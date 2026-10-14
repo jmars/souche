@@ -101,8 +101,11 @@ void write_blob(const uint8_t *data, uint32_t length, uint32_t offset)
 
     /* upstream: this.jit_dirty_cache(offset, offset + blob.length) -- restored as the
      * range invalidation (plan ss4.1's last row).  write_blob is the LOADER's path
-     * (src/main.c), so this is loader-time only; it is the one site that can write
-     * across a page and therefore the one that needs the range form. */
+     * (src/main.c) AND the guest-reachable DMA/IDE/virtio sinks (dma_do_read,
+     * ide.c's bus-master DMA, virtq_chain_set_next_blob -- the S2 paths above), so it
+     * runs at guest time too; it is the one site that can write across a page and
+     * therefore the one that needs the range form.  (N4, AUDIT-1R: the old sentence
+     * said "loader-time only", contradicting the S2 comment above.) */
     uop_invalidate_range(offset, length);
     memcpy(mem8 + offset, data, length);
 }

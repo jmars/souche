@@ -1207,7 +1207,15 @@ static void interface_atapi_read_dma(ide_interface_t *ide, const uint8_t *cmd)
      * clamp (interface_atapi_read); upstream is safe only because SyncBuffer.get throws
      * out-of-range (buffer.js:35-39).  LATENT today: no CLI flag attaches media to the
      * always-present ATAPI device (machine.c:66), so ide->buffer is always NULL here --
-     * the first --cdrom flag would make it live. */
+     * the first --cdrom flag would make it live.
+     *
+     * DIVERGENCE DECLARED (AUDIT-1R SF3): upstream's PIO arm clamps but its DMA arm
+     * DIES on this input (SyncBuffer.get throws RangeError); this port clamps BOTH
+     * arms.  Matching the release's death is not expressible safely here -- the C
+     * analogue of the un-clamped count is not a throw but the out-of-bounds memcpy
+     * itself -- so the clamp is the port's own PIO arm's semantics, under the same
+     * rationale as write_blob's declared divergence (the reference's death is its bug,
+     * not a defined observable).  Latent behind the missing --cdrom. */
     uint64_t available = ide->buffer_length - start;
     if ((uint64_t)byte_count > available) byte_count = (uint32_t)available;
 

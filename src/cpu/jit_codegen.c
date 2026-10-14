@@ -1540,7 +1540,15 @@ static const uop_t *uops_base;
  *   step 7  `ran && (FLUSH || jit_block_boundary)`: FLUSH is a decode-time uop flag,
  *           excluded by the flag test; jit_block_boundary is set only by
  *           after_block_boundary (cpu.c:78) behind interpreter bodies and sti's one nested
- *           dispatch -- both C bodies.  No recipe writes it.
+ *           dispatch -- both C bodies.  No recipe writes it -- AND it cannot be CARRIED
+ *           IN stale from an earlier uop, which is the half that closes the step for an
+ *           elided recipe: any setter necessarily RAN (after_block_boundary is called
+ *           after its body returns; `ran == false` means the resolve faulted before the
+ *           body, uop_cache.c), and a called uop's or recipe slow arm's OWN step 7 --
+ *           which those always run (`cont` is false for rec == NULL; the slow arm
+ *           re-enters the shared routine) -- flushes and clears it before the next uop
+ *           (uop_cache.c:1490-1493); uop_run's entry and the mid-batch fallback clear
+ *           the remaining paths.  So no admitted recipe can observe it set.
  *   step 8  the page-cross break `(ip ^ eip) & ~0xFFF`: for a recipe ip stays at the step-3
  *           store `instruction_pointer = body_ip`, and body_ip == eip + len for every
  *           non-custom-modrm uop (the +1 exception is 0x8D/0x8F only), so the test is the
@@ -1559,6 +1567,21 @@ static const uop_t *uops_base;
  *           criterion excludes their kinds BY NAME.  A fourth kind that grew an ip write
  *           would have to join that exclusion or the matrix's ip comparison (cmp_state)
  *           fails; the exclusion is the load-bearing half either way.
+ *
+ * OBLIGATION on future recipes (keep this true when adding a table entry): a recipe
+ * whose FAST path calls into C, or writes instruction_pointer, interpreted_
+ * unimplemented or jit_block_boundary, breaks the argument above -- it must join an
+ * exclusion here (by flag or by kind), or the matrix's arms must otherwise keep its
+ * checks.  A fast-path C call can set anything steps 6-11 test.
+ *
+ * INSTRUMENT NOTE: the flag clauses (steps 7 and 10) are guarded today by an INVARIANT
+ * PIN, not a runnable mutation -- jit_codegen_selftest.c's flag pin checks every table
+ * descriptor for UOP_DESC_FLUSH/UOP_DESC_BLOCK_END and passes vacuously until a future
+ * entry carries one (then the clause above is what keeps that entry's checks, and the
+ * pin stops the clause being deleted as dead code).  A pin is weaker than a mutation:
+ * it cannot fail on today's tree.  The mutation arm for this clause was retired for
+ * exactly that reason (results/perf-7.md, mut3); the page/kind clauses DO have failing
+ * mutations (mut1/mut2/mut4).
  *
  * A recipe WITH a slow arm skips the checks only on its fast path: the slow arm ran a C
  * body, which can set anything step 6-11 test, so the slow arm re-enters the shared

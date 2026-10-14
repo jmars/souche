@@ -53,7 +53,11 @@ changed variable = the BAR value):
   no BAR-relocated device carries a consecutive shim.
 - `pci_write32`'s `pci_bars[bar_nr]` was already bounded (`bar_nr < pci_bars_count`) by an
   earlier unit; re-verified.
-- `pci_get_io_space`'s registration-time read loop keeps its assert (host-driven).
+- ~~`pci_get_io_space`'s registration-time read loop keeps its assert (host-driven).~~
+  **[CORRECTED in REVIEWFIX-1 (N5, AUDIT-1R): there is no `pci_get_io_space` anywhere in
+  `src/`** — upstream's `PCI.prototype.get_io_space` was never ported (devices hardcode
+  their ports), so there is nothing to bound and this bullet cited a nonexistent site.
+  The sweep's substance stands.]
 
 **Divergence from the reference:** none observable — the discard *is* the reference's answer.
 
@@ -113,7 +117,11 @@ assert is resolved **at its site, matching what the pinned RELEASE reference doe
 **Divergences declared:** for the notify/sends/enable paths the release build pops garbage
 chains and runs on (there is no defined observable to match — a garbage reply into a used ring
 the driver never posted to); the port drops with a named note instead. This is the audit's own
-N3 recommendation and the port's established guard shape.
+N3 recommendation and the port's established guard shape. **[Extended in REVIEWFIX-1 (SF3,
+AUDIT-1R): S3's ATAPI DMA clamp is a declared divergence too — upstream's PIO arm clamps but
+its DMA arm DIES (`SyncBuffer.get` throws); the port clamps both arms, because the C analogue
+of "not clamping" is the out-of-bounds `memcpy` itself, not a throw. Declared at the site
+(`ide.c`, the AUDIT-1 S3 comment) and in S3's section below.]**
 
 ## S2 — the blob sinks bounded
 
@@ -143,6 +151,13 @@ N3 recommendation and the port's established guard shape.
 
 `interface_atapi_read_dma` now applies the PIO arm's clamp (`byte_count` to
 `buffer_length - start`) right after the bounds reject, before the status/DRQ/report sequence.
+**Divergence DECLARED (REVIEWFIX-1, SF3):** upstream's PIO arm clamps but its DMA arm **dies**
+on this input (`SyncBuffer.get` → `new Uint8Array(buffer, start, len)` throws,
+buffer.js:35-39); this port clamps **both** arms. Chosen rather than matched because the C
+analogue of the un-clamped count is not a throw but the out-of-bounds `memcpy` itself —
+"matching the release's death" is not expressible safely here — under the same rationale as
+write_blob's declared divergence (the reference's death is its bug, not a defined observable).
+Declared at the site too (`ide.c`, the AUDIT-1 S3 comment).
 **Reachability verdict: LATENT, not a blocker** — `machine_config.cdrom` is never given media
 (no CLI flag attaches it; `main.c` has no `--cdrom`), so `ide->buffer` is always NULL on the
 always-present ATAPI device and the vulnerable line is unreachable today; the first `--cdrom`
@@ -230,3 +245,21 @@ Nothing in this unit weakens an invalidation hook, the staircase, or the JIT def
 - The eip-hole AFTER comparison covers the final register state; the memory-window sha was not
   compared against the reference leg (the executed zeros only write through `add [eax],al` with
   the loader's eax, both legs identically).
+
+## Corrections (REVIEWFIX-1, from the two review passes)
+
+- **N6 (AUDIT-1R): commit cc6f0c0's message says "THREE pci.c config-write asserts the
+  audit had not named"; FOUR were dropped** (`pci_write8`'s BAR/ROM range, `pci_write16`'s
+  alignment, `pci_write16`'s ROM-range, `pci_write32`'s alignment — S1 item 7 above, which
+  already said four). The commit is NOT amended (this project does not rewrite history);
+  this correction is the record.
+- **N5 (AUDIT-1R): the class-check bullet citing `pci_get_io_space` described a function
+  that does not exist in the port** (upstream's `get_io_space` was never ported). Corrected
+  in place above, marked there.
+- **SF3 (AUDIT-1R): S3's clamp is a declared divergence** (upstream's DMA arm dies; the
+  port clamps both arms) — now declared in S3's section, in the "Divergences declared"
+  accounting, and at the site. See results/reviewfix-1.md for the full account.
+- **SF1/SF2 (AUDIT-1R): two further guest-reachable asserts in files the sweep had not
+  touched** (`rtc.c` bcd_unpack's nibble asserts; `acpi.c`'s PM-timer monotonic assert,
+  reachable through the port's own reboot path) — fixed by REVIEWFIX-1, each with a
+  demonstrated abort-before/run-on-after probe; see results/reviewfix-1.md.

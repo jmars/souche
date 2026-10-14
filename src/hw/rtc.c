@@ -194,9 +194,14 @@ static int32_t bcd_unpack(int32_t n)
     int32_t low = n & 0xF;
     int32_t high = n >> 4 & 0xF;
     /* rtc.js:220-222 */
-    DBG_ASSERT(n < 0x100);
-    DBG_ASSERT(low < 10);
-    DBG_ASSERT(high < 10);
+    DBG_ASSERT(n < 0x100); /* cannot fire: callers pass cmos_data[], a uint8_t */
+    /* AUDIT-1R SF1 (the S1 re-sweep): upstream's `dbg_assert(low < 10);
+     * dbg_assert(high < 10)` (rtc.js:221-222) are compiled out of the pinned release,
+     * whose behaviour for a nibble > 9 is the wrong-but-defined `low + 10*high` -- and
+     * the value is a GUEST byte: an alarm-register write (0x71 with index 0x01..0x05)
+     * followed by a status-B write with bit 5 set reaches here through
+     * rtc_cmos_port_write's `cmos_b & 0x20` arm -> decode_time.  Both asserts are
+     * dropped matching the release; the arithmetic is unchanged. */
     return low + 10 * high;
 }
 

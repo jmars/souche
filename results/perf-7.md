@@ -255,6 +255,12 @@ without the checks call**.
   differentially against the executor) and by the engage pins. A future recipe that calls
   into C on its FAST path must keep the checks (its table entry would need `slow = true`
   treatment in the criterion) — the comment at `jitcg_uop_continues` says so.
+  **[CORRECTED in REVIEWFIX-1 (PERF-7R finding 2): at review time the comment did NOT say
+  so — the obligation lived only in this report. It is now IN the comment at the criterion
+  (`jit_codegen.c`, the "OBLIGATION on future recipes" paragraph), which is where a future
+  recipe author actually reads; the review also restored the step-7 carry-in clause the
+  landing had dropped (finding 1) and named the flag clauses' invariant pin as the weaker
+  instrument (finding 3). All three are comment/documentation-only.]**
 * `instruction_counter`'s absolute value in the determinism gate (4,000,024,062 this run vs
   4,000,053,925 pinned at JIT-6F) is the guest-reads-the-host-clock class PERF-5 §7
   documents; the gate's own assertion (both runs EQUAL, transcripts byte-identical) passed.
