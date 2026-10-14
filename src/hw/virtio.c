@@ -59,17 +59,28 @@ static int32_t virtio_int_log2(uint32_t x)
 #define VIRTIO(device) ((virtio_device_t *)(device))
 
 /* ------------------------------------------------------------------ *
- * cpu.js:313-323 -- `read_blob`: a view of guest RAM with upstream's two assertions.
- * upstream's `this.mem8.subarray(offset, offset + length)` is a VIEW; the C port returns the
- * address, which is what the callers (memcpy) need.
+ * cpu.js:313-323 -- `read_blob`: a view of guest RAM.
+ *
+ * AUDIT-1 S2: upstream's two dbg_asserts are compiled out of the pinned release, and its
+ * `mem8.subarray(offset, offset + length)` then CLAMPS -- a descriptor address at or past
+ * the end of the wasm view yields an EMPTY view (MEASURED in node: subarray(20, 24) on a
+ * 16-byte array is empty; a straddling one is truncated), so no host memory is read and
+ * the missing bytes are simply not copied.  This port's mem8 is a fixed C array, so the
+ * same descriptor was a host OOB read whose bytes reached the console sink.  The caller
+ * still advances by the FULL length (upstream's `dest_offset += read_length` runs on the
+ * empty view too), so the dest's gap keeps whatever the caller pre-filled -- upstream's
+ * callers allocate zero-filled Uint8Arrays, and console_notify_output now does too.
  * ------------------------------------------------------------------ */
-static const uint8_t *virtio_guest_read_blob(uint32_t offset, uint32_t length)
+static uint32_t virtio_guest_read_blob(uint32_t offset, uint32_t length, const uint8_t **blob)
 {
-    if (length) {
-        DBG_ASSERT(!in_mapped_range(offset));
-        DBG_ASSERT(!in_mapped_range(offset + length - 1));
+    if (offset >= cpu->memory_size) {
+        *blob = mem8;
+        return 0;
     }
-    return mem8 + offset;
+    uint32_t available = cpu->memory_size - offset;
+    if (available > length) available = length;
+    *blob = mem8 + offset;
+    return available;
 }
 
 /* ------------------------------------------------------------------ *
@@ -1128,6 +1139,9 @@ bool virtqueue_is_configured(virtqueue_t *queue)
 /* virtio.js:1124-1128 */
 void virtqueue_enable(virtqueue_t *queue)
 {
+    /* AUDIT-1 S1 sweep verdict: NOT guest-reachable -- the field layer guards it
+     * (common_queue_enable_write only calls this on a configured queue), so the
+     * transcribed assert is a genuine internal contract and stays. */
     DBG_ASSERT(virtqueue_is_configured(queue)); /* "must be configured before enabled" */
     queue->enabled = true;
 }
@@ -1135,6 +1149,10 @@ void virtqueue_enable(virtqueue_t *queue)
 /* virtio.js:1130-1136 */
 void virtqueue_set_size(virtqueue_t *queue, uint32_t size)
 {
+    /* AUDIT-1 S1 sweep verdict: NOT guest-reachable -- common_queue_size_write rounds a
+     * non-power-of-2 up and clamps to size_supported BEFORE calling this, and every other
+     * caller passes the queue's own size_supported.  The transcribed asserts are internal
+     * contracts and stay. */
     DBG_ASSERT((size & (size - 1)) == 0); /* power of 2 or zero */
     DBG_ASSERT(size <= queue->size_supported);
     queue->size = size;
@@ -1269,8 +1287,13 @@ virtq_chain_t *virtqueue_pop_request(virtqueue_t *queue)
 void virtqueue_push_reply(virtqueue_t *queue, virtq_chain_t *chain)
 {
     DBG_ASSERT(queue->used_addr != 0);
-    DBG_ASSERT(queue->num_staged_replies < queue->size);
-
+    /* AUDIT-1 S1: upstream's second assert here is compiled out of the pinned release and
+     * IS guest-reachable: the guest writes queue_size = 0 through the common-config field
+     * AFTER configuring (common_queue_size_write clamps only the upper bound) and then
+     * posts a buffer -- the first staged reply fails `0 < 0` and aborted the process.
+     * The release proceeds: used_set_entry's write is a router-bounded write at the
+     * configured used_addr, and num_staged_replies is bounded by the pop/push pairing in
+     * the callers (one reply per popped chain, flushed per send). */
     uint32_t used_idx = (virtqueue_used_get_idx(queue) + queue->num_staged_replies) & queue->mask;
     virtio_logf("Push reply: used_idx=%u desc_idx=%u", (unsigned)used_idx,
                 (unsigned)chain->head_idx);
@@ -1370,8 +1393,9 @@ uint32_t virtq_chain_get_next_blob(virtq_chain_t *chain, uint8_t *dest_buffer, u
             chain->read_buffer_offset = 0;
         }
 
-        memcpy(dest_buffer + dest_offset, virtio_guest_read_blob(read_address, read_length),
-               read_length);
+        const uint8_t *src;
+        uint32_t src_len = virtio_guest_read_blob(read_address, read_length, &src);
+        memcpy(dest_buffer + dest_offset, src, src_len);
 
         dest_offset += read_length;
         remaining -= read_length;

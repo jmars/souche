@@ -1,0 +1,16 @@
+== perf-7-ab: base vs f1  pairs=5
+load-before=1.05 0.79 1.40
+a    real 1.462s  instr=ok state=ok serial=ok
+b    real 1.003s  instr=ok state=ok serial=ok
+b    real 0.999s  instr=ok state=ok serial=ok
+a    real 1.420s  instr=ok state=ok serial=ok
+a    real 1.418s  instr=ok state=ok serial=ok
+b    real 0.994s  instr=ok state=ok serial=ok
+b    real 0.995s  instr=ok state=ok serial=ok
+a    real 1.438s  instr=ok state=ok serial=ok
+a    real 1.418s  instr=ok state=ok serial=ok
+b    real 0.995s  instr=ok state=ok serial=ok
+load-after=1.05 0.79 1.40
+base       n=5 best 1.418 median 1.420 worst 1.462
+f1         n=5 best 0.994 median 0.995 worst 1.003
+ratio base/f1: best 0.7010x  median 0.7007x  (>1 means f1 is slower)

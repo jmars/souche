@@ -1,0 +1,14 @@
+== perf-7-ab: base vs base  pairs=4
+load-before=1.11 0.77 1.41
+a    real 1.470s  instr=ok state=ok serial=ok
+b    real 1.422s  instr=ok state=ok serial=ok
+b    real 1.405s  instr=ok state=ok serial=ok
+a    real 1.400s  instr=ok state=ok serial=ok
+a    real 1.404s  instr=ok state=ok serial=ok
+b    real 1.406s  instr=ok state=ok serial=ok
+b    real 1.415s  instr=ok state=ok serial=ok
+a    real 1.405s  instr=ok state=ok serial=ok
+load-after=1.25 0.81 1.42
+base       n=4 best 1.400 median 1.405 worst 1.470
+base       n=4 best 1.405 median 1.410 worst 1.422
+ratio base/base: best 1.0036x  median 1.0043x  (>1 means base is slower)

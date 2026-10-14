@@ -492,3 +492,59 @@ The gate defaults to `build/v86c` and prints its sha.
    formatting (not done: it is not needed by this gate, which pins the artifact).
 5. **Slice 4's persistence assertion must be written against the in-memory buffer**
    (§8), not against a page reload.
+
+---
+
+## 12. APPENDED CORRECTION (2026-10-14, the nobb follow-ups): the image's contract changed under this gate
+
+Everything §§1-11 above describes the BUSYBOX image and ARM B's IN-GUEST MKFS.
+Both are superseded by the user's decision in unit nobb (fx-demo
+`evidence/no-terminal-2026-10-13/`, baliveau `docs/baliveau-self-plan.md` §2):
+the image's busybox carried `sh`, `ash` AND `hush` (MEASURED `--list`), which
+made the project's own containment claim false, so the busybox AND the 63-binary
+fx-core payload are OUT, fx-init's disk path is NATIVE, formatting is a BUILD
+condition, and a BLANK disk now gets a LOUD REFUSAL.  The fxsh CONSOLE is
+deferred the same way: it returns by installing fxsh **THROUGH THE SYSTEM DHALL
+CONFIG as a package** (provides/src_of, oracle-attributable) — not by re-adding
+a host-bindir blob.
+
+**THE GATE WAS RE-PINNED, not left frozen.**  An arm testing a superseded
+artifact is a finding, not a pass: `gate-m2-5-guest.sh` now boots
+`tests/images/guest-initrd-shellfree.xz` (sha256
+`df1da2e31ff9fdd66b2d97af68fbd35cc16999e0ee17d53759126d4cf7178665`, 829,216 B,
+copied from fx-demo's rebuild).  The OLD image is FROZEN, pinned as SUPERSEDED
+(`guest-initrd-fxdisk.xz`, `accc806d…`), because souche is not a git repo and
+those bytes are the old contract's only copy; the pinned busybox FILE and its
+applet checks stay as provenance of what the old image carried.  The archive
+re-pin check FLIPPED with the contract: the image must now carry NO busybox
+entry, NO fxsh, and NO usr/fx-core payload (the probe walks the cpio headers,
+so a grep of fx-init's embedded strings cannot fool it).
+
+**ARM B kept its structure and its asymmetry; what it asserts changed.**  It
+used to prove the guest formatting zeros into a filesystem — the capability the
+removal deleted — so asserting it would have kept proving a removed thing.  It
+now asserts the NEW contract, mirroring fx-init's own G5 arm
+(`fx-init/tests/qemu_disk_probe.sh`): the blank disk rejects the mount
+(`Can't find ext4 filesystem`), fx-init REFUSES BY NAME (`is not a formatted
+filesystem` / `must be pre-formatted at build time`), NOTHING is formatted
+(`mkfs` absent, the old `inodes, 65536 blocks` headline now its own negative),
+the device is REFUSED not missed (no silent `no /dev/vda` fallback), and THE
+BOOT VERDICT still lands — `fx-init: boot-ok v3` from the ramfs store
+(`ensure_disk_store` is non-fatal by design, init.zig:2453).  MEASURED on the
+C leg: all 12 rows PASS.
+
+**The console row went CONDITIONAL, not silent.**  ARM A's `fx> ` row asserts
+exactly as before when the image carries fxsh; on the shell-free image it
+prints a NAMED skip (the deferred item, verbatim) and does not count as a
+failure.  The skip is decided by the same archive probe the pins use, so
+restoring fxsh re-arms the row with no edit.
+
+**RE-MEASURED, this day: `sh tests/gate-m2-5-guest.sh all` -> 0 FAILING
+assertion(s), exit 0** — pin (both image pins), ARM A on BOTH legs (C port and
+the pinned JS reference: mount, native seed, v3 read back from the disk, pivot,
+boot-ok, no fallback, no re-seed), ARM B (the refusal, 12/12), LEAN (the pinned
+ramfs line, same image), and gate 3b (the device/store lines the same MULTISET
+on both legs; the ordered diff is again only printk interleaving, one
+`ata2.00` line's position).  Raw evidence: `results/m2-5-guest-*` (this day's
+run overwrote the per-arm transcripts; the busybox-era numbers live in §§3-9
+and in the frozen image).

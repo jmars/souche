@@ -1,0 +1,34 @@
+=== write (/home/jaye/futaie/souche/src) ===
+v86c: write_blob: dropping 16 bytes at 0x1001000: outside guest memory (0x1000000)
+v86c: write_blob: dropping 8 of 16 bytes at 0xfffff8: outside guest memory (0x1000000)
+probe: write arm bounded (out-of-range dropped, straddle clamped)
+== mode write rc=0 ==
+=== read (/home/jaye/futaie/souche/src) ===
+probe: read arm bounded (16 zero bytes to the sink, no host bytes)
+== mode read rc=0 ==
+=== atapi (/home/jaye/futaie/souche/src) ===
+probe: atapi DMA read bounded (media 8192 B, lba 3, count 0x2000 sectors)
+== mode atapi rc=0 ==
+=== hash (/home/jaye/futaie/souche/src) ===
+probe: churn key 0xa53c collides with the sentinel's home slot
+probe: hash survived 6000 tombstone churns + the colliding bind (sentinel live, DEAD slots reused)
+== mode hash rc=0 ==
+=== virtio3 (/home/jaye/futaie/souche/src) ===
+v86c: virtio-console: control transmit notified for unconfigured queue 3; dropping the notification
+== mode virtio3 rc=0 ==
+=== virtio4 (/home/jaye/futaie/souche/src) ===
+probe: readback select=0x3 desc=0x5000 avail=0x5200 used=0x5400
+probe: device queues[3]: desc=0x5000 avail=0x5200 used=0x5400 (count=10)
+v86c: virtio-console: event with no posted buffer on the control receive queue (configured=0, has_request=0); dropping the send
+v86c: virtio-console: event with no posted buffer on the control receive queue (configured=0, has_request=0); dropping the send
+v86c: virtio-console: event with no posted buffer on the control receive queue (configured=0, has_request=0); dropping the send
+v86c: virtio-console: event with no posted buffer on the control receive queue (configured=0, has_request=0); dropping the send
+== mode virtio4 rc=0 ==
+=== virtio5 (/home/jaye/futaie/souche/src) ===
+probe: readback select=0x3 desc=0x5000 avail=0x5200 used=0x5400
+probe: device queues[3]: desc=0x5000 avail=0x5200 used=0x5400 (count=10)
+v86c: virtio-console: event with no posted buffer on the control receive queue (configured=1, has_request=0); dropping the send
+v86c: virtio-console: event with no posted buffer on the control receive queue (configured=1, has_request=0); dropping the send
+v86c: virtio-console: event with no posted buffer on the control receive queue (configured=1, has_request=0); dropping the send
+probe: virtio field writes + the push_reply attack ran on
+== mode virtio5 rc=0 ==

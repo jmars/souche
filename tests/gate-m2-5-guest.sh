@@ -1,30 +1,42 @@
 #!/bin/sh
 # tests/gate-m2-5-guest.sh -- SLICE 3's gates: THE SHARED IMAGE (HANDOFF=v86guest).
 #
-# THE ARTIFACT SET: slice 1's i386 kernel + the fx-demo-built initramfs (NOW
-# carrying a static i386 busybox at /usr/bin/busybox) + a 64 MiB ATA disk image,
-# booted on souche's native CLI (build/v86c) AND on the pinned JS reference
-# oracle/run-boot.mjs -- one image, two legs.
+# THE ARTIFACT SET: slice 1's i386 kernel + fx-demo's SHELL-FREE initramfs (the
+# nobb rebuild: NO busybox, NO fx-core payload -- fx-init's disk path is native
+# Zig now, so the guest needs no shell to bring the disk up) + a 64 MiB ATA disk
+# image, booted on souche's native CLI (build/v86c) AND on the pinned JS
+# reference oracle/run-boot.mjs -- one image, two legs.
 #
-# WHY THE BUSYBOX IS IN THE IMAGE (the user's decision, MEASURED before it):
-# fx-init's disk path execs /usr/bin/busybox for mkfs.ext2/rm/cp/mv/sync
-# (init.zig run_bb), fx-demo's image builder shipped NO busybox at all, and no
-# PREBUILT i386 busybox that can be pinned carries the mkfs.ext2 applet (Alpine:
-# neither applet; Debian busybox-static 1.38.0 i386: mke2fs yes, mkfs.ext2 no).
-# So fx-demo/kbuild/build-busybox.sh SOURCE-BUILDS busybox 1.36.1 with
-# CONFIG_MKFS_EXT2=y (upstream's alias applet for its mke2fs implementation), and
-# image/mkinitramfs.sh installs it with -B.  The pinned bytes are in
-# tests/images/busybox-i386-v86guest: static elf_i386, 0 NEEDED, all five
-# applets, mkfs.ext2 exercised natively by the recipe.
+# WHY THE BUSYBOX IS GONE FROM THE IMAGE (the user's decision, unit nobb, and
+# why it was right): fx-init's disk path used to exec /usr/bin/busybox for
+# mkfs.ext2/rm/cp/mv/sync (init.zig run_bb), fx-demo's image builder shipped NO
+# busybox at all, and no PREBUILT i386 busybox that can be pinned carries the
+# mkfs.ext2 applet -- so a busybox was SOURCE-BUILT (kbuild/build-busybox.sh,
+# now deleted) with CONFIG_MKFS_EXT2=y and installed with -B.  MEASURED on the
+# pinned build (tests/images/busybox-i386-v86guest, kept as provenance): its
+# applet set carried sh, ash AND hush -- the image was carrying three shells
+# while the project's containment claim said "no sh, no bash, no busybox".  The
+# fix is at the root: the operations are NATIVE in fx-init, formatting is a
+# BUILD condition (the host mkfs's the FILE image; only MOUNT needs privilege),
+# and a BLANK disk now gets a LOUD REFUSAL instead of an in-guest mkfs.  The
+# fxsh CONSOLE is deferred the same way: it comes back by installing fxsh
+# THROUGH THE SYSTEM DHALL CONFIG as a package (so it gets provides/src_of and
+# the oracle can attribute it) -- not by re-adding a host-bindir blob.
 #
 # THE GATE IS AN ASYMMETRY, on ONE machine, ONE kernel, ONE initramfs:
 #
-#   ARM A  a PRE-FORMATTED 64 MiB disk   -> mount (no mkfs), seed, boot-ok
-#   ARM B  a BLANK (all-zeros) disk      -> the GUEST formats it in-guest and
-#          then mounts: "EXT4-fs (sda): mounted filesystem" can only be printed
-#          if the guest's own mkfs WROTE the filesystem through the emulated ATA
-#          device and the kernel READ IT BACK.  This is the arm the busybox
-#          decision exists for, and the one slice 2 had to record as blocked.
+#   ARM A  a PRE-FORMATTED 64 MiB disk   -> mount (no mkfs), NATIVE seed,
+#          boot-ok.  THE ONLY SHAPE THAT MOUNTS.
+#   ARM B  a BLANK (all-zeros) disk      -> the LOUD PRE-FORMAT REFUSAL: the
+#          guest NAMES the device and the build-time contract ("is not a
+#          formatted filesystem ... must be pre-formatted at build time"),
+#          formats NOTHING, and the boot still reaches its verdict from the
+#          ramfs store (fx-init's ensure_disk_store is non-fatal by design).
+#          This arm USED to prove IN-GUEST FORMATTING -- the busybox decision's
+#          whole point, and the one slice 2 had to record as blocked; that
+#          capability was REMOVED BY DECISION, so the arm now asserts the NEW
+#          contract with the same structure and the same asymmetry (fx-init's
+#          own G5 arm, tests/qemu_disk_probe.sh, is the reference assertion).
 #   LEAN   the SAME machine + SAME initrd + fx-demo's pinned LEAN kernel
 #          (slice 1's control, no PCI/ATA) -> the ramfs line the browser lane
 #          prints today: "fx-init: disk store: no /dev/vda - using ramfs store".
@@ -39,10 +51,13 @@
 # MEASURED: tests/images/disk-fmt-64m.img is byte-identical (sha256) after a run
 # in which the guest mounted it, seeded ~30 MB into it and synced.  So the write
 # path is observable only IN-GUEST, and the gate says exactly that:
-#   * the "disk store mounted (current vN)" line is READ BACK FROM THE DISK
+#   * ARM A's "disk store mounted (current vN)" line is READ BACK FROM THE DISK
 #     (store_current_of(DISK_STORE) after the seed copy), so it proves a
-#     write->read-back through the emulated ATA device within the run;
-#   * ARM B proves the same for a filesystem the GUEST created from zeros;
+#     write->read-back through the emulated ATA device within the run -- ARM A
+#     remains the write->read-back proof;
+#   * ARM B is now the NEGATIVE arm: the blank disk is refused BY NAME, no mkfs
+#     line ever prints, and the boot still reaches its verdict from the ramfs
+#     store (the same shape fx-init's G5 arm asserts);
 #   * persistence ACROSS BOOTS is not assertable here and is not claimed.
 # The disk's volatility is RECORDED per arm (sha before/after), not asserted: a
 # later port adding write-back must not fail this gate.
@@ -58,7 +73,7 @@
 #   c      ARM A, C leg only (the PORT's leg; ~75 s)
 #   js     ARM A, reference leg only (the pinned v86: ~20 min -- MEASURED)
 #   armA   the pre-formatted disk, BOTH legs (gate 3a + 3b's inputs)
-#   armB   the blank disk, the in-guest mkfs arm (C leg; see LIMIT_BLANK)
+#   armB   the blank disk, the LOUD PRE-FORMAT REFUSAL arm (C leg; see LIMIT_BLANK)
 #   lean   the failure/asymmetry arm (the pinned lean kernel, C leg)
 #   diff   gate 3b's normalized leg diff (needs armA)
 #   all    pin + armA + armB + lean + diff
@@ -74,7 +89,16 @@ cd "$(dirname "$0")/.."
 # -B): overriding any of them makes the sha256 pin FAIL, which is the point.
 KERNEL="${KERNEL:-tests/images/vmlinuz-i386-v86guest}"
 LEAN="${LEAN:-tests/images/vmlinuz-i386-lean-control}"
-INITRD="${INITRD:-tests/images/guest-initrd-fxdisk.xz}"
+# THE BOOTED IMAGE: fx-demo's shell-free rebuild (no busybox, no fx-core, the
+# native disk path).  This is a RE-PIN (post-nobb): the gate used to boot
+# guest-initrd-fxdisk.xz, the busybox+fx-core image whose in-guest mkfs ARM B
+# asserted -- that contract is gone, and booting the superseded artifact would
+# be a gate passing on bytes nothing ships any more.
+INITRD="${INITRD:-tests/images/guest-initrd-shellfree.xz}"
+# the SUPERSEDED artifact, FROZEN (souche is not a git repo -- this file is the
+# only copy of the old contract's bytes; the pin below keeps it reproducible
+# and the busybox-file pins keep ITS provenance attributable).
+FROZEN_INITRD="${FROZEN_INITRD:-tests/images/guest-initrd-fxdisk.xz}"
 BUSYBOX="${BUSYBOX:-tests/images/busybox-i386-v86guest}"
 DISK_FMT="${DISK_FMT:-tests/images/disk-fmt-64m.img}"
 FW="${FW:-build/minibios-80m.bin}"
@@ -93,21 +117,25 @@ MEM=80
 #   * the reference does NOT reject it and never stops: a 6e9 run booted normally
 #     (its live console reaches boot-ok) and was still running at 600 s / 1 h 46 m;
 #     v86 stores the count in a Uint32Array, so `count >= limit` is unreachable.
-# So EVERY limit here is below 2**32-1.  ARM B therefore has ~4.2e9 to work in
-# and needs them: MEASURED, the pre-formatted ARM A boot reaches boot-ok v3
-# inside 2.9e9, and ARM B (in-guest mkfs + the same seed) inside 4.2e9.
+# So EVERY limit here is below 2**32-1.  ARM A therefore has ~4.2e9 to work in
+# and reaches boot-ok v3 inside 2.9e9.  ARM B used to need the maximum too --
+# MEASURED, in-guest mkfs.ext2 under the interpreter fit only inside 4.2e9 --
+# but the refusal path formats NOTHING, so the blank-disk boot now runs in ARM
+# A's envelope; LIMIT_BLANK stays as the arm's own bound so its wall-clock
+# contract does not silently move under it.
 LIMIT_C="${LIMIT_C:-4000000000}"
 LIMIT_JS="${LIMIT_JS:-4000000000}"
-# ARM B runs mkfs.ext2 inside the guest, under the interpreter: MEASURED at the
-# maximum the port accepts (see above).  A judgement bounded by a measurement:
-# ARM B reaches boot-ok v3 inside this limit, and a larger one is not expressible
-# on the C leg at all.
+# ARM B's bound.  See the uint32 note above for why it cannot go past 2**32-1.
 LIMIT_BLANK="${LIMIT_BLANK:-4200000000}"
 
 # ── pins (every one re-verified before use) ─────────────────────────────────
 SHA_KERNEL=f0278a8f2893eb93a8c857f3f2d5a589a5b9aa6a45033171bc5411fc10f658cd
 SHA_LEAN=25be0d5358d9445712f6d04e59a7be9133acbd3f69ad0720a69e43d5ba844b3d
-SHA_INITRD=accc806d937260ed5abffafe0530efc701ebaf0383cb22cfc25b2680bf8e4d02
+# the BOOTED image: fx-demo's shell-free rebuild (829216 bytes; copied from
+# fx-demo/web/initrd.xz at the re-pin, 2026-10-14)
+SHA_INITRD=df1da2e31ff9fdd66b2d97af68fbd35cc16999e0ee17d53759126d4cf7178665
+# the SUPERSEDED image (busybox + fx-core + in-guest mkfs): frozen, not booted
+SHA_INITRD_FROZEN=accc806d937260ed5abffafe0530efc701ebaf0383cb22cfc25b2680bf8e4d02
 SHA_BUSYBOX=fce38d5b7a492b86d719a77a07b189661132981dac1ef98c8435c087118586e0
 SHA_DISK_FMT=a2f0f6daac00c518727d7bf2981c2f6208dfe93e4973b06ffb2dc6c65ca0460c
 # 64 MiB of zeros: the BLANK arm's input, and the reason its provenance needs no
@@ -144,6 +172,7 @@ assert_eq() { if [ "$1" = "$2" ]; then pass "$3"; else fail "$3 (got '$1' want '
 # identified by its NAME AND THE SHA256 OF ITS CONTENT, and the store dirs by
 # their ENTRY NAMES.  Prints, one fact per line:
 #   store_dirs N / store_dir P / init_link T / busybox_sha S / busybox_size N
+#   / fxsh_sha S / fxsh_size N / fxcore_entries N
 archive_probe() {
     python3 - "$INITRD" <<'PYARCH'
 import hashlib, lzma, sys
@@ -153,6 +182,8 @@ off = 0
 store_dirs = {}
 init_link = set()
 busybox = []
+fxsh = []
+fxcore = 0
 while True:
     i = data.find(b"070701", off)
     if i < 0 or i + 110 > len(data):
@@ -171,13 +202,18 @@ while True:
     if not name:
         continue
     nm = name.decode("utf-8", "replace")
+    base = nm.lstrip("./")
     if "-fx-init" in nm:
         prefix = nm.lstrip("/").split("-fx-init")[0]
         store_dirs[prefix + "-fx-init"] = True
-    if nm.lstrip("./") in ("bin/init",):
+    if base in ("bin/init",):
         init_link.add(data[body:body + size].decode("utf-8", "replace"))
-    if nm.lstrip("./") == "usr/bin/busybox":
+    if base == "usr/bin/busybox":
         busybox.append((size, hashlib.sha256(data[body:body + size]).hexdigest()))
+    if base.split("/")[-1] == "fxsh":
+        fxsh.append((size, hashlib.sha256(data[body:body + size]).hexdigest()))
+    if base.startswith("usr/fx-core/"):
+        fxcore += 1
 
 print("store_dirs", len(store_dirs))
 for p in sorted(store_dirs):
@@ -191,6 +227,14 @@ if busybox:
 else:
     print("busybox_sha ABSENT")
     print("busybox_size 0")
+if fxsh:
+    for size, sha in fxsh:
+        print("fxsh_sha", sha)
+        print("fxsh_size", size)
+else:
+    print("fxsh_sha ABSENT")
+    print("fxsh_size 0")
+print("fxcore_entries", fxcore)
 PYARCH
 }
 
@@ -206,6 +250,16 @@ pin_check() {
         got=$(sha256sum "$1" | cut -d' ' -f1)
         if [ "$got" = "$2" ]; then pass "$1 sha256 $got"; else fail "$1 sha256 $got != $2"; fi
     done
+    # the SUPERSEDED artifact: pinned, frozen, and NOT booted by this gate any
+    # more (it is the busybox+fx-core image whose in-guest mkfs ARM B used to
+    # assert).  souche is not a git repo -- this pin is the old contract's only
+    # reproducibility.
+    if [ -f "$FROZEN_INITRD" ]; then
+        got=$(sha256sum "$FROZEN_INITRD" | cut -d' ' -f1)
+        if [ "$got" = "$SHA_INITRD_FROZEN" ]; then pass "$FROZEN_INITRD (SUPERSEDED, frozen, not booted) sha256 $got"; else fail "$FROZEN_INITRD sha256 $got != $SHA_INITRD_FROZEN"; fi
+    else
+        fail "the frozen superseded image is gone: $FROZEN_INITRD (the old contract loses its artifact)"
+    fi
     got=$(truncate -s $DISK_SIZE "$WORK/blank-probe.img" 2>/dev/null && sha256sum "$WORK/blank-probe.img" | cut -d' ' -f1)
     if [ "$got" = "$SHA_DISK_BLANK" ]; then pass "a blank $DISK_SIZE image has sha256 $got"; else fail "blank image sha256 $got != $SHA_DISK_BLANK"; fi
     [ -x "$V86C" ] || die "no $V86C (make; set V86C= to pin a frozen binary)"
@@ -219,16 +273,26 @@ pin_check() {
     # -w, not -l: the parsed list is one line with no trailing newline
     assert_eq "$(printf '%s' "$RD_LINES" | wc -w)" "1" "exactly ONE fx-init store dir in the image"
     assert_eq "$RD_LINES" "$STORE_DIR" "the store dir is the pinned one ($STORE_DIR)"
-    # the busybox must be IN the image AND be THESE bytes (name + content sha)
-    assert_eq "$(printf '%s' "$ARCHIVE" | sed -n 's/^busybox_sha //p')" "$SHA_BUSYBOX" \
-        "the image's /usr/bin/busybox is the pinned build (by content sha256)"
-    assert_eq "$(printf '%s' "$ARCHIVE" | sed -n 's/^busybox_size //p')" "2307404" \
-        "the busybox entry's size is the built artifact's"
+    # SHELL-FREE BY DECISION: the image must carry NO busybox, NO fxsh, and NO
+    # fx-core payload.  (The pinned BUSYBOX *file* below is the OLD image's
+    # artifact, kept as provenance -- it is not in this image any more.)
+    assert_eq "$(printf '%s' "$ARCHIVE" | sed -n 's/^busybox_sha //p')" "ABSENT" \
+        "the image carries NO busybox entry (shell-free by decision; fx-demo's harness/check-shell-free.mjs is the walking gate)"
+    assert_eq "$(printf '%s' "$ARCHIVE" | sed -n 's/^busybox_size //p')" "0" \
+        "and therefore no busybox size"
+    assert_eq "$(printf '%s' "$ARCHIVE" | sed -n 's/^fxsh_sha //p')" "ABSENT" \
+        "the image carries NO fxsh (the terminal is DEFERRED: it returns by installing fxsh THROUGH THE SYSTEM DHALL CONFIG as a package -- provides/src_of, oracle-attributable)"
+    assert_eq "$(printf '%s' "$ARCHIVE" | sed -n 's/^fxcore_entries //p')" "0" \
+        "NO usr/fx-core payload (the un-provenanced host-bindir blob is out)"
     # /bin/init, the path the GUEST resolves, points into the same store dir
     assert_eq "$(printf '%s' "$ARCHIVE" | sed -n 's|^init_link ||p')" "$STORE_DIR/fx-init" \
         "/bin/init -> the store dir the cmdline names"
+    # the console row in the arms branches on the SAME fact, decided here
+    HAVE_FXSH=0
+    [ "$(printf '%s' "$ARCHIVE" | sed -n 's/^fxsh_sha //p')" != "ABSENT" ] && HAVE_FXSH=1
 
-    echo "### THE BUSYBOX ITSELF (run natively: a static i386 ELF runs on this host)"
+    echo "### THE PINNED BUSYBOX FILE (the OLD image's artifact, frozen as provenance --"
+    echo "###  the image above no longer carries it; these rows keep ITS provenance honest)"
     case "$(file -b "$BUSYBOX")" in
         *"ELF 32-bit"*i386*"statically linked"*) pass "static elf_i386: $(file -b "$BUSYBOX")" ;;
         *) fail "$BUSYBOX is not a static i386 ELF: $(file -b "$BUSYBOX")" ;;
@@ -319,7 +383,19 @@ assert_preformatted() { # assert_preformatted NAME DISK_SHA
     want "$_s" 'EXT4-fs \(sda\): mounted filesystem' "the guest MOUNTED the ATA disk (the kernel's own line)"
     want "$_s" "fx-init: disk store mounted \(current v$V_IMAGE\)" "fx-init's disk-store verdict, read back from the disk"
     want "$_s" 'fx-init: pivoted to tmpfs root' "the pivot ran (the boot chain continued past the disk)"
-    want "$_s" 'fx> ' "the console service came up (dhake materialized /bin, silently)"
+    # the console service: CONDITIONAL on the image, never silent.  With fxsh in
+    # the image this asserts the prompt exactly as before; without it (the
+    # shell-free image -- fxsh is DEFERRED), it is a NAMED skip, not a fail and
+    # not a deletion: the day fxsh comes back THROUGH THE SYSTEM DHALL CONFIG
+    # (as a package -- provides/src_of, oracle-attributable), the row asserts
+    # again with no edit here.
+    if [ "${HAVE_FXSH:-0}" = 1 ]; then
+        want "$_s" 'fx> ' "the console service came up (dhake materialized /bin, silently)"
+    else
+        echo "  SKIP  (terminal deferred) the console prompt -- the image carries no fxsh;"
+        echo "        restore it by installing fxsh THROUGH THE SYSTEM DHALL CONFIG as a package"
+        echo "        (provides/src_of, oracle-attributable), rebuild, and this row asserts again."
+    fi
     want "$_s" "fx-init: boot-ok v$V_IMAGE" "THE BOOT VERDICT"
     want_not "$_s" 'fx-init: disk store: no /dev/vda' "the ramfs fallback did NOT fire"
     want_not "$_s" 'mkfs\.ext2 FAILED' "no mkfs failure"
@@ -359,32 +435,40 @@ gate_armA_js() {
 gate_armA() { gate_armA_c; gate_armA_js; }
 
 gate_armB() {
-    echo "### GATE 3a, ARM B: a BLANK disk -- the guest formats it IN-GUEST"
-    echo "### (the arm the busybox decision exists for; slice 2 recorded it as blocked)"
+    echo "### GATE 3a, ARM B: a BLANK disk -- the LOUD PRE-FORMAT REFUSAL (the NEW contract)"
+    echo "### (this arm USED to prove IN-GUEST FORMATTING: the guest's busybox mkfs.ext2"
+    echo "###  wrote a filesystem into the zeros and the kernel mounted it.  That capability"
+    echo "###  was REMOVED BY DECISION -- the disk is PRE-FORMATTED at build time and fx-init"
+    echo "###  REFUSES a blank one, by name.  Same structure, same asymmetry: what changed is"
+    echo "###  what the arm asserts.  fx-init's own G5 arm (tests/qemu_disk_probe.sh) is the"
+    echo "###  reference assertion.)"
     truncate -s $DISK_SIZE "$WORK/armB-c-disk.img" || die "cannot make the blank disk"
     _b="$WORK/armB-c-disk.img"
     assert_eq "$(sha256sum "$_b" | cut -d' ' -f1)" "$SHA_DISK_BLANK" "the ARM B input is $DISK_SIZE of zeros"
     leg_c armB-c "$_b" "$LIMIT_BLANK"
     _s=$R/m2-5-guest-armB-c-serial.txt
-    echo "--- assertions (the guest's own mkfs, then the mount)"
+    echo "--- assertions (the refusal, by name; then the verdict from the ramfs store)"
     want "$_s" 'ata1\.00: ATA-' "libata identified the blank disk"
     want "$_s" 'sd 0:0:0:0: \[sda\] 131072 512-byte logical blocks' "the blank disk's geometry (131072 sectors)"
     want "$_s" "Run $STORE_DIR/fx-init as init process" "the store's fx-init ran"
-    # the blank disk is NOT a filesystem: this is the mount attempt that fails
-    # and sends the guest into its own mkfs (the arm's whole point)
-    want "$_s" "EXT4-fs \(sda\): VFS: Can't find ext4 filesystem" "the blank disk rejected the first mount"
-    want "$_s" 'inodes, 65536 blocks' "the GUEST's busybox mkfs.ext2 reported the filesystem it made"
-    want "$_s" 'EXT4-fs \(sda\): mounted filesystem' "the guest FORMATTED the blank disk and the kernel mounted it"
-    want "$_s" "fx-init: disk store mounted \(current v$V_IMAGE\)" "the disk store came up (read back from the guest-made fs)"
-    want "$_s" "fx-init: boot-ok v$V_IMAGE" "THE BOOT VERDICT, on a disk the guest created"
-    want_not "$_s" 'mkfs\.ext2 FAILED' "the busybox's mkfs.ext2 applet did not fail"
-    want_not "$_s" 'fx-init: disk store: no /dev/vda' "no ramfs fallback"
+    # the blank disk is NOT a filesystem: the mount fails, and that failure is
+    # exactly what the refusal answers (this line used to trigger the mkfs)
+    want "$_s" "EXT4-fs \(sda\): VFS: Can't find ext4 filesystem" "the blank disk rejected the mount attempt"
+    # THE NEW CONTRACT, the two halves of the loud refusal (init.zig:2501):
+    want "$_s" 'is not a formatted filesystem' "THE REFUSAL names the device"
+    want "$_s" 'must be pre-formatted at build time' "THE REFUSAL names the pre-format contract (a BUILD condition, not a guest one)"
+    # the refusal is NON-FATAL by design (ensure_disk_store): the boot continues
+    # from the ramfs store and still reaches its verdict
+    want "$_s" "fx-init: boot-ok v$V_IMAGE" "THE BOOT VERDICT still lands (the boot continues from the ramfs store)"
+    want_not "$_s" "fx-init: disk store mounted" "the blank disk was NOT mounted (no store on it)"
+    want_not "$_s" 'mkfs' "NOTHING was formatted in-guest (the removed capability stays removed)"
+    want_not "$_s" 'inodes, 65536 blocks' "no busybox mkfs.ext2 output (the OLD contract's headline line, now its own negative)"
+    want_not "$_s" 'fx-init: disk store: no /dev/vda' "not the silent no-disk fallback either: the device IS there and was REFUSED, not missed"
     want_not "$_s" 'Kernel panic' "no kernel panic"
-    # The disk's content is volatile (in-memory buffer, see the header), so the
-    # proof that mkfs WRANGLED the device is in-guest: the mount line above can
-    # only be printed after mount(2) of a filesystem the guest itself wrote.
-    # What CAN be checked from the host is that the input really was zeros
-    # (asserted above) and that nothing failed.
+    # The disk's content is volatile (in-memory buffer, see the header), and the
+    # host-side sha cannot distinguish "untouched" from "not flushed" -- so the
+    # no-format proof is IN-GUEST: no mkfs line, no mount line, and the refusal
+    # naming the device, all above.
     echo "--- the arm's own stop line (the instruction count it needed)"
     grep -E "instructions" "$R/m2-5-guest-armB-c-stderr.txt" | sed 's/^/    /'
 }
@@ -467,7 +551,7 @@ gate_diff() {
 }
 
 # ── the store dir + the cmdline, resolved BEFORE anything runs ──────────────
-[ -f "$INITRD" ] || die "no $INITRD (see BUILD.md §3-§4 and kbuild/build-busybox.sh)"
+[ -f "$INITRD" ] || die "no $INITRD (fx-demo's shell-free rebuild; the frozen guest-initrd-fxdisk.xz is the SUPERSEDED artifact, kept but not booted)"
 STORE_DIR=$(store_path)
 [ -n "$STORE_DIR" ] || die "no /fx/store/<hash>-fx-init in $INITRD"
 # The kernel command line.  idle=poll is NOT optional (slice 1, re-measured on

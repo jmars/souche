@@ -1,0 +1,9 @@
+a      real 2.889s  instr=ok state=ok serial=ok
+b      real 3.717s  instr=ok state=ok serial=ok
+b      real 3.692s  instr=ok state=ok serial=ok
+a      real 2.734s  instr=ok state=ok serial=ok
+a      real 2.756s  instr=ok state=ok serial=ok
+b      real 3.707s  instr=ok state=ok serial=ok
+A unity : n=3 best 2.734 median 2.756
+B pertu : n=3 best 3.692 median 3.707
+ratio unity/pertu: best 1.3504x median 1.3451x  (>1 means pertu slower)

@@ -1,0 +1,9 @@
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+node gen/interpreter_uop.js
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+./build/v86c tests/test.img 1000000 > results/transcript.c.txt
+v86c: jit: x86-64 W^X code pages: mmap RW -> write -> mprotect RX (platform probe PASSED at init). Linux VERIFIED (this build); macOS MAP_JIT/Apple Silicon UNVERIFIED (pthread_jit_write_protect_np is NOT used); Windows UNVERIFIED. aarch64 has no backend: compiled out (V86C_JIT_X64=0).
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.js.txt
+diff -u results/transcript.js.txt results/transcript.c.txt
+milestone: the C transcript is byte-identical to the reference's

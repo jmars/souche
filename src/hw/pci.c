@@ -286,9 +286,10 @@ void pci_write8(int32_t address, int32_t written)
     uint8_t *space = (uint8_t *)pci->device_spaces[bdf];
 
     /* pci.js:294-297: the DEBUG assert that a 8-bit write is not landing on a BAR or the
-     * ROM address register. */
-    DBG_ASSERT(!((addr >= 0x10 && addr < 0x2C) || (addr >= 0x30 && addr < 0x34)));
-
+     * ROM address register.  AUDIT-1 S1 (class sweep): the assert is guest-reachable (two
+     * port writes select any BAR dword and then write one byte at it) and dbg_assert is
+     * compiled out of the pinned release, whose behaviour is the write itself -- the
+     * device-space shadow takes the byte, exactly as the line below does. */
     space[addr] = (uint8_t)written;
 }
 
@@ -297,7 +298,11 @@ void pci_write16(int32_t address, int32_t written)
     int32_t bdf = address >> 8 & 0xFFFF;
     int32_t addr = address & 0xFF;
 
-    DBG_ASSERT((address & 1) == 0);
+    /* AUDIT-1 S1 (class sweep): pci.js:348's `dbg_assert((address & 1) === 0)` is compiled
+     * out of the pinned release; a misaligned 16-bit config write then proceeds to
+     * `space[addr >>> 1] = written` -- an aliased in-bounds write of the shadow (addr is
+     * masked to 0xFF, so the u16 index is <= 0x7F of 128).  The assert here was a
+     * guest-reachable abort of the host process. */
 
     if (pci_bdf_is_absent(bdf) || pci->device_spaces[bdf] == NULL) {
         pci_stop_absent("write16", address, bdf);
@@ -311,8 +316,9 @@ void pci_write16(int32_t address, int32_t written)
         return;
     }
 
-    DBG_ASSERT(!(addr >= 0x30 && addr < 0x34));
-
+    /* AUDIT-1 S1 (class sweep): pci.js:368's assert is likewise compiled out of the
+     * release, which then writes the aliased u16 half of the shadow dword (index
+     * 0x18) -- the line below, unchanged. */
     space[addr >> 1] = (uint16_t)written;
 }
 
@@ -321,7 +327,9 @@ void pci_write32(int32_t address, int32_t written)
     int32_t bdf = address >> 8 & 0xFFFF;
     int32_t addr = address & 0xFF;
 
-    DBG_ASSERT((address & 3) == 0);
+    /* AUDIT-1 S1 (class sweep): pci.js:379's alignment assert is compiled out of the
+     * release; an unaligned 32-bit write then aliases into the BAR arm's arithmetic
+     * (bar_nr = (addr - 0x10) >> 2), every index of which is bounded below. */
 
     if (pci_bdf_is_absent(bdf) || pci->device_spaces[bdf] == NULL) {
         /* pci.js:386-390: an absent device's write32 is IGNORED, not an error -- the one
@@ -447,23 +455,33 @@ int32_t *pci_register_device(pci_device_t *device)
     return space;
 }
 
-/* pci.js:519-549 */
+/* pci.js:519-549
+ *
+ * AUDIT-1 B1: `to` is the guest's 32-bit BAR value & ~1 & 0xFFFF (pci_write32's io arm),
+ * so `to + i` reaches 0x1003F for the IDE's BAR4 (size 16, registered in every machine)
+ * or the virtio BAR0 (size 64) -- past this port's fixed `io_ports[0x10000]`, whose back
+ * is `io_mmap`'s function-pointer dispatch table with a MEASURED zero gap.  Upstream is
+ * safe only by JS accident: `ports[to+i] = entry` grows its array past 0x10000, and the
+ * dispatch indexes `ports[port & 0xFFFF]` (io.js:314-390; x86 ports are 16-bit), so the
+ * grown entries are unreachable -- observably the write is DISCARDED.  The same bound
+ * here reproduces exactly that answer; the read of `ports[to+i]` upstream is a JS hole
+ * (undefined) for these offsets, so its sanity assert is checked only in range. */
 void pci_set_io_bars(pci_bar_t *bar, int32_t from, int32_t to)
 {
     uint32_t count = bar->size;
 
     for (uint32_t i = 0; i < count; i++) {
-        if (from + (int32_t)i >= 0x1000) {
+        if (from + (int32_t)i >= 0x1000 && from + (int32_t)i < IO_PORT_COUNT) {
             io_ports[from + (int32_t)i] = io_create_empty_entry();
         }
 
-        io_port_entry_t entry = bar->entries[i];
-        io_port_entry_t empty_entry = io_ports[to + (int32_t)i];
-        (void)empty_entry; /* upstream asserts both exist */
-        DBG_ASSERT(empty_entry.device == NULL || empty_entry.read8 != NULL ||
-                   empty_entry.write8 != NULL);
+        if (to + (int32_t)i >= 0x1000 && to + (int32_t)i < IO_PORT_COUNT) {
+            io_port_entry_t entry = bar->entries[i];
+            io_port_entry_t empty_entry = io_ports[to + (int32_t)i];
+            (void)empty_entry; /* upstream asserts both exist */
+            DBG_ASSERT(empty_entry.device == NULL || empty_entry.read8 != NULL ||
+                       empty_entry.write8 != NULL);
 
-        if (to + (int32_t)i >= 0x1000) {
             io_ports[to + (int32_t)i] = entry;
         }
     }

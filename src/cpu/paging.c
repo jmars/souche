@@ -247,10 +247,14 @@ static int32_t do_page_walk(int32_t addr,
     }
 
     bool is_in_mapped_range = in_mapped_range(high);
-    /* upstream: has_code = !is_in_mapped_range && jit::jit_page_has_code(...).  There
-     * is no JIT, so there is no code page to track: false, and TLB_HAS_CODE is never
-     * set.  (The `else { true }` arm of upstream's side_effects test exists only for
-     * translate_address_read_no_side_effects, which discards this value anyway.) */
+    /* upstream: has_code = !is_in_mapped_range && jit::jit_page_has_code(...).  This port
+     * HAS a JIT now (V86C_JIT_X64), but its code protection does NOT ride this bit: a
+     * guest write to a page holding decoded or compiled code is caught by the per-store
+     * dirty/code bitmaps (uop_page_code, PERF-FIX-3's hooks) before any TLB entry matters,
+     * so TLB_HAS_CODE is never set here -- keep it that way unless the uop-cache's own
+     * invalidation chain moves onto this bit.  (The `else { true }` arm of upstream's
+     * side_effects test exists only for translate_address_read_no_side_effects, which
+     * discards this value anyway.) */
     bool has_code = false;
     int32_t info_bits = TLB_VALID | (for_writing ? 0 : TLB_READONLY) |
                         (allow_user ? 0 : TLB_NO_USER) |

@@ -6,6 +6,9 @@
 
 #include "modrm.h"
 
+#include <stdio.h>
+
+#include "cpu.h"
 #include "memory.h"
 #include "paging.h"
 
@@ -118,10 +121,23 @@ int32_t read_imm8(void)
         cpu->eip_phys = (int32_t)(phys ^ (uint32_t)eip);
         cpu->last_virt_eip = eip & ~0xFFF;
     }
-    DBG_ASSERT(!in_mapped_range((uint32_t)(cpu->eip_phys ^ eip)));
+    /* AUDIT-1 S1: the same resolution as cpu.c's fetch (get_phys_eip) -- the old
+     * DBG_ASSERT was a guest-reachable abort; an in-RAM physical address (the VGA hole
+     * included) is one the release reference executes from the raw bytes, and the raw
+     * mem8 read below stands.  Past the guest's RAM the port names the stop instead of
+     * reading host memory (the release crashes there; nasm_skip's jump fixture). */
+    uint32_t phys = (uint32_t)(cpu->eip_phys ^ eip);
+    if (phys >= cpu->memory_size) {
+        char stop[160];
+        snprintf(stop, sizeof(stop),
+                 "instruction fetch at physical 0x%x, past the end of guest RAM"
+                 " (0x%x) -- the release reference crashes here",
+                 (unsigned)phys, (unsigned)cpu->memory_size);
+        unimplemented_instruction(stop);
+    }
     /* the physical address was translated above, so this is the raw mem8 read that
      * upstream does (memory::mem8.offset(..)), not the mmap-checked router */
-    int32_t data8 = (int32_t)mem8[(uint32_t)(cpu->eip_phys ^ eip)];
+    int32_t data8 = (int32_t)mem8[phys];
     cpu->instruction_pointer = eip + 1;
     return data8;
 }

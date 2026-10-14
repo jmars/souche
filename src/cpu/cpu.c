@@ -97,7 +97,22 @@ uint32_t get_phys_eip(void)
 	}
 
 	uint32_t phys_addr = (uint32_t)(cpu->eip_phys ^ (int32_t)eip);
-	DBG_ASSERT(!in_mapped_range(phys_addr));
+	/* AUDIT-1 S1: the old DBG_ASSERT(!in_mapped_range(phys_addr)) was guest-reachable (a
+	 * guest points EIP at the VGA hole with one jmp; MEASURED rc 134 on the eip-hole
+	 * image) and it conflated two cases.  A fetch whose physical address is inside guest
+	 * RAM -- the VGA hole included -- is one the RELEASE reference executes from the raw
+	 * bytes (memory::mem8.offset(..)), which is exactly what the return value feeds; the
+	 * assert is gone and the raw read stands.  A fetch PAST the guest's RAM the release
+	 * does not survive either (the nasm suite's pinned jump fixture is its SIGSEGV), so
+	 * this port names that instead of reading host memory. */
+	if (phys_addr >= cpu->memory_size) {
+		char stop[160];
+		snprintf(stop, sizeof(stop),
+		         "instruction fetch at physical 0x%x, past the end of guest RAM"
+		         " (0x%x) -- the release reference crashes here",
+		         (unsigned)phys_addr, (unsigned)cpu->memory_size);
+		unimplemented_instruction(stop);
+	}
 	return phys_addr;
 }
 
@@ -110,7 +125,18 @@ uint32_t get_phys_eip(void)
  * conditions are the reference's. */
 void interpreted_run(uint32_t phys_addr)
 {
-	DBG_ASSERT(!in_mapped_range(phys_addr));
+	/* AUDIT-1 S1: same resolution as get_phys_eip's (this loop's own fetch goes through
+	 * that function at the tail).  An in-RAM address -- the VGA hole included -- runs the
+	 * raw bytes, as the release reference does; past the guest's RAM the port names the
+	 * stop instead of reading host memory. */
+	if (phys_addr >= cpu->memory_size) {
+		char stop[160];
+		snprintf(stop, sizeof(stop),
+		         "instruction fetch at physical 0x%x, past the end of guest RAM"
+		         " (0x%x) -- the release reference crashes here",
+		         (unsigned)phys_addr, (unsigned)cpu->memory_size);
+		unimplemented_instruction(stop);
+	}
 
 	jit_block_boundary = false;
 	int32_t i = 0;

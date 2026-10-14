@@ -1,0 +1,50 @@
+== the revert, as a diff against the shipped Makefile ==
+--- Makefile	2026-10-13 21:12:22.821491685 +0000
++++ /tmp/Makefile.pertu	2026-10-14 14:47:03.489841809 +0000
+@@ -108,6 +108,7 @@
+            src/cpu/cpu.h src/cpu/exec_boundary.h \
+            src/cpu/jit_mem.h src/cpu/jit_x64.h src/cpu/jit_codegen.h
+ CPU_CFLAGS := $(CFLAGS) $(PERF_CFLAGS) -Werror
++CPU_OBJ := $(patsubst src/cpu/%.c,$(BUILD)/cpu/%.o,$(CPU_SRC))
+ 
+ # M2-1 (HANDOFF=v86c): THE MACHINE -- the device layer.  ONE C FILE PER UPSTREAM JS DEVICE
+ # FILE in v86/src/ (io/pit/rtc/dma/ps2/acpi/pci + the device bus), so the JS->C mapping
+@@ -372,9 +373,9 @@
+ # PERF-1: the core is linked from $(UNITY_OBJ); $(GEN_OBJ) is still a prerequisite (it is
+ # the object the results/*-mut-rig.sh scripts link by path, and the selftest links take it
+ # too) but is INSIDE the unity object, so it is not on the command line.
+-$(BUILD)/v86c: src/main.c $(UNITY_OBJ) $(GEN_OBJ) $(HW_OBJ) $(SF_OBJ) $(MINIBIOS_EMBED)
++$(BUILD)/v86c: src/main.c $(CPU_OBJ) $(UOP_OBJ) $(GEN_OBJ) $(HW_OBJ) $(SF_OBJ) $(MINIBIOS_EMBED)
+ 	@mkdir -p $(BUILD)
+-	$(CC) $(CFLAGS) $(PERF_CFLAGS) -I src $(GC_LDFLAGS) -o $@ src/main.c $(MINIBIOS_EMBED) $(UNITY_OBJ) $(HW_OBJ) $(SF_OBJ)
++	$(CC) $(CFLAGS) $(PERF_CFLAGS) -I src $(GC_LDFLAGS) -o $@ src/main.c $(MINIBIOS_EMBED) $(CPU_OBJ) $(UOP_OBJ) $(HW_OBJ) $(GEN_OBJ) $(SF_OBJ)
+ 
+ # M1a: the core's translation units, compiled standalone (see the header note).
+ $(BUILD)/cpu/%.o: src/cpu/%.c $(CPU_HDR)
+== building the per-TU arm (build/revert) ==
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/revert/cpu/paging.o src/cpu/paging.c
+node gen/interpreter_uop.js
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -I src -Wl,--gc-sections -o build/revert/v86c src/main.c build/revert/minibios_embed.c build/revert/cpu/cpu_state.o build/revert/cpu/flags.o build/revert/cpu/memory.o build/revert/cpu/paging.o build/revert/cpu/arith.o build/revert/cpu/modrm.o build/revert/cpu/misc_instr.o build/revert/cpu/string.o build/revert/cpu/instructions.o build/revert/cpu/instructions_0f.o build/revert/cpu/sse_instr.o build/revert/cpu/softfloat.o build/revert/cpu/fpu.o build/revert/cpu/exceptions.o build/revert/cpu/pic.o build/revert/cpu/cpu.o build/revert/cpu/exec_boundary.o build/revert/cpu/uop_cache.o build/revert/cpu/jit_mem.o build/revert/cpu/jit_x64.o build/revert/cpu/jit_codegen.o build/revert/cpu/uop_gen.o build/revert/hw/io.o build/revert/hw/bus.o build/revert/hw/pit.o build/revert/hw/rtc.o build/revert/hw/dma.o build/revert/hw/ps2.o build/revert/hw/acpi.o build/revert/hw/pci.o build/revert/hw/machine.o build/revert/hw/uart.o build/revert/hw/kernel.o build/revert/hw/ide.o build/revert/hw/virtio.o build/revert/hw/virtio_console.o build/revert/cpu/interpreter_gen.o build/revert/sf/softfloat.o
+== benchmarking it ==
+results/perf-1/revert-attribution.sh: line 37: PERF_CFLAGS: command not found
+== perf_bench: ATTRIBUTION: per-TU link, same 
+bin=build/revert/v86c limit=200000000 kernel=tests/images/vmlinuz-i386 runs=1
+cores=32 load-before=2.02 1.46 1.20
+kernel=7.1.8-1-default cflags-host=cc (SUSE Linux) 16.2.0
+asserting: instruction count 200095214
+asserting: terminal guest state "in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0"
+asserting: serial output sha256 fae4924b13b07d441b0ad8458047d2f1d8abf0d1ec59876f44b88ef67d2d0b2a
+run  1: real 0.914s user 0.905s sys 0.008s  instr=200095214  state=ok serial=ok
+load-after=2.02 1.46 1.20
+n=1
+real: best 0.914  median 0.914  worst 0.914
+user: best 0.905  median 0.905  worst 0.905
+cpu (user+sys): best 0.913  median 0.913
+MIPS at best real: 218.92   at median real: 218.92
+verified (every run): 200095214 instructions, the terminal guest state clause
+                      above, and the guest's serial output sha256 -- every number in
+                      this output times THAT workload; none of them asserts it.
+raw samples appended to results/perf-1/samples.txt

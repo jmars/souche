@@ -11,7 +11,7 @@ tsc: Detected 1000.000 MHz processor
 last_pfn = 0x5000 max_arch_pfn = 0x100000
 x86/PAT: PAT support disabled because CONFIG_X86_PAT is disabled in the kernel.
 x86/PAT: Configuration [0-7]: WB  WT  UC- UC  WB  WT  UC- UC  
-RAMDISK: [mem 0x04000000-0x04367fff]
+RAMDISK: [mem 0x04000000-0x040cafff]
 80MB LOWMEM available.
   mapped low ram: 0 - 05000000
   low ram: 0 - 05000000
@@ -26,7 +26,7 @@ On node 0, zone Normal: 1 pages in unavailable ranges
 On node 0, zone Normal: 97 pages in unavailable ranges
 [mem 0x05000000-0xffffffff] available for PCI devices
 clocksource: refined-jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645519600211568 ns
-Kernel command line: console=hvc0 console=ttyS0 tsc=unstable idle=poll rdinit=/fx/store/54ce1971a82e89d78a83e3f805893b4e1651d714c62e69fda2c711ff8d3f2b69-fx-init/fx-init fx.store=/fx/store
+Kernel command line: console=hvc0 console=ttyS0 tsc=unstable idle=poll rdinit=/fx/store/047b11f9e9a69cee311c14820ed5d39acccf8d78c1001fc574da6dba7719dffa-fx-init/fx-init fx.store=/fx/store
 tsc: Marking TSC unstable due to boot parameter
 random: crng init done
 Dentry cache hash table entries: 16384 (order: 4, 65536 bytes, linear)
@@ -52,7 +52,7 @@ no APIC, boot with the "lapic" boot parameter to force-enable it.
 no hardware sampling interrupt available.
 PMU not available due to virtualization, using software events only.
 signal: max sigframe size: 1440
-Memory: 73956K/81528K available (1158K kernel code, 547K rwdata, 232K rodata, 192K init, 204K bss, 7280K reserved, 0K cma-reserved)
+Memory: 76632K/81528K available (1158K kernel code, 547K rwdata, 232K rodata, 192K init, 204K bss, 4604K reserved, 0K cma-reserved)
 devtmpfs: initialized
 clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645041785100000 ns
 futex hash table entries: 256 (order: -1, 3072 bytes, linear)
@@ -63,10 +63,10 @@ Unpacking initramfs...
 workingset: timestamp_bits=30 max_order=15 bucket_order=0
 Serial: 8250/16550 driver, 4 ports, IRQ sharing disabled
 serial8250: ttyS0 at I/O 0x3f8 (irq = 4, base_baud = 115200) is a 16550A
-Freeing initrd memory: 3488K
+Freeing initrd memory: 812K
 Freeing unused kernel image (initmem) memory: 192K
 Write protecting kernel text and read-only data: 1392k
-Run /fx/store/54ce1971a82e89d78a83e3f805893b4e1651d714c62e69fda2c711ff8d3f2b69-fx-init/fx-init as init process
+Run /fx/store/047b11f9e9a69cee311c14820ed5d39acccf8d78c1001fc574da6dba7719dffa-fx-init/fx-init as init process
 fx-init: store from kernel command line fx.store=/fx/store
 fx-init: boot start store /fx/store
 fx-init: disk store: no /dev/vda — using ramfs store
@@ -74,4 +74,4 @@ fx-init: pivot_root EINVAL (initramfs root is the namespace root) — switch_roo
 fx-init: pivoted to tmpfs root (magic 0x1021994)
 fx-init: fifo control up (/run/fx/control.in + /run/fx/control.out)
 fx-init: no UNIX control socket (/run/fx/control.sock: socket failed: Function not implemented — this kernel has no socket layer: CONFIG_NET is not set) — the fifo pair (/run/fx/control.in + control.out) carries the protocol for in-guest fxctl
-fx> fx-init: boot-ok v3
+fx-init: boot-ok v3

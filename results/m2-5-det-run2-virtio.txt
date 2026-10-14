@@ -13,8 +13,16 @@ sd 0:0:0:0: [sda] Preferred minimum I/O size 512 bytes
 scsi 1:0:0:0: CD-ROM            SONY     CD-ROM CDU-1000  1.1a PQ: 0 ANSI: 1 CCS
 sd 0:0:0:0: [sda] Attached SCSI disk
 Freeing initrd memory: 3488K
-Freeing unused kernel image (initmem) memory: 228K
-Write protecting kernel text and read-only data: 2324k
-Run /fx/store/54ce1971a82e89d78a83e3f805893b4e1651d714c62e69fda2c711ff8d3f2b69-fx-init/fx-init as init process
-EXT4-fs (sda): mounted filesystem bca8c481-2fd0-41bc-9001-b0a466163a9a r/w without journal. Quota mode: disabled.
-ext4 filesystem being mounted at /fx/disk supports timestamps until 2038-01-19 (0x7fffffff)
+/dev/root: Can't open blockdev
+VFS: Cannot open root device "" or unknown-block(0,0): error -6
+Please append a correct "root=" boot option; here are the available partitions:
+0800           65536 sda 
+ driver: sd
+List of all bdev filesystems:
+ ext3
+ ext2
+ ext4
+
+Kernel panic - not syncing: VFS: Unable to mount root fs on unknown-block(0,0)
+Kernel Offset: disabled
+---[ end Kernel panic - not syncing: VFS: Unable to mount root fs on unknown-block(0,0) ]---

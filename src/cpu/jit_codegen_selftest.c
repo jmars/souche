@@ -1423,6 +1423,21 @@ static void setup_matrix_highbyte(void)
 	write_reg32(EDX, 0x8888AB12); /* DH = 0xAB, DL = 0x12 */
 }
 
+/* THE SHIFT STATE (PERF-7 F2): destination and count both controlled, and the values chosen
+ * so the flag results are NON-TRIVIAL -- a shift whose CF and OF both land 0 exercises the
+ * or-ing below the same way a shift whose inputs were zero would (the arithmetic passes for
+ * the trivial reason).  EAX = 0x1A345678: `shl eax,cl` at CL=5 takes CF from bit 27 (set)
+ * and OF = 1 ^ sign(result) = 1; `shr eax,cl` takes CF from bit 4 (set) and OF = 0.
+ * EDX = 0x88000010: both directions of `shl/shr edx,cl` produce CF = 1 AND OF = 1, from a
+ * NEGATIVE original (the sign-extended >> arith.c's shr-OF reads). */
+static void setup_matrix_shift(void)
+{
+	setup_matrix();
+	write_reg32(EAX, 0x1A345678);
+	write_reg32(ECX, 0x00000005); /* CL = 5 */
+	write_reg32(EDX, 0x88000010);
+}
+
 static void recipe_case(const char *name, const uint8_t *body, int blen, void (*setup)(void),
                         int repeat)
 {
@@ -1669,6 +1684,96 @@ static void test_recipe_matrix(void)
 		recipe_case("test [m],imm32 (read)", r11, sizeof r11, setup_matrix_lazy, 2);
 	}
 
+	/* --- the shifts (PERF-7 F2): shl/shr r32, cl ---------------------------------
+	 * THE AUDIT'S EXPLICIT CAVEAT, closed here: the two by-cl recipes were first measured
+	 * with NO differential-matrix arms (the 3006-check matrix did not grow) -- their only
+	 * validation was the boot identity.  The semantics that make arms worth it are the
+	 * class this project has shipped wrong before: the count mask (CL = 0x20 is count 0),
+	 * the count-0 case (arith.c stores NOTHING -- no write-back, no flag state), and the
+	 * flag results (CF = the last bit out, OF per direction).  cmp_state compares flags /
+	 * flags_changed / last_result across all three arms, so a wrong CF -- or a flag store
+	 * on a count-0 shift, which the body never does -- fails the case, not just a reg. */
+	{
+		static const uint8_t s1[] = { 0xD3, 0xE0 }; /* shl eax, cl */
+		static const uint8_t s2[] = { 0xD3, 0xE8 }; /* shr eax, cl */
+		static const uint8_t s3[] = { 0xD3, 0xE2 }; /* shl edx, cl */
+		static const uint8_t s4[] = { 0xD3, 0xEA }; /* shr edx, cl */
+
+		recipe_case("shl eax,cl (composed)", s1, sizeof s1, setup_matrix_shift, 2);
+		recipe_case("shr eax,cl (composed)", s2, sizeof s2, setup_matrix_shift, 2);
+		recipe_case("shl edx,cl (negative, CF=1 OF=1)", s3, sizeof s3, setup_matrix_shift, 2);
+		recipe_case("shr edx,cl (negative, CF=1 OF=1)", s4, sizeof s4, setup_matrix_shift, 2);
+	}
+
+	/* THE COUNT SEMANTICS, one execution each with the answer pinned in every arm (the
+	 * high-byte rule: a shift WRITES its destination, so a second execution composes and
+	 * the pin would need the composition -- one pass is the value the encoding means). */
+	{
+		static const uint8_t c1[] = { 0xD3, 0xE0 }; /* shl eax, cl */
+		static const uint8_t c2[] = { 0xD3, 0xE8 }; /* shr eax, cl */
+
+		recipe_case("shl eax,cl (count 5: CF=1 OF=1)", c1, sizeof c1, setup_matrix_shift, 1);
+		for (int arm = 0; arm < 3; arm++) {
+			CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 0x468ACF00u);
+		}
+		recipe_case("shr eax,cl (count 5: CF=1 OF=0)", c2, sizeof c2, setup_matrix_shift, 1);
+		for (int arm = 0; arm < 3; arm++) {
+			CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 0x00D1A2B3u);
+		}
+
+		/* THE MASK + COUNT-0 CASES.  CL = 0x20 is count 0 through the body's `& 31` -- a
+		 * recipe that tested CL directly (or shifted by it unmasked) stores flag state on
+		 * a count-0 shift, which the body never does: flags_changed must STILL be the 0
+		 * the materialised setup left, and the destination must be untouched. */
+		{
+			static const uint8_t z0[] = { 0xB9, 0x00, 0x00, 0x00, 0x00, /* mov ecx, 0 */
+			                              0xD3, 0xE0 };                 /* shl eax, cl */
+			static const uint8_t z1[] = { 0xB9, 0x20, 0x00, 0x00, 0x00, /* mov ecx, 0x20 */
+			                              0xD3, 0xE8 };                 /* shr eax, cl */
+
+			recipe_case("shl eax,cl (CL=0: NOTHING stored)", z0, sizeof z0,
+			            setup_matrix_shift, 1);
+			for (int arm = 0; arm < 3; arm++) {
+				CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 0x1A345678u);
+				CHECK_EQ(snap[arm].cpu.flags_changed, 0);
+			}
+			recipe_case("shr eax,cl (CL=0x20 masked to 0)", z1, sizeof z1,
+			            setup_matrix_shift, 1);
+			for (int arm = 0; arm < 3; arm++) {
+				CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 0x1A345678u);
+				CHECK_EQ(snap[arm].cpu.flags_changed, 0);
+			}
+		}
+
+		/* THE 5-BIT MASK'S OTHER END: CL = 0xFF is count 31.  `mov eax, 1` (a RECIPE uop)
+		 * and `mov cl, 0xff` (a CALLED uop) ride in the program -- a recipe, a call and a
+		 * shift in one block is also a shape the elision must survive -- so neither the
+		 * setup's EAX nor its ECX is the operand here. */
+		{
+			static const uint8_t m1[] = { 0xB8, 0x01, 0x00, 0x00, 0x00, /* mov eax, 1 */
+			                              0xB1, 0xFF,                   /* mov cl, 0xff */
+			                              0xD3, 0xE0 };                 /* shl eax, cl */
+
+			recipe_case("shl eax,cl (CL=0xff -> count 31)", m1, sizeof m1,
+			            setup_matrix_shift, 1);
+			for (int arm = 0; arm < 3; arm++) {
+				CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 0x80000000u);
+			}
+		}
+
+		/* THE LAZY-FLAG STATE: the shift REPLACES the getter source (last_result becomes
+		 * the shift's result, flags_changed the shift's mask), so a following reader must
+		 * see the shift's state and not the stale cmp's -- the same composition the ALU
+		 * cases exercise, on a recipe whose flags are half-materialised (CF/OF direct). */
+		{
+			static const uint8_t l1[] = { 0xD3, 0xE0, /* shl eax, cl */
+			                              0x73, 0x01, 0xF4, 0x90, 0xF4 }; /* jae +1 */
+
+			recipe_case("shl eax,cl; jae (lazy before)", l1, sizeof l1,
+			            setup_matrix_lazy, 2);
+		}
+	}
+
 	/* --- inc/dec (CF-preserving), mov imm, nop --- */
 	{
 		static const uint8_t d1[] = { 0x40 };                   /* inc eax */
@@ -1859,6 +1964,12 @@ static void test_recipe_table(void)
 		{ (void (*)(void))instr_F6_0_reg, UOP_SHAPE_REGF1, 0x0F, "test r/m8 imm8" },
 		{ (void (*)(void))instr32_F7_2_reg, UOP_SHAPE_REGF0, 0, "not reg" },
 		{ (void (*)(void))instr32_F7_2_mem, UOP_SHAPE_MEMF0, 0, "not mem" },
+		/* PERF-7 F2: the by-cl shift register forms.  The matrix's shift arms drive the
+		 * semantics; these pins keep the ENTRIES findable (a dropped entry silently
+		 * de-inlines 73.7% of the benchmark's called toll -- a slowdown, invisible to
+		 * every state gate, which is why it is pinned here and not only measured). */
+		{ (void (*)(void))instr32_D3_4_reg, UOP_SHAPE_REGF0, 0, "shl r32,cl" },
+		{ (void (*)(void))instr32_D3_5_reg, UOP_SHAPE_REGF0, 0, "shr r32,cl" },
 		{ (void (*)(void))instr32_40, UOP_SHAPE_PLAIN0, 0, "inc eax" },
 		{ (void (*)(void))instr32_4F, UOP_SHAPE_PLAIN0, 0, "dec edi" },
 		{ (void (*)(void))instr32_BE, UOP_SHAPE_PLAIN1, 42, "mov r32,imm32" },
@@ -1937,6 +2048,26 @@ static void test_recipe_table(void)
 		        jit_recipe_count(), covered, pairs);
 		CHECK(covered > 0);
 		CHECK(pairs > covered); /* the table is a subset: the fallback is real */
+
+		/* (d) PERF-7 F1: THE FLAG-CLAUSE INVARIANT.  The elision criterion excludes
+		 * FLUSH/BLOCK_END uops by a flag test; its mechanical ground is that NO recipe
+		 * encoding carries either descriptor flag (scanned over all descriptors at
+		 * landing, results/perf-7.md).  A future table entry whose encoding carries
+		 * UOP_DESC_FLUSH or UOP_DESC_BLOCK_END makes that clause LOAD-BEARING -- this
+		 * pin names it at make-selftest time, instead of the clause being a no-op
+		 * someone deletes. */
+		for (uint32_t i = 0; i < uop_desc_count; i++) {
+			void (*fns[3])(void);
+			fns[0] = uop_descs[i].fn_plain;
+			fns[1] = uop_descs[i].fn_mem;
+			fns[2] = uop_descs[i].fn_reg;
+			for (int k = 0; k < 3; k++) {
+				if (fns[k] == NULL) continue;
+				if (jit_recipe_name(fns[k]) == NULL) continue;
+				CHECK((uop_descs[i].flags & UOP_DESC_BLOCK_END) == 0);
+				CHECK((uop_descs[i].iflags & UOP_DESC_FLUSH) == 0);
+			}
+		}
 	}
 }
 
@@ -2017,6 +2148,105 @@ static void test_chain(void)
 	        (unsigned long long)arm_stats[2].blocks_compiled);
 }
 
+/* ==================================================================== *
+ * PERF-7 F1: THE ELISION BATTERY -- the checks-skip is a claim about which
+ * checks a recipe CANNOT need, and that claim needs its own probes.
+ *
+ *  (a) THE ELIDED SHAPE: consecutive recipe uops in one block must elide the shared
+ *      checks routine on EVERY one of them (the criterion's compile-time count is the
+ *      instrument), and the full state -- instruction_counter and uop_pending included,
+ *      which is where a wrongly-elided flush or a missed pending count would show --
+ *      must be identical across all three engines.
+ *
+ *  (b) THE EXCLUDED SHAPE: the criterion's last clause (same page) is not vacuous.  An
+ *      instruction ENDING at its page's last byte (eip+len on the next page -- the
+ *      decoder only drops instructions whose BYTES leave the page) must keep its checks:
+ *      the executor's step 8 (the page-cross break) fires there and ends a reference
+ *      batch.  The probe pins the count relationship -- EVERY recipe uop elides EXCEPT
+ *      the edge uop -- and the counter equality across arms.
+ *
+ *  THE OTHER EXCLUDED SHAPES are driven by the existing pins and would fail without
+ *  them: JCC/JMP/LEA (the ip writers) by the matrix's jcc/jmp/lea cases and
+ *  test_tail_exit (a taken branch must reach step 11's TAIL), FLUSH by test_staircase's
+ *  cmpxchg arm, BLOCK_END/jit_block_boundary by its sti arm.  The mutation arms in
+ *  results/perf-7/mut-*.txt invert each clause and require the matching pin to fail.
+ * ==================================================================== */
+static void test_continuation_elision(void)
+{
+	fprintf(stderr, "  == test_continuation_elision (PERF-7 F1: the checks-skip battery)\n");
+
+	/* (a) six consecutive recipe uops -- mov imm, add, sub, mov imm, inc, shl -- then hlt.
+	 * Every recipe is on one page and carries neither flag, so all six must elide; the hlt
+	 * is a CALLED uop whose checks run (and which is the only reason the block exits). */
+	{
+		static const uint8_t prog[] = {
+			0xB8, 0x01, 0x00, 0x00, 0x00, /* mov eax, 1     (recipe: mov imm32) */
+			0x01, 0xC8,                   /* add eax, ecx   (recipe; ECX = 5 -> 6) */
+			0x29, 0xC8,                   /* sub eax, ecx   (recipe; -> 1) */
+			0xB9, 0x03, 0x00, 0x00, 0x00, /* mov ecx, 3     (recipe) */
+			0x40,                         /* inc eax        (recipe; -> 2) */
+			0xD3, 0xE0,                   /* shl eax, cl    (recipe; cl = 3 -> 16) */
+			0xF4,                         /* hlt            (CALLED: its checks run) */
+			0xEB, 0xFD,                   /* jmp $ */
+		};
+
+		for (int arm = 0; arm < 3; arm++) {
+			arm_setup = setup_matrix_shift;
+			arm_run(arm, CODE, prog, (int)sizeof prog, 200);
+		}
+		arm_setup = NULL;
+		cmp_state(0, 1, "elision: interp vs uop-cache");
+		cmp_state(1, 2, "elision: uop-cache vs compiled");
+		/* the elision ENGAGED -- all six recipes, or the probes above are measuring an
+		 * un-elided block and proving nothing (the vacuous-pass class) */
+		CHECK(arm_stats[2].blocks_compiled >= 1);
+		CHECK_EQ(arm_stats[2].uops_checks_elided, 6);
+		CHECK_EQ(arm_stats[2].inlined_uops, 6);
+		CHECK_EQ(arm_stats[2].called_uops, 1);
+		/* and the answer is the composed arithmetic, in every arm */
+		for (int arm = 0; arm < 3; arm++)
+			CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 16u);
+	}
+
+	/* (b) the page-edge uop: `add eax, ecx` placed so it ENDS at CODE+0x1000 (eip
+	 * CODE+0xFFE, len 2 -> ip on the next page).  Its checks MUST run and step 8 must end
+	 * the reference batch there; every other recipe uop in the page (the mov and the
+	 * nop fill) elides.  The budget covers the fill: this program is ~0x1001 instructions,
+	 * each executed once -- which is also what makes the static elided count comparable
+	 * to the dynamic inlined count. */
+	{
+		static uint8_t prog[0x1010];
+		int n = 0;
+
+		memset(prog, 0x90, sizeof prog); /* nop fill: recipe uops, all elidable */
+		prog[n++] = 0xB8;                /* mov eax, 1 */
+		prog[n++] = 0x01;
+		prog[n++] = 0x00;
+		prog[n++] = 0x00;
+		prog[n++] = 0x00;
+		n = 0xFFE;                       /* (the fill is already there) */
+		prog[n++] = 0x01;                /* add eax, ecx @ CODE+0xFFE ... */
+		prog[n++] = 0xC8;                /*   ... its ip lands on the NEXT page */
+		prog[n++] = 0xF4;                /* hlt @ CODE+0x1000 */
+		prog[n++] = 0xEB;
+		prog[n++] = 0xFD;                /* jmp $ */
+
+		for (int arm = 0; arm < 3; arm++) {
+			arm_setup = setup_matrix_shift;
+			arm_run(arm, CODE, prog, n, 8192);
+		}
+		arm_setup = NULL;
+		cmp_state(0, 1, "page edge: interp vs uop-cache");
+		cmp_state(1, 2, "page edge: uop-cache vs compiled");
+		/* exactly ONE recipe uop kept its checks: the page-edge add.  Every recipe ran
+		 * once, so the dynamic inlined count IS the static recipe count. */
+		CHECK_EQ(arm_stats[2].uops_checks_elided, arm_stats[2].inlined_uops - 1);
+		CHECK(arm_stats[2].uops_checks_elided > 0xFF0);
+		for (int arm = 0; arm < 3; arm++)
+			CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 6u); /* 1 + 5 */
+	}
+}
+
 int main(void)
 {
 	for (int arm = 0; arm < 3; arm++) {
@@ -2046,6 +2276,7 @@ int main(void)
 	test_cross_return();
 	test_exit_kinds();
 	test_chain();
+	test_continuation_elision();
 
 	if (checks == 0) {
 		fprintf(stderr, "jit_codegen_selftest: NO CHECKS RAN\n");

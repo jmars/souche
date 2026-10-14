@@ -26,7 +26,7 @@ On node 0, zone Normal: 1 pages in unavailable ranges
 On node 0, zone Normal: 97 pages in unavailable ranges
 [mem 0x05000000-0xffffffff] available for PCI devices
 clocksource: refined-jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645519600211568 ns
-Kernel command line: console=hvc0 console=ttyS0 tsc=unstable idle=poll rdinit=/fx/store/54ce1971a82e89d78a83e3f805893b4e1651d714c62e69fda2c711ff8d3f2b69-fx-init/fx-init fx.store=/fx/store
+Kernel command line: console=hvc0 console=ttyS0 tsc=unstable idle=poll rdinit=/fx/store/047b11f9e9a69cee311c14820ed5d39acccf8d78c1001fc574da6dba7719dffa-fx-init/fx-init fx.store=/fx/store
 tsc: Marking TSC unstable due to boot parameter
 random: crng init done
 Dentry cache hash table entries: 16384 (order: 4, 65536 bytes, linear)
@@ -112,120 +112,16 @@ sd 0:0:0:0: [sda] Preferred minimum I/O size 512 bytes
 scsi 1:0:0:0: CD-ROM            SONY     CD-ROM CDU-1000  1.1a PQ: 0 ANSI: 1 CCS
 sd 0:0:0:0: [sda] Attached SCSI disk
 Freeing initrd memory: 3488K
-Freeing unused kernel image (initmem) memory: 228K
-Write protecting kernel text and read-only data: 2324k
-Run /fx/store/54ce1971a82e89d78a83e3f805893b4e1651d714c62e69fda2c711ff8d3f2b69-fx-init/fx-init as init process
-fx-init: store from kernel command line fx.store=/fx/store
-fx-init: boot start store /fx/store
-EXT4-fs (sda): mounted filesystem bca8c481-2fd0-41bc-9001-b0a466163a9a r/w without journal. Quota mode: disabled.
-ext4 filesystem being mounted at /fx/disk supports timestamps until 2038-01-19 (0x7fffffff)
-cp: can't preserve times of '/fx/disk/store/ff234a4b775daa61f8273073648981f26c8dde8ac198ee739d866cb87ccb9866-dhall-c/.provisioned-by-build-store': Function not implemented
-cp: can't preserve times of '/fx/disk/store/ff234a4b775daa61f8273073648981f26c8dde8ac198ee739d866cb87ccb9866-dhall-c': Function not implemented
-cp: can't preserve times of '/fx/disk/store/c646492ea4785cb83dc04a389380fb70e4f8eab5a0de43f289b641316d713251-fxstore/.provisioned-by-build-store': Function not implemented
-cp: can't preserve times of '/fx/disk/store/c646492ea4785cb83dc04a389380fb70e4f8eab5a0de43f289b641316d713251-fxstore': Function not implemented
-cp: can't preserve times of '/fx/disk/store/970babc820e4e7da9c99df6f05109a3640ed179576428adfddf8b1754f3b5280-system-generation/etc/passwd': Function not implemented
-cp: can't preserve times of '/fx/disk/store/970babc820e4e7da9c99df6f05109a3640ed179576428adfddf8b1754f3b5280-system-generation/etc/hostname': Function not implemented
-cp: can't preserve times of '/fx/disk/store/970babc820e4e7da9c99df6f05109a3640ed179576428adfddf8b1754f3b5280-system-generation/etc/group': Function not implemented
-cp: can't preserve times of '/fx/disk/store/970babc820e4e7da9c99df6f05109a3640ed179576428adfddf8b1754f3b5280-system-generation/etc': Function not implemented
-cp: can't preserve times of '/fx/disk/store/970babc820e4e7da9c99df6f05109a3640ed179576428adfddf8b1754f3b5280-system-generation/config.dhall': Function not implemented
-cp: can't preserve times of '/fx/disk/store/970babc820e4e7da9c99df6f05109a3640ed179576428adfddf8b1754f3b5280-system-generation/Dhakefile.dhall': Function not implemented
-cp: can't preserve times of '/fx/disk/store/970babc820e4e7da9c99df6f05109a3640ed179576428adfddf8b1754f3b5280-system-generation': Function not implemented
-cp: can't preserve times of '/fx/disk/store/93211caf5c164c874e634691688a4ed1de89f324ca0f1cd7ceeb814bfcd07743-fxctl/fxctl': Function not implemented
-cp: can't preserve times of '/fx/disk/store/93211caf5c164c874e634691688a4ed1de89f324ca0f1cd7ceeb814bfcd07743-fxctl': Function not implemented
-cp: can't preserve times of '/fx/disk/store/8ec74aebab6dbe9e02cf90da0e6a6e6d4a0074a32c9587f73733e353a7466e6d-dhake/dhake.com': Function not implemented
-cp: can't preserve times of '/fx/disk/store/8ec74aebab6dbe9e02cf90da0e6a6e6d4a0074a32c9587f73733e353a7466e6d-dhake': Function not implemented
-cp: can't preserve times of '/fx/disk/store/8415e57597135dc38c3a3a4617f468411b342bb329ebc09cc1342d52296bf551-fake-service/fakesvc': Function not implemented
-cp: can't preserve times of '/fx/disk/store/8415e57597135dc38c3a3a4617f468411b342bb329ebc09cc1342d52296bf551-fake-service': Function not implemented
-cp: can't preserve times of '/fx/disk/store/79d46d5ac4ab4dc395b3ce098c79e21f14a6d49dbd285e058d4caa5cd0818204-datalog-dafsa/.provisioned-by-build-store': Function not implemented
-cp: can't preserve times of '/fx/disk/store/79d46d5ac4ab4dc395b3ce098c79e21f14a6d49dbd285e058d4caa5cd0818204-datalog-dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/658c40b5d2ba18b443c043df1c92c357d014f380bce1e5af67f976581c148183-fx-activate/fx-activate': Function not implemented
-cp: can't preserve times of '/fx/disk/store/658c40b5d2ba18b443c043df1c92c357d014f380bce1e5af67f976581c148183-fx-activate': Function not implemented
-cp: can't preserve times of '/fx/disk/store/54ce1971a82e89d78a83e3f805893b4e1651d714c62e69fda2c711ff8d3f2b69-fx-init/fx-init': Function not implemented
-cp: can't preserve times of '/fx/disk/store/54ce1971a82e89d78a83e3f805893b4e1651d714c62e69fda2c711ff8d3f2b69-fx-init': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/user.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/txn.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/tool_fxstore.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/symbols.array': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/svc_probe.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/svc_env.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/svc_console.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/svc_bin.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/svc_backoff.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/svc_argv.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/svc.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/store.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/srcstore.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/src_of.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/CURRENT': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/user.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/tool_fxstore.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/terms.bin': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/symbols.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/symbols.array': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/svc_probe.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/svc_env.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/svc_console.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/svc_bin.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/svc_backoff.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/svc_argv.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/svc.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/store.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/srcstore.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/src_of.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/root.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/provides.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/pkg.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/manifest.txt': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/install.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/generation_config.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/generation.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/dep.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/closure.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/boot_grace.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/agent_svc.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/activate_root.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/3': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/2/terms.bin': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/2/symbols.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/2/symbols.array': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/2/store.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/2/srcstore.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/2/manifest.txt': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/2': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/1/terms.bin': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/1/symbols.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/1/symbols.array': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/1/store.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/1/srcstore.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/1/root.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/1/pkg.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/1/manifest.txt': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/1/dep.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/1/closure.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots/1': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/snapshots': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/root.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/root.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/rels.txt': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/provides.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/pkg.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/pkg.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/install.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/generation_config.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/generation.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/dep.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/dep.dafsa': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/closure.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/boot_grace.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/agent_svc.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/activate_root.wal': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db/LOCK': Function not implemented
-cp: can't preserve times of '/fx/disk/store/.db': Function not implemented
-cp: can't preserve times of '/fx/disk/store': Function not implemented
-fx-init: disk store mounted (current v3)
-fx-init: pivot_root EINVAL (initramfs root is the namespace root) — switch_root fallback (MS_MOVE + chroot) applied
-fx-init: pivoted to tmpfs root (magic 0x1021994)
-fx-init: warning: virtio control: open /dev/vport0p3: No such device or address
-fx-init: fifo control up (/run/fx/control.in + /run/fx/control.out)
-fx-init: no UNIX control socket (/run/fx/control.sock: socket failed: Function not implemented — this kernel has no socket layer: CONFIG_NET is not set) — the fifo pair (/run/fx/control.in + control.out) carries the protocol for in-guest fxctl
-fx> fx-init: boot-ok v3
+/dev/root: Can't open blockdev
+VFS: Cannot open root device "" or unknown-block(0,0): error -6
+Please append a correct "root=" boot option; here are the available partitions:
+0800           65536 sda 
+ driver: sd
+List of all bdev filesystems:
+ ext3
+ ext2
+ ext4
+
+Kernel panic - not syncing: VFS: Unable to mount root fs on unknown-block(0,0)
+Kernel Offset: disabled
+---[ end Kernel panic - not syncing: VFS: Unable to mount root fs on unknown-block(0,0) ]---

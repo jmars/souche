@@ -7,6 +7,7 @@
  * Every such call site keeps the same control flow, with the callback dropped.
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -60,7 +61,20 @@ bool is_memory_zeroed(uint32_t addr, uint32_t length)
     return true;
 }
 
-/* cpu.js:299-311 -- added by M2-1 (see memory.h). */
+/* cpu.js:299-311 -- added by M2-1 (see memory.h).
+ *
+ * AUDIT-1 S2: upstream's two dbg_asserts on the target are compiled out of the pinned
+ * release, and `mem8.set(blob, offset)` then THROWS a RangeError for a target that leaves
+ * the wasm view (MEASURED in node: `new Uint8Array(16).set(new Uint8Array(4), 20)` is a
+ * RangeError) -- the reference dies on this input.  This port's mem8 is a fixed C array
+ * and write_blob is on GUEST-reachable paths (a virtio descriptor address through
+ * virtq_chain_set_next_blob, a DMA address through dma_do_read), so the unbounded write
+ * would run off the guest's RAM into host memory.  The kernel loader's write_blob
+ * (kernel.c:56) is the tree's established shape for this exact operation: drop what falls
+ * outside guest memory and say so on stderr -- a host artifact, like V86C_LOG_PORTS; no
+ * guest-readable value depends on it.  The bound is memory_size (the reference's own view
+ * length), not in_mapped_range: a descriptor aimed at the VGA hole writes the same raw
+ * bytes the release's wasm view would. */
 void write_blob(const uint8_t *data, uint32_t length, uint32_t offset)
 {
     /* upstream's `dbg_assert(blob && blob.length >= 0)` -- the second conjunct cannot fail
@@ -68,17 +82,29 @@ void write_blob(const uint8_t *data, uint32_t length, uint32_t offset)
      * check). */
     DBG_ASSERT(data != NULL);
 
-    if (length) {
-        DBG_ASSERT(!in_mapped_range(offset));
-        DBG_ASSERT(!in_mapped_range(offset + length - 1));
+    if (length == 0) return;
 
-        /* upstream: this.jit_dirty_cache(offset, offset + blob.length) -- restored as the
-         * range invalidation (plan ss4.1's last row).  write_blob is the LOADER's path
-         * (src/main.c), so this is loader-time only; it is the one site that can write
-         * across a page and therefore the one that needs the range form. */
-        uop_invalidate_range(offset, length);
-        memcpy(mem8 + offset, data, length);
+    if (offset >= cpu->memory_size) {
+        fprintf(stderr, "v86c: write_blob: dropping %u bytes at 0x%x: outside guest memory"
+                        " (0x%x)\n",
+                (unsigned)length, (unsigned)offset, (unsigned)cpu->memory_size);
+        return;
     }
+    if ((uint64_t)offset + length > cpu->memory_size) {
+        uint32_t kept = cpu->memory_size - offset;
+        fprintf(stderr, "v86c: write_blob: dropping %u of %u bytes at 0x%x: outside guest"
+                        " memory (0x%x)\n",
+                (unsigned)(length - kept), (unsigned)length, (unsigned)offset,
+                (unsigned)cpu->memory_size);
+        length = kept;
+    }
+
+    /* upstream: this.jit_dirty_cache(offset, offset + blob.length) -- restored as the
+     * range invalidation (plan ss4.1's last row).  write_blob is the LOADER's path
+     * (src/main.c), so this is loader-time only; it is the one site that can write
+     * across a page and therefore the one that needs the range form. */
+    uop_invalidate_range(offset, length);
+    memcpy(mem8 + offset, data, length);
 }
 
 /* ------------------------------------------------------------------ *

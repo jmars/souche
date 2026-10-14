@@ -1,0 +1,18 @@
+v86c: jit: x86-64 W^X code pages: mmap RW -> write -> mprotect RX (platform probe PASSED at init). Linux VERIFIED (this build); macOS MAP_JIT/Apple Silicon UNVERIFIED (pthread_jit_write_protect_np is NOT used); Windows UNVERIFIED. aarch64 has no backend: compiled out (V86C_JIT_X64=0).
+v86c boot: kernel 7729664 bytes sha256 ce1f6dad86646efaa980fed238c7ed7e4189fd90c30f99a3788df9c9429cc5c9
+v86c boot: firmware 65536 bytes at 0xf0000, option ROM 512 bytes at 0xc0000, memory 64 MiB, hda none, initrd none, cmdline 'console=ttyS0'
+v86c boot: reset cs=0xf000 eip=0xffff0
+v86c boot: 200095214 instructions, in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0
+j6: t_uoprun 3016961255 cyc / 238547 calls; t_dispatch_raw 71535310 cyc / 243783 brackets
+j6: NOTE t_dispatch is the C BETWEEN blocks (exit handling + loop top + hash probe); it EXCLUDES the prologue/epilogue, which run inside the block -- a LOWER bound on what chaining removes.
+j6: pair_cost 54 cyc -> dispatch_est 58371028 cyc, interior_est 2958590227 cyc
+uop-cache: lookups 15317515 (hits 15316502 = 99.99%, decodes 740, decode-fails 0)
+uop-cache: instructions 200095213 (uops 200095213, mid-batch fallback steps 0, interpreted_run instructions 0 -> fallback 0.000%)
+uop-cache: flushes 257574, discards 0, SMC aborts 11, invalidated blocks 308, cache clears 0, block ends 4217
+uop-cache: arena peak 12049/65536 uops, block peak 740/8192
+jit: pages alloc 945, blocks compiled 740 (live 432), lookups 740 (hits 0, misses 740), execs 243784, invalidations 308, deferred frees 11, W^X flips 1050, pool exhausted 0, hash full 0
+jit: blocks compiled 740 in 740 attempts (reused 0); refused: fit 0 (0 uops), pool 0, empty 0
+jit: block sizes: compiled 12049 uops in 1955383 bytes (mean 162.3 B/uop, 16.3 uops/block); refused-for-fit 0 uops in 0 blocks (mean 0.0)
+jit: uops executed inlined 195429258 / called 4665955 -> 97.67% dynamic inlined (compile-time: 8330 with a recipe, 3719 without, 6817 with the checks elided)
+jit: recipe table: 90 entries over 12049 emitted uops
+jit: exits: return 234330, tail 5227, abort 10, block-end 4217; chain links 15073458

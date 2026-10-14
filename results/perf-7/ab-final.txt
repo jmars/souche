@@ -1,0 +1,16 @@
+== perf-7-ab: base vs final  pairs=5
+load-before=0.90 0.96 1.02
+a    real 1.465s  instr=ok state=ok serial=ok
+b    real 0.861s  instr=ok state=ok serial=ok
+b    real 0.850s  instr=ok state=ok serial=ok
+a    real 1.432s  instr=ok state=ok serial=ok
+a    real 1.430s  instr=ok state=ok serial=ok
+b    real 0.851s  instr=ok state=ok serial=ok
+b    real 0.855s  instr=ok state=ok serial=ok
+a    real 1.430s  instr=ok state=ok serial=ok
+a    real 1.434s  instr=ok state=ok serial=ok
+b    real 0.852s  instr=ok state=ok serial=ok
+load-after=0.99 0.98 1.03
+base       n=5 best 1.430 median 1.432 worst 1.465
+final      n=5 best 0.850 median 0.852 worst 0.861
+ratio base/final: best 0.5944x  median 0.5950x  (>1 means final is slower)

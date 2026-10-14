@@ -70,7 +70,13 @@ enum {
  * (M2: 2 per recipe uop -- the slow trampoline and its tail -- UOP_MAX_BLOCK_UOPS == 64) plus
  * the block's own stubs and the shared per-block routines (M2's uop_exec fallback, the store
  * hook and the two flag getters). */
-#define JX64_MAX_LABELS 192
+/* AUDIT-2 NICE-b: 16 fixed labels + up to 3 per uop (l_slow + l_tail + l_ok) means a
+ * 59-uop all-mem-write block exhausted 192 labels while still fitting the 16 KiB byte
+ * cap, and the refusal was then mis-counted as a FIT refusal.  256 puts label exhaustion
+ * past the byte cap's own reach (~85 uops of the fattest recipe at ~200 B/uop exceeds
+ * 16 KiB first), so refused_fit is honest again.  The struct grows ~512 B; nothing else
+ * reads it. */
+#define JX64_MAX_LABELS 256
 #define JX64_MAX_FIXUPS 512
 
 /* a label that has not been bound yet */

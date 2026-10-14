@@ -8,6 +8,10 @@
 < pci 0000:00:12.0: vgaarb: bridge control possible
 < pci 0000:00:12.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
 106d98
-< scsi host0: ata_piix
+< printk: legacy console [hvc0] enabled
 107a100
-> scsi host0: ata_piix
+> printk: legacy console [hvc0] enabled
+113a107
+> ata2.00: ATAPI: v86 ATAPI CD-ROM, 1.00, max MWDMA2
+118d111
+< ata2.00: ATAPI: v86 ATAPI CD-ROM, 1.00, max MWDMA2

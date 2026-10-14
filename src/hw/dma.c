@@ -235,6 +235,24 @@ void dma_do_read(dma_buffer_t *buffer, uint32_t start, uint32_t len, int32_t cha
         return;
     }
 
+    /* THE C PORT'S BOUND, the twin of dma_do_write's (below): upstream reads mem8 -- the
+     * whole wasm linear memory -- and an access past it traps.  AUDIT-1 S2: this arm had
+     * NO such guard and handed the guest-chosen DMA address straight to write_blob, whose
+     * asserts were its only bounds (its twin's asymmetry was the audit's point; dead
+     * today with the floppy unported, but the asymmetry is the bug).  Same shape, same
+     * named stop. */
+    if ((uint64_t)addr + read_count > cpu->memory_size) {
+        char name[160];
+        snprintf(name, sizeof(name),
+                 "dma_do_read(channel=%d, addr=0x%x, len=%u) outside guest RAM"
+                 " (memory_size=0x%x)",
+                 (int)channel, (unsigned)addr, (unsigned)read_count,
+                 (unsigned)cpu->memory_size);
+        unimplemented_instruction(name);
+        fn(this_value, true);
+        return;
+    }
+
     dma->channel_addr[channel] = (uint16_t)(dma->channel_addr[channel] + read_count);
 
     write_blob(buffer->data + start, read_count, addr);

@@ -1,0 +1,28 @@
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+node gen/interpreter_uop.js
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+tests/perf_bench.sh --runs 7 --bin build/v86c --label "make bench"
+== perf_bench: make bench
+bin=build/v86c limit=200000000 kernel=tests/images/vmlinuz-i386 runs=7
+cores=32 load-before=5.89 4.81 4.89
+kernel=7.1.8-1-default cflags-host=cc (SUSE Linux) 16.2.0
+asserting: instruction count 200095214
+asserting: terminal guest state "in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0"
+asserting: serial output sha256 fae4924b13b07d441b0ad8458047d2f1d8abf0d1ec59876f44b88ef67d2d0b2a
+run  1: real 1.564s user 1.543s sys 0.018s  instr=200095214  state=ok serial=ok
+run  2: real 1.379s user 1.365s sys 0.013s  instr=200095214  state=ok serial=ok
+run  3: real 1.424s user 1.408s sys 0.014s  instr=200095214  state=ok serial=ok
+run  4: real 1.467s user 1.455s sys 0.011s  instr=200095214  state=ok serial=ok
+run  5: real 1.469s user 1.457s sys 0.011s  instr=200095214  state=ok serial=ok
+run  6: real 1.461s user 1.453s sys 0.008s  instr=200095214  state=ok serial=ok
+run  7: real 1.384s user 1.369s sys 0.013s  instr=200095214  state=ok serial=ok
+load-after=5.29 4.71 4.86
+n=7
+real: best 1.379  median 1.461  worst 1.564
+user: best 1.365  median 1.453  worst 1.543
+cpu (user+sys): best 1.378  median 1.461
+MIPS at best real: 145.10   at median real: 136.96
+verified (every run): 200095214 instructions, the terminal guest state clause
+                      above, and the guest's serial output sha256 -- every number in
+                      this output times THAT workload; none of them asserts it.

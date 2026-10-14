@@ -1,0 +1,35 @@
+### secfix-1 G1/G2/misalign probe captures (final tree a49a887); prefix binary = /tmp/secfix1-prefix-v86c (sha256 868ea1f4...)
+
+== G1 pci-bar2 probe, BEFORE (prefix binary) ==
+rc=0 (fixture captured separately)
+probe ebp low byte BEFORE: 0x10 (the corrupted mmap-dispatch answer; control 0xFF)
+
+== G1 AFTER ==
+probe ebp = 0xffffff (== control 0xb4ff ) -- the discard reproduced
+
+== G2 eip-hole, BEFORE (prefix, all 3 configs) ==
+bash: line 4: 3047674 Aborted                    (core dumped) /tmp/secfix1-prefix-v86c /tmp/audit1/eip-hole.img 100 $f --fixture > /dev/null 2> /tmp/e.err
+config [] rc=134 :: 
+bash: line 4: 3047689 Aborted                    (core dumped) /tmp/secfix1-prefix-v86c /tmp/audit1/eip-hole.img 100 $f --fixture > /dev/null 2> /tmp/e.err
+config [--jit off] rc=134 :: 
+bash: line 4: 3047703 Aborted                    (core dumped) /tmp/secfix1-prefix-v86c /tmp/audit1/eip-hole.img 100 $f --fixture > /dev/null 2> /tmp/e.err
+config [--jit off --uop-cache off] rc=134 :: 
+
+== G2 eip-hole, AFTER (final, all 3 configs) + JS reference ==
+config [] rc=3
+config [--jit off] rc=3
+config [--jit off --uop-cache off] rc=3
+JS reference rc=3
+
+== G2 state equality, final binary vs the pinned JS reference (oracle/nasm_state.mjs) ==
+JS reference: eip=0xe1000 eax=0x2badb002
+port [JIT]:         eip=0xe1000 eax=0x2badb002 -> IDENTICAL
+port [uop]:         eip=0xe1000 eax=0x2badb002 -> IDENTICAL
+port [interpreted]: eip=0xe1000 eax=0x2badb002 -> IDENTICAL
+(rc: BEFORE 134 in all three configs; AFTER 3 = ran past the limit, fixture printed)
+
+== pci-misalign probe (results/secfix1-pci-misalign.asm: write8 into a BAR, then a
+   misaligned write32 at 0x21 and a misaligned write16 at 0x31 -- three asserts in
+   pci.c's config-write paths, each transcribed from upstream's own dbg_assert) ==
+BEFORE (prefix binary): rc=134 :: assert(!((addr >= 0x10 && addr < 0x2C) || (addr >= 0x30 && addr < 0x34))) failed
+AFTER  (final binary):  rc=0, the machine runs all three arms and reaches the hlt loop (eip=0x10006d)

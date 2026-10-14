@@ -1,0 +1,14 @@
+== perf-7-ab: unity vs pertu  pairs=4
+load-before=0.35 0.94 1.06
+a    real 0.866s  instr=ok state=ok serial=ok
+b    real 0.922s  instr=ok state=ok serial=ok
+b    real 0.909s  instr=ok state=ok serial=ok
+a    real 0.855s  instr=ok state=ok serial=ok
+a    real 0.855s  instr=ok state=ok serial=ok
+b    real 0.906s  instr=ok state=ok serial=ok
+b    real 0.915s  instr=ok state=ok serial=ok
+a    real 0.856s  instr=ok state=ok serial=ok
+load-after=0.69 0.99 1.08
+unity      n=4 best 0.855 median 0.855 worst 0.866
+pertu      n=4 best 0.906 median 0.912 worst 0.922
+ratio unity/pertu: best 1.0596x  median 1.0660x  (>1 means pertu is slower)

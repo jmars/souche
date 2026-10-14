@@ -241,12 +241,18 @@ static int32_t data_read32(const ide_interface_t *ide, uint32_t offset)
 
 static void data_write16(ide_interface_t *ide, uint32_t offset, int32_t value)
 {
+    /* AUDIT-1 N1: the read twins' data_capacity check (data_read16 above) -- the safety
+     * of the command state machine's data_end <= data_length <= data_capacity invariant
+     * rests on it; a guest data-port write carries a guest-advanced offset, so the write
+     * twins carry the same bound instead of trusting the invariant. */
+    if (offset + 1 >= ide->data_capacity) return;
     ide->data[offset] = (uint8_t)value;
     ide->data[offset + 1] = (uint8_t)((uint32_t)value >> 8);
 }
 
 static void data_write32(ide_interface_t *ide, uint32_t offset, int32_t value)
 {
+    if (offset + 3 >= ide->data_capacity) return;
     ide->data[offset] = (uint8_t)value;
     ide->data[offset + 1] = (uint8_t)((uint32_t)value >> 8);
     ide->data[offset + 2] = (uint8_t)((uint32_t)value >> 16);
@@ -1194,6 +1200,16 @@ static void interface_atapi_read_dma(ide_interface_t *ide, const uint8_t *cmd)
         interface_push_irq(ide);
         return;
     }
+
+    /* AUDIT-1 S3: READ_12's count is a full 32-bit big-endian guest field, and this DMA
+     * arm's only check was `start >= buffer_length` -- the memcpy in interface_data_set
+     * then read past the host buffer holding the image.  The PIO arm above carries the
+     * clamp (interface_atapi_read); upstream is safe only because SyncBuffer.get throws
+     * out-of-range (buffer.js:35-39).  LATENT today: no CLI flag attaches media to the
+     * always-present ATAPI device (machine.c:66), so ide->buffer is always NULL here --
+     * the first --cdrom flag would make it live. */
+    uint64_t available = ide->buffer_length - start;
+    if ((uint64_t)byte_count > available) byte_count = (uint32_t)available;
 
     ide->status_reg = ATA_SR_DRDY | ATA_SR_DSC | ATA_SR_BSY;
     interface_report_read_start(ide);

@@ -1117,6 +1117,16 @@ uint32_t get_phys_eip(void)
     abort();
 }
 
+/* AUDIT-1 S1: modrm.c's read_imm8 now names the run loop's stop for a fetch past guest
+ * RAM; cpu.c is deliberately absent from this binary, so the stop gets the same
+ * abort-if-reached seat as get_phys_eip's above -- no test here drives a fetch. */
+void unimplemented_instruction(const char *name)
+{
+    fprintf(stderr, "cpu_selftest: unimplemented_instruction(%s) called -- this binary has"
+                    " no run loop\n", name);
+    abort();
+}
+
 static void reset_stubs(void)
 {
     reset_exceptions();

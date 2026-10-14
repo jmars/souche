@@ -134,6 +134,9 @@ typedef struct jit_stats {
 	uint64_t wx_flips;         /* mprotect transitions, both directions */
 	uint64_t execs;            /* jit_block_enter() calls */
 	uint64_t lowmem_failures;  /* reserve() when the pool was exhausted */
+	uint64_t hash_full;        /* bind() refused: the block hash had neither an EMPTY nor a
+	                            * DEAD slot (audit-2 A2-SF; unreachable with live blocks
+	                            * capped below JIT_HASH_SLOTS, kept as a named refusal) */
 } jit_stats_t;
 
 extern jit_stats_t jit_stats;

@@ -1,0 +1,321 @@
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+node gen/interpreter_uop.js
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -Wl,--gc-sections -o build/cpu_jit_codegen_selftest src/cpu/jit_codegen_selftest.c src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/paging.c src/cpu/arith.c src/cpu/modrm.c src/cpu/misc_instr.c src/cpu/string.c src/cpu/instructions.c src/cpu/instructions_0f.c src/cpu/sse_instr.c src/cpu/softfloat.c src/cpu/fpu.c src/cpu/exceptions.c src/cpu/pic.c src/cpu/cpu.c src/cpu/exec_boundary.c src/cpu/uop_cache.c src/cpu/jit_mem.c src/cpu/jit_x64.c src/cpu/jit_codegen.c build/cpu/interpreter_gen.o build/cpu/uop_gen.o build/sf/softfloat.o
+./build/cpu_jit_codegen_selftest
+  == test_encoder_pins
+  == test_recipe_table
+  recipe table: 90 recipes; 90 of the descriptor table's 1922 (descriptor, body) pairs are covered
+  == test_recipe
+  recipe: 4 inlined + 3 called uops, block-end exit, state identical to the uop cache and the interpreter
+  == test_recipe_matrix (per-recipe differential, G2)
+  matrix: mov r/m32,r32 reg            inlined 2 called 1
+  matrix: mov r32,r/m32 reg            inlined 2 called 1
+  matrix: movzx r32,r/m8 reg           inlined 2 called 1
+  matrix: movzx r32,r/m16 reg          inlined 2 called 1
+  matrix: mov r8,r/m8 reg (AL<-CL)     inlined 2 called 1
+  matrix: mov r/m8,r8 reg (AL<-AH)     inlined 2 called 1
+  matrix: mov r/m8,r8 reg (AH<-AL)     inlined 2 called 1
+  matrix: mov r8,r/m8 reg (AH<-CL)     inlined 2 called 1
+  matrix: mov r/m8,r8 reg (AH<-CL)     inlined 2 called 1
+  matrix: lea r32,m (base)             inlined 2 called 1
+  matrix: mov r/m16,r16 reg            inlined 2 called 1
+  matrix: mov r16,r/m16 reg            inlined 2 called 1
+  matrix: mov r32,[base+disp32]        inlined 2 called 1
+  matrix: movzx r32,ah (high-byte read) inlined 1 called 1
+  matrix: movzx r32,bh (high-byte read) inlined 1 called 1
+  matrix: movzx r32,ch (high-byte read) inlined 1 called 1
+  matrix: movzx r32,dh (high-byte read) inlined 1 called 1
+  matrix: mov ah,bh (high-byte write)  inlined 1 called 1
+  matrix: mov ah,ch (high-byte write)  inlined 1 called 1
+  matrix: mov dh,ah (high-byte write)  inlined 1 called 1
+  matrix: mov ah,bl (low src, high dst) inlined 1 called 1
+  matrix: mov ch,ah (8A entry, high dst) inlined 1 called 1
+  matrix: mov r32,[m]                  inlined 2 called 1
+  matrix: mov [m],r32                  inlined 2 called 1
+  matrix: movzx r32,[m8]               inlined 2 called 1
+  matrix: movzx r32,[m16]              inlined 2 called 1
+  matrix: mov r8,[m8]                  inlined 2 called 1
+  matrix: mov [m8],r8                  inlined 2 called 1
+  matrix: mov r16,[m16]                inlined 2 called 1
+  matrix: mov [m16],r16                inlined 2 called 1
+  matrix: mov r32,[base+index*1]       inlined 2 called 1
+  matrix: mov r32,es:[m] (prefix)      inlined 2 called 1
+  matrix: mov cs:[m],ecx (prefix)      inlined 2 called 1
+  matrix: add reg (materialised)       inlined 2 called 1
+  matrix: add reg (lazy)               inlined 2 called 1
+  matrix: or reg (lazy)                inlined 2 called 1
+  matrix: and reg (lazy)               inlined 2 called 1
+  matrix: sub reg (lazy)               inlined 2 called 1
+  matrix: xor reg (lazy)               inlined 2 called 1
+  matrix: cmp reg (lazy)               inlined 2 called 1
+  matrix: test reg (lazy)              inlined 2 called 1
+  matrix: add imm8                     inlined 2 called 1
+  matrix: or imm8                      inlined 2 called 1
+  matrix: and imm8                     inlined 2 called 1
+  matrix: sub imm8                     inlined 2 called 1
+  matrix: xor imm8                     inlined 2 called 1
+  matrix: cmp imm8                     inlined 2 called 1
+  matrix: test imm32                   inlined 2 called 1
+  matrix: test r/m8 imm8               inlined 2 called 1
+  matrix: not r/m32                    inlined 2 called 1
+  matrix: add [m],r32 (RMW)            inlined 2 called 1
+  matrix: or [m],r32 (RMW)             inlined 2 called 1
+  matrix: and [m],r32 (RMW)            inlined 2 called 1
+  matrix: sub [m],r32 (RMW)            inlined 2 called 1
+  matrix: xor [m],r32 (RMW)            inlined 2 called 1
+  matrix: cmp [m],r32 (read)           inlined 2 called 1
+  matrix: add [m],imm8 (RMW)           inlined 2 called 1
+  matrix: cmp [m],imm8 (read)          inlined 2 called 1
+  matrix: not [m]                      inlined 2 called 1
+  matrix: test [m],r32 (read)          inlined 2 called 1
+  matrix: test [m],imm32 (read)        inlined 2 called 1
+  matrix: shl eax,cl (composed)        inlined 2 called 1
+  matrix: shr eax,cl (composed)        inlined 2 called 1
+  matrix: shl edx,cl (negative, CF=1 OF=1) inlined 2 called 1
+  matrix: shr edx,cl (negative, CF=1 OF=1) inlined 2 called 1
+  matrix: shl eax,cl (count 5: CF=1 OF=1) inlined 1 called 1
+  matrix: shr eax,cl (count 5: CF=1 OF=0) inlined 1 called 1
+  matrix: shl eax,cl (CL=0: NOTHING stored) inlined 2 called 1
+  matrix: shr eax,cl (CL=0x20 masked to 0) inlined 2 called 1
+  matrix: shl eax,cl (CL=0xff -> count 31) inlined 2 called 2
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1007, want 0x1005)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1006, want 0x1004)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x4, want 0x3)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  shl eax,cl; jae (lazy before): cpu_state differs first at offset 68: 0x07 vs 0x05
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1007, want 0x1005)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1006, want 0x1004)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x4, want 0x3)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  shl eax,cl; jae (lazy before): cpu_state differs first at offset 68: 0x07 vs 0x05
+  matrix: shl eax,cl; jae (lazy before) inlined 2 called 1
+  matrix: inc eax (lazy CF)            inlined 2 called 1
+  matrix: dec edi (lazy CF)            inlined 2 called 1
+  matrix: inc edx (materialised CF)    inlined 2 called 1
+  matrix: mov r32,imm32                inlined 2 called 1
+  matrix: nop                          inlined 2 called 1
+  matrix: je (materialised, ZF=0)      inlined 1 called 1
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1005, want 0x1003)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1004, want 0x1002)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  jne (materialised, ZF=0): cpu_state differs first at offset 68: 0x05 vs 0x03
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1005, want 0x1003)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1004, want 0x1002)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  jne (materialised, ZF=0): cpu_state differs first at offset 68: 0x05 vs 0x03
+  matrix: jne (materialised, ZF=0)     inlined 1 called 1
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1005, want 0x1003)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1004, want 0x1002)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  jae (materialised, CF=0): cpu_state differs first at offset 68: 0x05 vs 0x03
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1005, want 0x1003)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1004, want 0x1002)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  jae (materialised, CF=0): cpu_state differs first at offset 68: 0x05 vs 0x03
+  matrix: jae (materialised, CF=0)     inlined 1 called 1
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1005, want 0x1003)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1004, want 0x1002)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  ja (materialised, CF=0): cpu_state differs first at offset 68: 0x05 vs 0x03
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1005, want 0x1003)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1004, want 0x1002)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  ja (materialised, CF=0): cpu_state differs first at offset 68: 0x05 vs 0x03
+  matrix: ja (materialised, CF=0)      inlined 1 called 1
+  matrix: je rel32 (materialised)      inlined 1 called 1
+  matrix: jbe rel32 (materialised)     inlined 1 called 1
+  matrix: jb (materialised, CF=0)      inlined 1 called 1
+  matrix: jb rel32 (materialised)      inlined 1 called 1
+  matrix: je rel32 (lazy)              inlined 1 called 1
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1009, want 0x1007)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1008, want 0x1006)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  jbe rel32 (lazy): cpu_state differs first at offset 68: 0x09 vs 0x07
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1009, want 0x1007)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1008, want 0x1006)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  jbe rel32 (lazy): cpu_state differs first at offset 68: 0x09 vs 0x07
+  matrix: jbe rel32 (lazy)             inlined 1 called 1
+  matrix: add al,cl; je (lazy ZF)      inlined 1 called 2
+  matrix: add al,cl; jb (lazy CF)      inlined 1 called 2
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1005, want 0x1003)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1004, want 0x1002)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  jmp rel8: cpu_state differs first at offset 68: 0x05 vs 0x03
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1005, want 0x1003)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1004, want 0x1002)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  jmp rel8: cpu_state differs first at offset 68: 0x05 vs 0x03
+  matrix: jmp rel8                     inlined 1 called 1
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1008, want 0x1006)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1007, want 0x1005)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  jmp rel32: cpu_state differs first at offset 68: 0x08 vs 0x06
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1008, want 0x1006)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1007, want 0x1005)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  jmp rel32: cpu_state differs first at offset 68: 0x08 vs 0x06
+  matrix: jmp rel32                    inlined 1 called 1
+  matrix: jbe rel8 (materialised, CF=0 ZF=0) inlined 1 called 1
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1005, want 0x1003)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1004, want 0x1002)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  jbe rel8 (lazy, CF=1 ZF=0): cpu_state differs first at offset 68: 0x05 vs 0x03
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1005, want 0x1003)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1004, want 0x1002)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  jbe rel8 (lazy, CF=1 ZF=0): cpu_state differs first at offset 68: 0x05 vs 0x03
+  matrix: jbe rel8 (lazy, CF=1 ZF=0)   inlined 1 called 1
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1009, want 0x1007)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1008, want 0x1006)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  jae rel32 (materialised, CF=0): cpu_state differs first at offset 68: 0x09 vs 0x07
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1009, want 0x1007)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1008, want 0x1006)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  jae rel32 (materialised, CF=0): cpu_state differs first at offset 68: 0x09 vs 0x07
+  matrix: jae rel32 (materialised, CF=0) inlined 1 called 1
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1009, want 0x1007)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1008, want 0x1006)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  jne rel32 (materialised, ZF=0): cpu_state differs first at offset 68: 0x09 vs 0x07
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1009, want 0x1007)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1008, want 0x1006)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  jne rel32 (materialised, ZF=0): cpu_state differs first at offset 68: 0x09 vs 0x07
+  matrix: jne rel32 (materialised, ZF=0) inlined 1 called 1
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1009, want 0x1007)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1008, want 0x1006)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  ja rel32 (materialised, CF=0 ZF=0): cpu_state differs first at offset 68: 0x09 vs 0x07
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1009, want 0x1007)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1008, want 0x1006)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  ja rel32 (materialised, CF=0 ZF=0): cpu_state differs first at offset 68: 0x09 vs 0x07
+  matrix: ja rel32 (materialised, CF=0 ZF=0) inlined 1 called 1
+  matrix: ja rel32 (lazy, CF=1 ZF=0)   inlined 1 called 1
+  matrix: cmp; jb rel8 (ZF=1 CF=0, not taken) inlined 2 called 1
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1007, want 0x1005)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1006, want 0x1004)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x4, want 0x3)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  cmp; jbe rel8 (ZF=1 CF=0, taken): cpu_state differs first at offset 68: 0x07 vs 0x05
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1007, want 0x1005)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1006, want 0x1004)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x4, want 0x3)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  cmp; jbe rel8 (ZF=1 CF=0, taken): cpu_state differs first at offset 68: 0x07 vs 0x05
+  matrix: cmp; jbe rel8 (ZF=1 CF=0, taken) inlined 2 called 1
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1007, want 0x1005)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1006, want 0x1004)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x4, want 0x3)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  cmp; jae rel8 (ZF=1 CF=0, taken): cpu_state differs first at offset 68: 0x07 vs 0x05
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1007, want 0x1005)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1006, want 0x1004)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x4, want 0x3)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  cmp; jae rel8 (ZF=1 CF=0, taken): cpu_state differs first at offset 68: 0x07 vs 0x05
+  matrix: cmp; jae rel8 (ZF=1 CF=0, taken) inlined 2 called 1
+  matrix: cmp; ja rel8 (ZF=1 CF=0, not taken) inlined 2 called 1
+  matrix: cmp; jb rel32 (ZF=1 CF=0, not taken) inlined 2 called 1
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x100b, want 0x1009)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x100a, want 0x1008)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x4, want 0x3)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  cmp; jbe rel32 (ZF=1 CF=0, taken): cpu_state differs first at offset 68: 0x0b vs 0x09
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x100b, want 0x1009)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x100a, want 0x1008)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x4, want 0x3)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  cmp; jbe rel32 (ZF=1 CF=0, taken): cpu_state differs first at offset 68: 0x0b vs 0x09
+  matrix: cmp; jbe rel32 (ZF=1 CF=0, taken) inlined 2 called 1
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x100b, want 0x1009)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x100a, want 0x1008)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x4, want 0x3)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  cmp; jae rel32 (ZF=1 CF=0, taken): cpu_state differs first at offset 68: 0x0b vs 0x09
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x100b, want 0x1009)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x100a, want 0x1008)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x4, want 0x3)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+  cmp; jae rel32 (ZF=1 CF=0, taken): cpu_state differs first at offset 68: 0x0b vs 0x09
+  matrix: cmp; jae rel32 (ZF=1 CF=0, taken) inlined 2 called 1
+  matrix: cmp; ja rel32 (ZF=1 CF=0, not taken) inlined 2 called 1
+  shapes A (PLAIN0/1, REG0 x2, REGF0/1): eax 0xdeadbeef ecx 0xffff8000 edx 0x22222223, state identical to both other arms
+  shapes B (MEM0, MEMF1, lea/custom-modrm, MEMF0/RMW store): eax 0xdeadbeef ecx 0x3100, [0x3104] 0x12345678 [0x3108] 42, state identical
+  == test_tlb_fold_bits (the TLB_READONLY fold)
+  tlb fold: entry after read+write = 0x00000001 (want VALID set, READONLY clear)
+  tlb fold: inlined 1, called 3 (the read-only write DECLINED), entry 0x00000001
+  == test_fault_early_return
+  fault (guard): vector 7, state identical (7 = #NM, 13 = #GP: the guard-order pin)
+  fault (materialise): vector 13, state identical
+  fault (FLUSH-flagged + faulted): vector 13, flushes 2 in BOTH engines (the batch did NOT end there)
+  == test_staircase
+  staircase: rdtsc readings 0/4000/5000, counter 10, pending 0 (identical in all three arms; flushes 2)
+  == test_prefix_and_previous_ip
+  prefix: fs:[0x1400] override honoured (0xa5a5a5a5), previous_ip 0x100c in both engines
+  == test_smc_abort
+  smc: patched instruction executed under the compiled block (value 0x2a, aborts 1, invalidations 1)
+  == test_tail_exit
+FAIL src/cpu/jit_codegen_selftest.c:1071: ram32(TRACE) == 5 (got 0x0, want 0x5)
+FAIL src/cpu/jit_codegen_selftest.c:1072: snap[2].cpu.reg32[EAX] == 5 (got 0x0, want 0x5)
+FAIL src/cpu/jit_codegen_selftest.c:1073: arm_stats[2].exits[JIT_EXIT_TAIL] >= 1
+  tail: uop-cache vs compiled: reg32[0] 0x5 vs 0x0
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x100e, want 0x1003)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x100d, want 0x1002)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x4, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x5, want 0x0)
+FAIL src/cpu/jit_codegen_selftest.c:708: memcmp(snap[a].ram, snap[b].ram, SNAP_RAM) == 0 (got 0x5, want 0x0)
+  tail: uop-cache vs compiled: cpu_state differs first at offset 0: 0x05 vs 0x00
+  tail: control left the block, TAIL exits 0
+  == test_cross_return
+  page-cross return: RETURN exits 1
+  == test_exit_kinds
+FAIL src/cpu/jit_codegen_selftest.c:1124: exits_seen[JIT_EXIT_TAIL] >= 1
+  exit kinds: return 4, tail 0, abort 1, block-end 117
+  == test_chain (self-loop through the chain stub)
+  chain: interpreter vs compiled: reg32[0] 0x0 vs 0x4
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x10, want 0x8)
+FAIL src/cpu/jit_codegen_selftest.c:701: x->last_op1 == y->last_op1 (got 0x1, want 0x5)
+FAIL src/cpu/jit_codegen_selftest.c:702: x->last_result == y->last_result (got 0x0, want 0x4)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0xfffffffffffffffc, want 0x0)
+  chain: interpreter vs compiled: cpu_state differs first at offset 0: 0x00 vs 0x04
+  chain: uop-cache vs compiled: reg32[0] 0x0 vs 0x4
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x10, want 0x8)
+FAIL src/cpu/jit_codegen_selftest.c:701: x->last_op1 == y->last_op1 (got 0x1, want 0x5)
+FAIL src/cpu/jit_codegen_selftest.c:702: x->last_result == y->last_result (got 0x0, want 0x4)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0xfffffffffffffffc, want 0x0)
+  chain: uop-cache vs compiled: cpu_state differs first at offset 0: 0x00 vs 0x04
+FAIL src/cpu/jit_codegen_selftest.c:2133: snap[2].cpu.reg32[EAX] == 0 (got 0x4, want 0x0)
+FAIL chain: the chain never engaged (links 0, tails 0)
+  == test_continuation_elision (PERF-7 F1: the checks-skip battery)
+jit_codegen_selftest: 3525 checks, 139 failures
+jit: blocks compiled 65 in 65 attempts (reused 0); refused: fit 0 (0 uops), pool 0, empty 0
+jit: block sizes: compiled 4092 uops in 189015 bytes (mean 46.2 B/uop, 63.0 uops/block); refused-for-fit 0 uops in 0 blocks (mean 0.0)
+jit: uops executed inlined 4091 / called 1 -> 99.98% dynamic inlined (compile-time: 4091 with a recipe, 1 without, 4090 with the checks elided)
+jit: recipe table: 90 entries over 4092 emitted uops
+jit: exits: return 1, tail 63, abort 0, block-end 1; chain links 0
+make: *** [Makefile:496: jit-codegen-selftest] Error 1

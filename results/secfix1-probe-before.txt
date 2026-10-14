@@ -1,0 +1,31 @@
+=== write (/tmp/secfix1-prefix-src/src) ===
+/tmp/secfix1-prefix-src/src/cpu/memory.c:72: [31;1massert(!in_mapped_range(offset)) failed[0m (cosmoaddr2line /tmp/secfix1-probe.bin.com.dbg 429448 40d136 40d8da 401d0c 4015f4)
+results/secfix1-probe.sh: line 45: 3041848 Aborted                    (core dumped) "$BIN" "$mode"
+== mode write rc=134 ==
+=== read (/tmp/secfix1-prefix-src/src) ===
+/tmp/secfix1-prefix-src/src/hw/virtio.c:69: [31;1massert(!in_mapped_range(offset)) failed[0m (cosmoaddr2line /tmp/secfix1-probe.bin.com.dbg 473569 47519c 40d249 40d8e1 401d0c 4015f4)
+results/secfix1-probe.sh: line 45: 3041857 Aborted                    (core dumped) "$BIN" "$mode"
+== mode read rc=134 ==
+=== atapi (/tmp/secfix1-prefix-src/src) ===
+results/secfix1-probe.sh: line 45: 3041868 Segmentation fault         (core dumped) "$BIN" "$mode"
+== mode atapi rc=139 ==
+=== hash (/tmp/secfix1-prefix-src/src) ===
+probe: churn key 0xa53c collides with the sentinel's home slot
+probe: SENTINEL LOST by the colliding bind -- the hash-full overwrite is real
+== mode hash rc=1 ==
+=== virtio3 (/tmp/secfix1-prefix-src/src) ===
+/tmp/secfix1-prefix-src/src/hw/virtio.c:1163: [31;1massert(queue->avail_addr != 0) failed[0m (cosmoaddr2line /tmp/secfix1-probe.bin.com.dbg 474e8b 475a9b 4730d8 4731de 46942c 40cfa7 40d89c 401d0c 4015f4)
+results/secfix1-probe.sh: line 45: 3041884 Aborted                    (core dumped) "$BIN" virtio "${mode#virtio}"
+== mode virtio3 rc=134 ==
+=== virtio4 (/tmp/secfix1-prefix-src/src) ===
+probe: readback select=0x3 desc=0x5000 avail=0x5200 used=0x5400
+probe: device queues[3]: desc=0x5000 avail=0x5200 used=0x5400 (count=10)
+/tmp/secfix1-prefix-src/src/hw/virtio.c:1254: [31;1massert(queue->avail_addr != 0) failed[0m (cosmoaddr2line /tmp/secfix1-probe.bin.com.dbg 474f27 475754 475b50 4730d8 4731de 46942c 40cf8a 40d89c 401d0c 4015f4)
+results/secfix1-probe.sh: line 45: 3041893 Aborted                    (core dumped) "$BIN" virtio "${mode#virtio}"
+== mode virtio4 rc=134 ==
+=== virtio5 (/tmp/secfix1-prefix-src/src) ===
+probe: readback select=0x3 desc=0x5000 avail=0x5200 used=0x5400
+probe: device queues[3]: desc=0x5000 avail=0x5200 used=0x5400 (count=10)
+/tmp/secfix1-prefix-src/src/hw/virtio.c:1272: [31;1massert(queue->num_staged_replies < queue->size) failed[0m (cosmoaddr2line /tmp/secfix1-probe.bin.com.dbg 474fed 4754e3 4757a7 475b50 4730d8 4731de 46942c 40d0c0 40d89c 401d0c 4015f4)
+results/secfix1-probe.sh: line 45: 3041904 Aborted                    (core dumped) "$BIN" virtio "${mode#virtio}"
+== mode virtio5 rc=134 ==

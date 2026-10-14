@@ -41,8 +41,9 @@ bool is_memory_zeroed(uint32_t addr, uint32_t length);
 /* cpu.js:299-311 (CPU.prototype.write_blob), minus the jit_dirty_cache call (JIT-only).
  * ADDED BY M2-1: the DMA controller's do_read lands a transfer's bytes in guest memory
  * through it (dma.js:297's `cpu.write_blob(data, addr)`), and the IDE/virtio units will
- * want the same helper rather than a second copy.  The two dbg_asserts about the target
- * address are kept as DBG_ASSERT. */
+ * want the same helper rather than a second copy.  SINCE AUDIT-1 S2 the target is
+ * BOUNDED (kernel.c's loader shape): what falls outside guest memory is dropped and said
+ * on stderr -- upstream's release dies on the same input (mem8.set throws). */
 void write_blob(const uint8_t *data, uint32_t length, uint32_t offset);
 
 /*

@@ -1,5 +1,5 @@
 reference: kernel 1253888 bytes sha256 f0278a8f2893eb93a8c857f3f2d5a589a5b9aa6a45033171bc5411fc10f658cd
-reference: firmware at 0xf0000, option ROM 512 bytes at 0xc0000, cmdline 'console=hvc0 console=ttyS0 tsc=unstable idle=poll rdinit=/fx/store/54ce1971a82e89d78a83e3f805893b4e1651d714c62e69fda2c711ff8d3f2b69-fx-init/fx-init fx.store=/fx/store'
-reference: memory 80 MiB, hda 67108864 bytes sha256 a2f0f6daac00c518727d7bf2981c2f6208dfe93e4973b06ffb2dc6c65ca0460c, initrd 3570068 bytes
+reference: firmware at 0xf0000, option ROM 512 bytes at 0xc0000, cmdline 'console=hvc0 console=ttyS0 tsc=unstable idle=poll rdinit=/fx/store/047b11f9e9a69cee311c14820ed5d39acccf8d78c1001fc574da6dba7719dffa-fx-init/fx-init fx.store=/fx/store'
+reference: memory 80 MiB, hda 67108864 bytes sha256 a2f0f6daac00c518727d7bf2981c2f6208dfe93e4973b06ffb2dc6c65ca0460c, initrd 829216 bytes
 reference: reset eip=0xffff0 cs=0xf000
-reference: {"instructions":4000029668,"limit":4000000000,"in_hlt":0,"eip":"0x59f4c","cr0":"0x80050033","cr3":"0x9d6000","cs":"0x73","exception":null,"serial_bytes":19245,"virtio_console_bytes":1220,"virtio_console_in_sent":false}
+reference: {"instructions":4000066917,"limit":4000000000,"in_hlt":0,"eip":"0x5a4dd","cr0":"0x80050033","cr3":"0x9d5000","cs":"0x73","exception":null,"serial_bytes":8003,"virtio_console_bytes":1241,"virtio_console_in_sent":false}

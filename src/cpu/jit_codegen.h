@@ -68,6 +68,11 @@ typedef struct jit_codegen_stats {
 	uint64_t bytes_emitted;       /* emitted code bytes, over the compiled blocks */
 	uint64_t uops_with_recipe;    /* compile-time: uops the recipe table matched */
 	uint64_t uops_without_recipe; /* compile-time: uops that will be called */
+	/* PERF-7 F1: compile-time subset of uops_with_recipe whose emission elides the shared
+	 * checks routine (jitcg_uop_continues' criterion).  The instrument for "did the elision
+	 * engage" -- the differential matrix asserts it per case, since a criterion that never
+	 * fired would leave every matrix case passing against an un-elided block. */
+	uint64_t uops_checks_elided;
 	uint64_t inlined_uops;        /* dynamic: executed uops that ran as emitted code */
 	uint64_t called_uops;         /* dynamic: executed uops that ran through a C call */
 	/* The exit kinds, counted by uop_run where the block's return value is read (indexed

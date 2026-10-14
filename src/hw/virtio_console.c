@@ -106,6 +106,25 @@ static void console_ack(virtio_console_t *console, int32_t queue_id, virtq_chain
     virtqueue_flush_replies(&console->virtio.queues[queue_id]);
 }
 
+/* AUDIT-1 S1 / N3: the guard the three control sends were missing.  Each of them pops the
+ * control RECEIVE queue (2) to stage its reply, and a guest that never posts a buffer
+ * there -- or never configures the queue at all -- made the pop's dbg_asserts abort the
+ * process.  Upstream has NO guard on this path (its release build pops a garbage chain
+ * and runs on; there is no defined observable to match), so the port names the case and
+ * drops the send -- the same shape console_resize and console_input_bytes already carry,
+ * which is upstream's own guard where IT has one.  The guest-visible difference: no reply
+ * is staged into a used ring the driver never posted to. */
+static bool console_control_queue_ready(virtio_console_t *console, const char *what)
+{
+    virtqueue_t *queue = &console->virtio.queues[2];
+    if (virtqueue_is_configured(queue) && virtqueue_has_request(queue)) return true;
+    fprintf(stderr, "v86c: virtio-console: %s with no posted buffer on the control receive"
+                    " queue (configured=%d, has_request=%d); dropping the send\n",
+            what, virtqueue_is_configured(queue) ? 1 : 0,
+            virtqueue_is_configured(queue) && virtqueue_has_request(queue) ? 1 : 0);
+    return false;
+}
+
 /* virtio_console.js:231-239 */
 static void console_send_window_size(virtio_console_t *console, int32_t port, int32_t cols,
                                      int32_t rows)
@@ -113,6 +132,7 @@ static void console_send_window_size(virtio_console_t *console, int32_t port, in
     if (rows == 0) rows = console->rows;
     if (cols == 0) cols = console->cols;
 
+    if (!console_control_queue_ready(console, "window-size")) return;
     virtq_chain_t *chain = virtqueue_pop_request(&console->virtio.queues[2]);
     uint8_t buffer[12];
     put_le32(buffer, 0, (uint32_t)port);
@@ -128,6 +148,7 @@ static void console_send_name(virtio_console_t *console, int32_t port, const cha
 {
     uint32_t name_length = (uint32_t)strlen(name);
 
+    if (!console_control_queue_ready(console, "port-name")) return;
     virtq_chain_t *chain = virtqueue_pop_request(&console->virtio.queues[2]);
     uint8_t buffer[8 + 64 + 1];
     if (name_length > 64) name_length = 64; /* this port's bound; upstream's names are "virtio-N" */
@@ -144,6 +165,7 @@ static void console_send_name(virtio_console_t *console, int32_t port, const cha
 static void console_send_event(virtio_console_t *console, int32_t port, uint16_t event,
                                uint16_t value)
 {
+    if (!console_control_queue_ready(console, "event")) return;
     virtq_chain_t *chain = virtqueue_pop_request(&console->virtio.queues[2]);
     uint8_t buffer[8];
     put_le32(buffer, 0, (uint32_t)port);
@@ -189,14 +211,30 @@ static void console_notify_output(void *device, uint32_t queue_id)
     int32_t port = queue_id > 3 ? (int32_t)((queue_id - 3) >> 1) : 0;
     if (port >= console->ports) port = console->ports - 1;
 
+    /* AUDIT-1 S1: a notify on a queue the driver never configured made
+     * virtqueue_has_request's dbg_assert (avail_addr != 0) abort the process -- one port
+     * write, fully guest-controlled.  Upstream's release reads a garbage count and pops a
+     * garbage chain; the port names the case and drops the notification (console_input
+     * bytes' own guard below is upstream's, and has this shape). */
+    if (!virtqueue_is_configured(queue)) {
+        fprintf(stderr, "v86c: virtio-console: output notified for unconfigured queue %u;"
+                        " dropping the notification\n", (unsigned)queue_id);
+        return;
+    }
+
     char message_name[VIRTIO_CONSOLE_NAME_MAX];
     snprintf(message_name, sizeof(message_name), "virtio-console%d-output-bytes", (int)port);
 
     while (virtqueue_has_request(queue)) {
         virtq_chain_t *chain = virtqueue_pop_request(queue);
         uint32_t length = chain->length_readable;
-        uint8_t *buffer = length > 0 ? malloc(length) : NULL;
-        if (length > 0 && buffer == NULL) {
+        /* upstream allocates `new Uint8Array(length)` here, which is ZERO-filled -- the
+         * port's malloc was not, and that was invisible only while every read filled the
+         * whole buffer.  With the audit-1 S2 clamp, a past-the-end descriptor supplies
+         * FEWER bytes than the chain asks for (upstream's empty subarray copies nothing),
+         * so the unfilled tail must be zeros as upstream's is, not host heap. */
+        uint8_t *buffer = calloc(1, length > 0 ? length : 1);
+        if (buffer == NULL) {
             fprintf(stderr, "v86c: virtio-console: cannot allocate %u bytes for a guest"
                             " write\n",
                     (unsigned)length);
@@ -249,6 +287,15 @@ static void console_notify_control_tx(void *device, uint32_t queue_id)
 
     virtqueue_t *queue = console_queue_for_notify(console, queue_id, "control transmit");
     if (queue == NULL) return;
+
+    /* AUDIT-1 S1: the same unconfigured-queue guard console_notify_output carries -- a
+     * notify on a queue the driver never configured made virtqueue_has_request's
+     * dbg_assert abort the process. */
+    if (!virtqueue_is_configured(queue)) {
+        fprintf(stderr, "v86c: virtio-console: control transmit notified for unconfigured"
+                        " queue %u; dropping the notification\n", (unsigned)queue_id);
+        return;
+    }
 
     while (virtqueue_has_request(queue)) {
         virtq_chain_t *chain = virtqueue_pop_request(queue);

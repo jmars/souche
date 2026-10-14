@@ -351,6 +351,15 @@ static void consecutive_write32(void *device, int32_t port, int32_t value)
 void io_register_read_consecutive(int32_t port, void *device, io_read_fn r8_1, io_read_fn r8_2,
                                   io_read_fn r8_3, io_read_fn r8_4)
 {
+    /* AUDIT-1 N2: the consecutive shims index io_ports[port+1..port+3] at DISPATCH time,
+     * and io_register_read/write's own bound is a DBG_ASSERT.  Every caller is a fixed low
+     * port today; make the bound hard so a future device cannot register a tail past the
+     * table (pci_set_io_bars can copy a device's entries near the top on a relocated BAR). */
+    if (port < 0 || port + 3 >= IO_PORT_COUNT) {
+        fprintf(stderr, "v86c: io: refusing consecutive read registration at %d: the +3 tail"
+                        " would leave the port table (0x%x)\n", port, IO_PORT_COUNT);
+        return;
+    }
     if (r8_3 != NULL && r8_4 != NULL) {
         io_register_read(port, device, r8_1, consecutive_read16_1, consecutive_read32);
         io_register_read(port + 1, device, r8_2, NULL, NULL);
@@ -366,6 +375,13 @@ void io_register_read_consecutive(int32_t port, void *device, io_read_fn r8_1, i
 void io_register_write_consecutive(int32_t port, void *device, io_write_fn w8_1, io_write_fn w8_2,
                                    io_write_fn w8_3, io_write_fn w8_4)
 {
+    /* AUDIT-1 N2: the same hard bound as io_register_read_consecutive's, for the write
+     * shims' io_ports[port+1..port+3]. */
+    if (port < 0 || port + 3 >= IO_PORT_COUNT) {
+        fprintf(stderr, "v86c: io: refusing consecutive write registration at %d: the +3 tail"
+                        " would leave the port table (0x%x)\n", port, IO_PORT_COUNT);
+        return;
+    }
     if (w8_3 != NULL && w8_4 != NULL) {
         io_register_write(port, device, w8_1, consecutive_write16_1, consecutive_write32);
         io_register_write(port + 1, device, w8_2, NULL, NULL);

@@ -131,7 +131,7 @@ void jit_stats_print(void)
 	fprintf(stderr,
 	        "jit: pages alloc %llu, blocks compiled %llu (live %llu), lookups %llu "
 	        "(hits %llu, misses %llu), execs %llu, invalidations %llu, deferred frees %llu, "
-	        "W^X flips %llu, pool exhausted %llu\n",
+	        "W^X flips %llu, pool exhausted %llu, hash full %llu\n",
 	        (unsigned long long)jit_stats.pages_alloc,
 	        (unsigned long long)jit_stats.blocks_compiled,
 	        (unsigned long long)jit_stats.blocks_live,
@@ -142,7 +142,8 @@ void jit_stats_print(void)
 	        (unsigned long long)jit_stats.invalidations,
 	        (unsigned long long)jit_stats.deferred_frees,
 	        (unsigned long long)jit_stats.wx_flips,
-	        (unsigned long long)jit_stats.lowmem_failures);
+	        (unsigned long long)jit_stats.lowmem_failures,
+	        (unsigned long long)jit_stats.hash_full);
 }
 
 /* JIT-6: the platform probe, defined after jit_page_alloc_run/jit_page_recycle (it uses
@@ -485,9 +486,31 @@ bool jit_cache_bind(uint32_t phys_start, uint32_t virt_start, uint8_t state,
 	}
 
 	uint32_t slot = jit_hash_pos(phys_start, virt_start, state);
+	/* AUDIT-2 A2-SF: the insert used to stop at the first EMPTY slot and, finding none,
+	 * overwrite the last-probed one -- DEAD tombstones (one per invalidation, written by
+	 * jit_block_drop) were never reused, so adversarial SMC churn could push binds past
+	 * JIT_HASH_SLOTS and the overwrite would clobber a LIVE slot (an aliased hash_slot,
+	 * unreachable blocks, a recompile spiral).  It now reuses the first DEAD slot seen,
+	 * exactly as uop_hash_insert does (uop_cache.c), and REFUSES the bind when the scan
+	 * finds neither EMPTY nor DEAD -- a state the block table cannot reach today (live
+	 * blocks cap at JIT_MAX_BLOCKS = 2048 < JIT_HASH_SLOTS), counted rather than silent. */
+	uint32_t first_dead = JIT_HASH_SLOTS;
 	for (uint32_t n = 0; n < JIT_HASH_SLOTS; n++) {
-		if (jit_hash[slot] == 0) break;
+		uint16_t v = jit_hash[slot];
+		if (v == 0) break;
+		if (v == JIT_HASH_DEAD && first_dead == JIT_HASH_SLOTS) first_dead = slot;
 		slot = (slot + 1u) & (JIT_HASH_SLOTS - 1u);
+	}
+	if (jit_hash[slot] != 0 && first_dead != JIT_HASH_SLOTS) slot = first_dead;
+	if (jit_hash[slot] != 0 && jit_hash[slot] != JIT_HASH_DEAD) {
+		/* neither an EMPTY nor a DEAD slot in the whole table: every slot names a live
+		 * block and writing here would orphan one.  Unreachable today (live blocks cap
+		 * at JIT_MAX_BLOCKS = 2048 < JIT_HASH_SLOTS), counted rather than silent. */
+		fprintf(stderr, "jit: bind: the block hash is full (%u slots)\n", JIT_HASH_SLOTS);
+		jit_stats.hash_full++;
+		jit_page_recycle(idx); /* this call refused the span, so it keeps nothing -- the
+		                        * WHO-OWNS-THE-SPAN rule in the block-table-full arm above */
+		return false;
 	}
 	b->hash_slot = (uint16_t)slot;
 	jit_hash[slot] = (uint16_t)(id + 1u);

@@ -1,0 +1,16 @@
+== perf-7-ab: base vs f4  pairs=5
+load-before=0.87 0.62 1.19
+a    real 1.465s  instr=ok state=ok serial=ok
+b    real 1.378s  instr=ok state=ok serial=ok
+b    real 1.378s  instr=ok state=ok serial=ok
+a    real 1.434s  instr=ok state=ok serial=ok
+a    real 1.415s  instr=ok state=ok serial=ok
+b    real 1.371s  instr=ok state=ok serial=ok
+b    real 1.407s  instr=ok state=ok serial=ok
+a    real 1.427s  instr=ok state=ok serial=ok
+a    real 1.413s  instr=ok state=ok serial=ok
+b    real 1.362s  instr=ok state=ok serial=ok
+load-after=0.97 0.66 1.19
+base       n=5 best 1.413 median 1.427 worst 1.465
+f4         n=5 best 1.362 median 1.378 worst 1.407
+ratio base/f4: best 0.9639x  median 0.9657x  (>1 means f4 is slower)

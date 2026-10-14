@@ -1,0 +1,16 @@
+== perf-7-ab: base vs stack  pairs=5
+load-before=1.72 1.26 1.20
+a    real 1.467s  instr=ok state=ok serial=ok
+b    real 0.852s  instr=ok state=ok serial=ok
+b    real 0.837s  instr=ok state=ok serial=ok
+a    real 1.407s  instr=ok state=ok serial=ok
+a    real 1.405s  instr=ok state=ok serial=ok
+b    real 0.834s  instr=ok state=ok serial=ok
+b    real 0.839s  instr=ok state=ok serial=ok
+a    real 1.415s  instr=ok state=ok serial=ok
+a    real 1.402s  instr=ok state=ok serial=ok
+b    real 0.836s  instr=ok state=ok serial=ok
+load-after=1.61 1.25 1.20
+base       n=5 best 1.402 median 1.407 worst 1.467
+stack      n=5 best 0.834 median 0.837 worst 0.852
+ratio base/stack: best 0.5949x  median 0.5949x  (>1 means stack is slower)

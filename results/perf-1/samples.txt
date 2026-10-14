@@ -242,3 +242,9 @@ sibonly 4.308
 all3 3.985
 nopatch 4.231
 sibonly 4.366
+# perf_bench ATTRIBUTION: per-TU link, same  bin=build/revert/v86c limit=200000000 runs=1 2026-10-14T14:41:14Z
+# real user sys
+0.867 0.849 0.017
+# perf_bench ATTRIBUTION: per-TU link, same  bin=build/revert/v86c limit=200000000 runs=1 2026-10-14T14:47:05Z
+# real user sys
+0.914 0.905 0.008
