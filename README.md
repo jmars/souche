@@ -36,10 +36,25 @@ and why. In one screen:
 | | |
 |---|---|
 | **CPU core** | the whole reference CPU: the 386-level base table, the 0F table, MMX/SSE, the x87 FPU on a vendored softfloat, the segment/GDT/LDT/TSS machinery, exceptions, interrupts, paging (PSE), the PIC. The instruction dispatch is **generated from the reference's own `v86/gen/x86_table.js`** — never hand-written — so an opcode's semantics cannot be re-decided by mistake. Census: **0 unimplemented call sites** |
-| **Execution** | a uop cache (decoded blocks, physically keyed) **and an x86-64 JIT**, both gated against the interpreter; the JIT is ON by default at **~1.7× over the uop cache** and 91% dynamic inlined coverage. `--uop-cache off` and `--jit off` each reproduce the pre-existing machine exactly |
+| **Execution** | three engines over the same generated dispatch: an interpreter, a **uop cache** (decoded, physically-keyed blocks) and an **x86-64 JIT**, each gated against the others. The JIT is ON by default, ~1.7× over the uop cache, at **97.67% dynamic inlined coverage**; `--uop-cache off` and `--jit off` each reproduce the pre-existing machine exactly |
 | **Devices** | port I/O and the mmap device hooks, bus, PIC, PIT, RTC, DMA, 8042 PS/2, ACPI, PCI, 8250 UART, IDE/ATA, virtio + virtio-console |
 | **Boot** | a Linux `bzImage` + initrd + cmdline; a raw multiboot/ELF path (the oracle's); and an embedded 64 KiB purpose-built firmware (`tests/minibios.asm`), needed because the reference cannot boot a bzImage without a BIOS |
 | **Proved by** | a real Alpine i386 kernel booting to its own panic on both machines, the guest's own `libata` reading our ATA (its md5 of the disk equals the host's), its `virtio_console` driver attaching `hvc0`, **and the baliveau guest reaching `fx-init: boot-ok v3`** |
+
+## Performance, in one line
+
+The 200,095,214-instruction kernel-boot benchmark ran in **6.26 s** (~32 MIPS) as a straightforward
+interpreter and runs in **~0.83 s (~240 MIPS)** now — about **7.5×** — with the M0 transcript
+byte-identical to the reference at every step and every guest boot unchanged. What paid, what was
+measured out, and what the instruments cannot see: [`docs/performance.md`](docs/performance.md).
+
+## Security posture, in one line
+
+The guest is untrusted code by construction and the emulator is one host process, so the boundary is
+the emulator's own memory safety. An audit of that boundary found and fixed a **demonstrated
+blocker** (a guest PCI config write ran off the end of the port table and into the mmap dispatch
+table of function pointers) plus a class of guest-reachable asserts and unbounded blob sinks. The
+threat model, the findings and what is verified clean: [`docs/security.md`](docs/security.md).
 
 ## Why the oracle came first
 
@@ -48,6 +63,17 @@ to both the reference (JavaScript v86) and the C port, dump a *canonical* machin
 from each, and `diff`. **Every unit since has been gated by that diff.** It is the reason the port
 can claim anything at all — and the reason a JIT whose codegen was silently wrong for high-byte
 registers was caught (see `TODO.md` §4).
+
+## Documentation
+
+| | |
+|---|---|
+| [`docs/architecture.md`](docs/architecture.md) | how the emulator is put together — the three engines, the generated dispatch, the memory model, the device layer, the boot paths |
+| [`docs/testing.md`](docs/testing.md) | the instruments and the method — the oracle contract, the 118-image corpus with native fixtures built without nasm or gdb, the selftest suites, the guest gates, and the rules each was earned by |
+| [`docs/performance.md`](docs/performance.md) | the measured arc, what paid, what was measured out, and the instruments' own limits |
+| [`docs/security.md`](docs/security.md) | the threat model, the audit, the fixes, and what is verified clean |
+| [`TODO.md`](TODO.md) | what is deliberately not ported, with the evidence and the trigger for each |
+| `results/` | the project's record: one report per unit with its raw evidence and its claims marked |
 
 ---
 
