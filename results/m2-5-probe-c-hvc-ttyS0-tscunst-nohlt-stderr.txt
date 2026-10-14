@@ -1,0 +1,5 @@
+v86c boot: kernel 1253888 bytes sha256 f0278a8f2893eb93a8c857f3f2d5a589a5b9aa6a45033171bc5411fc10f658cd
+v86c boot: firmware 65536 bytes at 0xf0000, option ROM 512 bytes at 0xc0000, memory 80 MiB, hda 4194304 bytes sha256 f83dba09f75d2c0b205aa7f24be1dec2fb9e32fe9d9d7725205408a8e3f0758f, initrd attached, cmdline 'console=hvc0 console=ttyS0 tsc=unstable nohlt'
+v86c boot: reset cs=0xf000 eip=0xffff0
+v86c boot: 579646211 instructions, in_hlt=1, exception=-1, unimplemented=0, eip=0xc101acb2 cs=0x60 cr0=0x80050033 cr3=0x2da000
+v86c boot: virtio console: 1390 bytes out, 15 bytes in, 1462 chain bytes read, 191 chain bytes written (inbound handshake fired)

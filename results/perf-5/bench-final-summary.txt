@@ -1,0 +1,39 @@
+== perf-5-ab: baseline vs final(c2+c4+c5)  pairs=4
+load-before=11.16 13.16 12.00
+a    real 3.222s  instr=ok state=ok serial=ok
+b    real 2.925s  instr=ok state=ok serial=ok
+b    real 3.080s  instr=ok state=ok serial=ok
+a    real 3.461s  instr=ok state=ok serial=ok
+a    real 3.430s  instr=ok state=ok serial=ok
+b    real 2.919s  instr=ok state=ok serial=ok
+b    real 3.128s  instr=ok state=ok serial=ok
+a    real 3.582s  instr=ok state=ok serial=ok
+load-after=13.09 13.44 12.12
+baseline   n=4 best 3.222 median 3.446 worst 3.582
+final(c2+c4+c5) n=4 best 2.919 median 3.002 worst 3.128
+ratio baseline/final(c2+c4+c5): best 0.9060x  median 0.8714x  (>1 means final(c2+c4+c5) is slower)
+
+== perf_bench: PERF-5 final tree
+bin=build/v86c limit=200000000 kernel=tests/images/vmlinuz-i386 runs=7
+cores=32 load-before=13.09 13.44 12.12
+kernel=7.1.8-1-default cflags-host=cc (SUSE Linux) 16.2.0
+asserting: instruction count 200095214
+asserting: terminal guest state "in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0"
+asserting: serial output sha256 fae4924b13b07d441b0ad8458047d2f1d8abf0d1ec59876f44b88ef67d2d0b2a
+run  1: real 3.201s user 3.178s sys 0.015s  instr=200095214  state=ok serial=ok
+run  2: real 2.986s user 2.967s sys 0.014s  instr=200095214  state=ok serial=ok
+run  3: real 2.859s user 2.845s sys 0.009s  instr=200095214  state=ok serial=ok
+run  4: real 2.839s user 2.824s sys 0.008s  instr=200095214  state=ok serial=ok
+run  5: real 2.868s user 2.851s sys 0.012s  instr=200095214  state=ok serial=ok
+run  6: real 2.887s user 2.861s sys 0.021s  instr=200095214  state=ok serial=ok
+run  7: real 2.920s user 2.903s sys 0.010s  instr=200095214  state=ok serial=ok
+load-after=12.67 13.33 12.11
+n=7
+real: best 2.839  median 2.887  worst 3.201
+user: best 2.824  median 2.861  worst 3.178
+cpu (user+sys): best 2.832  median 2.882
+MIPS at best real: 70.48   at median real: 69.31
+verified (every run): 200095214 instructions, the terminal guest state clause
+                      above, and the guest's serial output sha256 -- every number in
+                      this output times THAT workload; none of them asserts it.
+raw samples appended to results/perf-5/bench-final.txt

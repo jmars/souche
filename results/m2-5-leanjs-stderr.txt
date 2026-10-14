@@ -1,0 +1,5 @@
+reference: kernel 795136 bytes sha256 25be0d5358d9445712f6d04e59a7be9133acbd3f69ad0720a69e43d5ba844b3d
+reference: firmware at 0xf0000, option ROM 512 bytes at 0xc0000, cmdline 'console=hvc0 console=ttyS0 tsc=unstable idle=poll'
+reference: memory 80 MiB, hda 4194304 bytes sha256 f83dba09f75d2c0b205aa7f24be1dec2fb9e32fe9d9d7725205408a8e3f0758f, initrd 915741 bytes
+reference: reset eip=0xffff0 cs=0xf000
+reference: {"instructions":574685582,"limit":3000000000,"in_hlt":1,"eip":"0xc101399a","cr0":"0x80050033","cr3":"0x165000","cs":"0x60","exception":null,"serial_bytes":4772,"virtio_console_bytes":0,"virtio_console_in_sent":false}

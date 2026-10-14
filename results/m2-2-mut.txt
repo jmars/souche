@@ -1,0 +1,51 @@
+=== G4: the asymmetry rig (each mutation alone, then restored) ===
+
+--- the untouched tree, as the control ---
+1dbad114ef66a395124dbb37c4566436ee8d90bc748b5aabd9a560e6b9d4cee7  src/cpu/instructions_0f.c
+3cc41b9a0c9ce8544550eab09719418250f0984f15f1a2682eabff2720e355c0  src/hw/pci.c
+0b435bcfd34c54e872631f064a248af59ed39f86e3d2445cb7f5c57efe173d42  src/hw/uart.c
+61fceef81b651ae61bb128762b2477e99a2eccb94a746733f8322ae1d5f33893  src/hw/kernel.c
+0b0a775f510ecb431a0ed53ed94ff045740e655648a6394b0079a7647e71d6cc  tests/minibios.asm
+control selftest rc=0 :: hw_selftest: 338 checks, 0 failures, 0 skipped
+control boot rc=0 :: 287 lines, e820=4, panic=2
+
+=== M1: instructions_0f.c -- rdrand's register body back to #UD ===
+M1 mutated: boot rc=0, 1 lines, e820=0, 88=0, panic=0, version=0, optrom=1
+M1 restored from the saved copy: boot rc=0, 287 lines, e820=4, 88=0, panic=2, version=1, optrom=1
+
+=== M2: pci.c -- the absent-device bound check neutered (the out-of-bounds index) ===
+M2 mutated: boot rc=139, 148 lines, e820=4, 88=0, panic=0, version=1, optrom=1
+M2 restored from the saved copy: boot rc=0, 287 lines, e820=4, 88=0, panic=2, version=1, optrom=1
+
+=== M3: minibios.asm -- the option ROM checksum adds one byte per pump ===
+M3 mutated: boot rc=0, 1 lines, e820=0, 88=0, panic=0, version=0, optrom=0
+M3 restored from the saved copy: boot rc=0, 287 lines, e820=4, 88=0, panic=2, version=1, optrom=1
+
+=== M4: minibios.asm -- the E820 success path loses its CF patch ===
+M4 mutated: boot rc=0, 285 lines, e820=0, 88=2, panic=2, version=1, optrom=1
+M4 restored from the saved copy: boot rc=0, 288 lines, e820=4, 88=0, panic=2, version=1, optrom=1
+
+=== M5: uart.c -- every channel's output message is COM1's ===
+M5 mutated: selftest rc=1 :: hw_selftest: 338 checks, 3 failures, 0 skipped
+    FAIL src/hw/hw_selftest.c:1327: uart_sink1_count == 1 (got 0x0, want 0x1)
+    FAIL src/hw/hw_selftest.c:1328: uart_sink1[0] == 0x42 (got 0x0, want 0x42)
+M5 restored from the saved copy: selftest rc=0 :: hw_selftest: 338 checks, 0 failures, 0 skipped
+
+=== M6: kernel.c -- heap_end_ptr off by one page ===
+M6 mutated: selftest rc=1 :: hw_selftest: 338 checks, 2 failures, 0 skipped
+    FAIL src/hw/hw_selftest.c:1384: kr16(mem8 + base + 0x224) == 0xDE00 (got 0xce00, want 0xde00)
+    FAIL src/hw/hw_selftest.c:1490: kr16(mem8 + base + 0x224) == 0xDE00 (got 0xce00, want 0xde00)
+M6 restored from the saved copy: selftest rc=0 :: hw_selftest: 338 checks, 0 failures, 0 skipped
+
+--- the tree after every mutation has been restored ---
+1dbad114ef66a395124dbb37c4566436ee8d90bc748b5aabd9a560e6b9d4cee7  src/cpu/instructions_0f.c
+3cc41b9a0c9ce8544550eab09719418250f0984f15f1a2682eabff2720e355c0  src/hw/pci.c
+0b435bcfd34c54e872631f064a248af59ed39f86e3d2445cb7f5c57efe173d42  src/hw/uart.c
+61fceef81b651ae61bb128762b2477e99a2eccb94a746733f8322ae1d5f33893  src/hw/kernel.c
+0b0a775f510ecb431a0ed53ed94ff045740e655648a6394b0079a7647e71d6cc  tests/minibios.asm
+
+--- the control again, from the restored tree ---
+restored selftest rc=0 :: hw_selftest: 338 checks, 0 failures, 0 skipped
+restored boot rc=0 :: 287 lines, e820=4, panic=2
+
+=== end of the rig ===

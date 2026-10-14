@@ -1,0 +1,69 @@
+=== REBOOT-1 raw gate evidence, collected 2026-10-13T20:20:29Z ===
+
+--- G1 PRE-FIX ASYMMETRY (the current tree BEFORE the unit, both trigger sites stop) ---
+$ ./build/v86c tests/reboot-pci.img 2000000   (pre-fix binary)
+rc=1
+v86c: unimplemented: pci_portCF8_write8(0xCF9) reboot_internal (the machine reboot path is a later unit); transcript not produced
+$ ./build/v86c tests/reboot-ps2.img 2000000   (pre-fix binary)
+rc=1
+v86c: unimplemented: ps2_port64_write(0xFE) reboot_internal (the machine reboot path is a later unit); transcript not produced
+
+--- G1 POST-FIX: both triggers, 3 execution configs, all GOLD, byte-identical per image ---
+pci/default: verdict 0x600d600d marker 0x31415926 ecx 0x00000000 cs 0x0008 cr0 0x00000001 count 48 win 04f4aa5f79f194de
+pci/jitoff: verdict 0x600d600d marker 0x31415926 ecx 0x00000000 cs 0x0008 cr0 0x00000001 count 48 win 04f4aa5f79f194de
+pci/uopoff: verdict 0x600d600d marker 0x31415926 ecx 0x00000000 cs 0x0008 cr0 0x00000001 count 48 win 04f4aa5f79f194de
+pci: the 3 configs are byte-identical
+ps2/default: verdict 0x600d600d marker 0x31415926 ecx 0x00000000 cs 0x0008 cr0 0x00000001 count 48 win b1dfb73392e48689
+ps2/jitoff: verdict 0x600d600d marker 0x31415926 ecx 0x00000000 cs 0x0008 cr0 0x00000001 count 48 win b1dfb73392e48689
+ps2/uopoff: verdict 0x600d600d marker 0x31415926 ecx 0x00000000 cs 0x0008 cr0 0x00000001 count 48 win b1dfb73392e48689
+ps2: the 3 configs are byte-identical
+
+--- gate-reboot-1.sh (21 checks incl. the window model, determinism, the runaway guard) ---
+gate-reboot-1: 21 passed, 0 failed
+
+--- G4 MUTATION RIG (results/reboot-1-mut-rig.sh) ---
+MUT M1 omit reset_cpu: CAUGHT (EBX: -87228414 -87228414)
+MUT M2 omit ps2_reset: CAUGHT (EBX: -87228413 -87228413)
+MUT M3 omit pit_init: CAUGHT (EBX: -87228412 -87228412)
+MUT M5 omit uop_cache_clear: NOT CAUGHT by the two-boot image (EBX: 1611489293 1611489293)
+
+--- G3: selftest ---
+cpu_selftest: 3522 checks, 0 failures
+cpu_m1c_selftest: 228 checks, 0 failures
+hw_selftest: 551 checks, 0 failures, 0 skipped
+uop_cache_selftest: 7934349 checks, 0 failures
+--- G3: nasm / transcript-diff / bench ---
+[+] Passed 118/118 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+milestone: the C transcript is byte-identical to the reference's
+asserting: instruction count 200095214
+asserting: terminal guest state "in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0"
+asserting: serial output sha256 fae4924b13b07d441b0ad8458047d2f1d8abf0d1ec59876f44b88ef67d2d0b2a
+MIPS at best real: 122.53   at median real: 120.18
+--- G3: the aarch64 APE companion ---
+-rwx--x--x. 1 jaye jaye 2440524 Oct 13 20:21 build/v86c.aarch64.elf
+
+--- G2 KERNEL ARM: a real guest reboots itself (sysrq -> kbd 0xFE -> port 0x64), ~1m58s ---
+$ ./build/v86c --bzimage tests/images/vmlinuz-i386 4000000000 --cmdline console=ttyS0 --hda tests/images/disk.img --initrd tests/images/guest-initramfs-reboot.img --memory 80 --bios build/minibios-80m.bin --serial ...
+rc=0
+GUEST-INIT: start, uname = 6.6.134-0-lts
+GUEST-INIT: waited 27 round(s) for /sys/block/sda
+GUEST-INIT: BOOT1: sector 8 currently: Rct…–§¸ÉÚëü/@Qbs„•¦·ÈÙêû.?Pa
+GUEST-INIT: BOOT1: marker written to /dev/sda sector 8, rebooting via the PS/2 controller
+GUEST-INIT: start, uname = 6.6.134-0-lts
+GUEST-INIT: waited 26 round(s) for /sys/block/sda
+GUEST-INIT: BOOT2: marker read back from /dev/sda sector 8: DISK PERSIST OK
+GUEST-INIT: BOOT2: sector 8 md5: 8087c6949187d0a43c9756f280a5ae32  -
+GUEST-INIT: BOOT2: first 64 sectors md5: 8a636e5ea5c543c9c97cd99bbcd1850c  -
+GUEST-INIT: BOOT2: powering off
+the kernel's own reboot line:
+[  754.182547] sysrq: Resetting
+the firmware's boot-2 re-entry:
+minibios: option ROM at c000
+the HOST disk.img file after the run:
+-rw-r--r--. 1 jaye jaye 4194304 Oct 12 16:53 tests/images/disk.img
+sector 8 on the host file is UNCHANGED original content (boot 1 read this same garbage before writing; the marker lived only in the device's buffer):
+b'Rct\x85\x96\xa7\xb8\xc9'
+
+--- the m2-5 determinism gate on the final binary (the property a reboot must not break) ---
+gate-m2-5-determinism.sh: 0 FAILING assertion(s), rc 0; serial 29c332ffe961... (18782 bytes), virtio 3b9d566c35f5... (1242 bytes), 4000053925 instructions both runs -- the pinned historical values, unchanged

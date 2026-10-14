@@ -1,0 +1,1739 @@
+/*
+ * jit_codegen.c -- THE BLOCK COMPILER: one decoded uop block -> one native x86-64 function.
+ * See jit_codegen.h for the calling/execution contract and the aarch64 posture.
+ *
+ * ==================================================================== *
+ * WHAT THE COMPILED BLOCK REPRODUCES, AND IN WHICH ORDER
+ *
+ * The contract is src/cpu/uop_cache.c's executor loop -- not a re-description of it.  For each
+ * uop the executor does, in this order (uop_cache.c, the `for (;;)` inside the block run):
+ *
+ *   1. `if (uop_abort_pending) -> ABORT`          (the SMC abort, before ANY of the uop's work)
+ *   2. `previous_ip = u->eip; instruction_pointer = u->body_ip; prefixes = u->pfx`
+ *   3. `pagefault = false`                        (D1's dispatch-entry clear)
+ *   4. the body (inline recipe, or the shape's C call), then `pagefault = false` again
+ *   5. `prefixes = 0; pending += 1`
+ *   6. `if (interpreted_unimplemented) { flush; RETURN }`
+ *   7. `if (ran && (FLUSH || jit_block_boundary)) { flush; jbc = false; if budget RETURN }`
+ *   8. `if the uop's page != the current page { flush; RETURN }`
+ *   9. `if (pending >= LIMIT && eip >= ip) { flush; RETURN }`
+ *  10. `if (BLOCK_END) { block_ends++; RETURN }`
+ *  11. `if (u->eip + u->len != ip) -> TAIL`       (control flow left the block)
+ *  12. otherwise the next uop
+ *
+ * Steps 6-11 are emitted ONCE PER BLOCK as a shared subroutine (`l_checks`), called at the end
+ * of every uop with three registers describing that uop: EDI = the uop's flags (bit0 FLUSH,
+ * bit1 BLOCK_END, bit2 "the body ran"), ESI = `u->eip + u->len` (the ip the fall-through path
+ * must have) and R10D = `u->eip`.  It runs in the executor's order and returns only on the
+ * fall-through path; every other outcome jumps to the block's exit stubs, which set the exit
+ * kind in a frame slot and jump to the epilogue.
+ *
+ * ==================================================================== *
+ * M2: THE FALLBACK IS THE C EXECUTOR ITSELF, AND THE RECIPES ARE INLINED
+ *
+ * M1 emitted the executor's per-shape call sequence (the guard, the address materialisation,
+ * the argument mapping, the body call) INLINE, once per uop: ~190 bytes per called uop, of
+ * which ~150 was the JIT's own bookkeeping.  MEASURED consequence (results/jit-1-m1.md ss4):
+ * 190 of the boot's 740 blocks -- the hot ones, mean 47.4 uops, holding 99.7% of the boot's
+ * dynamic executions -- did not fit in the 4 KiB code page and ran as uops, so only 0.32 % of
+ * the boot ran compiled.
+ *
+ * M2 changes both halves of that:
+ *
+ *  (a) A uop with NO recipe is not expanded.  It becomes a 20-byte trampoline that loads the
+ *      uop pointer and its flag word into the two argument registers and `call`s ONE shared
+ *      per-block stub, which spills, calls `uop_exec_uop(u)` -- THE C EXECUTOR'S OWN per-uop
+ *      worker (uop_cache.c) -- and reloads.  That is strictly MORE faithful than M1's
+ *      transcription (one implementation of the shape switch, the guards and the
+ *      materialisation instead of two) and it costs ~70 bytes per called uop instead of ~190.
+ *  (b) A uop WITH a recipe is emitted inline, exactly (see the recipes below), and never calls
+ *      the executor on the path that matters.
+ *
+ * The fit rule and the coverage measurement are the brief's G1; `results/jit-2-m2.md` has the
+ * before/after numbers.
+ *
+ * ==================================================================== *
+ * THE REGISTER CONTRACT (plan ss4.1) AND THE SPILL RULE
+ *
+ * Inside a compiled block: guest EAX/ECX/EDX/EBX/ESP/EBP/ESI/EDI live in RAX/RCX/RDX/RBX/
+ * R12-R15; RBP holds `&cpu`; R8 holds `&jit_abort_flag`; R9 holds the pending count.  RSI,
+ * RDI, R10 and R11 are free scratch at every point an emitter can reach (the checks routine's
+ * arguments RSI/R10 are materialised at the END of each uop, after the body).
+ *
+ * THE SPILL RULE: before ANY C call the eight guest registers AND the pending count are stored
+ * into cpu_state/the global, and after the call they are reloaded.  It is uniform (a per-call
+ * cost, and calls are the fallback path) and it is what makes the C bodies work unchanged:
+ * every `instr_XX_*` body reads and writes `cpu->reg32[]`, so the register file it sees must be
+ * the live one.  A recipe needs no spill -- it operates on the host registers directly, and any
+ * LATER call in the same block spills its result.
+ *
+ * THE STATE OF RECORD IS MEMORY, not the host registers: lazy-flag state, the segment bases,
+ * EIP and the counters are all read and written through `cpu` exactly as the executor does, so
+ * the two paths cannot disagree about them.  A compiled block is thus always in a state the C
+ * code can be re-entered from at any of its exits.
+ *
+ * ==================================================================== *
+ * AND WHAT IT DOES NOT DO.  It does not implement the reference's loop tail, the next-block
+ * lookup, or the SMC re-decode: `jit_execute_block` returns and uop_run's existing C code does
+ * all of it (jit_codegen.h).  That is the plan's central claim -- the compiled block returns
+ * one of the executor's own outcomes and the parts not reimplemented cannot be wrong.
+ */
+
+#include "jit_codegen.h"
+
+#include "jit_mem.h"
+
+#include <stdio.h> /* the stats report, and the aarch64 stub's own line */
+
+#if V86C_JIT_X64
+
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "cpu.h"          /* interpreted_unimplemented, jit_block_boundary, cpu_cycle_budget_end */
+#include "cpu_state.h"    /* cpu_state_t, offsetof, the TLB_ and FLAG_ constants */
+#include "instructions.h"   /* the recipe bodies, keyed by pointer */
+#include "instructions_0f.h" /* the 0F-escape bodies (movzx, the rel32 jumps) */
+#include "jit_x64.h"
+#include "memory.h"  /* mem8 -- the data-address base */
+#include "modrm.h"   /* PREFIX_MASK_SEGMENT, SEG_PREFIX_ZERO */
+#include "paging.h"  /* tlb_data */
+#include "uop_cache.h" /* uop_t, uop_pending, uop_stats, uop_exec_uop */
+
+/* ------------------------------------------------------------------ *
+ * the compile-time constants of the emitted block
+ * ------------------------------------------------------------------ */
+
+/* THE LOCAL FRAME, offsets from RSP.  The first three slots are M1's (the executed-uop count,
+ * the inlined-uop count and the exit kind); the rest are M2's: the per-uop flag word the slow
+ * trampoline hands the shared stub, and the four addresses the inlined memory recipes load
+ * once per block instead of carrying in a register (there are only four scratch registers and
+ * every one of them is live across the access).  56 bytes keeps RSP 16-byte aligned at every
+ * emitted `call` (JIT_CODE_PAGE_BYTES is the buffer; this is the SysV stack rule). */
+#define JC_FRAME_EXEC     0  /* 4: uops that ran (the executor's block_uops) */
+#define JC_FRAME_INLINED  4  /* 4: ... of which ran as emitted code (the coverage split) */
+#define JC_FRAME_KIND     8  /* 4: the exit kind, read by the epilogue */
+#define JC_FRAME_FLAGS   12  /* 4: the per-uop flag word, in transit to the shared stub */
+#define JC_FRAME_TLB     16  /* 8: (uintptr_t)tlb_data */
+#define JC_FRAME_MEM8    24  /* 8: (uintptr_t)&mem8 -- the ADDRESS of the pointer, so the
+                          * value is re-read per access and cannot go stale */
+#define JC_FRAME_CODE    32  /* 8: uop_page_code's current value */
+#define JC_FRAME_CODELEN 40  /* 4: uop_page_code_len */
+#define JC_FRAME_BYTES   56
+
+/* the state offsets, from offsetof() -- never hardcoded numbers */
+#define JC_OFF(field) ((int32_t)offsetof(cpu_state_t, field))
+
+/* THE GUEST REGISTER MAP (plan ss4.1).  Index order is cpu_state.h's own (EAX..EDI == 0..7). */
+static const uint8_t jitcg_greg[8] = {
+	JX_RAX, JX_RCX, JX_RDX, JX_RBX, JX_R12, JX_R13, JX_R14, JX_R15
+};
+
+#define JC_ABORT_REG JX_R8  /* &jit_abort_flag -- the SMC abort channel the compiled code reads */
+#define JC_PENDING   JX_R9  /* the pending count, live across the block */
+#define JC_TMP       JX_R11 /* scratch; also the shared stubs' function-pointer register */
+#define JC_TMP2      JX_RSI /* scratch; the materialised physical address of a memory operand */
+#define JC_VAL       JX_R10 /* the inlined operand's value register */
+
+/* the per-uop flag word the checks routine reads (bit2 = "the body ran") */
+#define JC_F_FLUSH     1
+#define JC_F_BLOCK_END 2
+#define JC_F_RAN       4
+
+/* The scratch the block is emitted into.  ITS CAPACITY IS THE M2 FIT RULE (jit_mem.h): a block
+ * that needs more than one code page gets as many contiguous 4 KiB pages as it needs, up to
+ * JIT_CODE_MAX_BLOCK_BYTES; past that it is not compiled at all.  The emitter's overflow flag
+ * is the test, so the emission cannot run past the buffer while discovering that. */
+static uint8_t jitcg_scratch[JIT_CODE_MAX_BLOCK_BYTES];
+
+jit_codegen_stats_t jit_codegen_stats;
+
+/* the shared per-block labels and the state byte, for the recipe emitters.  The compile pass is
+ * single-threaded and non-reentrant (jit_compile_block owns jitcg_scratch for the same
+ * reason), so this is the emitter's context rather than a parameter of every recipe. */
+typedef struct jitcg_shared {
+	uint8_t state;     /* the uop cache's state byte -- cpl3 is constant-folded from it */
+	int l_slow;        /* the shared C fallback (jitcg_emit_slow) */
+	int getcf, getzf;  /* the shared lazy-flag getters (jitcg_emit_getcf/getzf) */
+	bool has_getcf, has_getzf;
+} jitcg_shared_t;
+
+static jitcg_shared_t jitcg_sh;
+
+/* ------------------------------------------------------------------ *
+ * the recipe table
+ * ------------------------------------------------------------------ */
+
+/* ---- the operand helpers ---- */
+
+static bool jc_mem_shape(uint8_t shape)
+{
+	return shape == UOP_SHAPE_MEM0 || shape == UOP_SHAPE_MEM1 ||
+	       shape == UOP_SHAPE_MEMF0 || shape == UOP_SHAPE_MEMF1;
+}
+
+#define JC_MAX_RECIPES 192
+
+/* a state cell / a register / a guest register, as an operand.  These are macros over a
+ * COMPOUND LITERAL rather than functions: the emitters take `const jx_operand_t *`, and they
+ * are called in expressions where a local would be pure noise. */
+#define jc_reg(r_) (&(jx_operand_t){ false, (r_), -1, 0, 0 })
+#define jc_state(off_) (&(jx_operand_t){ true, JX_RBP, -1, 0, (off_) })
+#define jc_greg(g_) (&(jx_operand_t){ false, jitcg_greg[(g_)], -1, 0, 0 })
+#define jc_mem(b_, i_, s_, d_) (&(jx_operand_t){ true, (b_), (i_), (s_), (d_) })
+
+/* THE BYTE VIEW OF THE REGISTER FILE (cpu_state.c:19-30), which is NOT "the byte register
+ * of the same index":
+ *
+ *     get_reg8_index(i) = (i << 2 & 12) | (i >> 2 & 1)      ->     0,4,8,12,1,5,9,13
+ *
+ * so register i's byte lives in reg32[i & 3] at byte (i >> 2 & 1) -- AL/CL/DL/BL for 0..3 and
+ * AH/CH/DH/BH for 4..7, i.e. the HIGH byte of EAX/ECX/EDX/EBX.  MEASURED, and it cost a 16 KiB
+ * serial flood rather than a wrong digit: writing AH into reg32[4]'s high byte (ESP's) instead
+ * of reg32[0]'s corrupted the guest's stack pointer, and the boot firmware then printed one
+ * message forever. */
+static inline int jc_reg8_host(int guest) { return jitcg_greg[guest & 3]; }
+static inline bool jc_reg8_high(int guest) { return guest >= 4; }
+
+/* read_reg8(i), zero-extended into `dst` */
+static void jitcg_emit_read_reg8(jx64_t *e, int dst, int guest)
+{
+	int h = jc_reg8_host(guest);
+	if (!jc_reg8_high(guest)) {
+		jx64_movzx_r32_r8(e, dst, h);
+	}
+	else {
+		/* AH..BH are bits 8..15 of the 32-bit register, and REX makes the H registers
+		 * unaddressable, so the byte is extracted with a shift */
+		jx64_mov_r32_r32(e, dst, h);
+		jx64_shr_r32_imm8(e, dst, 8);
+		/* THE MASK MUST BE THE imm32 FORM (`81 /4 id`).  The imm8 form
+		 * (`83 /4 ib`, imm8 == true) SIGN-EXTENDS the byte: 0xFF becomes
+		 * 0xFFFFFFFF, the AND is a no-op, and the 24 bits the shift left in
+		 * bits 8..31 survive -- measured: `movzx esi, ah` on EAX=0x9ABCDEF0
+		 * gave 0x009ABCDE instead of 0xDE. */
+		jx64_alu_rm_imm(e, 4 /* and */, jc_reg(dst), 0xFF, false);
+	}
+}
+
+/* write_reg8(i, value) -- only the low byte of `src` is used, `tmp` is scratch
+ *
+ * The `and tmp, 0xFF` below is the imm32 form for the SAME reason as the reader's (see
+ * jitcg_emit_read_reg8): the imm8 form sign-extends 0xFF, masks nothing, and lets `src`'s bits
+ * 8..23 reach the destination's bits 16..31 through the shift.
+ *
+ * WHETHER THIS SITE IS LIVE DEPENDS ON THE READER, and all four states were MEASURED
+ * (results/jit-fix-1.md, G1's four arms; `mov ah, bh` on EAX = 0x1111C0DE, EBX = 0x22223456):
+ *
+ *   reader dead + this dead  -> 0x333334DE   WRONG  <- the tree as shipped and reviewed
+ *   reader dead + this fixed -> 0x111134DE   right
+ *   reader fixed + this dead -> 0x111134DE   right
+ *   reader fixed + this fixed-> 0x111134DE   right
+ *
+ * So it IS reachable with a non-zero source -- the reader hands it its unmasked 24-bit value --
+ * but it cannot be reached INDEPENDENTLY of the reader: every caller passes JC_VAL, and every
+ * JC_VAL producer zero-extends, which is what makes this mask dead weight once the reader is
+ * fixed.  Two independent reviews of this unit disagreed about this site (one called it a live
+ * blocker, the probe that first measured it called it correct because its cases used a LOW-byte
+ * source, whose reader arm was never broken); the measurement above is what settles it:
+ * `mov ah, bl` correct / `mov ah, bh` wrong is a property of the SOURCE, not of this helper. */
+static void jitcg_emit_write_reg8(jx64_t *e, int guest, int src, int tmp)
+{
+	int h = jc_reg8_host(guest);
+	if (!jc_reg8_high(guest)) {
+		jx64_mov_r8_r8(e, h, src);
+	}
+	else {
+		jx64_alu_rm_imm(e, 4, jc_reg(h), ~0xFF00, false); /* keep bits 0..7 and 16..31 */
+		jx64_mov_r32_r32(e, tmp, src);
+		jx64_alu_rm_imm(e, 4, jc_reg(tmp), 0xFF, false);
+		jx64_shl_r32_imm8(e, tmp, 8);
+		jx64_or_r32_r32(e, h, tmp);
+	}
+}
+
+/* ------------------------------------------------------------------ *
+ * the inlined memory operand: address, translation, the gates, the access
+ *
+ * Every gate below is a transcription of the C helper the uop would otherwise call, and EVERY
+ * one of them jumps to the shared fallback instead of being finished here -- which is always
+ * correct, because the fallback re-runs the whole C body from the uop's own decoded fields.
+ * The gates, and the site each comes from:
+ *
+ *   the page-end straddle   safe_read{16,32s} / safe_write{16,32}: the C splits the access in
+ *                           two and translates each half, so a straddling access is not a
+ *                           single physical access at all (reads: paging.c:517-566)
+ *   the TLB miss            translate_address (paging.c:275-292): the entry does not satisfy
+ *                           the requested access's bits, so a walk (with side effects) is due
+ *   the device/mapped range safe_read and safe_write in_mapped_range test (memory.h:93-96)
+ *   a store to a code page  the C body's OWN invalidate hook (uop_invalidate_page_fast at
+ *                           paging.h:197-221, and paging.c safe_write): the recipe must not
+ *                           re-implement it, and a data page -- the common case -- is exactly
+ *                           the page the hook would skip, so this gate is equivalent
+ *   the null segment        uop_seg_base (uop_cache.c:372-395): raises the #GP
+ * ------------------------------------------------------------------ */
+
+enum { JC_W32 = 32, JC_W16 = 16, JC_W8 = 8 };
+
+/* the linear address of a memory operand, in `dst`.  `with_seg` is false for 0x8D (lea), whose
+ * body forces SEG_PREFIX_ZERO and therefore never adds a segment base at all. */
+static void jitcg_emit_addr(jx64_t *e, const uop_t *u, int dst, bool with_seg, int l_slow)
+{
+	int base = u->base == UOP_REG_NONE ? -1 : (int)jitcg_greg[u->base];
+	int index = u->index == UOP_REG_NONE ? -1 : (int)jitcg_greg[u->index];
+	uint8_t seg = u->seg;
+	int pseg;
+
+	jx64_lea_r32_rm(e, dst, jc_mem(base, index, (int)u->scale, (int32_t)u->disp));
+
+	if (!with_seg) return;
+
+	pseg = (int)(u->pfx & PREFIX_MASK_SEGMENT);
+	if (pseg == SEG_PREFIX_ZERO) return; /* the address is unsegmented by construction */
+	if (pseg != 0) seg = (uint8_t)(pseg - 1);
+
+	jx64_cmp_m8_imm8(e, JX_RBP, JC_OFF(segment_is_null) + (int32_t)seg, 0);
+	jx64_jcc_label(e, JX_CC_NE, l_slow);
+	jx64_alu_r32_rm(e, 0 /* add */, dst, jc_state(JC_OFF(segment_offsets) + 4 * (int32_t)seg));
+}
+
+/* materialise the physical address in JC_TMP2 and the mem8 base in JC_TMP.  `write` selects
+ * the C helper's translation (translate_address_write_and_can_skip_dirty vs
+ * translate_address_read -- paging.c:275-315 vs :259-273, whose only difference is TLB_READONLY
+ * in the entry test). */
+static void jitcg_emit_mem_prep(jx64_t *e, const uop_t *u, int width, bool write, int l_slow)
+{
+	int mask = TLB_VALID | ((jitcg_sh.state & CACHED_MASK_CPL3) ? TLB_NO_USER : 0) |
+	           (write ? TLB_READONLY : 0);
+
+	jitcg_emit_addr(e, u, JC_TMP, true, l_slow);
+
+	/* the page-end straddle (see the header block).  A byte access never straddles. */
+	if (width != JC_W8) {
+		jx64_mov_r32_r32(e, JX_RDI, JC_TMP);
+		jx64_alu_rm_imm(e, 4, jc_reg(JX_RDI), 0xFFF, false);
+		jx64_cmp_r32_imm32(e, JX_RDI, width == JC_W16 ? 0xFFF : 0xFFD);
+		jx64_jcc_label(e, JX_CC_AE, l_slow);
+	}
+
+	/* the TLB fast path: entry = tlb_data[addr >> 12]; (entry & mask) == TLB_VALID */
+	jx64_mov_r32_r32(e, JC_TMP2, JC_TMP);
+	jx64_shr_r32_imm8(e, JC_TMP2, 12);
+	/* THE LINEAR ADDRESS LIVES IN JC_TMP UNTIL THE FINAL XOR, so the tlb_data pointer goes in
+	 * JX_RDI (which the mask test below reloads anyway).  MEASURED, and it is why the matrix's
+	 * every memory case refused to inline: loading tlb_data into JC_TMP destroyed the address,
+	 * and `phys` came out as `entry ^ (tlb_data & 0xFFFFFFFF)` -- far above memory_size, so the
+	 * plain-RAM gate took every access.
+	 *
+	 * SCALE 2 == x4: tlb_data is an int32_t[] indexed by a page number. */
+	jx64_mov_r64_m64(e, JX_RDI, JX_RSP, JC_FRAME_TLB);
+	jx64_mov_r32_rm(e, JC_TMP2, jc_mem(JX_RDI, JC_TMP2, 2, 0));
+	jx64_mov_r32_r32(e, JX_RDI, JC_TMP2);
+	jx64_alu_rm_imm(e, 4, jc_reg(JX_RDI), mask, true);
+	jx64_cmp_r32_imm32(e, JX_RDI, TLB_VALID);
+	jx64_jcc_label(e, JX_CC_NE, l_slow);
+
+	/* phys = (entry & ~0xFFF) ^ addr (the guest physical address -- paging.c:291-294) */
+	jx64_alu_rm_imm(e, 4, jc_reg(JC_TMP2), ~0xFFF, false);
+	jx64_xor_r32_r32(e, JC_TMP2, JC_TMP);
+
+	/* in_mapped_range(phys): >= memory_size, or inside the 0xA0000..0xC0000 device window */
+	jx64_alu_r32_rm(e, 7 /* cmp */, JC_TMP2, jc_state(JC_OFF(memory_size)));
+	jx64_jcc_label(e, JX_CC_AE, l_slow);
+	jx64_lea_r32_rm(e, JX_RDI, jc_mem(JC_TMP2, -1, 0, (int32_t)-0xA0000));
+	jx64_cmp_r32_imm32(e, JX_RDI, 0x20000);
+	jx64_jcc_label(e, JX_CC_B, l_slow);
+
+	if (write) {
+		/* a write to a page that holds decoded or compiled code belongs to the C body,
+		 * whose own hook drops the block and raises the abort -- and that is the whole
+		 * reason the emitted fast path never has to call anything */
+		int l_ok = jx64_label(e);
+		jx64_mov_r32_r32(e, JX_RDI, JC_TMP2);
+		jx64_shr_r32_imm8(e, JX_RDI, 12);
+		/* THE FRAME IS RSP-RELATIVE (jc_mem(JX_RSP, ...)), NOT cpu_state (jc_state).  MEASURED:
+		 * reading the length at `rbp + JC_FRAME_CODELEN` (which is cpu->last_op1) made the
+		 * comparison against the page number meaningless, so a store to a page that HOLDS CODE
+		 * could skip the invalidate-and-re-decode the C body owns -- stale code executing, the
+		 * PERF-FIX-3 blocker the plan's ss4 exists to keep shut -- and cost the 200 M boot its
+		 * final state. */
+		jx64_alu_r32_rm(e, 7 /* cmp */, JX_RDI, jc_mem(JX_RSP, -1, 0, JC_FRAME_CODELEN));
+		jx64_jcc_label(e, JX_CC_AE, l_ok);
+		jx64_mov_r64_m64(e, JC_TMP, JX_RSP, JC_FRAME_CODE);
+		jx64_movzx_r32_rm8(e, JX_RDI, jc_mem(JC_TMP, JX_RDI, 0, 0));
+		jx64_test_r32_r32(e, JX_RDI, JX_RDI);
+		jx64_jcc_label(e, JX_CC_NE, l_slow);
+		jx64_bind(e, l_ok);
+	}
+
+	/* JC_TMP = mem8 (re-read through the pointer's own address, so it cannot go stale) */
+	jx64_mov_r64_m64(e, JC_TMP, JX_RSP, JC_FRAME_MEM8);
+	jx64_mov_r64_m64(e, JC_TMP, JC_TMP, 0);
+}
+
+/* the operand an inlined memory access reads or writes: mem8 base in JC_TMP, phys in JC_TMP2 */
+#define jitcg_mem_operand() jc_mem(JC_TMP, JC_TMP2, 0, 0)
+
+static void jitcg_emit_mem_load(jx64_t *e, const uop_t *u, int dst, int width, int l_slow)
+{
+	jitcg_emit_mem_prep(e, u, width, false, l_slow);
+	if (width == JC_W32) jx64_mov_r32_rm(e, dst, jitcg_mem_operand());
+	else if (width == JC_W16) jx64_movzx_r32_rm16(e, dst, jitcg_mem_operand());
+	else jx64_movzx_r32_rm8(e, dst, jitcg_mem_operand());
+}
+
+static void jitcg_emit_mem_store(jx64_t *e, const uop_t *u, int src, int width, int l_slow)
+{
+	jitcg_emit_mem_prep(e, u, width, true, l_slow);
+	if (width == JC_W32) jx64_mov_rm_r32(e, jitcg_mem_operand(), src);
+	else if (width == JC_W16) jx64_mov_rm16_r16(e, jitcg_mem_operand(), src);
+	else jx64_mov_rm8_r8(e, jitcg_mem_operand(), src);
+}
+
+/* the recipe's FIRST operand (the r/m one), loaded into `dst` / written from `src` */
+static void jitcg_emit_op_load(jx64_t *e, const uop_t *u, int dst, int width, int l_slow)
+{
+	if (jc_mem_shape(u->shape)) {
+		jitcg_emit_mem_load(e, u, dst, width, l_slow);
+		return;
+	}
+	if (width == JC_W32) jx64_mov_r32_r32(e, dst, jitcg_greg[u->modrm & 7]);
+	else if (width == JC_W16) jx64_movzx_r32_rm16(e, dst, jc_greg(u->modrm & 7));
+	else jitcg_emit_read_reg8(e, dst, (int)(u->modrm & 7));
+}
+
+static void jitcg_emit_op_store(jx64_t *e, const uop_t *u, int src, int width, int l_slow)
+{
+	if (jc_mem_shape(u->shape)) {
+		jitcg_emit_mem_store(e, u, src, width, l_slow);
+		return;
+	}
+	if (width == JC_W32) jx64_mov_r32_r32(e, jitcg_greg[u->modrm & 7], src);
+	else if (width == JC_W16) jx64_mov_rm16_r16(e, jc_greg(u->modrm & 7), src);
+	else jitcg_emit_write_reg8(e, (int)(u->modrm & 7), src, JC_TMP);
+}
+
+/* ------------------------------------------------------------------ *
+ * the lazy-flag writers
+ *
+ * flags.c:97-178 and arith.c:396-422, transcribed.  The STATE IS MEMORY (cpu->flags_changed /
+ * last_op1 / last_result / last_op_size), which is what makes the two engines unable to
+ * disagree about it: nothing is cached in a host register across a uop.
+ * ------------------------------------------------------------------ */
+
+/* flags_add / flags_sub (flags.c:97-136): last_op1 is the DESTINATION's value and must be
+ * stored BEFORE the result overwrites it.  `digit` 0 == add, 5 == sub, 7 == cmp (sub with no
+ * write-back); cmp and sub differ only in the caller's use of the result. */
+static void jitcg_emit_flags_addsub_reg(jx64_t *e, int digit, int dst, int src)
+{
+	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(last_op1), dst);
+	jx64_alu_rm_r32(e, digit, jc_reg(dst), src);
+	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(last_result), dst);
+	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(last_op_size), OPSIZE_32);
+	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(flags_changed),
+	                   (uint32_t)(int32_t)(FLAGS_ALL | (digit == 0 ? 0 : FLAG_SUB)));
+}
+
+static void jitcg_emit_flags_addsub_imm(jx64_t *e, int digit, int dst, int32_t imm, bool imm8)
+{
+	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(last_op1), dst);
+	jx64_alu_rm_imm(e, digit, jc_reg(dst), imm, imm8);
+	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(last_result), dst);
+	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(last_op_size), OPSIZE_32);
+	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(flags_changed),
+	                   (uint32_t)(int32_t)(FLAGS_ALL | (digit == 0 ? 0 : FLAG_SUB)));
+}
+
+/* arith_and / arith_or / arith_xor (arith.c:396-422): NO last_op1 store, and CF/OF/AF are
+ * materialised in `flags` (they are cleared in flags_changed, so the getters read them back
+ * from there).  `digit` 1 == or, 4 == and, 6 == xor. */
+#define JC_LOGIC_MASK   ((int32_t)~(FLAG_CARRY | FLAG_OVERFLOW | FLAG_ADJUST))
+
+static void jitcg_emit_flags_logic_tail(jx64_t *e, int dst);
+
+static void jitcg_emit_flags_logic_reg(jx64_t *e, int digit, int dst, int src)
+{
+	jx64_alu_rm_r32(e, digit, jc_reg(dst), src);
+	jitcg_emit_flags_logic_tail(e, dst);
+}
+
+/* The scratch here is JX_RDI, NOT JC_TMP2: JC_TMP2 is the materialised PHYSICAL ADDRESS of a
+ * read-modify-write operand and must survive the flag update between the load and the store.
+ * MEASURED (the matrix's `or [m]`/`xor [m]` cases): with JC_TMP2 the store wrote to
+ * `mem8 + (the flags word)` -- a wild write that the RAM comparison caught. */
+static void jitcg_emit_flags_logic_tail(jx64_t *e, int dst)
+{
+	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(last_result), dst);
+	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(last_op_size), OPSIZE_32);
+	jx64_mov_r32_rm(e, JX_RDI, jc_state(JC_OFF(flags)));
+	jx64_alu_rm_imm(e, 4, jc_reg(JX_RDI), JC_LOGIC_MASK, false);
+	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(flags), JX_RDI);
+	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(flags_changed), (uint32_t)(FLAGS_ALL & JC_LOGIC_MASK));
+}
+
+static void jitcg_emit_flags_logic_imm(jx64_t *e, int digit, int dst, int32_t imm, bool imm8)
+{
+	jx64_alu_rm_imm(e, digit, jc_reg(dst), imm, imm8);
+	jitcg_emit_flags_logic_tail(e, dst);
+}
+
+/* flags_inc / flags_dec (flags.c:156-178): CF is PRESERVED, so the lazy carry is materialised
+ * into `flags` first -- through the shared getcf routine, which is not a C call. */
+static void jitcg_emit_flags_incdec(jx64_t *e, int dst, bool dec)
+{
+	jx64_call_label(e, jitcg_sh.getcf); /* EDI = CF as 0/1 */
+	jx64_mov_r32_rm(e, JC_TMP2, jc_state(JC_OFF(flags)));
+	jx64_alu_rm_imm(e, 4, jc_reg(JC_TMP2), ~1, false);
+	jx64_or_r32_r32(e, JC_TMP2, JX_RDI);
+	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(flags), JC_TMP2);
+
+	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(last_op1), dst);
+	if (dec) jx64_dec_r32(e, dst);
+	else jx64_inc_r32(e, dst);
+	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(last_result), dst);
+	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(last_op_size), OPSIZE_32);
+	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(flags_changed),
+	                   (uint32_t)(int32_t)((FLAGS_ALL & ~1) | (dec ? FLAG_SUB : 0)));
+}
+
+/* ------------------------------------------------------------------ *
+ * the recipes
+ *
+ * Each one is a transcription of ONE body (or one family, where the encodings share a body
+ * shape and differ only in a digit and a flag bit) and each one writes the same
+ * cpu_state/guest-register state the body writes, in the same order.  A recipe that cannot
+ * complete jumps to jitcg_sh.l_slow; one that cannot fail never allocates the label at all
+ * (jit_recipe_t.slow), which is what keeps the common uops small.
+ * ------------------------------------------------------------------ */
+
+/* mov r/m32, r32 -- 0x89 (instr32_89_reg/_mem) */
+static void rec_mov_rm_r32(jx64_t *e, const uop_t *u, int l_slow)
+{
+	if (jc_mem_shape(u->shape)) jitcg_emit_mem_store(e, u, jitcg_greg[u->g], JC_W32, l_slow);
+	else jx64_mov_r32_r32(e, jitcg_greg[u->modrm & 7], jitcg_greg[u->g]);
+}
+
+/* mov r32, r/m32 -- 0x8B (instr32_8B_reg/_mem) */
+static void rec_mov_r32_rm(jx64_t *e, const uop_t *u, int l_slow)
+{
+	if (jc_mem_shape(u->shape)) jitcg_emit_mem_load(e, u, jitcg_greg[u->g], JC_W32, l_slow);
+	else jx64_mov_r32_r32(e, jitcg_greg[u->g], jitcg_greg[u->modrm & 7]);
+}
+
+/* movzx r32, r/m8 -- 0F B6 (instructions_0f.c) */
+static void rec_movzx_r8(jx64_t *e, const uop_t *u, int l_slow)
+{
+	if (jc_mem_shape(u->shape)) jitcg_emit_mem_load(e, u, jitcg_greg[u->g], JC_W8, l_slow);
+	else jitcg_emit_read_reg8(e, jitcg_greg[u->g], (int)(u->modrm & 7));
+}
+
+/* movzx r32, r/m16 -- 0F B7 */
+static void rec_movzx_r16(jx64_t *e, const uop_t *u, int l_slow)
+{
+	if (jc_mem_shape(u->shape)) jitcg_emit_mem_load(e, u, jitcg_greg[u->g], JC_W16, l_slow);
+	else jx64_movzx_r32_rm16(e, jitcg_greg[u->g], jc_greg(u->modrm & 7));
+}
+
+/* mov r8, r/m8 -- 0x8A (instr_8A_reg/_mem): the destination is always the REGISTER `g` */
+static void rec_mov_r8_rm8(jx64_t *e, const uop_t *u, int l_slow)
+{
+	if (jc_mem_shape(u->shape)) {
+		jitcg_emit_mem_load(e, u, JC_VAL, JC_W8, l_slow);
+		jitcg_emit_write_reg8(e, (int)u->g, JC_VAL, JC_TMP);
+	}
+	else {
+		jitcg_emit_read_reg8(e, JC_VAL, (int)(u->modrm & 7));
+		jitcg_emit_write_reg8(e, (int)u->g, JC_VAL, JC_TMP);
+	}
+}
+
+/* mov r/m8, r8 -- 0x88 (instr_88_reg/_mem) */
+static void rec_mov_rm8_r8(jx64_t *e, const uop_t *u, int l_slow)
+{
+	jitcg_emit_read_reg8(e, JC_VAL, (int)u->g);
+	jitcg_emit_op_store(e, u, JC_VAL, JC_W8, l_slow);
+}
+
+/* mov r/m16, r16 -- 0x89 with 0x66 (instr16_89_reg/_mem) */
+static void rec_mov_rm16_r16(jx64_t *e, const uop_t *u, int l_slow)
+{
+	jitcg_emit_op_store(e, u, jitcg_greg[u->g], JC_W16, l_slow);
+}
+
+/* mov r16, r/m16 -- 0x8B with 0x66 (instr16_8B_reg/_mem) */
+static void rec_mov_r16_rm16(jx64_t *e, const uop_t *u, int l_slow)
+{
+	if (jc_mem_shape(u->shape)) {
+		jitcg_emit_mem_load(e, u, JC_VAL, JC_W16, l_slow);
+		jx64_mov_rm16_r16(e, jc_greg((int)u->g), JC_VAL);
+	}
+	else {
+		jx64_movzx_r32_rm16(e, JC_VAL, jc_greg(u->modrm & 7));
+		jx64_mov_rm16_r16(e, jc_greg((int)u->g), JC_VAL);
+	}
+}
+
+/* lea r32, m -- 0x8D (instr32_8D_mem).  The body ORs SEG_PREFIX_ZERO into cpu->prefixes before
+ * modrm_resolve, so the segment base is NOT added and the whole instruction is the offset sum:
+ * the recipe is the decoder's own extracted fields and cannot fault. */
+static void rec_lea(jx64_t *e, const uop_t *u, int l_slow)
+{
+	(void)l_slow;
+	jitcg_emit_addr(e, u, jitcg_greg[u->g], false, l_slow);
+	/* modrm_resolve (which the body runs on the RAW modrm byte) CONSUMES the sib/disp, so the
+	 * body leaves the instruction pointer at the instruction's END -- the executor's own
+	 * body_ip for this uop is the position just after the modrm byte (uop_cache.c:614), so
+	 * the recipe must advance it as the body does or the divergence test reads a control
+	 * transfer that never happened.  MEASURED: without this, a `lea` inside a block sent the
+	 * next lookup to eip + pfx_len + opcode_bytes + 1 and a second block was decoded from the
+	 * middle of the lea (the codegen selftest's shapes-B arm). */
+	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(instruction_pointer),
+	                   u->eip + (uint32_t)u->len);
+}
+
+/* the group-1 ALU family: `<digit> r/m32, r32` (0x01/09/21/29/31/39) and the immediate forms
+ * (0x81/0x83).  `digit` 0 add, 1 or, 4 and, 5 sub, 6 xor, 7 cmp.  2/3 (adc/sbb) read the lazy
+ * carry and are NOT recipes: they fall back to the C body. */
+static void jitcg_emit_alu_rm(jx64_t *e, const uop_t *u, int l_slow, int digit, bool is_imm,
+                             int32_t imm, bool imm8)
+{
+	/* digit 7 is `cmp`: the OPCODE writes nothing back, but the FLAGS are flags_sub's -- so
+	 * the arithmetic is the sub opcode on the copy, and only the write-back is dropped.
+	 * Getting this wrong is silent and data-dependent (MEASURED: storing the unmodified
+	 * operand in last_result made every `jb` after a `cmp` read CF as if the difference were
+	 * positive, which cost the M0 transcript and the 200 M boot). */
+	int op = digit == 7 ? 5 : digit;
+	bool wb = digit != 7; /* cmp writes nothing back */
+	bool logic = digit == 1 || digit == 4 || digit == 6;
+
+	if (jc_mem_shape(u->shape) && wb) {
+		/* the C's SAFE_READ_WRITE32: ONE translate for the read AND the write */
+		jitcg_emit_mem_prep(e, u, JC_W32, true, l_slow);
+		const jx_operand_t *m = jitcg_mem_operand();
+		jx64_mov_r32_rm(e, JC_VAL, m);
+		if (is_imm) {
+			if (logic) jitcg_emit_flags_logic_imm(e, op, JC_VAL, imm, imm8);
+			else jitcg_emit_flags_addsub_imm(e, op, JC_VAL, imm, imm8);
+		}
+		else {
+			if (logic) jitcg_emit_flags_logic_reg(e, op, JC_VAL, jitcg_greg[u->g]);
+			else jitcg_emit_flags_addsub_reg(e, op, JC_VAL, jitcg_greg[u->g]);
+		}
+		jx64_mov_rm_r32(e, m, JC_VAL);
+	}
+	else {
+		jitcg_emit_op_load(e, u, JC_VAL, JC_W32, l_slow);
+		if (is_imm) {
+			if (logic) jitcg_emit_flags_logic_imm(e, op, JC_VAL, imm, imm8);
+			else jitcg_emit_flags_addsub_imm(e, op, JC_VAL, imm, imm8);
+		}
+		else {
+			if (logic) jitcg_emit_flags_logic_reg(e, op, JC_VAL, jitcg_greg[u->g]);
+			else jitcg_emit_flags_addsub_reg(e, op, JC_VAL, jitcg_greg[u->g]);
+		}
+		if (wb) jitcg_emit_op_store(e, u, JC_VAL, JC_W32, l_slow);
+	}
+}
+
+/* test r/m32, r32 -- 0x85: arith_and with no write-back, no last_op1 */
+static void rec_test_rm_r32(jx64_t *e, const uop_t *u, int l_slow)
+{
+	if (jc_mem_shape(u->shape)) jitcg_emit_mem_load(e, u, JC_VAL, JC_W32, l_slow);
+	else jx64_mov_r32_r32(e, JC_VAL, jitcg_greg[u->modrm & 7]);
+	jitcg_emit_flags_logic_reg(e, 4 /* and */, JC_VAL, jitcg_greg[u->g]);
+}
+
+/* test r/m32, imm32 -- F7 /0 */
+static void rec_test_rm_imm32(jx64_t *e, const uop_t *u, int l_slow)
+{
+	jitcg_emit_op_load(e, u, JC_VAL, JC_W32, l_slow);
+	jitcg_emit_flags_logic_imm(e, 4, JC_VAL, u->imm, false);
+}
+
+/* test r/m8, imm8 -- F6 /0: the same arith_and with OPSIZE_8 */
+static void rec_test_rm8_imm8(jx64_t *e, const uop_t *u, int l_slow)
+{
+	jitcg_emit_op_load(e, u, JC_VAL, JC_W8, l_slow);
+	jx64_alu_rm_imm(e, 4, jc_reg(JC_VAL), u->imm & 0xFF, true);
+	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(last_result), JC_VAL);
+	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(last_op_size), OPSIZE_8);
+	jx64_mov_r32_rm(e, JC_TMP2, jc_state(JC_OFF(flags)));
+	jx64_alu_rm_imm(e, 4, jc_reg(JC_TMP2), JC_LOGIC_MASK, false);
+	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(flags), JC_TMP2);
+	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(flags_changed), (uint32_t)(FLAGS_ALL & JC_LOGIC_MASK));
+}
+
+/* not r/m32 -- F7 /2 (arith.c: `~x`, no flags at all) */
+static void rec_not_rm32(jx64_t *e, const uop_t *u, int l_slow)
+{
+	if (jc_mem_shape(u->shape)) {
+		jitcg_emit_mem_prep(e, u, JC_W32, true, l_slow);
+		const jx_operand_t *m = jitcg_mem_operand();
+		jx64_mov_r32_rm(e, JC_VAL, m);
+		jx64_not_r32(e, JC_VAL);
+		jx64_mov_rm_r32(e, m, JC_VAL);
+	}
+	else {
+		jx64_mov_r32_r32(e, JC_VAL, jitcg_greg[u->modrm & 7]);
+		jx64_not_r32(e, JC_VAL);
+		jx64_mov_r32_r32(e, jitcg_greg[u->modrm & 7], JC_VAL);
+	}
+}
+
+/* inc/dec r32 -- 0x40-0x4F: the register is baked into the body, so one recipe per encoding */
+static void rec_incdec_reg(jx64_t *e, const uop_t *u, int l_slow, int guest, bool dec)
+{
+	(void)u; (void)l_slow;
+	jx64_mov_r32_r32(e, JC_VAL, jitcg_greg[guest]);
+	jitcg_emit_flags_incdec(e, JC_VAL, dec);
+	jx64_mov_r32_r32(e, jitcg_greg[guest], JC_VAL);
+}
+
+/* mov r32, imm32 -- 0xB8+r: one recipe per encoding (the register is in the body) */
+static void rec_mov_r32_imm32(jx64_t *e, const uop_t *u, int l_slow, int guest)
+{
+	(void)l_slow;
+	jx64_mov_r32_imm32(e, jitcg_greg[guest], (uint32_t)u->imm);
+}
+
+/* nop -- 0x90 */
+static void rec_nop(jx64_t *e, const uop_t *u, int l_slow) { (void)e; (void)u; (void)l_slow; }
+
+/* the conditional jumps -- 0x70-0x7F (rel8) and 0F 80-8F (rel32).
+ *
+ * The condition is evaluated by the SHARED per-block getters (jitcg_emit_getcf/getzf, which are
+ * emitted code, not calls into flags.c); a taken jump stores the target the C body would store
+ * and then FALLS THROUGH to the same tail as an untaken one, so the executor's own step 11 sees
+ * the divergence and exits TAIL.  `cc` is the low nibble of the opcode. */
+static void rec_jcc(jx64_t *e, const uop_t *u, int l_slow, int cc)
+{
+	int l_skip = jx64_label(e);
+	int not_taken;
+
+	(void)l_slow;
+	switch (cc) {
+	case JX_CC_B:
+	case JX_CC_AE:
+		jx64_call_label(e, jitcg_sh.getcf);
+		break;
+	case JX_CC_E:
+	case JX_CC_NE:
+		jx64_call_label(e, jitcg_sh.getzf);
+		break;
+	default: /* BE == CF|ZF, A == !(CF|ZF): TWO getters, and the first result must survive the
+	          * second call.  It goes in JC_VAL (R10), NOT in JC_TMP (R11): the getzf stub uses
+	          * R11 for the lazy shift count, so saving CF there ORs it with last_op_size.
+	          * MEASURED -- every jbe/ja with a LAZY flag state took the wrong branch, which
+	          * cost the 200 M boot its final state (a `jbe` jumped into the middle of the
+	          * loop it was bounding). */
+		jx64_call_label(e, jitcg_sh.getcf);
+		jx64_mov_r32_r32(e, JC_VAL, JX_RDI);
+		jx64_call_label(e, jitcg_sh.getzf);
+		jx64_or_r32_r32(e, JX_RDI, JC_VAL);
+		break;
+	}
+	jx64_test_r32_r32(e, JX_RDI, JX_RDI);
+	/* the branch that SKIPS the taken path: `jcc` with the condition's own negation -- "taken
+	 * means the flag is ZERO" for AE/NE/A, and "taken means the flag is SET" for E/B/BE. */
+	not_taken = (cc == JX_CC_AE || cc == JX_CC_A || cc == JX_CC_NE) ? JX_CC_NE : JX_CC_E;
+	jx64_jcc_label(e, not_taken, l_skip);
+	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(instruction_pointer),
+	                   u->eip + (uint32_t)u->len + (uint32_t)u->imm);
+	jx64_bind(e, l_skip);
+}
+
+/* jmp rel8 / rel32 -- 0xEB / 0xE9: `ip += imm` from the instruction's end */
+static void rec_jmp(jx64_t *e, const uop_t *u, int l_slow)
+{
+	(void)l_slow;
+	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(instruction_pointer),
+	                   u->eip + (uint32_t)u->len + (uint32_t)u->imm);
+}
+
+/* ------------------------------------------------------------------ *
+ * the recipe table itself
+ * ------------------------------------------------------------------ */
+
+typedef struct jc_entry {
+	void (*fn)(void);
+	const char *name;
+	uint8_t shape;
+	uint8_t kind;   /* JIT_REC_* -- the emitter's own selector */
+	uint8_t aux;    /* the digit / the register / the condition code */
+	bool slow;      /* the emission has failure paths (see jit_recipe_t.slow) */
+} jc_entry_t;
+
+#define JIT_REC_MOV_RM_R32   1
+#define JIT_REC_MOV_R32_RM   2
+#define JIT_REC_MOVZX_R8     3
+#define JIT_REC_MOVZX_R16    4
+#define JIT_REC_MOV_R8_RM8   5
+#define JIT_REC_MOV_RM8_R8   6
+#define JIT_REC_MOV_RM16_R16 7
+#define JIT_REC_MOV_R16_RM16 8
+#define JIT_REC_LEA          9
+#define JIT_REC_ALU_RM_REG  10
+#define JIT_REC_ALU_RM_IMM8 11
+#define JIT_REC_ALU_RM_IMM32 12
+#define JIT_REC_TEST_RM_R32 13
+#define JIT_REC_TEST_RM_IMM 14
+#define JIT_REC_TEST_RM8_IMM 15
+#define JIT_REC_NOT_RM32    16
+#define JIT_REC_INC_REG     17
+#define JIT_REC_DEC_REG     18
+#define JIT_REC_MOV_IMM32   19
+#define JIT_REC_NOP         20
+#define JIT_REC_JCC         21
+#define JIT_REC_JMP         22
+
+static void jc_emit_recipe(jx64_t *e, const uop_t *u, const jc_entry_t *r, int l_slow)
+{
+	switch (r->kind) {
+	case JIT_REC_MOV_RM_R32: rec_mov_rm_r32(e, u, l_slow); break;
+	case JIT_REC_MOV_R32_RM: rec_mov_r32_rm(e, u, l_slow); break;
+	case JIT_REC_MOVZX_R8: rec_movzx_r8(e, u, l_slow); break;
+	case JIT_REC_MOVZX_R16: rec_movzx_r16(e, u, l_slow); break;
+	case JIT_REC_MOV_R8_RM8: rec_mov_r8_rm8(e, u, l_slow); break;
+	case JIT_REC_MOV_RM8_R8: rec_mov_rm8_r8(e, u, l_slow); break;
+	case JIT_REC_MOV_RM16_R16: rec_mov_rm16_r16(e, u, l_slow); break;
+	case JIT_REC_MOV_R16_RM16: rec_mov_r16_rm16(e, u, l_slow); break;
+	case JIT_REC_LEA: rec_lea(e, u, l_slow); break;
+	case JIT_REC_ALU_RM_REG: jitcg_emit_alu_rm(e, u, l_slow, r->aux, false, 0, false); break;
+	case JIT_REC_ALU_RM_IMM8: jitcg_emit_alu_rm(e, u, l_slow, r->aux, true, u->imm, true); break;
+	case JIT_REC_ALU_RM_IMM32: jitcg_emit_alu_rm(e, u, l_slow, r->aux, true, u->imm, false); break;
+	case JIT_REC_TEST_RM_R32: rec_test_rm_r32(e, u, l_slow); break;
+	case JIT_REC_TEST_RM_IMM: rec_test_rm_imm32(e, u, l_slow); break;
+	case JIT_REC_TEST_RM8_IMM: rec_test_rm8_imm8(e, u, l_slow); break;
+	case JIT_REC_NOT_RM32: rec_not_rm32(e, u, l_slow); break;
+	case JIT_REC_INC_REG: rec_incdec_reg(e, u, l_slow, r->aux, false); break;
+	case JIT_REC_DEC_REG: rec_incdec_reg(e, u, l_slow, r->aux, true); break;
+	case JIT_REC_MOV_IMM32: rec_mov_r32_imm32(e, u, l_slow, r->aux); break;
+	case JIT_REC_NOP: rec_nop(e, u, l_slow); break;
+	case JIT_REC_JCC: rec_jcc(e, u, l_slow, r->aux); break;
+	case JIT_REC_JMP: rec_jmp(e, u, l_slow); break;
+	default: e->overflow = true; break;
+	}
+}
+
+/* ONE recipe per ENCODING (the plan's ss7 step 2 preference: keyed on the body pointer, so
+ * `uop_t` does not change), sorted by the pointer at build time so the lookup -- which happens
+ * once per emitted uop, at COMPILE time -- is a binary search.  A recipe is valid for exactly
+ * one SHAPE: that is what fixes its argument mapping, so a body reached through a shape the
+ * recipe does not describe falls back instead of being mis-called. */
+#define JC_R(fn_, name_, shape_, kind_, aux_, slow_) \
+	{ (void (*)(void))(fn_), name_, UOP_SHAPE_##shape_, kind_, aux_, slow_ }
+
+static const jc_entry_t jitcg_table[] = {
+	JC_R(instr32_89_reg, "mov r/m32, r32 reg", REG0, JIT_REC_MOV_RM_R32, 0, false),
+	JC_R(instr32_89_mem, "mov r/m32, r32 mem", MEM0, JIT_REC_MOV_RM_R32, 0, true),
+	JC_R(instr32_8B_reg, "mov r32, r/m32 reg", REG0, JIT_REC_MOV_R32_RM, 0, false),
+	JC_R(instr32_8B_mem, "mov r32, r/m32 mem", MEM0, JIT_REC_MOV_R32_RM, 0, true),
+	JC_R(instr32_0FB6_reg, "movzx r32, r/m8 reg", REG0, JIT_REC_MOVZX_R8, 0, false),
+	JC_R(instr32_0FB6_mem, "movzx r32, r/m8 mem", MEM0, JIT_REC_MOVZX_R8, 0, true),
+	JC_R(instr32_0FB7_reg, "movzx r32, r/m16 reg", REG0, JIT_REC_MOVZX_R16, 0, false),
+	JC_R(instr32_0FB7_mem, "movzx r32, r/m16 mem", MEM0, JIT_REC_MOVZX_R16, 0, true),
+	JC_R(instr_8A_reg, "mov r8, r/m8 reg", REG0, JIT_REC_MOV_R8_RM8, 0, false),
+	JC_R(instr_8A_mem, "mov r8, r/m8 mem", MEM0, JIT_REC_MOV_R8_RM8, 0, true),
+	JC_R(instr_88_reg, "mov r/m8, r8 reg", REG0, JIT_REC_MOV_RM8_R8, 0, false),
+	JC_R(instr_88_mem, "mov r/m8, r8 mem", MEM0, JIT_REC_MOV_RM8_R8, 0, true),
+	JC_R(instr16_89_reg, "mov r/m16, r16 reg", REG0, JIT_REC_MOV_RM16_R16, 0, false),
+	JC_R(instr16_89_mem, "mov r/m16, r16 mem", MEM0, JIT_REC_MOV_RM16_R16, 0, true),
+	JC_R(instr16_8B_reg, "mov r16, r/m16 reg", REG0, JIT_REC_MOV_R16_RM16, 0, false),
+	JC_R(instr16_8B_mem, "mov r16, r/m16 mem", MEM0, JIT_REC_MOV_R16_RM16, 0, true),
+	/* lea: the memory form only (0x8D with mod == 3 is trigger_ud, a different body) */
+	JC_R(instr32_8D_mem, "lea r32, m", MEM0, JIT_REC_LEA, 0, false),
+
+	JC_R(instr32_01_reg, "add r/m32, r32 reg", REG0, JIT_REC_ALU_RM_REG, 0, false),
+	JC_R(instr32_01_mem, "add r/m32, r32 mem", MEM0, JIT_REC_ALU_RM_REG, 0, true),
+	JC_R(instr32_09_reg, "or r/m32, r32 reg", REG0, JIT_REC_ALU_RM_REG, 1, false),
+	JC_R(instr32_09_mem, "or r/m32, r32 mem", MEM0, JIT_REC_ALU_RM_REG, 1, true),
+	JC_R(instr32_21_reg, "and r/m32, r32 reg", REG0, JIT_REC_ALU_RM_REG, 4, false),
+	JC_R(instr32_21_mem, "and r/m32, r32 mem", MEM0, JIT_REC_ALU_RM_REG, 4, true),
+	JC_R(instr32_29_reg, "sub r/m32, r32 reg", REG0, JIT_REC_ALU_RM_REG, 5, false),
+	JC_R(instr32_29_mem, "sub r/m32, r32 mem", MEM0, JIT_REC_ALU_RM_REG, 5, true),
+	JC_R(instr32_31_reg, "xor r/m32, r32 reg", REG0, JIT_REC_ALU_RM_REG, 6, false),
+	JC_R(instr32_31_mem, "xor r/m32, r32 mem", MEM0, JIT_REC_ALU_RM_REG, 6, true),
+	JC_R(instr32_39_reg, "cmp r/m32, r32 reg", REG0, JIT_REC_ALU_RM_REG, 7, false),
+	JC_R(instr32_39_mem, "cmp r/m32, r32 mem", MEM0, JIT_REC_ALU_RM_REG, 7, true),
+
+	JC_R(instr32_83_0_reg, "add r/m32, imm8 reg", REGF1, JIT_REC_ALU_RM_IMM8, 0, false),
+	JC_R(instr32_83_0_mem, "add r/m32, imm8 mem", MEMF1, JIT_REC_ALU_RM_IMM8, 0, true),
+	JC_R(instr32_83_1_reg, "or r/m32, imm8 reg", REGF1, JIT_REC_ALU_RM_IMM8, 1, false),
+	JC_R(instr32_83_1_mem, "or r/m32, imm8 mem", MEMF1, JIT_REC_ALU_RM_IMM8, 1, true),
+	JC_R(instr32_83_4_reg, "and r/m32, imm8 reg", REGF1, JIT_REC_ALU_RM_IMM8, 4, false),
+	JC_R(instr32_83_4_mem, "and r/m32, imm8 mem", MEMF1, JIT_REC_ALU_RM_IMM8, 4, true),
+	JC_R(instr32_83_5_reg, "sub r/m32, imm8 reg", REGF1, JIT_REC_ALU_RM_IMM8, 5, false),
+	JC_R(instr32_83_5_mem, "sub r/m32, imm8 mem", MEMF1, JIT_REC_ALU_RM_IMM8, 5, true),
+	JC_R(instr32_83_6_reg, "xor r/m32, imm8 reg", REGF1, JIT_REC_ALU_RM_IMM8, 6, false),
+	JC_R(instr32_83_6_mem, "xor r/m32, imm8 mem", MEMF1, JIT_REC_ALU_RM_IMM8, 6, true),
+	JC_R(instr32_83_7_reg, "cmp r/m32, imm8 reg", REGF1, JIT_REC_ALU_RM_IMM8, 7, false),
+	JC_R(instr32_83_7_mem, "cmp r/m32, imm8 mem", MEMF1, JIT_REC_ALU_RM_IMM8, 7, true),
+
+	JC_R(instr32_85_reg, "test r/m32, r32 reg", REG0, JIT_REC_TEST_RM_R32, 0, false),
+	JC_R(instr32_85_mem, "test r/m32, r32 mem", MEM0, JIT_REC_TEST_RM_R32, 0, true),
+	JC_R(instr32_F7_0_reg, "test r/m32, imm32 reg", REGF1, JIT_REC_TEST_RM_IMM, 0, false),
+	JC_R(instr32_F7_0_mem, "test r/m32, imm32 mem", MEMF1, JIT_REC_TEST_RM_IMM, 0, true),
+	JC_R(instr_F6_0_reg, "test r/m8, imm8 reg", REGF1, JIT_REC_TEST_RM8_IMM, 0, false),
+	JC_R(instr_F6_0_mem, "test r/m8, imm8 mem", MEMF1, JIT_REC_TEST_RM8_IMM, 0, true),
+	JC_R(instr32_F7_2_reg, "not r/m32 reg", REGF0, JIT_REC_NOT_RM32, 0, false),
+	JC_R(instr32_F7_2_mem, "not r/m32 mem", MEMF0, JIT_REC_NOT_RM32, 0, true),
+
+	JC_R(instr_90, "nop", PLAIN0, JIT_REC_NOP, 0, false),
+	JC_R(instr32_EB, "jmp rel8", PLAIN1, JIT_REC_JMP, 0, false),
+	JC_R(instr32_E9, "jmp rel32", PLAIN1, JIT_REC_JMP, 0, false),
+};
+
+/* inc/dec r32 (0x40-0x4F) and mov r32, imm32 (0xB8-0xBF): one recipe per encoding, the register
+ * baked into the body.  Written as loops over the symbol names so the table stays a table. */
+static void (*const jitcg_inc_fns[8])(void) = {
+	(void (*)(void))instr32_40, (void (*)(void))instr32_41, (void (*)(void))instr32_42,
+	(void (*)(void))instr32_43, (void (*)(void))instr32_44, (void (*)(void))instr32_45,
+	(void (*)(void))instr32_46, (void (*)(void))instr32_47
+};
+static void (*const jitcg_dec_fns[8])(void) = {
+	(void (*)(void))instr32_48, (void (*)(void))instr32_49, (void (*)(void))instr32_4A,
+	(void (*)(void))instr32_4B, (void (*)(void))instr32_4C, (void (*)(void))instr32_4D,
+	(void (*)(void))instr32_4E, (void (*)(void))instr32_4F
+};
+static void (*const jitcg_movimm_fns[8])(void) = {
+	(void (*)(void))instr32_B8, (void (*)(void))instr32_B9, (void (*)(void))instr32_BA,
+	(void (*)(void))instr32_BB, (void (*)(void))instr32_BC, (void (*)(void))instr32_BD,
+	(void (*)(void))instr32_BE, (void (*)(void))instr32_BF
+};
+/* the 16 conditional-jump encodings: the index IS the condition code (0x70+cc / 0F 80+cc) */
+static void (*const jitcg_jcc8_fns[16])(void) = {
+	(void (*)(void))instr32_70, (void (*)(void))instr32_71, (void (*)(void))instr32_76,
+	(void (*)(void))instr32_77, (void (*)(void))instr32_74, (void (*)(void))instr32_75,
+	(void (*)(void))instr32_72, (void (*)(void))instr32_73, (void (*)(void))instr32_78,
+	(void (*)(void))instr32_79, (void (*)(void))instr32_7A, (void (*)(void))instr32_7B,
+	(void (*)(void))instr32_7C, (void (*)(void))instr32_7D, (void (*)(void))instr32_7E,
+	(void (*)(void))instr32_7F
+};
+static void (*const jitcg_jcc32_fns[16])(void) = {
+	(void (*)(void))instr32_0F80, (void (*)(void))instr32_0F81, (void (*)(void))instr32_0F86,
+	(void (*)(void))instr32_0F87, (void (*)(void))instr32_0F84, (void (*)(void))instr32_0F85,
+	(void (*)(void))instr32_0F82, (void (*)(void))instr32_0F83, (void (*)(void))instr32_0F88,
+	(void (*)(void))instr32_0F89, (void (*)(void))instr32_0F8A, (void (*)(void))instr32_0F8B,
+	(void (*)(void))instr32_0F8C, (void (*)(void))instr32_0F8D, (void (*)(void))instr32_0F8E,
+	(void (*)(void))instr32_0F8F
+};
+/* the conditions this unit inlines: the four the hot code uses (CF and ZF and their
+ * combinations).  The rest (S/NS/PE/PO/L/GE/LE/G, and O/NO) fall back to the C body. */
+static bool jc_cc_supported(int cc)
+{
+	return cc == JX_CC_B || cc == JX_CC_AE || cc == JX_CC_E || cc == JX_CC_NE ||
+	       cc == JX_CC_BE || cc == JX_CC_A;
+}
+
+static const char *const jc_cc_name[16] = {
+	"jo", "jno", "jb", "jae", "je", "jne", "jbe", "ja",
+	"js", "jns", "jp", "jnp", "jl", "jge", "jle", "jg"
+};
+
+static jc_entry_t jitcg_table_built[JC_MAX_RECIPES];
+static uint32_t jitcg_ntable;
+static bool jitcg_built;
+
+static void jitcg_add(const jc_entry_t *e)
+{
+	if (jitcg_ntable >= JC_MAX_RECIPES) return;
+	jitcg_table_built[jitcg_ntable++] = *e;
+}
+
+static void jitcg_build_recipes(void)
+{
+	if (jitcg_built) return;
+
+	for (size_t i = 0; i < sizeof jitcg_table / sizeof jitcg_table[0]; i++) {
+		jitcg_add(&jitcg_table[i]);
+	}
+	for (int i = 0; i < 8; i++) {
+		jc_entry_t e;
+		memset(&e, 0, sizeof e);
+		e.fn = jitcg_inc_fns[i];
+		e.name = "inc r32";
+		e.shape = UOP_SHAPE_PLAIN0;
+		e.kind = JIT_REC_INC_REG;
+		e.aux = (uint8_t)i;
+		jitcg_add(&e);
+
+		e.fn = jitcg_dec_fns[i];
+		e.name = "dec r32";
+		e.kind = JIT_REC_DEC_REG;
+		jitcg_add(&e);
+
+		e.fn = jitcg_movimm_fns[i];
+		e.name = "mov r32, imm32";
+		e.shape = UOP_SHAPE_PLAIN1;
+		e.kind = JIT_REC_MOV_IMM32;
+		jitcg_add(&e);
+	}
+	for (int cc = 0; cc < 16; cc++) {
+		jc_entry_t e;
+		if (!jc_cc_supported(cc)) continue;
+		memset(&e, 0, sizeof e);
+		e.name = jc_cc_name[cc];
+		e.kind = JIT_REC_JCC;
+		e.aux = (uint8_t)cc;
+		e.shape = UOP_SHAPE_PLAIN1;
+		e.fn = jitcg_jcc8_fns[cc];
+		jitcg_add(&e);
+		e.fn = jitcg_jcc32_fns[cc];
+		jitcg_add(&e);
+	}
+
+	/* keep the table sorted by the key, so the lookup is a binary search */
+	for (uint32_t i = 1; i < jitcg_ntable; i++) {
+		jc_entry_t key = jitcg_table_built[i];
+		uint32_t j = i;
+		while (j > 0 && (uintptr_t)jitcg_table_built[j - 1].fn > (uintptr_t)key.fn) {
+			jitcg_table_built[j] = jitcg_table_built[j - 1];
+			j--;
+		}
+		jitcg_table_built[j] = key;
+	}
+	jitcg_built = true;
+}
+
+static const jc_entry_t *jitcg_find(void (*fn)(void))
+{
+	uint32_t lo = 0, hi = jitcg_ntable;
+	while (lo < hi) {
+		uint32_t mid = lo + (hi - lo) / 2;
+		uintptr_t a = (uintptr_t)jitcg_table_built[mid].fn;
+		uintptr_t b = (uintptr_t)fn;
+		if (a == b) return &jitcg_table_built[mid];
+		if (a < b) lo = mid + 1;
+		else hi = mid;
+	}
+	return NULL;
+}
+
+const jit_recipe_t *jit_recipe_lookup(const uop_t *u)
+{
+	static jit_recipe_t out;
+	jitcg_build_recipes();
+	const jc_entry_t *r = jitcg_find(u->fn);
+	if (r == NULL) return NULL;
+	/* the SHAPE (the argument mapping), and the decoded fields the recipe reads.  A memory
+	 * recipe needs an address the emitter can compute: the 16-bit form (masked to 16 bits,
+	 * a different arithmetic) has no recipe. */
+	if (r->shape != u->shape) return NULL;
+	if (jc_mem_shape(u->shape)) {
+		if (u->addr_kind != UOP_ADDR_32 && u->addr_kind != UOP_ADDR_SIB) return NULL;
+	}
+	else if (u->shape == UOP_SHAPE_REG0 || u->shape == UOP_SHAPE_REG1 ||
+	         u->shape == UOP_SHAPE_REGF0 || u->shape == UOP_SHAPE_REGF1) {
+		if (!(u->flags & UOP_FLAG_IGNORE_MOD) && (u->modrm & 7) > 7) return NULL;
+	}
+	if (u->g > 7 && !(u->shape == UOP_SHAPE_REGF0 || u->shape == UOP_SHAPE_REGF1 ||
+	                  u->shape == UOP_SHAPE_MEMF0 || u->shape == UOP_SHAPE_MEMF1 ||
+	                  u->shape == UOP_SHAPE_PLAIN0 || u->shape == UOP_SHAPE_PLAIN1)) {
+		return NULL;
+	}
+	out.fn = r->fn;
+	out.name = r->name;
+	out.shape = r->shape;
+	out.slow = r->slow;
+	out.kind = r->kind;
+	out.aux = r->aux;
+	return &out;
+}
+
+const char *jit_recipe_name(void (*fn)(void))
+{
+	jitcg_build_recipes();
+	const jc_entry_t *r = jitcg_find(fn);
+	return r == NULL ? NULL : r->name;
+}
+
+uint32_t jit_recipe_count(void)
+{
+	jitcg_build_recipes();
+	return jitcg_ntable;
+}
+
+bool jit_codegen_available(void) { return true; }
+
+/* ------------------------------------------------------------------ *
+ * the machinery every uop uses
+ * ------------------------------------------------------------------ */
+
+/* the stores the executor does before the body (step 2) */
+static void jitcg_emit_stores(jx64_t *e, const uop_t *u, bool any_pfx)
+{
+	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(previous_ip), u->eip);
+	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(instruction_pointer), u->body_ip);
+	if (any_pfx) jx64_mov_m8_imm8(e, JX_RBP, JC_OFF(prefixes), u->pfx);
+}
+
+/* THE SPILL / RELOAD PAIR (jit_codegen.h's comment): the eight guest registers and the pending
+ * count, in both directions.  The reload also re-materialises the abort-flag address, because a
+ * C call is free to clobber R8 (caller-saved) and the next uop's abort check reads it. */
+static void jitcg_emit_spill(jx64_t *e)
+{
+	for (int i = 0; i < 8; i++) {
+		jx64_mov_m32_r32(e, JX_RBP, JC_OFF(reg32) + 4 * i, jitcg_greg[i]);
+	}
+	jx64_mov_r64_imm64(e, JC_TMP, (uint64_t)(uintptr_t)&uop_pending);
+	jx64_mov_m32_r32(e, JC_TMP, 0, JC_PENDING);
+}
+
+static void jitcg_emit_reload(jx64_t *e)
+{
+	for (int i = 0; i < 8; i++) {
+		jx64_mov_r32_m32(e, jitcg_greg[i], JX_RBP, JC_OFF(reg32) + 4 * i);
+	}
+	jx64_mov_r64_imm64(e, JC_TMP, (uint64_t)(uintptr_t)&uop_pending);
+	jx64_mov_r32_m32(e, JC_PENDING, JC_TMP, 0);
+	jx64_mov_r64_imm64(e, JC_ABORT_REG, (uint64_t)(uintptr_t)&jit_abort_flag);
+}
+
+/* step 5's tail: the dispatch window's exit clear, and `prefixes = 0` */
+static void jitcg_emit_post(jx64_t *e, bool any_pfx)
+{
+	jx64_mov_m8_imm8(e, JX_RBP, JC_OFF(pagefault), 0);
+	if (any_pfx) jx64_mov_m8_imm8(e, JX_RBP, JC_OFF(prefixes), 0);
+}
+
+/* THE SHARED C FALLBACK: one per block, entered by `call` with RDI = the uop and ESI = its flag
+ * word, and it returns to the instruction after that call (the uop's own tail).  It is
+ * `uop_exec(u)` -- the executor's own per-uop worker -- so the shape switch, the task-switch
+ * guard, the raw-modrm substitution for a custom_modrm_resolve encoding and the
+ * materialisation-fault return are the C implementation rather than a transcription of it.
+ *
+ * RSP is 8 mod 16 on entry (it was `call`ed from the block's frame level), so `sub rsp, 8`
+ * first: the SysV rule wants RSP 16-byte aligned AT the call, i.e. 0 mod 16 before it.  The
+ * frame slots are at [rsp + 8 + off] on entry and [rsp + 16 + off] afterwards. */
+static void jitcg_emit_slow(jx64_t *e, bool any_pfx)
+{
+	jx64_mov_m32_r32(e, JX_RSP, 8 + JC_FRAME_FLAGS, JX_RSI);
+	jx64_sub_r64_imm8(e, JX_RSP, 8);
+	jx64_mov_m8_imm8(e, JX_RBP, JC_OFF(pagefault), 0);
+	jitcg_emit_spill(e);
+	jx64_mov_r64_imm64(e, JC_TMP, (uint64_t)(uintptr_t)uop_exec_uop);
+	jx64_call_r64(e, JC_TMP);
+	jx64_movzx_r32_r8(e, JX_RDI, JX_RAX); /* uop_exec returns bool in AL */
+	jx64_mov_r32_m32(e, JX_RSI, JX_RSP, 16 + JC_FRAME_FLAGS);
+	jx64_shl_r32_imm8(e, JX_RDI, 2); /* ... into bit 2, "the body ran" */
+	jx64_or_r32_r32(e, JX_RDI, JX_RSI);
+	jx64_add_r64_imm8(e, JX_RSP, 8);
+	jitcg_emit_reload(e);
+	jitcg_emit_post(e, any_pfx);
+	jx64_ret(e);
+}
+
+/* THE SHARED FLAG GETTERS.  getcf/getzf (flags.c:15-65), emitted code rather than calls into
+ * flags.c -- they are what makes a jcc recipe and an inc/dec possible without a C call.  Each
+ * returns 0/1 in EDI and clobbers only RSI/RDI/R11 (all of which the caller treats as dead:
+ * the checks routine's arguments are materialised AFTER the body). */
+static void jitcg_emit_getcf(jx64_t *e)
+{
+	int l_absent = jx64_label(e), l_done = jx64_label(e);
+
+	jx64_test_rm32_imm32(e, jc_state(JC_OFF(flags_changed)), 1);
+	jx64_jcc_label(e, JX_CC_E, l_absent);
+	jx64_mov_r32_rm(e, JC_TMP, jc_state(JC_OFF(flags_changed)));
+	jx64_sar_r32_imm8(e, JC_TMP, 31); /* the sub mask (flags_changed >> 31) */
+	jx64_mov_r32_rm(e, JX_RDI, jc_state(JC_OFF(last_result)));
+	jx64_xor_r32_r32(e, JX_RDI, JC_TMP);
+	jx64_mov_r32_rm(e, JC_TMP2, jc_state(JC_OFF(last_op1)));
+	jx64_xor_r32_r32(e, JC_TMP2, JC_TMP);
+	jx64_cmp_r32_r32(e, JX_RDI, JC_TMP2);
+	jx64_setcc_r8(e, JX_CC_B, JX_RDI);
+	jx64_movzx_r32_r8(e, JX_RDI, JX_RDI);
+	jx64_jmp_label(e, l_done);
+	jx64_bind(e, l_absent);
+	jx64_mov_r32_rm(e, JX_RDI, jc_state(JC_OFF(flags)));
+	jx64_alu_rm_imm(e, 4, jc_reg(JX_RDI), 1, true);
+	jx64_bind(e, l_done);
+	jx64_ret(e);
+}
+
+static void jitcg_emit_getzf(jx64_t *e)
+{
+	int l_absent = jx64_label(e), l_done = jx64_label(e);
+
+	jx64_test_rm32_imm32(e, jc_state(JC_OFF(flags_changed)), FLAG_ZERO);
+	jx64_jcc_label(e, JX_CC_E, l_absent);
+	/* (~last_result & (last_result - 1)) >> last_op_size & 1 -- `bt` is the variable shift
+	 * without needing CL (CL is a live guest register) */
+	jx64_mov_r32_rm(e, JX_RDI, jc_state(JC_OFF(last_result)));
+	jx64_mov_r32_r32(e, JC_TMP2, JX_RDI);
+	jx64_not_r32(e, JC_TMP2);
+	jx64_dec_r32(e, JX_RDI);
+	jx64_and_r32_r32(e, JX_RDI, JC_TMP2);
+	jx64_mov_r32_rm(e, JC_TMP, jc_state(JC_OFF(last_op_size)));
+	jx64_bt_r32_r32(e, JX_RDI, JC_TMP);
+	jx64_setcc_r8(e, JX_CC_B, JX_RDI);
+	jx64_movzx_r32_r8(e, JX_RDI, JX_RDI);
+	jx64_jmp_label(e, l_done);
+	jx64_bind(e, l_absent);
+	jx64_mov_r32_rm(e, JX_RDI, jc_state(JC_OFF(flags)));
+	jx64_test_r32_imm32(e, JX_RDI, FLAG_ZERO);
+	jx64_setcc_r8(e, JX_CC_NE, JX_RDI);
+	jx64_movzx_r32_r8(e, JX_RDI, JX_RDI);
+	jx64_bind(e, l_done);
+	jx64_ret(e);
+}
+
+/* ------------------------------------------------------------------ *
+ * the shared checks routine, the exit stubs, the prologue and the epilogue
+ * ------------------------------------------------------------------ */
+
+/* the flush: `instruction_counter += pending; pending = 0` (uop_cache.c's uop_flush), PLUS the
+ * executor's own tally of reproduced reference batch ends (uop_stats.flushes).  The tally is
+ * maintained rather than left to the interpreted path on purpose: a counter that silently
+ * means something different under --jit on is exactly the kind of instrument this project
+ * treats as broken (results/perf-5-tune.md's method), and the flush count is the cheapest
+ * independent check that both engines ended the same batches. */
+static void jitcg_emit_flush(jx64_t *e)
+{
+	jx64_mov_r32_m32(e, JC_TMP, JX_RBP, JC_OFF(instruction_counter));
+	jx64_add_r32_r32(e, JC_TMP, JC_PENDING);
+	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(instruction_counter), JC_TMP);
+	jx64_xor_r32_r32(e, JC_PENDING, JC_PENDING);
+	jx64_mov_r64_imm64(e, JC_TMP, (uint64_t)(uintptr_t)&uop_stats.flushes);
+	jx64_add_m32_imm8(e, JC_TMP, 0, 1);
+}
+
+/* steps 6-11.  Reached by `call` (RSP is 8 bytes below the block's frame while it runs), which
+ * is why every non-returning exit here first restores RSP with `add rsp, 8` -- and why the
+ * per-uop abort check and the exit stubs OUTSIDE this routine do not. */
+static void jitcg_emit_checks(jx64_t *e, int l_flush_return, int l_kind_return, int l_kind_tail,
+                              int l_kind_blkend, int l_c2, int l_c4, int l_clear_jbc,
+                              int l_ck_return, int l_ck_blkend, int l_ck_tail)
+{
+	/* 6. interpreted_unimplemented -> flush + RETURN (NOT gated on ran: the executor's own
+	 * order, and the port's "the emulator cannot execute this" stop). */
+	jx64_mov_r64_imm64(e, JC_TMP, (uint64_t)(uintptr_t)&interpreted_unimplemented);
+	jx64_cmp_m8_imm8(e, JC_TMP, 0, 0);
+	jx64_jcc_label(e, JX_CC_NE, l_flush_return);
+
+	/* 7. `if (ran && ((FLUSH) || jit_block_boundary)) { flush; jbc = false; if budget RETURN }`.
+	 * The condition is checked in the executor's own shape: `ran` gates the WHOLE arm, and a
+	 * false `ran` must not clear jit_block_boundary either. */
+	jx64_test_r8_imm8(e, JX_RDI, JC_F_RAN);
+	jx64_jcc_label(e, JX_CC_E, l_c2);
+	jx64_test_r8_imm8(e, JX_RDI, JC_F_FLUSH);
+	jx64_jcc_label(e, JX_CC_NE, l_clear_jbc);
+	jx64_mov_r64_imm64(e, JC_TMP, (uint64_t)(uintptr_t)&jit_block_boundary);
+	jx64_cmp_m8_imm8(e, JC_TMP, 0, 0);
+	jx64_jcc_label(e, JX_CC_E, l_c2);
+	jx64_bind(e, l_clear_jbc);
+	jx64_mov_r64_imm64(e, JC_TMP, (uint64_t)(uintptr_t)&jit_block_boundary);
+	jx64_mov_m8_imm8(e, JC_TMP, 0, 0);
+	jitcg_emit_flush(e);
+	/* the budget check (do_many_cycles_native's window): `(int32)(counter - end) >= 0`.  EDI
+	 * is pushed so it can be the scratch the two-operand subtraction needs -- the block's
+	 * flags must survive to step 10. */
+	jx64_push_r64(e, JX_RDI);
+	jx64_mov_r64_imm64(e, JC_TMP, (uint64_t)(uintptr_t)&cpu_cycle_budget_end);
+	jx64_mov_r32_m32(e, JX_RDI, JX_RBP, JC_OFF(instruction_counter));
+	jx64_sub_r32_m32(e, JX_RDI, JC_TMP, 0);
+	jx64_pop_r64(e, JX_RDI);
+	jx64_jcc_label(e, JX_CC_NS, l_ck_return); /* SF == 0 <=> the wrapped difference >= 0 */
+
+	jx64_bind(e, l_c2);
+	/* 8. the page-crossing break (the reference's second clause: the instruction MOVED to
+	 * another page), which is also the only way a diverging uop inside one page is not a
+	 * tail. */
+	jx64_mov_r32_m32(e, JC_TMP, JX_RBP, JC_OFF(instruction_pointer));
+	jx64_xor_r32_r32(e, JC_TMP, JX_R10);
+	jx64_test_r32_imm32(e, JC_TMP, 0xFFFFF000u);
+	jx64_jcc_label(e, JX_CC_NE, l_flush_return);
+
+	/* 9. the iteration limit, only reachable on a backward control transfer:
+	 * `pending >= INTERPRETER_ITERATION_LIMIT && u->eip >= ip` (uop_cache.c's own line).
+	 * MEASURED -- this was INVERTED (`ip >= eip`) from M1 through M2's first draft, and M1's
+	 * gates could not see it: its programs are far shorter than the limit, and its boot ran
+	 * only 0.32 % of its uops compiled.  At 89.9 % coverage the boot hits the limit with the
+	 * compiled path constantly, and the inverted test ended a reference batch on every
+	 * FORWARD branch at the limit -- a staircase shift that cost the 200 M boot its final
+	 * state (eip 0x21972ee vs 0x21972c1 after the same instruction count). */
+	jx64_cmp_r32_imm32(e, JC_PENDING, (int32_t)INTERPRETER_ITERATION_LIMIT);
+	jx64_jcc_label(e, JX_CC_B, l_c4);
+	jx64_mov_r32_m32(e, JC_TMP, JX_RBP, JC_OFF(instruction_pointer));
+	jx64_cmp_r32_r32(e, JC_TMP, JX_R10);
+	jx64_jcc_label(e, JX_CC_BE, l_flush_return);
+	jx64_bind(e, l_c4);
+
+	/* 10. the block end (the BLOCK_END uop: the block stops HERE, and whether that is also a
+	 * reference batch end is what bit0 of EDI said in step 7) */
+	jx64_test_r8_imm8(e, JX_RDI, JC_F_BLOCK_END);
+	jx64_jcc_label(e, JX_CC_NE, l_ck_blkend);
+
+	/* 11. the divergence test: the executor compares against `eip + len`, NOT against
+	 * body_ip -- a custom_modrm_resolve body (0x8D/0x8F) consumes its own sib/disp bytes and
+	 * leaves the pointer at the instruction's end, which is what ESI carries. */
+	jx64_cmp_m32_r32(e, JX_RBP, JC_OFF(instruction_pointer), JX_RSI);
+	jx64_jcc_label(e, JX_CC_NE, l_ck_tail);
+
+	jx64_ret(e);
+
+	/* --- the exits.  Reached ONLY from inside this routine, so each restores RSP first. */
+	jx64_bind(e, l_ck_return);
+	jx64_add_r64_imm8(e, JX_RSP, 8);
+	jx64_jmp_label(e, l_kind_return);
+	jx64_bind(e, l_ck_blkend);
+	jx64_add_r64_imm8(e, JX_RSP, 8);
+	jx64_jmp_label(e, l_kind_blkend);
+	jx64_bind(e, l_ck_tail);
+	jx64_add_r64_imm8(e, JX_RSP, 8);
+	jx64_jmp_label(e, l_kind_tail);
+}
+
+static void jitcg_emit_prologue(jx64_t *e, bool need_slots, bool need_code)
+{
+	jx64_push_r64(e, JX_RBP);
+	jx64_push_r64(e, JX_RBX);
+	jx64_push_r64(e, JX_R12);
+	jx64_push_r64(e, JX_R13);
+	jx64_push_r64(e, JX_R14);
+	jx64_push_r64(e, JX_R15);
+	jx64_sub_r64_imm8(e, JX_RSP, JC_FRAME_BYTES);
+
+	jx64_mov_r64_imm64(e, JX_RBP, (uint64_t)(uintptr_t)cpu);
+	for (int i = 0; i < 8; i++) {
+		jx64_mov_r32_m32(e, jitcg_greg[i], JX_RBP, JC_OFF(reg32) + 4 * i);
+	}
+	jx64_mov_r64_imm64(e, JC_TMP, (uint64_t)(uintptr_t)&uop_pending);
+	jx64_mov_r32_m32(e, JC_PENDING, JC_TMP, 0);
+	jx64_mov_r64_imm64(e, JC_ABORT_REG, (uint64_t)(uintptr_t)&jit_abort_flag);
+
+	jx64_mov_m32_imm32(e, JX_RSP, JC_FRAME_EXEC, 0);
+	jx64_mov_m32_imm32(e, JX_RSP, JC_FRAME_INLINED, 0);
+	jx64_mov_m32_imm32(e, JX_RSP, JC_FRAME_KIND, 0);
+	/* the D1 window's entry clear, hoisted to the block entry: with a clear also after every
+	 * CALLED body the flag is false at every uop boundary, which is what the executor's
+	 * per-uop entry clear establishes (this file's header argues the equivalence). */
+	jx64_mov_m8_imm8(e, JX_RBP, JC_OFF(pagefault), 0);
+
+	/* the addresses the inlined memory access needs, loaded once per block (see the frame
+	 * layout): tlb_data is a link-time constant, the other three are read through their own
+	 * addresses so a value that changes later is re-read rather than cached. */
+	if (need_slots) {
+		jx64_mov_r64_imm64(e, JC_TMP, (uint64_t)(uintptr_t)tlb_data);
+		jx64_mov_m64_r64(e, JX_RSP, JC_FRAME_TLB, JC_TMP);
+		jx64_mov_r64_imm64(e, JC_TMP, (uint64_t)(uintptr_t)&mem8);
+		jx64_mov_m64_r64(e, JX_RSP, JC_FRAME_MEM8, JC_TMP);
+	}
+	if (need_code) {
+		jx64_mov_r64_imm64(e, JC_TMP, (uint64_t)(uintptr_t)&uop_page_code);
+		jx64_mov_r64_m64(e, JC_TMP, JC_TMP, 0);
+		jx64_mov_m64_r64(e, JX_RSP, JC_FRAME_CODE, JC_TMP);
+		jx64_mov_r64_imm64(e, JC_TMP, (uint64_t)(uintptr_t)&uop_page_code_len);
+		jx64_mov_r32_m32(e, JC_TMP, JC_TMP, 0);
+		jx64_mov_m32_r32(e, JX_RSP, JC_FRAME_CODELEN, JC_TMP);
+	}
+}
+
+static void jitcg_emit_epilogue(jx64_t *e)
+{
+	/* the pending count goes back to its global (the executor's own storage) */
+	jx64_mov_r64_imm64(e, JC_TMP, (uint64_t)(uintptr_t)&uop_pending);
+	jx64_mov_m32_r32(e, JC_TMP, 0, JC_PENDING);
+
+	/* ... the guest registers go back to cpu->reg32[] ... */
+	for (int i = 0; i < 8; i++) {
+		jx64_mov_m32_r32(e, JX_RBP, JC_OFF(reg32) + 4 * i, jitcg_greg[i]);
+	}
+
+	/* ... and the counters are folded in ONCE per block run (the executor's PERF-5 hoist):
+	 * uop_stats.uops_executed += executed, and the coverage split -- inlined = the recipe
+	 * uops that ran, called = the rest.  A 64-bit add, so this cannot wrap where the C path
+	 * would not. */
+	jx64_mov_r32_m32(e, JC_TMP, JX_RSP, JC_FRAME_EXEC);
+	jx64_mov_r32_m32(e, JX_R10, JX_RSP, JC_FRAME_INLINED);
+	jx64_mov_r64_imm64(e, JX_RDI, (uint64_t)(uintptr_t)&uop_stats.uops_executed);
+	jx64_add_m64_r64(e, JX_RDI, 0, JC_TMP);
+	jx64_mov_r64_imm64(e, JX_RDI, (uint64_t)(uintptr_t)&jit_codegen_stats.inlined_uops);
+	jx64_add_m64_r64(e, JX_RDI, 0, JX_R10);
+	jx64_sub_r32_r32(e, JC_TMP, JX_R10);
+	jx64_mov_r64_imm64(e, JX_RDI, (uint64_t)(uintptr_t)&jit_codegen_stats.called_uops);
+	jx64_add_m64_r64(e, JX_RDI, 0, JC_TMP);
+
+	jx64_mov_r32_m32(e, JX_RAX, JX_RSP, JC_FRAME_KIND); /* the exit kind, AFTER the spill */
+	jx64_add_r64_imm8(e, JX_RSP, JC_FRAME_BYTES);
+	jx64_pop_r64(e, JX_R15);
+	jx64_pop_r64(e, JX_R14);
+	jx64_pop_r64(e, JX_R13);
+	jx64_pop_r64(e, JX_R12);
+	jx64_pop_r64(e, JX_RBX);
+	jx64_pop_r64(e, JX_RBP);
+	jx64_ret(e);
+}
+
+/* ------------------------------------------------------------------ *
+ * one uop
+ * ------------------------------------------------------------------ */
+
+static const uop_t *uops_base;
+
+static void jitcg_emit_uop(jx64_t *e, const uop_t *u, const jc_entry_t *rec, bool any_pfx,
+                           int l_kind_abort, int l_checks)
+{
+	int flags = 0;
+	int l_slow = -1, l_tail = -1;
+
+	if (u->flags & UOP_FLAG_FLUSH) flags |= JC_F_FLUSH;
+	if (u->flags & UOP_FLAG_BLOCK_END) flags |= JC_F_BLOCK_END;
+
+	/* step 1: the abort check, before any of this uop's work (the executor's own order) */
+	jx64_cmp_m8_imm8(e, JC_ABORT_REG, 0, 0);
+	jx64_jcc_label(e, JX_CC_NE, l_kind_abort);
+
+	/* steps 2-3 */
+	jitcg_emit_stores(e, u, any_pfx);
+
+	if (rec != NULL && rec->kind != 0) {
+		if (getenv("JITCG_DUMP")) {
+			fprintf(stderr, "jitcg:     uop %u code at byte %zu\n", (unsigned)(u - uops_base),
+			        e->n);
+		}
+		/* the recipe's failure continuations, allocated only when the emission can fail
+		 * (jit_recipe_t.slow): an infallible recipe emits no trampoline at all. */
+		if (rec->slow) {
+			l_slow = jx64_label(e);
+			l_tail = jx64_label(e);
+		}
+		jc_emit_recipe(e, u, rec, l_slow);
+		/* STEP 5's `prefixes = 0`, on the RECIPE path too.  A recipe that ran under a prefix
+		 * byte (a segment override, say) left cpu->prefixes set, and the reference's own
+		 * block-entry invariant -- `DBG_ASSERT(cpu->prefixes == 0)` in uop_decode_block -- then
+		 * fired on the next decode.  MEASURED: the 200 M boot aborted at eip 0x21972f7 after
+		 * 876,568 instructions.  The CALLED path gets this from jitcg_emit_post in the shared
+		 * stub; the fast path has to emit it. */
+		if (any_pfx) jx64_mov_m8_imm8(e, JX_RBP, JC_OFF(prefixes), 0);
+		jx64_mov_r32_imm32(e, JX_RDI, (uint32_t)(flags | JC_F_RAN));
+		jx64_add_m32_imm8(e, JX_RSP, JC_FRAME_INLINED, 1);
+		if (rec->slow) {
+			jx64_jmp_label(e, l_tail);
+			jx64_bind(e, l_slow);
+			jx64_mov_r64_imm64(e, JX_RDI, (uint64_t)(uintptr_t)u);
+			jx64_mov_r32_imm32(e, JX_RSI, (uint32_t)flags);
+			jx64_call_label(e, jitcg_sh.l_slow);
+			jx64_bind(e, l_tail);
+		}
+	}
+	else {
+		jx64_mov_r64_imm64(e, JX_RDI, (uint64_t)(uintptr_t)u);
+		jx64_mov_r32_imm32(e, JX_RSI, (uint32_t)flags);
+		jx64_call_label(e, jitcg_sh.l_slow);
+	}
+
+	/* step 5's counts.  `block_uops += 1` happens AFTER the abort check in the executor,
+	 * which is why the abort exit must not have counted this uop -- here the frame slot is
+	 * only incremented on the fall-through path, so an abort exit leaves it holding exactly
+	 * the uops that ran. */
+	jx64_add_m32_imm8(e, JX_RSP, JC_FRAME_EXEC, 1);
+	jx64_inc_r32(e, JC_PENDING);
+
+	/* steps 6-11, in the shared routine */
+	jx64_mov_r32_imm32(e, JX_RSI, u->eip + u->len);
+	jx64_mov_r32_imm32(e, JX_R10, u->eip);
+	jx64_call_label(e, l_checks);
+}
+
+/* ------------------------------------------------------------------ *
+ * the compiler
+ * ------------------------------------------------------------------ */
+
+uint8_t *jit_compile_block(const uop_t *uops, uint32_t count, uint32_t phys, uint32_t virt,
+                           uint8_t state)
+{
+	jit_codegen_stats.compile_attempts++;
+
+	if (count == 0 || count > UOP_MAX_BLOCK_UOPS) {
+		jit_codegen_stats.refused_noblock++;
+		return NULL;
+	}
+
+	/* REUSE BEFORE COMPILING.  A block can outlive its uop-cache record: the cache's own
+	 * clear (an arena/block overflow) drops decoded blocks without any guest write, and the
+	 * guest's bytes are unchanged, so the compiled block is still valid and must be FOUND
+	 * rather than recompiled -- a recompile would take a second code allocation for the same
+	 * key and the first one could never be freed.  This is a COMPILE-time lookup: the run
+	 * path reads the code pointer the block record already carries (no double hash). */
+	uint8_t *have = jit_cache_lookup(phys, virt, state);
+	if (have != NULL) {
+		jit_codegen_stats.blocks_reused++;
+		return have;
+	}
+
+	/* THE PRE-PASS: which recipes the block's uops have, and therefore which shared
+	 * routines and prologue slots the emission needs.  The recipe lookup is compile-time
+	 * only, so it happens here and nowhere near a run path. */
+	const jc_entry_t *recs[UOP_MAX_BLOCK_UOPS];
+	bool any_pfx = false, need_slots = false, need_code = false, need_slow = false;
+	bool need_cf = false, need_zf = false;
+
+	jitcg_build_recipes();
+	for (uint32_t i = 0; i < count; i++) {
+		const uop_t *u = &uops[i];
+		const jit_recipe_t *r = jit_recipe_lookup(u);
+		recs[i] = r == NULL ? NULL : jitcg_find(r->fn);
+		if (u->pfx != 0) any_pfx = true;
+		if (recs[i] == NULL) {
+			need_slow = true;
+			continue;
+		}
+		if (recs[i]->slow) need_slow = true;
+		if (jc_mem_shape(recs[i]->shape)) {
+			if (recs[i]->kind != JIT_REC_LEA) need_slots = true;
+			if (recs[i]->kind != JIT_REC_LEA) {
+				/* a memory recipe that WRITES goes through the code-page gate */
+				switch (recs[i]->kind) {
+				case JIT_REC_MOV_RM_R32:
+				case JIT_REC_MOV_RM8_R8:
+				case JIT_REC_MOV_RM16_R16:
+					need_code = true;
+					break;
+				case JIT_REC_ALU_RM_REG:
+				case JIT_REC_ALU_RM_IMM8:
+				case JIT_REC_NOT_RM32:
+					if (recs[i]->aux != 7) need_code = true;
+					break;
+				default:
+					break;
+				}
+			}
+		}
+		switch (recs[i]->kind) {
+		case JIT_REC_INC_REG:
+		case JIT_REC_DEC_REG:
+			need_cf = true;
+			break;
+		case JIT_REC_JCC:
+			if (recs[i]->aux == JX_CC_B || recs[i]->aux == JX_CC_AE) need_cf = true;
+			else if (recs[i]->aux == JX_CC_E || recs[i]->aux == JX_CC_NE) need_zf = true;
+			else {
+				need_cf = true;
+				need_zf = true;
+			}
+			break;
+		default:
+			break;
+		}
+	}
+
+	jx64_t e;
+	jx64_init(&e, jitcg_scratch, sizeof jitcg_scratch);
+
+	int l_epilogue = jx64_label(&e);
+	int l_kind_return = jx64_label(&e);
+	int l_kind_tail = jx64_label(&e);
+	int l_kind_abort = jx64_label(&e);
+	int l_kind_blkend = jx64_label(&e);
+	int l_flush_return = jx64_label(&e);
+	int l_checks = jx64_label(&e);
+	int l_c2 = jx64_label(&e);
+	int l_c4 = jx64_label(&e);
+	int l_clear_jbc = jx64_label(&e);
+	int l_ck_return = jx64_label(&e);
+	int l_ck_blkend = jx64_label(&e);
+	int l_ck_tail = jx64_label(&e);
+
+	jitcg_sh.state = state;
+	jitcg_sh.l_slow = jx64_label(&e);
+	jitcg_sh.getcf = need_cf ? jx64_label(&e) : -1;
+	jitcg_sh.getzf = need_zf ? jx64_label(&e) : -1;
+
+	jitcg_emit_prologue(&e, need_slots, need_code);
+	uops_base = uops;
+
+	for (uint32_t i = 0; i < count; i++) {
+		const uop_t *u = &uops[i];
+		if (recs[i] != NULL) jit_codegen_stats.uops_with_recipe++;
+		else jit_codegen_stats.uops_without_recipe++;
+		jitcg_emit_uop(&e, u, recs[i], any_pfx, l_kind_abort, l_checks);
+	}
+
+	/* THE BLOCK RAN OUT OF UOPS (the executor's `idx += 1; if (idx >= count) why = TAIL`):
+	 * the last uop's checks routine returns here on the fall-through path, and the reference
+	 * has no boundary at a cap end -- so the tail, then a fresh lookup at the new eip.  This
+	 * is also what keeps the emission from falling into the shared routines below. */
+	jx64_jmp_label(&e, l_kind_tail);
+
+	jx64_bind(&e, l_checks);
+	jitcg_emit_checks(&e, l_flush_return, l_kind_return, l_kind_tail, l_kind_blkend, l_c2,
+	                  l_c4, l_clear_jbc, l_ck_return, l_ck_blkend, l_ck_tail);
+
+	/* the flush-without-a-budget-check stub (steps 6, 8 and 9 all end a reference batch and
+	 * return; only step 7 checks the window, because only there is the reference's batch end
+	 * the place do_many_cycles_native stops) */
+	jx64_bind(&e, l_flush_return);
+	jx64_add_r64_imm8(&e, JX_RSP, 8); /* this one is reached from INSIDE the routine */
+	jitcg_emit_flush(&e);
+	jx64_jmp_label(&e, l_kind_return);
+
+	/* THE SHARED ROUTINES: each is entered by `call` (or is unreachable) and each ends in
+	 * `ret`, so the emission can fall from one into the next without a jump. */
+	if (need_cf) {
+		jx64_bind(&e, jitcg_sh.getcf);
+		jitcg_emit_getcf(&e);
+	}
+	if (need_zf) {
+		jx64_bind(&e, jitcg_sh.getzf);
+		jitcg_emit_getzf(&e);
+	}
+	if (need_slow) {
+		jx64_bind(&e, jitcg_sh.l_slow);
+		jitcg_emit_slow(&e, any_pfx);
+	}
+
+	jx64_bind(&e, l_kind_return);
+	jx64_mov_m32_imm32(&e, JX_RSP, JC_FRAME_KIND, JIT_EXIT_RETURN);
+	jx64_jmp_label(&e, l_epilogue);
+	jx64_bind(&e, l_kind_tail);
+	jx64_mov_m32_imm32(&e, JX_RSP, JC_FRAME_KIND, JIT_EXIT_TAIL);
+	jx64_jmp_label(&e, l_epilogue);
+	jx64_bind(&e, l_kind_abort);
+	jx64_mov_m32_imm32(&e, JX_RSP, JC_FRAME_KIND, JIT_EXIT_ABORT);
+	jx64_jmp_label(&e, l_epilogue);
+	jx64_bind(&e, l_kind_blkend);
+	jx64_mov_m32_imm32(&e, JX_RSP, JC_FRAME_KIND, JIT_EXIT_BLOCK_END);
+	jx64_jmp_label(&e, l_epilogue);
+
+	jx64_bind(&e, l_epilogue);
+	jitcg_emit_epilogue(&e);
+
+	/* THE FIT RULE, and every other refusal.  `jx64_finish` fails on an overflow (more code
+	 * than JIT_CODE_MAX_BLOCK_BYTES), an unbound label, an invalid label id, or a
+	 * displacement that does not fit in 32 bits -- in EVERY case nothing is published and the
+	 * block keeps its uop execution. */
+	if (!jx64_finish(&e)) {
+		jit_codegen_stats.refused_fit++;
+		jit_codegen_stats.refused_fit_uops += count;
+		return NULL;
+	}
+	uint32_t len = (uint32_t)jx64_len(&e);
+	if (len == 0 || len > JIT_CODE_MAX_BLOCK_BYTES) {
+		jit_codegen_stats.refused_fit++;
+		jit_codegen_stats.refused_fit_uops += count;
+		return NULL;
+	}
+
+	if (getenv("JITCG_DUMP")) {
+		char pth[64]; FILE *f; snprintf(pth, sizeof pth, "/tmp/block-%08x-%u.bin", phys, len); f = fopen(pth, "wb");
+		fprintf(stderr, "jitcg: block %u uops at %08x/%08x state %02x, %u bytes\n", count, phys,
+		        virt, state, len);
+		if (f) { fwrite(jitcg_scratch, 1, len, f); fclose(f); }
+		for (uint32_t i = 0; i < count; i++) {
+			const char *nm = jit_recipe_name(uops[i].fn);
+			fprintf(stderr, "jitcg:   uop %u eip %08x shape %u addr %u base %u idx %u sc %u "
+			                "disp %08x modrm %02x g %u seg %u rec %s\n", i, uops[i].eip,
+			        uops[i].shape, uops[i].addr_kind, uops[i].base, uops[i].index,
+			        uops[i].scale, (unsigned)uops[i].disp, uops[i].modrm, uops[i].g, uops[i].seg, nm ? nm : "-");
+			fprintf(stderr, "jitcg:     flags %02x len %u\n", uops[i].flags, uops[i].len);
+		}
+	}
+	uint8_t *page = jit_code_reserve_span(len);
+	if (page == NULL) {
+		jit_codegen_stats.refused_pool++;
+		return NULL;
+	}
+	memcpy(page, jitcg_scratch, len);
+	if (jit_code_publish(page, len) == NULL) {
+		jit_codegen_stats.refused_pool++;
+		return NULL;
+	}
+	if (!jit_cache_bind(phys, virt, state, page, len)) {
+		jit_codegen_stats.refused_pool++;
+		return NULL;
+	}
+
+	jit_codegen_stats.blocks_compiled++;
+	jit_codegen_stats.compiled_uops += count;
+	jit_codegen_stats.bytes_emitted += len;
+	return page;
+}
+
+int jit_execute_block(uint8_t *code)
+{
+	jit_block_enter(code);
+	int kind = ((int (*)(void))(void *)code)();
+	jit_block_exit();
+	return kind;
+}
+
+void jit_codegen_stats_print(void)
+{
+	uint64_t dyn = jit_codegen_stats.inlined_uops + jit_codegen_stats.called_uops;
+	uint64_t sta = jit_codegen_stats.uops_with_recipe + jit_codegen_stats.uops_without_recipe;
+
+	fprintf(stderr,
+	        "jit: blocks compiled %llu in %llu attempts (reused %llu); refused: fit %llu "
+	        "(%llu uops), pool %llu, empty %llu\n",
+	        (unsigned long long)jit_codegen_stats.blocks_compiled,
+	        (unsigned long long)jit_codegen_stats.compile_attempts,
+	        (unsigned long long)jit_codegen_stats.blocks_reused,
+	        (unsigned long long)jit_codegen_stats.refused_fit,
+	        (unsigned long long)jit_codegen_stats.refused_fit_uops,
+	        (unsigned long long)jit_codegen_stats.refused_pool,
+	        (unsigned long long)jit_codegen_stats.refused_noblock);
+	fprintf(stderr, "jit: block sizes: compiled %llu uops in %llu bytes (mean %.1f B/uop, "
+	                "%.1f uops/block); refused-for-fit %llu uops in %llu blocks (mean %.1f)\n",
+	        (unsigned long long)jit_codegen_stats.compiled_uops,
+	        (unsigned long long)jit_codegen_stats.bytes_emitted,
+	        jit_codegen_stats.compiled_uops
+	            ? (double)jit_codegen_stats.bytes_emitted / (double)jit_codegen_stats.compiled_uops
+	            : 0.0,
+	        jit_codegen_stats.blocks_compiled
+	            ? (double)jit_codegen_stats.compiled_uops / (double)jit_codegen_stats.blocks_compiled
+	            : 0.0,
+	        (unsigned long long)jit_codegen_stats.refused_fit_uops,
+	        (unsigned long long)jit_codegen_stats.refused_fit,
+	        jit_codegen_stats.refused_fit
+	            ? (double)jit_codegen_stats.refused_fit_uops / (double)jit_codegen_stats.refused_fit
+	            : 0.0);
+	fprintf(stderr,
+	        "jit: uops executed inlined %llu / called %llu -> %.2f%% dynamic inlined "
+	        "(compile-time: %llu with a recipe, %llu without)\n",
+	        (unsigned long long)jit_codegen_stats.inlined_uops,
+	        (unsigned long long)jit_codegen_stats.called_uops,
+	        dyn ? 100.0 * (double)jit_codegen_stats.inlined_uops / (double)dyn : 0.0,
+	        (unsigned long long)jit_codegen_stats.uops_with_recipe,
+	        (unsigned long long)jit_codegen_stats.uops_without_recipe);
+	fprintf(stderr, "jit: recipe table: %u entries over %u emitted uops\n",
+	        jit_recipe_count(),
+	        (unsigned)jit_codegen_stats.compiled_uops);
+	if (sta == 0) {
+		fprintf(stderr, "jit: no uop was emitted (nothing was compiled)\n");
+	}
+}
+
+#else /* !V86C_JIT_X64 -- THE aarch64 / any-other-arch POSTURE (jit_codegen.h) */
+
+jit_codegen_stats_t jit_codegen_stats;
+
+bool jit_codegen_available(void) { return false; }
+uint32_t jit_recipe_count(void) { return 0; }
+const jit_recipe_t *jit_recipe_lookup(const uop_t *u)
+{
+	(void)u;
+	return NULL;
+}
+const char *jit_recipe_name(void (*fn)(void))
+{
+	(void)fn;
+	return NULL;
+}
+uint8_t *jit_compile_block(const uop_t *uops, uint32_t count, uint32_t phys, uint32_t virt,
+                           uint8_t state)
+{
+	(void)uops; (void)count; (void)phys; (void)virt; (void)state;
+	return NULL;
+}
+int jit_execute_block(uint8_t *code)
+{
+	(void)code;
+	return JIT_EXIT_RETURN;
+}
+void jit_codegen_stats_print(void)
+{
+	fprintf(stderr, "jit: no x86-64 backend on this architecture: no block is compiled\n");
+}
+
+#endif /* V86C_JIT_X64 */

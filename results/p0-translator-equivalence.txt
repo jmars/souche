@@ -1,0 +1,11 @@
+TRANSLATOR CLEANUP -- equivalence measurement
+
+method: translate all 123 tests with the planner's translator and with tests/nasm2gas.py,
+then run BOTH outputs through the shipped as/ld flags and compare the linked images.
+
+  diff -rq baseline clean                 -> all 123 .s differ (one trailing blank line only)
+  for each .s: diff <(sed -e '$ { /^$/d }' baseline) clean   -> no output for all 123
+  as --32 -mx86-used-note=no + ld -m elf_i386 -z noseparate-code + shipped geometry
+  diff <(md5sum of baseline .img) <(md5sum of clean .img)     -> empty
+
+RESULT: EQUIVALENT: all 123 linked images byte-identical  (rc=0)

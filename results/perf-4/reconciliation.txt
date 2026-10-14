@@ -1,0 +1,85 @@
+== A. THE HOOK SITES (every uop_invalidate_* call in the port) ==
+src/cpu/uop_cache.h:301: * at all and `uop_invalidate_page` returns immediately -- so the cache-off transcript must
+src/cpu/uop_cache.h:332:void uop_invalidate_page(uint32_t phys_addr);
+src/cpu/uop_cache.h:336:void uop_invalidate_range(uint32_t phys_addr, uint32_t length);
+src/cpu/uop_cache.h:371:static inline void uop_invalidate_page_fast(uint32_t phys_addr)
+src/cpu/uop_cache.h:375:		uop_invalidate_page(phys_addr);
+src/cpu/paging.c:653:         * knows holds no code, which is exactly the test uop_invalidate_page_fast makes
+src/cpu/paging.c:655:        uop_invalidate_page_fast(phys_addr);
+src/cpu/paging.c:680:        uop_invalidate_page_fast(phys_addr);
+src/cpu/paging.c:702:        uop_invalidate_page_fast(phys_addr); /* plan ss4.1 row 5 */
+src/cpu/paging.c:732:            uop_invalidate_page_fast(phys_addr); /* plan ss4.1 row 5's 64-bit arm */
+src/cpu/paging.c:760:            uop_invalidate_page_fast(phys_addr); /* plan ss4.1 row 5's 128-bit arm; the
+src/cpu/string.c:280:                uop_invalidate_page_fast(phys_dst);
+src/cpu/string.c:300:                    uop_invalidate_range(phys_dst, count_until_page_end * (uint32_t)size_bytes);
+src/cpu/string.c:312:                    uop_invalidate_range(phys_dst, count_until_page_end);
+src/cpu/string.c:318:                    uop_invalidate_page_fast(phys_dst);
+src/cpu/string.c:322:                    uop_invalidate_page_fast(phys_dst);
+src/cpu/memory.c:79:        uop_invalidate_range(offset, length);
+src/cpu/memory.c:356:         * because the cache's tables are empty (uop_invalidate_page_fast is a load of a
+src/cpu/memory.c:358:        uop_invalidate_page_fast(addr);
+src/cpu/memory.c:375:        uop_invalidate_page_fast(addr);
+src/cpu/memory.c:395:        uop_invalidate_page_fast(addr);
+src/cpu/uop_cache.c:881:void uop_invalidate_page(uint32_t phys_addr)
+src/cpu/uop_cache.c:913:void uop_invalidate_range(uint32_t phys_addr, uint32_t length)
+src/cpu/uop_cache.c:920:		if (uop_page_head[page] != 0) uop_invalidate_page(page << 12);
+
+== B. THE GUEST-RAM WRITE SITES (the plan's other list) ==
+src/hw/kernel.c:72:    memcpy(mem8 + addr, blob, length);
+src/hw/kernel.c:238:    mem8[cmd_line_ptr + strlen(cmdline)] = 0;
+src/cpu/memory.c:48:    memset(mem8 + addr, 0, size);
+src/cpu/memory.c:80:        memcpy(mem8 + offset, data, length);
+src/cpu/memory.c:359:        write8_no_mmap_or_dirty_check(addr, value);
+src/cpu/memory.c:363:void write8_no_mmap_or_dirty_check(uint32_t addr, int32_t value) { mem8[addr] = (uint8_t)value; }
+src/cpu/memory.c:376:        write16_no_mmap_or_dirty_check(addr, value);
+src/cpu/memory.c:380:void write16_no_mmap_or_dirty_check(uint32_t addr, int32_t value)
+src/cpu/memory.c:383:    memcpy(mem8 + addr, &v, sizeof(v));
+src/cpu/memory.c:396:        write32_no_mmap_or_dirty_check(addr, value);
+src/cpu/memory.c:400:void write32_no_mmap_or_dirty_check(uint32_t addr, int32_t value)
+src/cpu/memory.c:402:    memcpy(mem8 + addr, &value, sizeof(value));
+src/cpu/memory.c:405:void write64_no_mmap_or_dirty_check(uint32_t addr, uint64_t value)
+src/cpu/memory.c:407:    memcpy(mem8 + addr, &value, sizeof(value));
+src/cpu/memory.c:410:void write128_no_mmap_or_dirty_check(uint32_t addr, reg128 value)
+src/cpu/memory.c:412:    memcpy(mem8 + addr, &value, sizeof(value));
+src/cpu/memory.c:415:void memset_no_mmap_or_dirty_check(uint32_t addr, uint8_t value, uint32_t count)
+src/cpu/memory.c:417:    memset(mem8 + addr, value, count);
+src/cpu/memory.c:420:void memcpy_no_mmap_or_dirty_check(uint32_t src_addr, uint32_t dst_addr, uint32_t count)
+src/cpu/memory.c:424:    memmove(mem8 + dst_addr, mem8 + src_addr, count); /* upstream ptr::copy, overlap-safe */
+src/cpu/memory.c:449:        vga_mem8[addr - VGA_LFB_ADDRESS] = (uint8_t)value;
+src/cpu/memory.c:461:        memcpy(vga_mem8 + (addr - VGA_LFB_ADDRESS), &v, sizeof(v));
+src/cpu/memory.c:472:        memcpy(vga_mem8 + (addr - VGA_LFB_ADDRESS), &value, sizeof(value));
+src/cpu/memory.c:491:        memcpy(vga_mem8 + (addr - VGA_LFB_ADDRESS), &value, sizeof(value));
+src/cpu/memory.c:502:        memcpy(vga_mem8 + (addr - VGA_LFB_ADDRESS), &v0, sizeof(v0));
+src/cpu/memory.c:503:        memcpy(vga_mem8 + (addr - VGA_LFB_ADDRESS + 8), &v1, sizeof(v1));
+src/hw/hw_selftest.c:120:    for (int i = 0; i < 8; i++) mem8[addr + i] = (uint8_t)(v >> (8 * i));
+src/hw/hw_selftest.c:237:    mem8[0x100 + (addr & 0xFF)] = (uint8_t)value;
+src/hw/hw_selftest.c:663:    mem8[0x1000] = 0x77;
+src/hw/hw_selftest.c:664:    mem8[0x1001] = 0x88;
+src/hw/hw_selftest.c:1041:    mem8[0x5FFE] = 0xFA; /* cli */
+src/hw/hw_selftest.c:1042:    mem8[0x5FFF] = 0xF4; /* hlt */
+src/hw/hw_selftest.c:1046:    memcpy(mem8 + HANDLER_EIP, handler, sizeof(handler));
+src/hw/hw_selftest.c:1798:        for (int i = 0; i < 512; i++) mem8[dest + i] = 0;
+src/hw/hw_selftest.c:2136:    memcpy(mem8 + 0x4000, "ABC", 3);
+src/hw/hw_selftest.c:2175:    mem8[0x4400] = 0x00;
+src/main.c:233:	memcpy(mem8 + addr, blob, length);
+src/main.c:994:	memcpy(mem8 + BOOT_OPTION_ROM_ADDRESS, loaded.option_rom, loaded.option_rom_length);
+src/main.c:998:	memcpy(mem8 + BOOT_FIRMWARE_ADDRESS, firmware, firmware_length);
+src/cpu/string.c:281:                if (size == STR_B) write8_no_mmap_or_dirty_check(phys_dst, src_val);
+src/cpu/string.c:282:                else if (size == STR_W) write16_no_mmap_or_dirty_check(phys_dst, src_val);
+src/cpu/string.c:283:                else write32_no_mmap_or_dirty_check(phys_dst, src_val);
+src/cpu/string.c:301:                    memcpy_no_mmap_or_dirty_check(phys_src, phys_dst,
+src/cpu/string.c:313:                    memset_no_mmap_or_dirty_check(phys_dst, (uint8_t)src_val, count_until_page_end);
+src/cpu/string.c:319:                    write16_no_mmap_or_dirty_check(phys_dst, src_val);
+src/cpu/string.c:323:                    write32_no_mmap_or_dirty_check(phys_dst, src_val);
+src/cpu/paging.c:656:        write8_no_mmap_or_dirty_check(phys_addr, value);
+src/cpu/paging.c:681:        write16_no_mmap_or_dirty_check(phys_addr, value);
+src/cpu/paging.c:703:        write32_no_mmap_or_dirty_check(phys_addr, value);
+src/cpu/paging.c:733:            write64_no_mmap_or_dirty_check(phys_addr, value);
+src/cpu/paging.c:763:            write128_no_mmap_or_dirty_check(phys_addr, value);
+
+== C. THE LOADER-TIME WRITERS (before the guest runs; hook inert by construction) ==
+   src/main.c      : the multiboot/ELF loader and the boot firmware/option-ROM copies
+   src/hw/kernel.c : the bzImage loader's own static write_blob + the cmdline byte
+   src/cpu/memory.c zero_memory (memset) -- called by main.c's loader and the selftests
+   (the device DMA paths are NOT here: dma.c:240, ide.c:829 and virtio.c:1409 all call
+    the CPU's write_blob, which is hooked -- see list A)

@@ -1,0 +1,2 @@
+jit: platform probe: FORCED to fail (V86C_JIT_PROBE_FAIL) -- the failure path under test
+v86c: jit: x86-64 W^X code pages: the PLATFORM PROBE FAILED (a canary page could not be reserved, published and executed here) -- JIT disabled for this run; the uop cache is the engine. Linux VERIFIED; macOS/Windows UNVERIFIED by design, which is why the probe exists.

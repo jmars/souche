@@ -1,0 +1,278 @@
+Testing arith-optimisations.img
+Testing btc-imm.img
+Testing btc-reg16.img
+Testing btc-reg32.img
+Testing btr-imm.img
+Testing btr-reg16.img
+Testing btr-reg32.img
+Testing bts-imm.img
+Testing bts-reg16.img
+Testing bts-reg32.img
+Testing cmp16-setbe.img
+Testing cmpxchg.img
+Testing cmpxchg-setbe.img
+Testing cmpxchg8b.img
+Testing comiss.img
+Testing cvtpi2ps.img
+Testing cvtps2pi.img
+Testing cvttps2pi.img
+Testing double-segment-prefix.img
+Testing emms.img
+Testing f2xm1.img
+Testing fchs.img
+Testing fdecstp.img
+Testing fdiv.img
+Testing fdiv-zero.img
+Testing fdivr.img
+Testing fincstp.img
+Testing fprem.img
+Testing fprem-distinct.img
+Testing fprem1.img
+Testing fptan.img
+Testing fpu_m80.img
+Testing frndint.img
+Testing fsave_frstor.img
+Testing fscale.img
+Testing fsincos.img
+Testing fsqrt.img
+Testing fst-st-empty-tag.img
+Testing fstenv.img
+Testing fstm80.img
+Testing fstsw.img
+Testing fxtract.img
+Testing fxtract-zero.img
+Testing fyl2x.img
+Testing fyl2x-zero.img
+Testing fyl2xp1.img
+Testing indirect-call.img
+Testing indirect-jump.img
+Testing jcxz.img
+Testing jump.img
+Testing lea-nop.img
+Testing leave16.img
+Testing leave32.img
+Testing loop.img
+Testing loopnz.img
+Testing loopz.img
+Testing maskmovdqu.img
+Testing maskmovq.img
+Testing mov16.img
+Testing mov_sreg.img
+Testing movaps.img
+Testing movd.img
+Testing movntpd.img
+Testing movntps.img
+Testing movq.img
+Testing packssdw.img
+Testing packsswb.img
+Testing packuswb.img
+Testing paddb.img
+Testing paddd.img
+Testing paddsb.img
+Testing paddsw.img
+Testing paddusb.img
+Testing paddusw.img
+Testing paddw.img
+Testing pand.img
+Testing pandn.img
+Testing pcmpeqb.img
+Testing pcmpeqd.img
+Testing pcmpeqw.img
+Testing pcmpgtb.img
+Testing pcmpgtd.img
+Testing pcmpgtw.img
+Testing pmaddwd.img
+Testing pmulhw.img
+Testing pmullw.img
+Testing pmuludq.img
+Testing pop_esp.img
+Testing pop_esp2.img
+Testing por.img
+Testing pshufw.img
+Testing pslld.img
+Testing psllq.img
+Testing psllw.img
+Testing psrad.img
+Testing psraw.img
+Testing psrld.img
+Testing psrlq.img
+Testing psrlw.img
+Testing psubb.img
+Testing psubd.img
+Testing psubsb.img
+Testing psubsw.img
+Testing psubusb.img
+Testing psubusw.img
+Testing psubw.img
+Testing punpckhbw.img
+Testing punpckhdq.img
+Testing punpckhwd.img
+Testing punpcklbw.img
+Testing punpckldq.img
+Testing punpcklwd.img
+Testing push.img
+Testing pushf.img
+Testing pxor.img
+Testing ret-imm.img
+Testing shufps-edgecase.img
+Testing ucomiss.img
+
+[!] 5 test(s) could not run against the actual leg:
+
+[-] idiv16-overflow:
+	reference leg failed on idiv16-overflow: panicked at src/rust/cpu/cpu.rs:819:13:
+Unimplemented: #GP handler
+wasm://wasm/v86.wasm-007a84ce:1
+
+
+RuntimeError: unreachable
+    at v86.wasm._RNvCsdtSMxSA38aw_7___rustc10rust_panic (wasm://wasm/v86.wasm-007a84ce:wasm-function[1565]:0xbcb9c)
+    at v86.wasm._RNvNtCs4BkbFkxXoBt_3std9panicking15panic_with_hook (wasm://wasm/v86.wasm-007a84ce:wasm-function[1563]:0xbc8ff)
+    at v86.wasm._RNCNvNtCs4BkbFkxXoBt_3std9panicking13panic_handler0B5_ (wasm://wasm/v86.wasm-007a84ce:wasm-function[1570]:0xbcc34)
+    at v86.wasm._RINvNtNtCs4BkbFkxXoBt_3std3sys9backtrace26___rust_end_short_backtraceNCNvNtB6_9panicking13panic_handler0zEB6_ (wasm://wasm/v86.wasm-007a84ce:wasm-function[1569]:0xbcbce)
+    at v86.wasm._RNvCsdtSMxSA38aw_7___rustc17rust_begin_unwind (wasm://wasm/v86.wasm-007a84ce:wasm-function[1542]:0xbb27a)
+    at v86.wasm._RNvNtCs8hZryZq3oeI_4core9panicking9panic_fmt (wasm://wasm/v86.wasm-007a84ce:wasm-function[1528]:0xba19f)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu3cpu21call_interrupt_vector (wasm://wasm/v86.wasm-007a84ce:wasm-function[2513]:0x101c49)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu12instructions16instr16_F7_7_reg (wasm://wasm/v86.wasm-007a84ce:wasm-function[3013]:0x12d64a)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863gen11interpreter3run (wasm://wasm/v86.wasm-007a84ce:wasm-function[2412]:0xfbf7e)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu3cpu22run_prefix_instruction (wasm://wasm/v86.wasm-007a84ce:wasm-function[2429]:0xfd488)
+
+Node.js v26.8.1
+
+[-] idiv32-overflow:
+	reference leg failed on idiv32-overflow: panicked at src/rust/cpu/cpu.rs:819:13:
+Unimplemented: #GP handler
+wasm://wasm/v86.wasm-007a84ce:1
+
+
+RuntimeError: unreachable
+    at v86.wasm._RNvCsdtSMxSA38aw_7___rustc10rust_panic (wasm://wasm/v86.wasm-007a84ce:wasm-function[1565]:0xbcb9c)
+    at v86.wasm._RNvNtCs4BkbFkxXoBt_3std9panicking15panic_with_hook (wasm://wasm/v86.wasm-007a84ce:wasm-function[1563]:0xbc8ff)
+    at v86.wasm._RNCNvNtCs4BkbFkxXoBt_3std9panicking13panic_handler0B5_ (wasm://wasm/v86.wasm-007a84ce:wasm-function[1570]:0xbcc34)
+    at v86.wasm._RINvNtNtCs4BkbFkxXoBt_3std3sys9backtrace26___rust_end_short_backtraceNCNvNtB6_9panicking13panic_handler0zEB6_ (wasm://wasm/v86.wasm-007a84ce:wasm-function[1569]:0xbcbce)
+    at v86.wasm._RNvCsdtSMxSA38aw_7___rustc17rust_begin_unwind (wasm://wasm/v86.wasm-007a84ce:wasm-function[1542]:0xbb27a)
+    at v86.wasm._RNvNtCs8hZryZq3oeI_4core9panicking9panic_fmt (wasm://wasm/v86.wasm-007a84ce:wasm-function[1528]:0xba19f)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu3cpu21call_interrupt_vector (wasm://wasm/v86.wasm-007a84ce:wasm-function[2513]:0x101c49)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu12instructions16instr32_F7_7_reg (wasm://wasm/v86.wasm-007a84ce:wasm-function[3023]:0x12dfdc)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863gen11interpreter3run (wasm://wasm/v86.wasm-007a84ce:wasm-function[2412]:0xfc337)
+    at v86.wasm.main_loop (wasm://wasm/v86.wasm-007a84ce:wasm-function[3293]:0x1496dc)
+
+Node.js v26.8.1
+
+[-] idiv8-overflow:
+	reference leg failed on idiv8-overflow: panicked at src/rust/cpu/cpu.rs:819:13:
+Unimplemented: #GP handler
+wasm://wasm/v86.wasm-007a84ce:1
+
+
+RuntimeError: unreachable
+    at v86.wasm._RNvCsdtSMxSA38aw_7___rustc10rust_panic (wasm://wasm/v86.wasm-007a84ce:wasm-function[1565]:0xbcb9c)
+    at v86.wasm._RNvNtCs4BkbFkxXoBt_3std9panicking15panic_with_hook (wasm://wasm/v86.wasm-007a84ce:wasm-function[1563]:0xbc8ff)
+    at v86.wasm._RNCNvNtCs4BkbFkxXoBt_3std9panicking13panic_handler0B5_ (wasm://wasm/v86.wasm-007a84ce:wasm-function[1570]:0xbcc34)
+    at v86.wasm._RINvNtNtCs4BkbFkxXoBt_3std3sys9backtrace26___rust_end_short_backtraceNCNvNtB6_9panicking13panic_handler0zEB6_ (wasm://wasm/v86.wasm-007a84ce:wasm-function[1569]:0xbcbce)
+    at v86.wasm._RNvCsdtSMxSA38aw_7___rustc17rust_begin_unwind (wasm://wasm/v86.wasm-007a84ce:wasm-function[1542]:0xbb27a)
+    at v86.wasm._RNvNtCs8hZryZq3oeI_4core9panicking9panic_fmt (wasm://wasm/v86.wasm-007a84ce:wasm-function[1528]:0xba19f)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu3cpu21call_interrupt_vector (wasm://wasm/v86.wasm-007a84ce:wasm-function[2513]:0x101c49)
+    at v86.wasm.instr_F6_7_reg (wasm://wasm/v86.wasm-007a84ce:wasm-function[3003]:0x12cd73)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863gen11interpreter3run (wasm://wasm/v86.wasm-007a84ce:wasm-function[2412]:0xfbbc0)
+    at v86.wasm.main_loop (wasm://wasm/v86.wasm-007a84ce:wasm-function[3293]:0x1496dc)
+
+Node.js v26.8.1
+
+[-] mov_sreg_ud1:
+	reference leg failed on mov_sreg_ud1: panicked at src/rust/cpu/cpu.rs:819:13:
+Unimplemented: #GP handler
+wasm://wasm/v86.wasm-007a84ce:1
+
+
+RuntimeError: unreachable
+    at v86.wasm._RNvCsdtSMxSA38aw_7___rustc10rust_panic (wasm://wasm/v86.wasm-007a84ce:wasm-function[1565]:0xbcb9c)
+    at v86.wasm._RNvNtCs4BkbFkxXoBt_3std9panicking15panic_with_hook (wasm://wasm/v86.wasm-007a84ce:wasm-function[1563]:0xbc8ff)
+    at v86.wasm._RNCNvNtCs4BkbFkxXoBt_3std9panicking13panic_handler0B5_ (wasm://wasm/v86.wasm-007a84ce:wasm-function[1570]:0xbcc34)
+    at v86.wasm._RINvNtNtCs4BkbFkxXoBt_3std3sys9backtrace26___rust_end_short_backtraceNCNvNtB6_9panicking13panic_handler0zEB6_ (wasm://wasm/v86.wasm-007a84ce:wasm-function[1569]:0xbcbce)
+    at v86.wasm._RNvCsdtSMxSA38aw_7___rustc17rust_begin_unwind (wasm://wasm/v86.wasm-007a84ce:wasm-function[1542]:0xbb27a)
+    at v86.wasm._RNvNtCs8hZryZq3oeI_4core9panicking9panic_fmt (wasm://wasm/v86.wasm-007a84ce:wasm-function[1528]:0xba19f)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu3cpu21call_interrupt_vector (wasm://wasm/v86.wasm-007a84ce:wasm-function[2513]:0x101c49)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu3cpu10trigger_ud (wasm://wasm/v86.wasm-007a84ce:wasm-function[2049]:0xd3012)
+    at v86.wasm.instr_8E_mem (wasm://wasm/v86.wasm-007a84ce:wasm-function[2704]:0x112297)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863gen11interpreter3run (wasm://wasm/v86.wasm-007a84ce:wasm-function[2412]:0xf6ecb)
+
+Node.js v26.8.1
+
+[-] mov_sreg_ud2:
+	reference leg failed on mov_sreg_ud2: panicked at src/rust/cpu/cpu.rs:819:13:
+Unimplemented: #GP handler
+wasm://wasm/v86.wasm-007a84ce:1
+
+
+RuntimeError: unreachable
+    at v86.wasm._RNvCsdtSMxSA38aw_7___rustc10rust_panic (wasm://wasm/v86.wasm-007a84ce:wasm-function[1565]:0xbcb9c)
+    at v86.wasm._RNvNtCs4BkbFkxXoBt_3std9panicking15panic_with_hook (wasm://wasm/v86.wasm-007a84ce:wasm-function[1563]:0xbc8ff)
+    at v86.wasm._RNCNvNtCs4BkbFkxXoBt_3std9panicking13panic_handler0B5_ (wasm://wasm/v86.wasm-007a84ce:wasm-function[1570]:0xbcc34)
+    at v86.wasm._RINvNtNtCs4BkbFkxXoBt_3std3sys9backtrace26___rust_end_short_backtraceNCNvNtB6_9panicking13panic_handler0zEB6_ (wasm://wasm/v86.wasm-007a84ce:wasm-function[1569]:0xbcbce)
+    at v86.wasm._RNvCsdtSMxSA38aw_7___rustc17rust_begin_unwind (wasm://wasm/v86.wasm-007a84ce:wasm-function[1542]:0xbb27a)
+    at v86.wasm._RNvNtCs8hZryZq3oeI_4core9panicking9panic_fmt (wasm://wasm/v86.wasm-007a84ce:wasm-function[1528]:0xba19f)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu3cpu21call_interrupt_vector (wasm://wasm/v86.wasm-007a84ce:wasm-function[2513]:0x101c49)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu3cpu10trigger_ud (wasm://wasm/v86.wasm-007a84ce:wasm-function[2049]:0xd3012)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu12instructions14instr16_8C_mem (wasm://wasm/v86.wasm-007a84ce:wasm-function[2702]:0x1121f7)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863gen11interpreter3run (wasm://wasm/v86.wasm-007a84ce:wasm-function[2412]:0xf6d66)
+
+Node.js v26.8.1
+
+[+] Passed 113/118 tests.
+[!] 5 of 123 selected test(s) produced no state from the actual leg, 0 were skipped (tests/nasm_skip.txt).
+[-] Failed 5 test(s).
+
+[-] jump.img:
+
+	exception eip
+	Actual:   0x42b001
+	Expected: 0x2404c7
+
+	Exception
+	Actual:   None
+	Expected: GP
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] maskmovdqu.img:
+
+	exception eip
+	Actual:   0x80078
+	Expected: 0x80055
+
+	Exception
+	Actual:   None
+	Expected: GP
+
+[-] maskmovq.img:
+
+	exception eip
+	Actual:   0x8006e
+	Expected: 0x8004f
+
+	Exception
+	Actual:   None
+	Expected: GP
+
+[-] pop_esp.img:
+
+	exception eip
+	Actual:   0x8002f
+	Expected: 0x80023
+
+	Exception
+	Actual:   None
+	Expected: GP
+
+[-] pop_esp2.img:
+
+	exception eip
+	Actual:   0x80026
+	Expected: 0x80023
+
+	Exception
+	Actual:   None
+	Expected: GP

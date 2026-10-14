@@ -1,0 +1,19 @@
+disk sha256 a2f0f6daac00c518727d7bf2981c2f6208dfe93e4973b06ffb2dc6c65ca0460c
+### 1. a SECOND INDEPENDENT BUILD of the fixed source (fresh object dir)
+52c9fd012b83d23c5e5febecd5794f64cdfe13c8ad7831ef967865bf11590415  /tmp/v86det/bin/v86c-fixed
+2ee29c846da219dc88b5e5a05a52cf72301fab3b07cc7385d3cdaadc5d3bf703  /tmp/v86det/bin/v86c-fixed-b2
+### 2. THE CONTROL: the RTC back ON THE HOST CLOCK, RDRAND still fixed
+ctrl1 rc=0 4000097141 instructions
+ctrl2 rc=0 4000077187 instructions
+CONTROL: the two serials are identical
+CONTROL: the two virtios are identical
+4c4
+< v86c boot: 4000097141 instructions, in_hlt=0, exception=-1, unimplemented=0, eip=0xc11de760 cs=0x60 cr0=0x80050033 cr3=0x9ce000
+---
+> v86c boot: 4000077187 instructions, in_hlt=0, exception=-1, unimplemented=0, eip=0xc11de760 cs=0x60 cr0=0x80050033 cr3=0x9ce000
+### 3. THE SECOND BUILD, same image + same cmdline
+b2run1 rc=0 4000053925 instructions
+b2 serial == the frozen binary's run1 serial (BYTE-IDENTICAL)
+b2 virtio == the frozen binary's run1 virtio (BYTE-IDENTICAL)
+b2 stderr == run1 stderr (instruction count included)
+### done

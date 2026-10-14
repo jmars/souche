@@ -1,0 +1,13 @@
+installed all-swap (cmp vs fixed: differs)
+jit-codegen-selftest rc=0 jit_codegen_selftest: 2778 checks, 0 failures
+jit-selftest      rc=0 
+nasm default      rc=0 [!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+nasm --uop-cache off rc=0 [!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+nasm --jit on rc=0 [!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+transcript-diff default rc=0
+transcript --jit off vs JS: IDENTICAL
+transcript --jit on vs JS: DIFFERS
+boot 1.5G (off) rc=0 in_hlt=0, exception=-1, unimplemented=0, eip=0xc1927800 cs=0x60 cr0=0x80050033 cr3=0x1ea1000
+boot 1.5G (on) rc=0 in_hlt=1, exception=-1, unimplemented=0, eip=0x219a3c1 cs=0x10 cr0=0x60000011 cr3=0x0
+1.5 G serial: DIFFERS
+restored: ok

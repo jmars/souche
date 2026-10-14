@@ -1,0 +1,19 @@
+WHAT THE ORACLE ACTUALLY COMPARES -- measured over the 123 native fixtures
+  fixture length: [2116]
+  fixtures whose ftag (the tag word) == FPU_TAG_ALL_INVALID (0xAAAA): 0
+  fixtures whose ftag carries 0xffff in the upper half: 123/123
+  run.js's fpu branch (run.js:423) therefore ALWAYS takes the st/status path and
+  NEVER the mm path (run.js:445-456). CONSEQUENCE: the 16 mm words are not
+  compared by this oracle at all; the mm-visible effects are covered only through
+  the 8 KiB memory window (which is why maskmov*/ps*/pack*/punpck* still gate).
+  (SCOPE: this is MEASURED for our fixtures. Whether upstream's gdb fixture ftag
+  also always carries the upper half is INFERRED, not measured -- gdb is absent.)
+
+  exception fixtures (the branch of run.js:489-510):
+    SIGFPE   3: idiv16-overflow, idiv32-overflow, idiv8-overflow
+    SIGILL   2: mov_sreg_ud1, mov_sreg_ud2
+    SIGSEGV  5: jump, maskmovdqu, maskmovq, pop_esp, pop_esp2
+  the JS REFERENCE cannot exercise that branch: 5 of the 10 produce no state
+  (release-build panic) and 5 report no exception (reference takes no fault).
+  The C port CAN report it (--actual), so the branch stays in the runner; the
+  negative control proves the runner reports it (control 3/3).

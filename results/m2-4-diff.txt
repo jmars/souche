@@ -1,0 +1,65 @@
+72c72
+<  Console: colour EGA 80x25
+---
+>  Console: colour dummy device 80x25
+142c142
+<  audit: type=2000 audit(1791832544.646:1): state=initialized audit_enabled=0 res=1
+---
+>  audit: type=2000 audit(1791832459.883:1): state=initialized audit_enabled=0 res=1
+170,173d169
+<  pci 0000:00:12.0: [1234:1111] type 00 class 0x030000
+<  pci 0000:00:12.0: BAR 0 [mem 0xe0000000-0xe07fffff pref]
+<  pci 0000:00:12.0: ROM [mem 0xfebe0000-0xfebeffff pref]
+<  pci 0000:00:12.0: Video device with shadowed ROM at [mem 0x000c0000-0x000dffff]
+182,184d177
+<  pci 0000:00:12.0: vgaarb: setting as boot VGA device
+<  pci 0000:00:12.0: vgaarb: bridge control possible
+<  pci 0000:00:12.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
+186a180
+>  hrtimer: interrupt took 13972002 ns
+204a199
+>  pci 0000:00:00.0: quirk_passive_release+0x0/0x90 took 16213 usecs
+205a201
+>  pci 0000:00:00.0: quirk_natoma+0x0/0x40 took 33234 usecs
+206a203
+>  pci 0000:00:01.0: quirk_isa_dma_hangs+0x0/0x50 took 15074 usecs
+208d204
+<  clocksource: tsc: mask: 0xffffffffffffffff max_cycles: 0x1cd42e4dffb, max_idle_ns: 881590591483 ns
+209a206
+>  clocksource: tsc: mask: 0xffffffffffffffff max_cycles: 0x1cd42e4dffb, max_idle_ns: 881590591483 ns
+232c229
+<  rtc_cmos rtc_cmos: setting system clock to 2026-10-12T19:15:48 UTC (1791832548)
+---
+>  rtc_cmos rtc_cmos: setting system clock to 2026-10-12T19:14:26 UTC (1791832466)
+242c239
+<  sched_clock: Marking stable (9462068633, 29257074)->(9493509336, -2183629)
+---
+>  sched_clock: Marking stable (208878958851, 1113731000)->(403345056000, -193352366149)
+256d252
+< 0090	12341111	0	        e0000008	               0	               0	               0	               0	               0	           c0002	          800000	               0	               0	               0	               0	               0	           20000	
+260c256
+< GUEST-INIT: waited 15 round(s) for /dev/hvc0
+---
+> GUEST-INIT: waited 14 round(s) for /dev/hvc0
+272,275c268,271
+< virtio_pci 16384 0 - Live 0xc5836000
+< virtio_pci_legacy_dev 12288 1 virtio_pci, Live 0xc5857000
+< virtio_console 28672 0 - Live 0xc5863000
+< virtio_pci_modern_dev 16384 1 virtio_pci, Live 0xc583c000
+---
+> virtio_pci 16384 0 - Live 0xc583c000
+> virtio_pci_legacy_dev 12288 1 virtio_pci, Live 0xc5836000
+> virtio_console 28672 0 - Live 0xc5860000
+> virtio_pci_modern_dev 16384 1 virtio_pci, Live 0xc5853000
+280c276
+<   0:       4167    XT-PIC      timer
+---
+>   0:       6652    XT-PIC      timer
+283c279
+<   4:        277    XT-PIC      ttyS0
+---
+>   4:        239    XT-PIC      ttyS0
+307c303
+<  Console: colour EGA 80x25
+---
+>  Console: colour dummy device 80x25

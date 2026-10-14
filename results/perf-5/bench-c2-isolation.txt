@@ -1,0 +1,27 @@
+== perf-5-ab: baseline vs c2-seg-inline  pairs=4
+load-before=10.21 9.20 8.82
+a    real 3.322s  instr=ok state=ok serial=ok
+b    real 3.228s  instr=ok state=ok serial=ok
+b    real 3.255s  instr=ok state=ok serial=ok
+a    real 3.324s  instr=ok state=ok serial=ok
+a    real 3.310s  instr=ok state=ok serial=ok
+b    real 3.280s  instr=ok state=ok serial=ok
+b    real 3.256s  instr=ok state=ok serial=ok
+a    real 3.294s  instr=ok state=ok serial=ok
+load-after=12.18 9.70 9.00
+baseline   n=4 best 3.294 median 3.316 worst 3.324
+c2-seg-inline n=4 best 3.228 median 3.255 worst 3.280
+ratio baseline/c2-seg-inline: best 0.9800x  median 0.9818x  (>1 means c2-seg-inline is slower)
+
+== perf-5-ab: c12-wrap-both vs c2-seg-only  pairs=3
+load-before=12.18 9.70 9.00
+a    real 3.277s  instr=ok state=ok serial=ok
+b    real 3.181s  instr=ok state=ok serial=ok
+b    real 3.230s  instr=ok state=ok serial=ok
+a    real 3.210s  instr=ok state=ok serial=ok
+a    real 3.221s  instr=ok state=ok serial=ok
+b    real 3.190s  instr=ok state=ok serial=ok
+load-after=15.59 10.68 9.34
+c12-wrap-both n=3 best 3.210 median 3.221 worst 3.277
+c2-seg-only n=3 best 3.181 median 3.190 worst 3.230
+ratio c12-wrap-both/c2-seg-only: best 0.9910x  median 0.9904x  (>1 means c2-seg-only is slower)

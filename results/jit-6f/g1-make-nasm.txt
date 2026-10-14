@@ -1,0 +1,12 @@
+=== make minibios-mem ===
+make: Nothing to be done for 'minibios-mem'.
+rc=0
+=== make ===
+node gen/interpreter_uop.js
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+rc=0
+=== make nasm ===
+	maskmovq: P0 class B: same as maskmovdqu (fixture #GP at 0x8004f, port and JS reference both report eip 0x8006e / no exception)
+	pop_esp: the native fixture expects a #GP at 0x80023 from a store to address 0; address 0 is plain guest RAM in v86's flat 2 MiB memory model, so neither the reference nor the port takes a fault (P0 class B) and the C leg halts instead -- the same emulator-model gap, not a port defect
+	pop_esp2: same as pop_esp: the fixture's SIGSEGV comes from the host MMU writing to address 0, which the emulator does not model (P0 class B)
+rc=0

@@ -1,0 +1,36 @@
+=== M1 trigger_de drops the eip rewind (cpu.rs:3429)
+  crafted m1c binary: FAIL (2 assertion(s))
+  nasm corpus:        [+] Passed 115/118 tests.
+  restored:           PASS (not caught)
+=== M2 the error code is pushed unconditionally (has_error_code ignored)
+  crafted m1c binary: FAIL (15 assertion(s))
+  restored:           PASS (not caught)
+=== M3 a trap gate clears the interrupt flag too
+  crafted m1c binary: FAIL (2 assertion(s))
+  restored:           PASS (not caught)
+=== M4 the delivered CS loses the cpl in its RPL
+  crafted m1c binary: FAIL (20 assertion(s))
+  restored:           PASS (not caught)
+=== M5 the master PIC does not set the in-service register
+  crafted m1c binary: FAIL (3 assertion(s))
+  restored:           PASS (not caught)
+=== M6 R3: a fault while resolving the gate CS no longer aborts the delivery
+  crafted m1c binary: FAIL (2 assertion(s))
+  restored:           PASS (not caught)
+=== M7 the undeliverable stop records the wrong vector
+  crafted m1c binary: PASS (not caught)
+  nasm corpus:        [+] Passed 113/113 tests.
+  restored:           PASS (not caught)
+=== M8 switch_seg does not write the accessed bit back
+  crafted m1c binary: FAIL (2 assertion(s))
+  restored:           PASS (not caught)
+=== all mutations restored
+=== M1 trigger_de drops the eip rewind (cpu.rs:3429)
+  crafted m1c binary: FAIL (2 assertion(s))
+  nasm corpus:        rc=1  [+] Passed 115/118 tests. [!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt). 
+  restored:           PASS (not caught)
+=== M7 the undeliverable stop records the wrong vector
+  crafted m1c binary: PASS (not caught)
+  nasm corpus:        rc=1  [!] 5 test(s) could not run against the actual leg: [+] Passed 113/113 tests. [!] 5 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt). 
+  restored:           PASS (not caught)
+=== all mutations restored

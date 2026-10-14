@@ -1,0 +1,4 @@
+PASS  static vs static, same name, same signature: refused (unity_c.py:   shared_helper (static) /tmp/tmp.4nryvOrL74/a.c:1)
+PASS  a file-local static shadowing another unit's export: refused (unity_c.py:   exported (global) /tmp/tmp.4nryvOrL74/g.c:1)
+PASS  the same file alone: emitted
+PASS  the shipped unity set (cpu core, one unit): emitted

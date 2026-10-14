@@ -1,0 +1,48 @@
+minibios: option ROM at c000
+Linux version 6.12.19 (build@debian) (gcc (Debian 14.2.0-19) 14.2.0, GNU ld (GNU Binutils for Debian) 2.44) #1 2025-03-13 12:15:54 UTC
+BIOS-provided physical RAM map:
+BIOS-e820: [mem 0x0000000000000000-0x000000000009fbff] usable
+BIOS-e820: [mem 0x000000000009fc00-0x000000000009ffff] reserved
+BIOS-e820: [mem 0x00000000000f0000-0x00000000000fffff] reserved
+BIOS-e820: [mem 0x0000000000100000-0x0000000004ffffff] usable
+Notice: NX (Execute Disable) protection cannot be enabled: non-PAE kernel!
+tsc: Detected 1000.000 MHz processor
+last_pfn = 0x5000 max_arch_pfn = 0x100000
+x86/PAT: PAT support disabled because CONFIG_X86_PAT is disabled in the kernel.
+x86/PAT: Configuration [0-7]: WB  WT  UC- UC  WB  WT  UC- UC  
+RAMDISK: [mem 0x04000000-0x040dffff]
+80MB LOWMEM available.
+  mapped low ram: 0 - 05000000
+  low ram: 0 - 05000000
+Zone ranges:
+  Normal   [mem 0x0000000000001000-0x0000000004ffffff]
+Movable zone start for each node
+Early memory node ranges
+  node   0: [mem 0x0000000000001000-0x000000000009efff]
+  node   0: [mem 0x0000000000100000-0x0000000004ffffff]
+Initmem setup node 0 [mem 0x0000000000001000-0x0000000004ffffff]
+On node 0, zone Normal: 1 pages in unavailable ranges
+On node 0, zone Normal: 97 pages in unavailable ranges
+[mem 0x05000000-0xffffffff] available for PCI devices
+clocksource: refined-jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645519600211568 ns
+Kernel command line: console=hvc0 console=ttyS0 tsc=unstable
+tsc: Marking TSC unstable due to boot parameter
+random: crng init done
+Dentry cache hash table entries: 16384 (order: 4, 65536 bytes, linear)
+Inode-cache hash table entries: 8192 (order: 3, 32768 bytes, linear)
+Built 1 zonelists, mobility grouping on.  Total pages: 20382
+mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+Checking if this processor honours the WP bit even in supervisor mode...Ok.
+SLUB: HWalign=64, Order=0-1, MinObjects=0, CPUs=1, Nodes=1
+NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+printk: legacy console [ttyS0] enabled
+Calibrating delay loop (skipped), value calculated using timer frequency.. 2000.00 BogoMIPS (lpj=4000000)
+Last level iTLB entries: 4KB 64, 2MB 64, 4MB 64
+Last level dTLB entries: 4KB 64, 2MB 0, 4MB 64, 1GB 0
+CPU: Intel Pentium III (Katmai) (family: 0x6, model: 0x7, stepping: 0x3)
+Speculative Store Bypass: Vulnerable
+L1TF: Kernel not compiled for PAE. No mitigation for L1TF
+x86/fpu: x87 FPU will use FXSAVE
+pid_max: default: 32768 minimum: 301
+Mount-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)

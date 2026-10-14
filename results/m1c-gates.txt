@@ -1,0 +1,68 @@
+=== M1c gates (HANDOFF=v86c) -- raw evidence ===
+Mon Oct 12 02:10:20 PM UTC 2026
+
+--- G1: make (regenerates the dispatcher) ---
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+make rc=0
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+rg -c unimplemented_instruction src/cpu/interpreter_gen.c -> 1 line(s)
+rg -c 'unimplemented_instruction\("' src/cpu/interpreter_gen.c -> rc=0 (1 = no match)
+--- G1 detail: the census measure ---
+  (no output + exit 1 = ZERO call sites; rc=1)
+  the 1 remaining line match is the emitter's own header comment:
+14: * unimplemented_instruction(...) and returns: the opcode is still classified (never
+
+--- G5: make selftest (both binaries) ---
+cpu_selftest: 3522 checks, 0 failures
+cpu_m1c_selftest: 193 checks, 0 failures
+selftest rc=0
+
+--- G5b: the M0 transcript diff ---
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+./build/v86c tests/test.img 1000000 > results/transcript.c.txt
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.js.txt
+diff -u results/transcript.js.txt results/transcript.c.txt
+milestone: the C transcript is byte-identical to the reference's
+transcript-diff rc=0
+
+--- G5c: make oracle (the reference side, unchanged) ---
+check_transcript: transcript matches tests/model.py (8 GPRs, EFLAGS, EIP, 561 instructions, 4096-byte window sha256)
+oracle rc=0
+
+--- G2: make nasm (the full differential corpus, C leg) ---
+grep: warning: stray \ before t
+[+] Passed 118/118 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+[~] Skipped 5 test(s) (tests/nasm_skip_c.txt):
+nasm rc=0 (make would have stopped otherwise)
+
+--- G2 detail: the five class-A corpus tests take M1c's UNDELIVERABLE stop ---
+idiv8-overflow   v86c: image does not start with a multiboot header
+idiv16-overflow  v86c: image does not start with a multiboot header
+idiv32-overflow  v86c: image does not start with a multiboot header
+mov_sreg_ud1     v86c: image does not start with a multiboot header
+mov_sreg_ud2     v86c: image does not start with a multiboot header
+
+  (non-fixture mode prints the stop reason; the fixture mode prints the signal the native harness took:)
+idiv8-overflow   (signal SIGFPE)
+mov_sreg_ud1     (signal SIGILL)
+
+  NOTE (correcting the block above): the non-fixture driver takes only the M0 flat image
+  (main.c refuses anything without the multiboot magic), so the five lines above are the
+  DRIVER's format check, not the stop.  The stop's evidence is the fixture line, tied to
+  the mechanism by mutation M7: with the vector not recorded, the same two tests produce
+  NO state (main.c exits 1) and the runner reports 5 tests unable to run -- see
+  results/m1c-gates-mut.txt.  All five (idiv8/16/32-overflow, mov_sreg_ud1/ud2) print the
+  signal their NATIVE fixture carries and PASS in the 118/118 above.
+
+=== FINAL VERIFICATION (frozen tree, Mon Oct 12 02:12:43 PM UTC 2026) ===
+make rc=0
+census-callsites rc=1
+cpu_selftest: 3522 checks, 0 failures
+cpu_m1c_selftest: 193 checks, 0 failures
+transcript-diff rc=0
+[+] Passed 118/118 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+nasm rc=0

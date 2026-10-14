@@ -1,0 +1,18 @@
+THE 1.5 G BOOT'S SERIAL BYTES ARE NOT A GATE, MEASURED:
+two --jit off runs of the same command, same tree:
+bac97364137398daf8cc29be0cc112f06bf5fda5b5e8d18b9567352d53e057ac  results/jit-1/boot-1.5g-jitoff-run1-serial.txt
+7e1fbbb5511737945bcf1f8b6a18cc70633f81bfa117b54f3ef1c3747adafcee  results/jit-1/boot-1.5g-jitoff-run2-serial.txt
+first differing line:
+135c135
+< [   61.367678] devtmpfs: initialized
+---
+> [   61.370276] devtmpfs: initialized
+
+the guest reads the HOST clock (rtc.c CLOCK_REALTIME), so its dmesg timestamps
+drift run to run.  The gate for this boot is the FINAL MACHINE STATE (identical in
+off/on/onjit: in_hlt=0, exception=-1, unimplemented=0, eip=0xc1927800 cs=0x60
+cr0=0x80050033 cr3=0x1ea1000).  The 200 M boot's serial IS deterministic (pinned
+sha fae4924b...) and is compared there.
+
+the spike's own gates-summary.txt shows the same thing (3 different shas across
+on/off/onjit, all rc=0): results/jit-spike/gates-summary.txt

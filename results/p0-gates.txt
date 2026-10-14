@@ -1,0 +1,166 @@
+### P0 gates -- raw output (host: Linux 7.1.8-1-default x86_64, node v26.8.1, GNU ld (GNU Binutils; openSUSE Tumbleweed) 2.45.0.20251103-4)
+### every command is printed with its exit code; build/ starts without nasm artifacts
+
+$ rm -rf build/nasm build/mkfixture
+
+================ G1 ================
+$ make nasm-translate
+python3 tests/nasm_run.py --stage translate
+
+[+] Translated + assembled + linked 123/123 file(s)
+-> exit 0
+
+================ G2 ================
+$ make nasm-fixtures
+cc -std=gnu11 -O2 -Wall -Wextra -o build/mkfixture tests/mkfixture.c
+python3 tests/nasm_run.py --stage fixtures
+
+[+] Generated 123/123 native fixture(s)
+[+] Fixture mix: SIGFPE=3, SIGILL=2, SIGSEGV=5, breakpoint=113
+-> exit 0
+
+================ G3 ================
+(make nasm with the C port absent: the JS reference against the native fixtures)
+$ make nasm
+python3 tests/nasm_run.py --stage run
+Testing arith-optimisations.img
+Testing btc-imm.img
+Testing btc-reg16.img
+Testing btc-reg32.img
+Testing btr-imm.img
+Testing btr-reg16.img
+Testing btr-reg32.img
+Testing bts-imm.img
+Testing bts-reg16.img
+Testing bts-reg32.img
+Testing cmp16-setbe.img
+Testing cmpxchg.img
+Testing cmpxchg-setbe.img
+Testing cmpxchg8b.img
+Testing comiss.img
+Testing cvtpi2ps.img
+Testing cvtps2pi.img
+Testing cvttps2pi.img
+Testing double-segment-prefix.img
+Testing emms.img
+Testing f2xm1.img
+Testing fchs.img
+Testing fdecstp.img
+Testing fdiv.img
+Testing fdiv-zero.img
+Testing fdivr.img
+Testing fincstp.img
+Testing fprem.img
+Testing fprem-distinct.img
+Testing fprem1.img
+Testing fptan.img
+Testing fpu_m80.img
+Testing frndint.img
+Testing fsave_frstor.img
+Testing fscale.img
+Testing fsincos.img
+Testing fsqrt.img
+Testing fst-st-empty-tag.img
+Testing fstenv.img
+Testing fstm80.img
+Testing fstsw.img
+Testing fxtract.img
+Testing fxtract-zero.img
+Testing fyl2x.img
+Testing fyl2x-zero.img
+Testing fyl2xp1.img
+Testing indirect-call.img
+Testing indirect-jump.img
+Testing jcxz.img
+Testing lea-nop.img
+Testing leave16.img
+Testing leave32.img
+Testing loop.img
+Testing loopnz.img
+Testing loopz.img
+Testing mov16.img
+Testing mov_sreg.img
+Testing movaps.img
+Testing movd.img
+Testing movntpd.img
+Testing movntps.img
+Testing movq.img
+Testing packssdw.img
+Testing packsswb.img
+Testing packuswb.img
+Testing paddb.img
+Testing paddd.img
+Testing paddsb.img
+Testing paddsw.img
+Testing paddusb.img
+Testing paddusw.img
+Testing paddw.img
+Testing pand.img
+Testing pandn.img
+Testing pcmpeqb.img
+Testing pcmpeqd.img
+Testing pcmpeqw.img
+Testing pcmpgtb.img
+Testing pcmpgtd.img
+Testing pcmpgtw.img
+Testing pmaddwd.img
+Testing pmulhw.img
+Testing pmullw.img
+Testing pmuludq.img
+Testing por.img
+Testing pshufw.img
+Testing pslld.img
+Testing psllq.img
+Testing psllw.img
+Testing psrad.img
+Testing psraw.img
+Testing psrld.img
+Testing psrlq.img
+Testing psrlw.img
+Testing psubb.img
+Testing psubd.img
+Testing psubsb.img
+Testing psubsw.img
+Testing psubusb.img
+Testing psubusw.img
+Testing psubw.img
+Testing punpckhbw.img
+Testing punpckhdq.img
+Testing punpckhwd.img
+Testing punpcklbw.img
+Testing punpckldq.img
+Testing punpcklwd.img
+Testing push.img
+Testing pushf.img
+Testing pxor.img
+Testing ret-imm.img
+Testing shufps-edgecase.img
+Testing ucomiss.img
+
+[+] Passed 113/113 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 10 were skipped (tests/nasm_skip.txt).
+[~] Skipped 10 test(s) (tests/nasm_skip.txt):
+	idiv16-overflow: reference panics "Unimplemented: #GP handler" (#DE -> empty IDT, hook DEBUG-gated)
+	idiv32-overflow: reference panics "Unimplemented: #GP handler" (#DE -> empty IDT, hook DEBUG-gated)
+	idiv8-overflow: reference panics "Unimplemented: #GP handler" (#DE -> empty IDT, hook DEBUG-gated)
+	jump: reference reports no exception and never halts (MEASURED: keeps executing at eip 0x42b001, past the 2 MiB RAM; fixture: SIGSEGV at 0x2404c7)
+	maskmovdqu: reference reports no exception and halts at 0x80078 (fixture: SIGSEGV at 0x80055)
+	maskmovq: reference reports no exception and halts at 0x8006e (fixture: SIGSEGV at 0x8004f)
+	mov_sreg_ud1: reference panics "Unimplemented: #GP handler" (#UD -> empty IDT, hook DEBUG-gated)
+	mov_sreg_ud2: reference panics "Unimplemented: #GP handler" (#UD -> empty IDT, hook DEBUG-gated)
+	pop_esp: reference reports no exception and halts at 0x8002f (fixture: SIGSEGV at 0x80023)
+	pop_esp2: reference reports no exception and halts at 0x80026 (fixture: SIGSEGV at 0x80023)
+-> exit 0
+
+================ G4 ================
+$ make
+make: Nothing to be done for 'all'.
+-> exit 0
+
+$ make oracle
+python3 tests/model.py --out results/expected.json > /dev/null
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.txt
+python3 tests/check_transcript.py results/expected.json results/transcript.txt
+check_transcript: transcript matches tests/model.py (8 GPRs, EFLAGS, EIP, 561 instructions, 4096-byte window sha256)
+-> exit 0
+

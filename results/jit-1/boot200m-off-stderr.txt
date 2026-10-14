@@ -1,0 +1,4 @@
+v86c boot: kernel 7729664 bytes sha256 ce1f6dad86646efaa980fed238c7ed7e4189fd90c30f99a3788df9c9429cc5c9
+v86c boot: firmware 65536 bytes at 0xf0000, option ROM 512 bytes at 0xc0000, memory 64 MiB, hda none, initrd none, cmdline 'console=ttyS0'
+v86c boot: reset cs=0xf000 eip=0xffff0
+v86c boot: 200095214 instructions, in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0

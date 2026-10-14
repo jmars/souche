@@ -1,0 +1,16 @@
+=== M2-1F G1 -- the port-0x80 probe, BEFORE and AFTER (D-F1) ===
+
+--- BEFORE: results/m2-1f-io-prefix.c copied over src/hw/io.c ---
+build RC=0
+PORT-0x80 PROBE: `out 0x80, 0x21` -> stopped=1 io_port_write8(port=0x80, PORT_DIAG) (no device claimed this port at this width)| `in al, 0x80` -> value=0x00 stopped=1 io_port_read8(port=0x80, PORT_DIAG) (no device claimed this port at this width)
+hw_selftest: 225 checks, 24 failures
+FAIL lines: 24
+selftest exit status (THE GATE): 1
+
+--- AFTER: the tree's src/hw/io.c restored ---
+build RC=0
+PORT-0x80 PROBE: `out 0x80, 0x21` -> stopped=0 | `in al, 0x80` -> value=0xff stopped=0 
+hw_selftest: 225 checks, 0 failures
+FAIL lines: 0
+selftest exit status (THE GATE): 0
+

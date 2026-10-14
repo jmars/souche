@@ -1,0 +1,14 @@
+== perf-5-ab: c2b-stats vs c4-hoist-uops  pairs=4
+load-before=10.79 10.38 9.45
+a    real 3.301s  instr=ok state=ok serial=ok
+b    real 3.136s  instr=ok state=ok serial=ok
+b    real 3.126s  instr=ok state=ok serial=ok
+a    real 3.276s  instr=ok state=ok serial=ok
+a    real 3.292s  instr=ok state=ok serial=ok
+b    real 3.144s  instr=ok state=ok serial=ok
+b    real 3.190s  instr=ok state=ok serial=ok
+a    real 3.331s  instr=ok state=ok serial=ok
+load-after=10.59 10.35 9.46
+c2b-stats  n=4 best 3.276 median 3.296 worst 3.331
+c4-hoist-uops n=4 best 3.126 median 3.140 worst 3.190
+ratio c2b-stats/c4-hoist-uops: best 0.9542x  median 0.9525x  (>1 means c4-hoist-uops is slower)

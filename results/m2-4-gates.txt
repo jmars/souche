@@ -1,0 +1,189 @@
+### G3
+=== make clean && make
+$ sh -c make clean && make
+rc=0
+as --32 -o build/minibios.o tests/minibios.asm
+ld -m elf_i386 -Ttext 0 -o build/minibios.elf build/minibios.o
+ld: warning: cannot find entry symbol _start; defaulting to 00000000
+objcopy -O binary -j .text build/minibios.elf build/minibios.bin
+python3 gen/minibios_bin.py build/minibios.bin build/minibios_embed.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -I src -Wl,--gc-sections -o build/v86c src/main.c build/minibios_embed.c build/cpu/cpu_state.o build/cpu/flags.o build/cpu/memory.o build/cpu/paging.o build/cpu/arith.o build/cpu/modrm.o build/cpu/misc_instr.o build/cpu/string.o build/cpu/instructions.o build/cpu/instructions_0f.o build/cpu/sse_instr.o build/cpu/softfloat.o build/cpu/fpu.o build/cpu/exceptions.o build/cpu/pic.o build/cpu/cpu.o build/cpu/exec_boundary.o build/hw/io.o build/hw/bus.o build/hw/pit.o build/hw/rtc.o build/hw/dma.o build/hw/ps2.o build/hw/acpi.o build/hw/pci.o build/hw/machine.o build/hw/uart.o build/hw/kernel.o build/hw/ide.o build/hw/virtio.o build/hw/virtio_console.o build/cpu/interpreter_gen.o build/sf/softfloat.o
+
+=== make selftest (cpu_selftest + cpu_m1c_selftest + hw_selftest)
+$ make selftest
+rc=0
+PASS kernel: the bzImage boot params, the option ROM, the real image (338 checks so far)
+v86c: ide: ide0.0: ATA read: Outside of disk (lba 8192 count 1)
+v86c: ide: ide0.0: unimplemented ATA command 0x3d: ABORT
+PASS ide: geometry, IDENTIFY, READ SECTORS/DMA, the error status, the ATAPI command set (445 checks so far)
+PASS virtio: the PCI function and its capability chain, feature negotiation, the queues, both directions of the console, the IRQ route (541 checks so far)
+hw_selftest: 541 checks, 0 failures, 0 skipped
+
+=== make oracle
+$ make oracle
+rc=0
+python3 tests/model.py --out results/expected.json > /dev/null
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.txt
+python3 tests/check_transcript.py results/expected.json results/transcript.txt
+check_transcript: transcript matches tests/model.py (8 GPRs, EFLAGS, EIP, 561 instructions, 4096-byte window sha256)
+
+=== make transcript-diff (the diff must be EMPTY)
+$ make transcript-diff
+rc=0
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+./build/v86c tests/test.img 1000000 > results/transcript.c.txt
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.js.txt
+diff -u results/transcript.js.txt results/transcript.c.txt
+milestone: the C transcript is byte-identical to the reference's
+
+=== make determinism
+$ make determinism
+rc=0
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.run1.txt
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.run2.txt
+diff -u results/transcript.run1.txt results/transcript.run2.txt
+determinism: two consecutive oracle runs are byte-identical
+
+=== make nasm (the differential corpus)
+$ make nasm
+rc=0
+[~] Skipped 5 test(s) (tests/nasm_skip_c.txt):
+	jump: src/cpu/cpu.c:83: assert(!in_mapped_range(phys_addr)) failed -- the fixture's jump reaches a region v86's flat 2 MiB memory model maps differently (P0 class B, the same model gap as pop_esp); unchanged since M1a-4
+	maskmovdqu: P0 class B: the native fixture expects a #GP at 0x80055 where the port writes below the stack, but address 0 is plain guest RAM in v86's flat model, so neither the reference nor the port faults. MEASURED: the JS reference leg gives the port's exact actual eip/exception (0x80078 / None)
+	maskmovq: P0 class B: same as maskmovdqu (fixture #GP at 0x8004f, port and JS reference both report eip 0x8006e / no exception)
+	pop_esp: the native fixture expects a #GP at 0x80023 from a store to address 0; address 0 is plain guest RAM in v86's flat 2 MiB memory model, so neither the reference nor the port takes a fault (P0 class B) and the C leg halts instead -- the same emulator-model gap, not a port defect
+	pop_esp2: same as pop_esp: the fixture's SIGSEGV comes from the host MMU writing to address 0, which the emulator does not model (P0 class B)
+
+[+] Passed 118/118 tests.
+
+-rwxr-xr-x. 1 jaye jaye 65536 Oct 12 19:18 build/minibios-80m.bin
+-rwxr-xr-x. 1 jaye jaye 65536 Oct 12 19:17 build/minibios.bin
+### G4a: THE M2-2 BOOT -- no --hda, 64 MiB, the M2-2 firmware, console=ttyS0
+port rc=0
+v86c boot: reset cs=0xf000 eip=0xffff0
+v86c boot: 1000094817 instructions, in_hlt=0, exception=-1, unimplemented=0, eip=0xc1927800 cs=0x60 cr0=0x80050033 cr3=0x1ea1000
+port: panic=2 e820=4 lines=294
+
+reference rc=0
+reference: {"instructions":1000014528,"limit":1000000000,"in_hlt":0,"eip":"0xc1927800","cr0":"0x80050033","cr3":"0x1ea1000","cs":"0x60","exception":null,"serial_bytes":17901,"virtio_console_bytes":0,"virtio_console_in_sent":false}
+reference: panic=2 e820=4 lines=297
+
+--- the M2-2 C-versus-reference diff (timestamps stripped; the VGA and the clock are the
+--- divergences M2-2/M2-3 already named)
+71c71
+<  Console: colour EGA 80x25
+---
+>  Console: colour dummy device 80x25
+141c141
+<  audit: type=2000 audit(1791832746.709:1): state=initialized audit_enabled=0 res=1
+---
+>  audit: type=2000 audit(1791832719.883:1): state=initialized audit_enabled=0 res=1
+164,167d163
+<  pci 0000:00:12.0: [1234:1111] type 00 class 0x030000
+<  pci 0000:00:12.0: BAR 0 [mem 0xe0000000-0xe07fffff pref]
+<  pci 0000:00:12.0: ROM [mem 0xfebe0000-0xfebeffff pref]
+<  pci 0000:00:12.0: Video device with shadowed ROM at [mem 0x000c0000-0x000dffff]
+176,178d171
+<  pci 0000:00:12.0: vgaarb: setting as boot VGA device
+<  pci 0000:00:12.0: vgaarb: bridge control possible
+<  pci 0000:00:12.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
+180a174
+>  hrtimer: interrupt took 14497001 ns
+198a193
+>  pci 0000:00:00.0: quirk_passive_release+0x0/0x90 took 39300 usecs
+199a195
+>  pci 0000:00:00.0: quirk_natoma+0x0/0x40 took 14838 usecs
+200a197
+>  pci 0000:00:01.0: quirk_isa_dma_hangs+0x0/0x50 took 29563 usecs
+223,224d219
+<  rtc_cmos rtc_cmos: registered as rtc0
+<  rtc_cmos rtc_cmos: setting system clock to 2026-10-12T19:19:09 UTC (1791832749)
+225a221,222
+>  rtc_cmos rtc_cmos: registered as rtc0
+
+### G4b: THE M2-3 BOOT -- --hda + initrd, 80 MiB: the disk must still attach
+port rc=0
+v86c boot: 1400069788 instructions, in_hlt=0, exception=-1, unimplemented=0, eip=0xc1928515 cs=0x60 cr0=0x80050033 cr3=0x2c02000
+    GUEST-INIT: start, uname = 6.6.134-0-lts
+    [  731.167767] ata2.00: ATAPI: v86 ATAPI CD-ROM, 1.00, max MWDMA2
+    [  731.264408] ata1.00: ATA-0: v86 ATA HD, 1.00, max MWDMA2
+    [  731.293180] ata1.00: 8192 sectors, multi 0: LBA48 
+    [  734.032440] sd 0:0:0:0: [sda] 8192 512-byte logical blocks: (4.19 MB/4.00 MiB)
+    [  734.052776] sd 0:0:0:0: [sda] Write Protect is off
+    [  734.929300] sd 0:0:0:0: [sda] Write cache: disabled, read cache: enabled, doesn't support DPO or FUA
+    [  734.964342] sd 0:0:0:0: [sda] Preferred minimum I/O size 512 bytes
+    [  737.215843]  sda: sda1
+    [  737.372397] sd 0:0:0:0: [sda] Attached SCSI disk
+    GUEST-INIT: waited 27 round(s) for /sys/block/sda
+    GUEST-INIT: /sys/block:
+    [1;36mram0[m   [1;36mram10[m  [1;36mram12[m  [1;36mram14[m  [1;36mram2[m   [1;36mram4[m   [1;36mram6[m   [1;36mram8[m   [1;36msda[m
+    GUEST-INIT: /proc/partitions:
+       8        0       4096 sda
+       8        1       1024 sda1
+    GUEST-INIT: first 64 sectors of /dev/sda, md5:
+    GUEST-INIT: dmesg (ata/sd/scsi):
+    [  731.167767] ata2.00: ATAPI: v86 ATAPI CD-ROM, 1.00, max MWDMA2
+    [  731.264408] ata1.00: ATA-0: v86 ATA HD, 1.00, max MWDMA2
+    [  731.293180] ata1.00: 8192 sectors, multi 0: LBA48 
+    [  734.032440] sd 0:0:0:0: [sda] 8192 512-byte logical blocks: (4.19 MB/4.00 MiB)
+    [  734.052776] sd 0:0:0:0: [sda] Write Protect is off
+    [  734.064583] sd 0:0:0:0: [sda] Mode Sense: 00 3a 00 00
+    [  734.929300] sd 0:0:0:0: [sda] Write cache: disabled, read cache: enabled, doesn't support DPO or FUA
+    [  734.964342] sd 0:0:0:0: [sda] Preferred minimum I/O size 512 bytes
+    [  737.215843]  sda: sda1
+    [  737.372397] sd 0:0:0:0: [sda] Attached SCSI disk
+    GUEST-INIT: end
+
+### G4c: the same boot on the reference, for the same lines
+reference rc=0
+reference: {"instructions":1400047884,"limit":1400000000,"in_hlt":0,"eip":"0xc1928515","cr0":"0x80050033","cr3":"0x2cad000","cs":"0x60","exception":null,"serial_bytes":19256,"virtio_console_bytes":0,"virtio_console_in_sent":false}
+    GUEST-INIT: start, uname = 6.6.134-0-lts
+    [   18.128653] ata2.00: ATAPI: v86 ATAPI CD-ROM, 1.00, max MWDMA2
+    [   18.129904] ata1.00: ATA-0: v86 ATA HD, 1.00, max MWDMA2
+    [   18.130179] ata1.00: 8192 sectors, multi 0: LBA48 
+    [   18.165393] sd 0:0:0:0: [sda] 8192 512-byte logical blocks: (4.19 MB/4.00 MiB)
+    [   18.171463] sd 0:0:0:0: [sda] Write Protect is off
+    [   18.172311] sd 0:0:0:0: [sda] Write cache: disabled, read cache: enabled, doesn't support DPO or FUA
+    [   18.173148] sd 0:0:0:0: [sda] Preferred minimum I/O size 512 bytes
+    [   18.230519]  sda: sda1
+    [   18.237937] sd 0:0:0:0: [sda] Attached SCSI disk
+    GUEST-INIT: waited 28 round(s) for /sys/block/sda
+    GUEST-INIT: /sys/block:
+    [1;36mram0[m   [1;36mram10[m  [1;36mram12[m  [1;36mram14[m  [1;36mram2[m   [1;36mram4[m   [1;36mram6[m   [1;36mram8[m   [1;36msda[m
+    GUEST-INIT: /proc/partitions:
+       8        0       4096 sda
+       8        1       1024 sda1
+    GUEST-INIT: first 64 sectors of /dev/sda, md5:
+    GUEST-INIT: dmesg (ata/sd/scsi):
+    [   18.128653] ata2.00: ATAPI: v86 ATAPI CD-ROM, 1.00, max MWDMA2
+    [   18.129904] ata1.00: ATA-0: v86 ATA HD, 1.00, max MWDMA2
+    [   18.130179] ata1.00: 8192 sectors, multi 0: LBA48 
+    [   18.165393] sd 0:0:0:0: [sda] 8192 512-byte logical blocks: (4.19 MB/4.00 MiB)
+    [   18.171463] sd 0:0:0:0: [sda] Write Protect is off
+    [   18.171740] sd 0:0:0:0: [sda] Mode Sense: 00 3a 00 00
+    [   18.172311] sd 0:0:0:0: [sda] Write cache: disabled, read cache: enabled, doesn't support DPO or FUA
+    [   18.173148] sd 0:0:0:0: [sda] Preferred minimum I/O size 512 bytes
+    [   18.230519]  sda: sda1
+    [   18.237937] sd 0:0:0:0: [sda] Attached SCSI disk
+    GUEST-INIT: end
+
+### G1: THE VIRTIO CONSOLE GATE itself (both legs, one command line each)
+port:      ./build/v86c --bzimage tests/images/vmlinuz-i386 3000000000 --cmdline 'console=hvc0 console=ttyS0' \
+               --initrd tests/images/guest-initramfs-virtio.img --bios build/minibios-80m.bin \
+               --memory 80 --virtio-console results/m2-4-c-virtio.txt \
+               --virtio-console-in results/m2-4-virtio-in.txt --serial results/m2-4-c-serial.txt
+reference: node oracle/run-boot.mjs tests/images/vmlinuz-i386 build/minibios-80m.bin 3000000000 \
+               'console=hvc0 console=ttyS0' --initrd tests/images/guest-initramfs-virtio.img \
+               --memory 80 --virtio-console results/m2-4-js-virtio.txt \
+               --virtio-console-in results/m2-4-virtio-in.txt > results/m2-4-js-serial.txt
+(captured by the unit; the transcripts are in results/m2-4-{c,js}-{serial,virtio}.txt)
+
+### G1b: THE SAME KERNEL WITH console=hvc0 ALONE -- the kernel's log where no other
+###      console exists (ttyS0 receives 30 bytes, the virtio console 2154)
+the transcripts: results/m2-4-hvconly-serial.txt (30 bytes) and
+                 results/m2-4-hvconly-virtio.txt (2154 bytes)
+    [  260.376934] Warning: unable to open an initial console.
+    [  511.833258] printk: console [hvc0] enabled
+    GUEST-INIT: read back from /dev/hvc0: [VIRTIO-INPUT16]
+    GUEST-INIT: read back from /dev/hvc0: [VIRTIO-INPUT16]

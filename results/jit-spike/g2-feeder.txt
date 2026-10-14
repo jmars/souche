@@ -1,0 +1,52 @@
+=== Q2: the two routes, measured 2026-10-13T11:25:48Z load=23.92 24.50 22.76 ===
+
+--- (1) THE BYTE STREAMS (must be comparable: both take n in edi, seed in esi) ---
+dynasm: block is 27 bytes
+dynasm bytes:
+  53 41 89 f8 31 c0 31 db 89 f1 31 ff 01 d8 29 d9
+  31 f7 41 ff c8 75 f5 89 f8 5b c3
+encoder: block is 27 bytes
+encoder bytes:
+  53 41 89 f8 31 c0 31 db 89 f1 31 ff 01 d8 29 d9
+  31 f7 41 ff c8 75 f5 89 f8 5b c3
+
+--- (2) THE STREAMS DIFFED ---
+IDENTICAL BYTE STREAMS: 53 41 89 f8 31 c0 31 db 89 f1 31 ff 01 d8 29 d9
+
+--- (3) WHAT EACH ADDS TO AN APE (the driver binaries, cosmocc, same -O2 flags) ---
+1474158  /tmp/jitspike/dynasm-run.com.dbg
+1468910  /tmp/jitspike/enc-run.com.dbg
+text+data+rodata from the ELF symbol sizes:
+   text	   data	    bss	    dec	    hex	filename
+ 233472	  40960	  61504	 335936	  52040	/tmp/jitspike/dynasm-run.com.dbg
+ 229376	  40960	  61504	 331840	  51040	/tmp/jitspike/enc-run.com.dbg
+
+--- (4) THE BUILD-TIME TOOL: minilua ---
+7771 /home/jaye/futaie/baliveau/src/vendor/luajit/src/host/minilua.c
+-rwxr-xr-x. 1 jaye jaye 154720 Oct 13 10:58 /tmp/jitspike/minilua-host
+dynasm.lua + dasm_x86.lua + dasm_proto.h + dasm_x86.h bytes:
+31016  /home/jaye/futaie/baliveau/src/vendor/luajit/dynasm/dynasm.lua
+75655  /home/jaye/futaie/baliveau/src/vendor/luajit/dynasm/dasm_x86.lua
+2062  /home/jaye/futaie/baliveau/src/vendor/luajit/dynasm/dasm_proto.h
+16503  /home/jaye/futaie/baliveau/src/vendor/luajit/dynasm/dasm_x86.h
+our encoder:
+  75 x64enc.h
+ 229 x64enc.c
+ 304 total
+generated header: 53 lines, action list 40 bytes
+
+--- (2b) THE FULL STREAMS DIFFED (all bytes, not one line) ---
+IDENTICAL: the two routes' full 27-byte streams are byte-for-byte equal
+
+--- (5) DOES minilua FIT THE cosmocc TOOLCHAIN? (build it with cosmocc) ---
+
+real	0m3.806s
+user	0m6.525s
+sys	0m0.393s
+-rwxr-xr-x. 1 jaye jaye 960521 Oct 13 11:25 /tmp/jitspike/minilua-cosmo
+and it can run the DynASM step:
+
+real	0m0.007s
+user	0m0.005s
+sys	0m0.003s
+the cosmocc-built minilua produces the SAME generated header as the host-built one

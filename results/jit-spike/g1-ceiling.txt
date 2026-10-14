@@ -1,0 +1,42 @@
+shape M, inline TLB (102 bytes):
+  53 41 89 f0 41 89 d3 31 db 45 89 d9 45 89 da 41
+  c1 e9 0c 41 81 e1 ff 03 00 00 4e 8b 0c cf 4d 85
+  c9 74 3f 41 81 e2 ff 0f 00 00 43 8b 04 11 01 c3
+  45 89 d9 45 89 da 41 c1 e9 0c 41 81 e1 ff 03 00
+  00 4e 8b 0c cf 4d 85 c9 74 18 41 81 e2 ff 0f 00
+  00 43 0f b6 4c 11 04 21 d9 41 ff c8 75 ab 89 d8
+  5b c3 89 d8 5b c3
+shape M, folded page (26 bytes):
+  53 41 89 f0 31 db 8b 07 01 c3 42 0f b6 4f 04 21
+  d9 41 ff c8 75 f0 89 d8 5b c3
+shape A, pure ALU (27 bytes):
+  53 41 89 f8 31 c0 31 db 89 f1 31 ff 01 d8 29 d9
+  31 f7 41 ff c8 75 f5 89 f8 5b c3
+iterations per arm: 1000000, rounds: 9
+shape M: reference sum 0x4a4fc000, native inline-TLB 0x4a4fc000 -> MATCH
+shape M: reference sum 0x4a4fc000, native folded     0x4a4fc000 -> MATCH
+shape A: reference edi 0x0, native 0x0 -> MATCH
+shape M2 (12-uop block): reference 0x666cba00, emulator ebx 0x666cba00 -> MATCH
+  [check] instrs=6000001 in_hlt=1 unimplemented=0 eip=0x100e cs=0x8 uop_pending=0
+shape M through the emulator (cache on): ebx 0x4a4fc000 -> MATCH
+
+arm                           guest instr    best ms   best ns/GI    med ns/GI    best MIPS
+M emulator (uop cache on)         6000001       82.3       13.722       17.458        72.88
+M emulator (cache off)            6000001      121.0       20.163       24.927        49.59
+M2 emulator (12-uop block)       12000001      170.3       14.195       18.699        70.45
+M native inline-TLB            3072000000      524.3        0.171        0.323      5859.08
+M native folded-page           3072000000      215.4        0.070        0.097     14259.30
+A emulator (uop cache on)         5000001       53.9       10.773       14.160        92.83
+A emulator (cache off)            5000001       73.4       14.688       18.477        68.08
+A native                       2560000000      191.3        0.075        0.100     13381.79
+
+RATIO (same process, same work, interleaved; 9 rounds, host load in the record):
+  from BEST round   -- shape M: emulator/native-inline-TLB 80.4x, emulator/native-folded 195.7x, shape A: 144.2x
+  from MEDIAN round -- shape M: emulator/native-inline-TLB 54.1x, emulator/native-folded 180.9x, shape A: 142.2x
+  PER-BLOCK-ENTRY OVERHEAD, measured by block length alone: the SAME mix in a 12-uop block costs 14.20 ns/GI vs 13.72 in the 6-uop block
+  what the uop cache already buys on these shapes: M on/off = 1.43x, A on/off = 1.30x
+host loadavg: 26.18 24.59 22.40 42/1363 1578072
+uop-cache: lookups 29400000 (hits 29399969 = 100.00%, decodes 31, decode-fails 0)
+uop-cache: instructions 227200031 (uops 227200031, mid-batch fallback steps 0, interpreted_run instructions 0 -> fallback 0.000%)
+uop-cache: flushes 2272, discards 0, SMC aborts 0, invalidated blocks 0, cache clears 50, block ends 0
+uop-cache: arena peak 13/65536 uops, block peak 1/8192

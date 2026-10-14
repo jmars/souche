@@ -1,0 +1,4 @@
+reference: kernel 7729664 bytes sha256 ce1f6dad86646efaa980fed238c7ed7e4189fd90c30f99a3788df9c9429cc5c9
+reference: firmware at 0xf0000, option ROM 512 bytes at 0xc0000, cmdline 'console=ttyS0'
+reference: reset eip=0xffff0 cs=0xf000
+reference: {"instructions":1500011042,"limit":1500000000,"in_hlt":0,"eip":"0xc1927800","cr0":"0x80050033","cr3":"0x1ea1000","cs":"0x60","exception":null,"serial_bytes":17900}

@@ -1,0 +1,3 @@
+uop-cache: lookups 15317241 (hits 15316502 = 100.00%, decodes 739, decode-fails 0)
+uop-cache: instructions 200095213 (uops 200095213, mid-batch fallback steps 0, interpreted_run instructions 0 -> fallback 0.000%)
+uop-cache: flushes 257574, discards 0, SMC aborts 10, invalidated blocks 230, cache clears 0, block ends 4217

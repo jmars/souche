@@ -1,0 +1,124 @@
+PERF-3 M1 gates, 2026-10-12T22:19:38+00:00, host Linux 7.1.8-1-default, load 9.17 10.29 9.36
+
+=== G5: the plan's ss10 file hashes, first-12 sha256 NOW
+    src/cpu/cpu.c                    42668edf380d
+    src/cpu/cpu.h                    15916226b0c4
+    src/cpu/cpu_state.h              05dbf8ce2628
+    src/cpu/memory.c                 9ca61a23817a
+    src/cpu/paging.c                 949942c6b762
+    src/cpu/modrm.c                  48c5e9bd2163
+    src/cpu/modrm.h                  351b15f2a4dc
+    src/cpu/instructions.c           bcab21bad3ae
+    src/cpu/instructions_0f.c        1dbad114ef66
+    src/cpu/string.c                 70f7f84193ad
+    src/cpu/cpu_state.c              5b46e29f2198
+    src/cpu/interpreter_gen.c        ba3ed9f6920f
+    gen/interpreter_c.js             c01a320897b8
+    v86/gen/x86_table.js             272218337ad6
+    results/cpu-port-plan.md         7b585fdeca61
+    Makefile                         93aa54348c3d
+
+=== G1: make clean && make -j16 (cosmocc, -Wall -Wextra -Werror)
+    rc=0  (18s)
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/hw/io.o src/hw/io.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/hw/bus.o src/hw/bus.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/hw/pit.o src/hw/pit.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/hw/rtc.o src/hw/rtc.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/hw/dma.o src/hw/dma.c
+    (the ONLY diagnostic is the pre-existing minibios ld warning:) 
+    1
+=== G1b: the emitted uop_gen.c is byte-reproducible
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+    rc=0 (identical after re-running the generator)
+    (and after DELETING it:)
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends
+161a23a8f44cc3f6b47c560ff55449a668aadbbe124725d09844ad53a1456b15  src/cpu/uop_gen.c
+161a23a8f44cc3f6b47c560ff55449a668aadbbe124725d09844ad53a1456b15  /tmp/uop_gen.c.1
+
+=== G1c: make uop-unity (the decoder + its tables inside the shipped unity TU)
+$ make uop-unity
+    python3 gen/unity_c.py -o build/uop_unity.c src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/paging.c src/cpu/arith.c src/cpu/modrm.c src/cpu/misc_instr.c src/cpu/string.c src/cpu/instructions.c src/cpu/instructions_0f.c src/cpu/sse_instr.c src/cpu/softfloat.c src/cpu/fpu.c src/cpu/exceptions.c src/cpu/pic.c src/cpu/cpu.c src/cpu/exec_boundary.c src/cpu/interpreter_gen.c src/cpu/uop_cache.c src/cpu/uop_gen.c
+    unity_c.py: 20 sources -> build/uop_unity.c
+    /home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -I . -I src -c -o build/uop_unity.o build/uop_unity.c
+    uop-unity: the decoder and its tables compile inside the shipped unity TU
+    rc=0
+    the shipped TU's own source list (18 = the step-1 list, the two new files NOT in it):
+    src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/paging.c src/cpu/arith.c src/cpu/modrm.c src/cpu/misc_instr.c src/cpu/string.c src/cpu/instructions.c src/cpu/instructions_0f.c src/cpu/sse_instr.c src/cpu/softfloat.c src/cpu/fpu.c src/cpu/exceptions.c src/cpu/pic.c src/cpu/cpu.c src/cpu/exec_boundary.c src/cpu/interpreter_gen.c
+
+=== G2/G4a: make selftest (all four suites; the uop decode checker is the fourth)
+$ make selftest
+        blocks produced                  : 31691 (block-end 8056, page-end 1, cap 23630)
+      (b) address comparisons vs modrm_resolve: 1426777 (failures 0)
+          forms: 16-bit 356307, 32-bit 1053569, sib 16901
+    uop_cache_selftest: 7934349 checks, 0 failures
+    rc=0   (full output: results/perf-3/selftest.txt)
+    cpu_selftest: 3522 checks, 0 failures
+    hw_selftest: 541 checks, 0 failures, 0 skipped
+    uop_cache_selftest: 7934349 checks, 0 failures
+    FAIL lines: 0
+
+=== G2 evidence: the decode checker's own output (from the same run)
+uop_cache_selftest coverage:
+  dispatch cases decoded (base+0F) x (16+32 keys), of 1024: 996
+    not reached: 00F 026 02E 036 03E 062 064 065 066 067 0F0 0F1 0F2 0F3 10F 126 12E 136 13E 162 164 165 166 167 1F0 1F1 1F2 1F3
+  streams probed                     : 31954
+  instructions decoded and checked   : 1555069
+    length PINNED by the interpreter : 1551551 (6829 of them via a rel-branch target)
+    length unpinned                  : 402 (of which 201 named/allowed)
+    no descriptor (block falls back) : 263 (interpreter agreed: 263)
+    (a) DECODE-TIME stops the decoder has a descriptor for (must be 0): 0
+    runtime stops (sandbox-caused, counted not compared)        : 48 (8 distinct) e.g. iret: CS selector is invalid (upstream panic "Unimplemented: CS selector
+  io ports reached by probes (stubbed): 164384 reads, 164384 writes
+    probes skipped: the body is DBG_ASSERT(false) in this build : 108
+    probes skipped: 16-bit mode + 66 prefix + a control transfer, where the
+                   port's own upstream-inherited dbg_assert!s fire on guest-reachable operands : 1
+    probes whose advance was not a length (delivery/far transfer): 6586
+    blocks produced                  : 31691 (block-end 8056, page-end 1, cap 23630)
+  (b) address comparisons vs modrm_resolve: 1426777 (failures 0)
+      forms: 16-bit 356307, 32-bit 1053569, sib 16901
+uop_cache_selftest: 7934349 checks, 0 failures
+
+=== G4b: make nasm
+$ make nasm
+    [~] Skipped 5 test(s) (tests/nasm_skip_c.txt):
+    	jump: src/cpu/cpu.c:83: assert(!in_mapped_range(phys_addr)) failed -- the fixture's jump reaches a region v86's flat 2 MiB memory model maps differently (P0 class B, the same model gap as pop_esp); unchanged since M1a-4
+    	maskmovdqu: P0 class B: the native fixture expects a #GP at 0x80055 where the port writes below the stack, but address 0 is plain guest RAM in v86's flat model, so neither the reference nor the port faults. MEASURED: the JS reference leg gives the port's exact actual eip/exception (0x80078 / None)
+    	maskmovq: P0 class B: same as maskmovdqu (fixture #GP at 0x8004f, port and JS reference both report eip 0x8006e / no exception)
+    	pop_esp: the native fixture expects a #GP at 0x80023 from a store to address 0; address 0 is plain guest RAM in v86's flat 2 MiB memory model, so neither the reference nor the port takes a fault (P0 class B) and the C leg halts instead -- the same emulator-model gap, not a port defect
+    	pop_esp2: same as pop_esp: the fixture's SIGSEGV comes from the host MMU writing to address 0, which the emulator does not model (P0 class B)
+    rc=0
+=== G4c: make transcript-diff
+$ make transcript-diff
+    node gen/interpreter_c.js
+    [+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+    ./build/v86c tests/test.img 1000000 > results/transcript.c.txt
+    node oracle/run.mjs tests/test.img 1000000 > results/transcript.js.txt
+    diff -u results/transcript.js.txt results/transcript.c.txt
+    milestone: the C transcript is byte-identical to the reference's
+    rc=0
+
+=== G4d: make bench (7 runs on the shipped build/v86c), PLUS the attribution arm
+===      (the shipped unity TU without PERF-3's files vs with them, interleaved)
+    run  6: real 4.533s user 4.494s sys 0.026s  instr=200095214
+    run  7: real 4.453s user 4.410s sys 0.033s  instr=200095214
+    load-after=15.15 12.12 10.15
+    n=7
+    real: best 4.453  median 4.541  worst 4.627
+    user: best 4.410  median 4.494  worst 4.557
+    cpu (user+sys): best 4.443  median 4.526
+    MIPS at best real: 44.93   at median real: 44.06
+    MIPS at best real: 45.33   at median real: 45.33
+    real: best 4.376  median 4.376  worst 4.376
+    MIPS at best real: 45.73   at median real: 45.73
+    real: best 4.391  median 4.391  worst 4.391
+    MIPS at best real: 45.57   at median real: 45.57
+    real: best 4.429  median 4.429  worst 4.429
+    MIPS at best real: 45.18   at median real: 45.18
+    
+    == summary (every interleaved sample in results/perf-3/samples.txt) ==
+       OUT  n=6  best 4.391  median 4.419  all=[4.454, 4.423, 4.439, 4.415, 4.414, 4.391]
+       IN   n=6  best 4.376  median 4.409  all=[4.411, 4.425, 4.391, 4.408, 4.376, 4.429]
+       median difference (IN - OUT): -0.010 s = -0.21%  -- inside this host's drift at the load printed above
+
+=== done 2026-10-12T22:23:44+00:00

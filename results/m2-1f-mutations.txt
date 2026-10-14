@@ -1,0 +1,26 @@
+=== M2-1F asymmetry (each mutation alone, then restored) ===
+Mon Oct 12 03:29:27 PM UTC 2026
+CASE F1.1 unclaimed read8 answers 0xFF: PASS (mutated -> hw_selftest FAILS, 11 failing assertion(s))
+    FAIL src/hw/hw_selftest.c:322: io_port_read8(0x1234) == 0xFF (got 0x0, want 0xff)
+    FAIL src/hw/hw_selftest.c:344: io_port_read8(0x1234) == 0xFF (got 0x0, want 0xff)
+    restored -> hw_selftest PASSES again (225 checks, 0 failures)
+CASE F1.2 unclaimed write8 is discarded: PASS (mutated -> hw_selftest FAILS, 5 failing assertion(s))
+    FAIL src/hw/hw_selftest.c:338: !interpreted_unimplemented
+    FAIL io: the port map, the unclaimed-port contract (D-F1), the mmap half + R1F (37 checks so far)
+    restored -> hw_selftest PASSES again (225 checks, 0 failures)
+results/m2-1f-mut-rig.sh: line 20: 3984987 Aborted                    (core dumped) ./build/hw_selftest > /tmp/m2-1f-mut-run.log 2>&1
+CASE F2.1 microtick divides by 1000: PASS (mutated -> hw_selftest FAILS, 16 failing assertion(s))
+    FAIL src/hw/hw_selftest.c:252: microtick() == 0.001
+    FAIL src/hw/hw_selftest.c:254: microtick() == 1.0
+    restored -> hw_selftest PASSES again (225 checks, 0 failures)
+CASE F2.2 the clock's named constant: PASS (mutated -> hw_selftest FAILS, 24 failing assertion(s))
+    FAIL src/hw/hw_selftest.c:252: microtick() == 0.001
+    FAIL src/hw/hw_selftest.c:254: microtick() == 1.0
+    restored -> hw_selftest PASSES again (225 checks, 0 failures)
+results/m2-1f-mut-rig.sh: line 20: 3987990 Aborted                    (core dumped) ./build/hw_selftest > /tmp/m2-1f-mut-run.log 2>&1
+CASE F2.3 the PM timer's rate: PASS (mutated -> hw_selftest FAILS, 3 failing assertion(s))
+    FAIL src/hw/hw_selftest.c:279: acpi_get_timer(microtick()) == (int32_t)round(1.0 * (PMTIMER_FREQ_HZ / 1000.0)) (got 0x369e99, want 0xdfc)
+    FAIL src/hw/hw_selftest.c:281: acpi_get_timer(microtick()) == (int32_t)round(2.0 * (PMTIMER_FREQ_HZ / 1000.0)) (got 0x6d3d32, want 0x1bf7)
+    restored -> hw_selftest PASSES again (225 checks, 0 failures)
+
+=== all 5 mutations were VISIBLE (and the restore is green) ===

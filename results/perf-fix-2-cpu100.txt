@@ -1,0 +1,29 @@
+mutations written: get_phys_eip's only; and both
+cpu.c mutation: 1 line(s) differ (get_phys_eip's site only)
+cpu.c mutation: 2 line(s) differ (both guards)
+unity_c.py: 20 sources -> build/pf2-cpu100/after.c
+-------------------------------------------------------------------
+THE RUN  (the corpus's own jump image: the guest that reaches the site)
+
+  the tree as it ships  : results/perf-fix-2-cpu100.sh: line 108: 1216518 Aborted                    (core dumped) ( ( "$WORK/v86c-after" "$IMG" "$LIMIT" --fixture > "$WORK/after.out" 2> "$WORK/after.err" ) 2> /dev/null )
+rc=134  src/cpu/cpu.c:100: [31;1massert(!in_mapped_range(phys_addr)) failed[0m (cosmoaddr2line /home/j
+  that line DELETED     : results/perf-fix-2-cpu100.sh: line 111: 1216605 Aborted                    (core dumped) ( ( "$WORK/v86c-dropped" "$IMG" "$LIMIT" --fixture > "$WORK/dropped.out" 2> "$WORK/dropped.err" ) 2> /dev/null )
+rc=134  /home/jaye/futaie/souche/build/pf2-cpu100/cpu.c:112: [31;1massert(!in_mapped_range(phys_addr)) 
+
+  BOTH guards DELETED   : results/perf-fix-2-cpu100.sh: line 117: 1216689 Segmentation fault         (core dumped) ( ( "$WORK/v86c-both" "$IMG" "$LIMIT" --fixture > "$WORK/both.out" 2> "$WORK/both.err" ) 2> /dev/null )
+rc=139  
+                       (no stop message at all)
+
+  the dropped leg's first host signal, if any:
+    /home/jaye/futaie/souche/build/pf2-cpu100/cpu.c:112: [31;1massert(!in_mapped_range(phys_addr)) failed[0m (cosmoaddr2line /home/jaye/futaie/souche/build/pf2-cpu100/v86c-dropped.com.dbg 4710b7 4719d9 471ad0 471b51 471c09 40e0ba 401c0f 40272c 4015f4)
+  the both-deleted leg's first host signal, if any:
+
+  the port's own terminal state, when a leg survives to print one:
+    dropped  no fixture printed (the leg did not reach a state it could report)
+    both     no fixture printed (the leg did not reach a state it could report)
+-------------------------------------------------------------------
+  THE REFERENCE's own answer on the same image (its release build has no such check):
+    rc=3 guest did not halt within 1000000 instructions
+    no fixture printed (Expecting value: line 1 column 1 (char 0))
+-------------------------------------------------------------------
+raw: build/pf2-cpu100/{after,dropped}.{out,err}, build/pf2-cpu100/ref.{out,err}

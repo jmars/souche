@@ -1,0 +1,14 @@
+== perf-5-ab: same-bin-A vs same-bin-B  pairs=4
+load-before=11.13 12.43 12.00
+a    real 2.966s  instr=ok state=ok serial=ok
+b    real 2.993s  instr=ok state=ok serial=ok
+b    real 2.976s  instr=ok state=ok serial=ok
+a    real 2.983s  instr=ok state=ok serial=ok
+a    real 2.981s  instr=ok state=ok serial=ok
+b    real 2.973s  instr=ok state=ok serial=ok
+b    real 2.976s  instr=ok state=ok serial=ok
+a    real 2.968s  instr=ok state=ok serial=ok
+load-after=14.03 12.97 12.18
+same-bin-A n=4 best 2.966 median 2.974 worst 2.983
+same-bin-B n=4 best 2.973 median 2.976 worst 2.993
+ratio same-bin-A/same-bin-B: best 1.0024x  median 1.0005x  (>1 means same-bin-B is slower)

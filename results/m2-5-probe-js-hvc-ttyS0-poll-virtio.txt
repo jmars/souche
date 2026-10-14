@@ -1,0 +1,42 @@
+ata1: PATA max MWDMA2 cmd 0x1f0 ctl 0x3f6 bmdma 0xb400 irq 14 lpm-pol 0
+ata2: PATA max MWDMA2 cmd 0x170 ctl 0x376 bmdma 0xb408 irq 15 lpm-pol 0
+sched_clock: Marking stable (1207900189, 8621827)->(1219518275, -2996259)
+ata2.00: ATAPI: v86 ATAPI CD-ROM, 1.00, max MWDMA2
+ata1.00: ATA-0: v86 ATA HD, 1.00, max MWDMA2
+ata1.00: 8192 sectors, multi 0: LBA48 
+scsi 0:0:0:0: Direct-Access     ATA      v86 ATA HD       n/a  PQ: 0 ANSI: 5
+sd 0:0:0:0: [sda] 8192 512-byte logical blocks: (4.19 MB/4.00 MiB)
+sd 0:0:0:0: [sda] Write Protect is off
+sd 0:0:0:0: [sda] Write cache: disabled, read cache: enabled, doesn't support DPO or FUA
+sd 0:0:0:0: [sda] Preferred minimum I/O size 512 bytes
+scsi 1:0:0:0: CD-ROM            SONY     CD-ROM CDU-1000  1.1a PQ: 0 ANSI: 1 CCS
+ sda: sda1
+sd 0:0:0:0: [sda] Attached SCSI disk
+clocksource: timekeeping watchdog on CPU0: Marking clocksource 'tsc' as unstable because the skew is too large:
+clocksource:                       'pit' wd_nsec: 479719774 wd_now: eac52474 wd_last: eabc688b mask: ffffffff
+clocksource:                       'tsc' cs_nsec: 495715858 cs_now: 2d82353e6 cs_last: 2ba974dd4 mask: ffffffffffffffff
+clocksource:                       Clocksource 'tsc' skewed 15996084 ns (15 ms) over watchdog 'pit' interval of 479719774 ns (479 ms)
+clocksource:                       'tsc' is current clocksource.
+tsc: Marking TSC unstable due to clocksource watchdog
+TSC found unstable after boot, most likely due to broken BIOS. Use 'tsc=unstable'.
+sched_clock: Marking unstable (1576272522, 8621827)<-(1587890858, -2996259)
+clocksource: Not enough CPUs to check clocksource 'tsc'.
+clocksource: Switched to clocksource pit
+Freeing initrd memory: 896K
+Freeing unused kernel image (initmem) memory: 228K
+Write protecting kernel text and read-only data: 2324k
+Run /init as init process
+GUEST-INIT: waited 0 round(s) for /dev/hvc0
+GUEST-INIT: /dev/hvc*: /dev/hvc0 /dev/hvc1 /dev/hvc2 /dev/hvc3 /dev/hvc4 /dev/hvc5 /dev/hvc6 /dev/hvc7 
+GUEST-INIT: /sys/bus/virtio/devices: virtio0 
+GUEST-INIT: /proc/interrupts:
+GUEST-INIT: /proc/devices hvc entries: 1
+GUEST-INIT: dmesg, the kernel's own virtio/console lines:
+Kernel command line: console=hvc0 console=ttyS0 idle=poll
+printk: legacy console [ttyS0] enabled
+printk: legacy console [hvc0] enabled
+GUEST-INIT: waiting for host input
+VIRTIO-INPUT16
+GUEST-INIT: read back from /dev/hvc0: [VIRTIO-INPUT16]
+GUEST-INIT: end
+reboot: System halted

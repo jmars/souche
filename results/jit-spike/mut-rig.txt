@@ -1,0 +1,22 @@
+=== jit-spike mut-rig: the stale-block probe, shown able to fail ===
+ARM 0 (control, unmutated): PASS (exit 0) -- the probe is GREEN before any mutation
+ARM 1: CAUGHT (exit 1) -- the probe FAILED on the mutated tree
+    FAIL src/cpu/jit_selftest.c:328: jit_stats.invalidations >= invalidations_before + 1
+    FAIL src/cpu/jit_selftest.c:339: page2 == NULL
+    FAIL src/cpu/jit_selftest.c:349: ram32(DATA_ADDR) == 0x22 (got 0x11, want 0x22)
+ARM 2: CAUGHT (exit 139) -- the probe FAILED on the mutated tree
+    FAIL src/cpu/jit_selftest.c:339: page2 == NULL
+ARM 3: CAUGHT (exit 1) -- the probe FAILED on the mutated tree
+    FAIL src/cpu/jit_selftest.c:328: jit_stats.invalidations >= invalidations_before + 1
+    FAIL src/cpu/jit_selftest.c:339: page2 == NULL
+    FAIL src/cpu/jit_selftest.c:349: ram32(DATA_ADDR) == 0x22 (got 0x11, want 0x22)
+ARM 4: CAUGHT (exit 1) -- the probe FAILED on the mutated tree
+    FAIL src/cpu/jit_selftest.c:328: jit_stats.invalidations >= invalidations_before + 1
+    FAIL src/cpu/jit_selftest.c:339: page2 == NULL
+    FAIL src/cpu/jit_selftest.c:349: ram32(DATA_ADDR) == 0x22 (got 0x11, want 0x22)
+ARM 5: CAUGHT (exit 1) -- the probe FAILED on the mutated tree
+    FAIL src/cpu/jit_selftest.c:408: jit_stats.deferred_frees == deferred + 1 (got 0x0, want 0x1)
+    jit-selftest: 29 checks, 1 failures
+ARM R (restored tree, rebuilt): PASS (exit 0) -- no mutation left behind
+
+arms: 5 mutated + 1 control + 1 restoration; CAUGHT 5/5; failures 0

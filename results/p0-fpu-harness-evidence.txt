@@ -1,0 +1,55 @@
+EVIDENCE for the two x87 harness fixes -- arbitrated by the GUEST ITSELF.
+Probes (built with the same tests/nasm2gas.py + as + ld geometry as the corpus):
+  fpuprobe.asm  : fnstsw -> [0x101100], fnstcw -> [0x101104]; fldz/fld1/fdivp;
+                  fnstsw -> [0x101110], fnstcw -> [0x101114]
+  fpuprobe2.asm : fnstenv -> [0x101120]; fnstsw -> [0x101100]; fldz/fld1/fdivp;
+                  fnstenv -> [0x101140]; fnstsw -> [0x101110]
+  stprobe.asm   : pcmpeqd xmm0/xmm3, fldpi, fld1   (nonzero x87+xmm, TOP=6)
+fnstenv writes the guest's OWN cw/swd/TAG word into the 8 KiB window that the oracle
+compares, so those words are shared truth -- both legs must and do agree on them
+(verified below). The fixture is then read off the same stop.
+
+== fpuprobe ==
+   guest (both legs): fnstsw before=0x0000 fnstcw before=0x037f fnstsw after=0x3800 fnstcw after=0x037f
+   guest vs reference agree on every compared memory word: True
+   st   reference (v86, logical)          : [0, 0, 0, 0, 0, 0, 0, 1]
+   st   OLD fixture (planner's mkfixture.c): [1.0, 0.0, 0.0, 0.0, 'invalid', 0.0, 0.0, 0.0]
+   st   NEW fixture (tests/mkfixture.c)    : [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+   STATUS  reference=0x00003800  OLD=0xffff3800  NEW=0x00003800
+   TAGWORD reference=0x00007fff  OLD=0xffff0080  NEW=0xffff7fff
+
+== fpuprobe2 ==
+   guest fnstenv BEFORE: cw=0xffff037f swd=0xffff0000 TAG=0xffffffff
+   guest fnstenv AFTER : cw=0xffff037f swd=0xffff3800 TAG=0xffff7fff
+   st   reference (v86, logical)          : [0, 0, 0, 0, 0, 0, 0, 1]
+   st   OLD fixture (planner's mkfixture.c): [1.0, 0.0, 0.0, 0.0, 'invalid', 0.0, 0.0, 0.0]
+   st   NEW fixture (tests/mkfixture.c)    : [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+   STATUS  reference=0x00003800  OLD=0xffff3800  NEW=0x00003800
+   TAGWORD reference=0x00007fff  OLD=0xffff0080  NEW=0xffff7fff
+
+== stprobe ==
+   st   reference (v86, logical)          : [1, 3.141592653589793, 0, 0, 0, 0, 0, 0]
+   st   OLD fixture (planner's mkfixture.c): [0.0, 0.0, 1.0, 3.141592653589793, 0.0, 0.0, 0.0, 0.0]
+   st   NEW fixture (tests/mkfixture.c)    : [1.0, 3.141592653589793, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+   STATUS  reference=0x00003000  OLD=0xffff3000  NEW=0x00003000
+   TAGWORD reference=0x00000fff  OLD=0xffff00c0  NEW=0xffff0fff
+
+READING (each claim MEASURED on this host):
+ 1. The guest's own status word (fnstsw / fnstenv.swd, identical in both legs) is
+    0x3800 in fpuprobe/fpuprobe2 and 0x3000 in stprobe. The reference reports exactly
+    those; the OLD fixture reports them | 0xffff0000 -> masked by run.js's
+    FPU_STATUS_MASK the value becomes 0xFDD5 and can never match. Only the TAG word
+    gets the kernel's convert_from_fxsr | 0xffff0000 -- the status word does not.
+ 2. The guest's own tag word (fnstenv.TAG, identical in both legs) is 0x7fff after
+    the fdivp. The reference reports 0x7fff too; the NEW fixture's low half is
+    0x7fff; the OLD fixture's low half is 0x0080, which is the raw ABRIDGED fxsave
+    FTW byte, not the full tag word.
+ 3. st ordering: the reference reports logical st0..st7 (0.0 then pi for stprobe,
+    where TOP=6). The NEW fixture matches; the OLD fixture reports the slot at
+    (top+i)&7 of a buffer whose slots are ALREADY logical -- one rotation too many
+    (stprobe: [0,0,1.0,pi,..] instead of [1.0,pi,0,..]). The OLD tag test also
+    invents an "invalid" entry (fpuprobe st4) that neither the guest nor the
+    reference has.
+ 4. xmm: both fixtures agree with the reference (pcmpeqd pattern), i.e. the
+    512-byte fxsave image ptrace returns really does carry xmm at 0xa0 (see
+    results/p0-fpu-layout-rawdump.txt).

@@ -1,0 +1,172 @@
+=== R3F GATES (raw) ===
+
+--- PRE-FIX BASELINE (captured BEFORE the emitter edit; the tree was unmodified)
+=== PRE-FIX selftest
+PASS instr: the moffs forms, the A4-AF string wrappers (incl. a segment override), arpl, the 66/67/F0/F2/F3 prefixes and the segment prefixes
+PASS instr: read-modify-write across a page boundary (virt_boundary), no write on a fault, the string slow path's partial effects
+cpu_selftest: 2968 checks, 0 failures
+rc=0
+=== PRE-FIX nasm
+[+] Passed 21/21 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 102 were skipped (tests/nasm_skip_c.txt).
+  make transcript-diff: empty diff, rc=0
+
+Mon Oct 12 12:19:56 AM UTC 2026
+
+--- G2: make (regenerates the dispatcher, rebuilds the APE)
+make: Nothing to be done for 'all'.
+G2 make rc=0
+
+--- G2: the M0 transcript diff must still be EMPTY
+./build/v86c tests/test.img 1000000 > results/transcript.c.txt
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.js.txt
+diff -u results/transcript.js.txt results/transcript.c.txt
+milestone: the C transcript is byte-identical to the reference's
+G2 transcript-diff rc=0
+sha256 of the two transcripts:
+8bb8eca53f5c5ccbb1ef2c532c2d4a493180a5e5b44da87bceb6c0a8f094cd61  results/transcript.js.txt
+8bb8eca53f5c5ccbb1ef2c532c2d4a493180a5e5b44da87bceb6c0a8f094cd61  results/transcript.c.txt
+
+--- G3a: make nasm (baseline was 21/21 passed + 102 named skips)
+G3 nasm rc=0
+[+] Passed 21/21 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 102 were skipped (tests/nasm_skip_c.txt).
+
+--- G3b: make selftest (baseline was 2968 checks / 0 failures)
+PASS instr: read-modify-write across a page boundary (virt_boundary), no write on a fault, the string slow path's partial effects
+cpu_selftest: 2968 checks, 0 failures
+rc=0
+
+--- G2 (cont.): a from-scratch rebuild of the generated dispatcher + the APE
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o build/cpu/interpreter_gen.o src/cpu/interpreter_gen.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -I src -o build/v86c src/main.c build/cpu/cpu_state.o build/cpu/flags.o build/cpu/memory.o build/cpu/paging.o build/cpu/arith.o build/cpu/modrm.o build/cpu/misc_instr.o build/cpu/string.o build/cpu/instructions.o build/cpu/instructions_0f.o build/cpu/cpu.o build/cpu/exec_boundary.o build/cpu/interpreter_gen.o
+G2 rebuild rc=0
+
+--- G4: generator reproducibility -- emit twice, diff the two emissions
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 839 implemented, 1083 unimplemented, 843 names defined (unchanged)
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 839 implemented, 1083 unimplemented, 843 names defined (unchanged)
+diff of the two emissions (empty = reproducible):
+G4 diff rc=0
+122853fc5f96f3918792383a7f9966923158cb781e3d9dff36b93caa96da1133  /tmp/r3f-gen1.c
+122853fc5f96f3918792383a7f9966923158cb781e3d9dff36b93caa96da1133  src/cpu/interpreter_gen.c
+
+=== G1: THE N1 PROBE RIG (results/r3f-probe.sh) ===
+pre-fix dispatcher sha256 == the sha R3's review recorded: bb53cf87e7969d27277e6d7c549bf7e1a6571b0b826386b32dfcb87e693c6f93
+-------------------------------------------------------------------
+PROBE IMAGES
+  MODE=1      48 bytes  sha256=ba29be02afde2b36
+  MODE=2      48 bytes  sha256=4978ecbe7f2ea131
+  MODE=0      47 bytes  sha256=fe1c64b023d067f5
+  MODE=4      55 bytes  sha256=971e36a4e474a0b3
+  MODE=5      49 bytes  sha256=f076a2b2066e3591
+  the sequence (MODE=1, disassembled):
+    00100020 <_start>:
+      100020:	fc                   	cld
+      100021:	b8 11 11 11 11       	mov    $0x11111111,%eax
+      100026:	f2 0f 6f             	(bad)
+      100029:	c1 a3 00 11 10 00 f4 	shll   $0xf4,0x101100(%ebx)
+-------------------------------------------------------------------
+MODE=1 (build/r3f-probe/probe.1.img)
+results/r3f-probe.sh: line 66: 3014974 Aborted                    (core dumped) sh -c "$2 $3 $LIMIT" > "$WORK/out.txt" 2> "$WORK/err.txt"
+  BEFORE N1 (v86c-prefix) exit=134  build/r3f-probe/interpreter_gen.prefix.c:10484: [31;1massert((prefixes_ & (0x20 | 0x10 | 0x08))
+  AFTER N1/N2 (v86c)     exit=1    v86c: unimplemented: instructions_0f::instr_0F6F_reg; transcript not produced
+  JS REFERENCE           exit=0    transcript=1965 bytes
+-------------------------------------------------------------------
+MODE=2 (build/r3f-probe/probe.2.img)
+  BEFORE N1 (v86c-prefix) exit=1    v86c: unimplemented: instructions_0f::instr_0F6F_reg; transcript not produced
+  AFTER N1/N2 (v86c)     exit=1    v86c: unimplemented: instructions_0f::instr_0F6F_reg; transcript not produced
+  JS REFERENCE           exit=0    transcript=1965 bytes
+-------------------------------------------------------------------
+MODE=0 (build/r3f-probe/probe.0.img)
+  BEFORE N1 (v86c-prefix) exit=1    v86c: unimplemented: instructions_0f::instr_0F6F_reg; transcript not produced
+  AFTER N1/N2 (v86c)     exit=1    v86c: unimplemented: instructions_0f::instr_0F6F_reg; transcript not produced
+  JS REFERENCE           exit=0    transcript=1965 bytes
+-------------------------------------------------------------------
+MODE=4 (build/r3f-probe/probe.4.img)
+  BEFORE N1 (v86c-prefix) exit=1    v86c: unimplemented: instructions_0f::instr_0F6E_reg; transcript not produced
+  AFTER N1/N2 (v86c)     exit=1    v86c: unimplemented: instructions_0f::instr_0F6E_reg; transcript not produced
+  JS REFERENCE           exit=0    transcript=1965 bytes
+-------------------------------------------------------------------
+MODE=5 (build/r3f-probe/probe.5.img)
+  BEFORE N1 (v86c-prefix) exit=0    
+  AFTER N1/N2 (v86c)     exit=0    
+  JS REFERENCE           exit=0    transcript=1965 bytes
+-------------------------------------------------------------------
+REFERENCE: is the stray prefix observable?  (MODE=1 vs MODE=2, equal length)
+  the only differing lines:
+    -    "sha256": "ba29be02afde2b3684e59818e54b8b7776f50eff3ff70b5dc7883c7daca7de2a"
+    +    "sha256": "4978ecbe7f2ea1318d989724b729c38b4b78723dc374c7181cd3df560a76878d"
+REFERENCE: MODE=1 vs MODE=0 (the unprefixed encoding, one byte shorter)
+    -    "eip": "0x00100030",
+    +    "eip": "0x0010002f",
+    -    "bytes": 48,
+    +    "bytes": 47,
+    -    "sha256": "ba29be02afde2b3684e59818e54b8b7776f50eff3ff70b5dc7883c7daca7de2a"
+    +    "sha256": "fe1c64b023d067f506b4f033163138a766915ff2e3a0c75aeaa0999793e89592"
+REFERENCE: does the fallthrough body EXECUTE, or is the prefix merely ignored?
+  MODE=4 puts eax into mm0 and then runs the STRAY-F2 store form (plain body: store
+  mm0 to 0x101000); MODE=5 writes the same 8 bytes with a GPR store.
+  MODE=4 memory_window sha256 = 638e120965028b3898ca0f7610fe21e1a7450266d5bf8a0402b970f1c9009ef9
+  MODE=5 memory_window sha256 = 638e120965028b3898ca0f7610fe21e1a7450266d5bf8a0402b970f1c9009ef9
+  EQUAL -> the reference EXECUTED the unprefixed body: the 8 bytes at 0x101000 are
+  mm0 = 0x0000000011111111, byte for byte what the GPR store writes.
+-------------------------------------------------------------------
+exit codes recorded under build/r3f-probe/rc.*
+rig rc=0
+
+=== G1 (cont.): the stand-in-body state probe (results/r3f-inject.sh) ===
+  emitter copy: 3 lines patched (import path, CPU_DIR, OUT_FILE); nothing else differs
+[+] r3f-inject/interpreter_gen.c: 1922 call sites, 841 implemented, 1081 unimplemented, 845 names defined (unchanged)
+-------------------------------------------------------------------
+MODE=1  stand-in binary exit=0  transcript=1965 bytes 
+          vs the JS reference: DIFFERS --
+            -        "0xfff000000x00000000",
+            +        "0x000000000x00000000",
+            -      "stack_empty": "0x00",
+            +      "stack_empty": "0xff",
+            -      "tag_word": "0x5554"
+            +      "tag_word": "0xffff"
+MODE=2  stand-in binary exit=0  transcript=1965 bytes 
+          vs the JS reference: DIFFERS --
+            -        "0xfff000000x00000000",
+            +        "0x000000000x00000000",
+            -      "stack_empty": "0x00",
+            +      "stack_empty": "0xff",
+            -      "tag_word": "0x5554"
+            +      "tag_word": "0xffff"
+MODE=0  stand-in binary exit=0  transcript=1965 bytes 
+          vs the JS reference: DIFFERS --
+            -        "0xfff000000x00000000",
+            +        "0x000000000x00000000",
+            -      "stack_empty": "0x00",
+            +      "stack_empty": "0xff",
+            -      "tag_word": "0x5554"
+            +      "tag_word": "0xffff"
+-------------------------------------------------------------------
+the shipped binary (no stand-in) on the same images, for contrast:
+  MODE=1 exit=1 v86c: unimplemented: instructions_0f::instr_0F6F_reg; transcript not produced
+  MODE=2 exit=1 v86c: unimplemented: instructions_0f::instr_0F6F_reg; transcript not produced
+  MODE=0 exit=1 v86c: unimplemented: instructions_0f::instr_0F6F_reg; transcript not produced
+rig rc=0
+
+=== G1 (cont.): the fallthrough reachability sweep (results/r3f-fallthrough.mjs) ===
+PREFIX-GROUP FALLTHROUGH INPUTS (reachable from guest bytes; the arm R3/N1 changed)
+  groups with a prefix arm and a no-prefix body : 91
+  distinct stray prefix combinations             : 174
+  of those, whose STRAY prefix is 66             : 2
+  of those, whose STRAY prefix is F2             : 89
+  of those, whose STRAY prefix is F3             : 83
+  whose UNPREFIXED body is IMPLEMENTED in src/cpu: 0
+
+  => EVERY reachable fallthrough runs a body the port has not written yet, so the
+     port STOPS BY NAME at it (unimplemented_instruction); the reference EXECUTES
+     that body.  That divergence is the UNPORTED BODY (M1b), not the fallthrough:
+     the same encoding without the stray prefix stops in exactly the same place.
+
+  table opcode  sse  arms           stray     unimplemented body
+  0F    0x0F13  true 66x1           F2+F3     instr_0F13_mem instr_0F13_reg
+  0F    0x0F14  true 66x1           F2+F3     instr_0F14_mem instr_0F14_reg
+  0F    0x0F15  true 66x1           F2+F3     instr_0F15_mem instr_0F15_reg
+  0F    0x0F16  true 66x1,F3x1      F2        instr_0F16_mem instr_0F16_reg
+  0F    0x0F17  true 66x1           F2+F3     instr_0F17_mem instr_0F17_reg
+  0F    0x0F28  true 66x1           F2+F3     instr_0F28_mem instr_0F28_reg

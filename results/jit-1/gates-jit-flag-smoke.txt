@@ -1,0 +1,13 @@
+$ ./build/v86c tests/test.img 1000 --jit on --jit-stats --uop-cache-stats
+v86c: jit: x86-64 W^X code pages: mmap RW -> write -> mprotect RX. Linux VERIFIED (this build); macOS MAP_JIT/Apple Silicon UNVERIFIED (pthread_jit_write_protect_np is NOT used); Windows UNVERIFIED. aarch64 has no backend: compiled out (V86C_JIT_X64=0).
+uop-cache: lookups 130 (hits 126 = 96.92%, decodes 4, decode-fails 0)
+uop-cache: instructions 561 (uops 561, mid-batch fallback steps 0, interpreted_run instructions 0 -> fallback 0.000%)
+uop-cache: flushes 1, discards 0, SMC aborts 0, invalidated blocks 0, cache clears 0, block ends 1
+uop-cache: arena peak 166/65536 uops, block peak 4/8192
+jit: pages alloc 1, blocks compiled 1 (live 1), lookups 4 (hits 0, misses 4), execs 15, invalidations 0, deferred frees 0, W^X flips 1, pool exhausted 0
+jit: blocks compiled 1 in 4 attempts (reused 0); refused: fit 3 (149 uops), pool 0, empty 0
+jit: block sizes: compiled 17 uops in 3727 bytes (mean 219.2 B/uop, 17.0 uops/block); refused-for-fit 149 uops in 3 blocks (mean 49.7)
+jit: uops executed inlined 1 / called 114 -> 0.87% dynamic inlined (compile-time: 3 with a recipe, 163 without)
+jit: recipe table: 1 entry -- see results/jit-1-m1.md for what M2 adds
+$ ./build/v86c tests/test.img 1000 --uop-cache off --jit on
+jit: --jit needs the uop cache's invalidation hooks; --uop-cache off was also given. JIT off.

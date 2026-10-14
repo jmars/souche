@@ -1,0 +1,180 @@
+minibios: option ROM at c000
+Linux version 6.12.19 (build@debian) (gcc (Debian 14.2.0-19) 14.2.0, GNU ld (GNU Binutils for Debian) 2.44) #1 2025-03-13 12:15:54 UTC
+BIOS-provided physical RAM map:
+BIOS-e820: [mem 0x0000000000000000-0x000000000009fbff] usable
+BIOS-e820: [mem 0x000000000009fc00-0x000000000009ffff] reserved
+BIOS-e820: [mem 0x00000000000f0000-0x00000000000fffff] reserved
+BIOS-e820: [mem 0x0000000000100000-0x0000000004ffffff] usable
+process: using polling idle threads
+Notice: NX (Execute Disable) protection cannot be enabled: non-PAE kernel!
+tsc: Detected 1000.000 MHz processor
+last_pfn = 0x5000 max_arch_pfn = 0x100000
+x86/PAT: PAT support disabled because CONFIG_X86_PAT is disabled in the kernel.
+x86/PAT: Configuration [0-7]: WB  WT  UC- UC  WB  WT  UC- UC  
+RAMDISK: [mem 0x04000000-0x040dffff]
+80MB LOWMEM available.
+  mapped low ram: 0 - 05000000
+  low ram: 0 - 05000000
+Zone ranges:
+  Normal   [mem 0x0000000000001000-0x0000000004ffffff]
+Movable zone start for each node
+Early memory node ranges
+  node   0: [mem 0x0000000000001000-0x000000000009efff]
+  node   0: [mem 0x0000000000100000-0x0000000004ffffff]
+Initmem setup node 0 [mem 0x0000000000001000-0x0000000004ffffff]
+On node 0, zone Normal: 1 pages in unavailable ranges
+On node 0, zone Normal: 97 pages in unavailable ranges
+[mem 0x05000000-0xffffffff] available for PCI devices
+clocksource: refined-jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645519600211568 ns
+Kernel command line: console=hvc0 console=ttyS0 tsc=unstable idle=poll
+tsc: Marking TSC unstable due to boot parameter
+random: crng init done
+Dentry cache hash table entries: 16384 (order: 4, 65536 bytes, linear)
+Inode-cache hash table entries: 8192 (order: 3, 32768 bytes, linear)
+Built 1 zonelists, mobility grouping on.  Total pages: 20382
+mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+Checking if this processor honours the WP bit even in supervisor mode...Ok.
+SLUB: HWalign=64, Order=0-1, MinObjects=0, CPUs=1, Nodes=1
+NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+printk: legacy console [ttyS0] enabled
+Calibrating delay loop (skipped), value calculated using timer frequency.. 2000.00 BogoMIPS (lpj=4000000)
+Last level iTLB entries: 4KB 64, 2MB 64, 4MB 64
+Last level dTLB entries: 4KB 64, 2MB 0, 4MB 64, 1GB 0
+CPU: Intel Pentium III (Katmai) (family: 0x6, model: 0x7, stepping: 0x3)
+Speculative Store Bypass: Vulnerable
+L1TF: Kernel not compiled for PAE. No mitigation for L1TF
+x86/fpu: x87 FPU will use FXSAVE
+pid_max: default: 32768 minimum: 301
+Mount-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+Performance Events: 
+no APIC, boot with the "lapic" boot parameter to force-enable it.
+no hardware sampling interrupt available.
+PMU not available due to virtualization, using software events only.
+signal: max sigframe size: 1440
+Memory: 75488K/81528K available (1917K kernel code, 635K rwdata, 404K rodata, 228K init, 208K bss, 5748K reserved, 0K cma-reserved)
+devtmpfs: initialized
+clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645041785100000 ns
+futex hash table entries: 256 (order: -1, 3072 bytes, linear)
+clocksource: pit: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 1601818034827 ns
+PCI: Using configuration type 1 for base access
+SCSI subsystem initialized
+PCI: Probing PCI hardware
+PCI host bridge to bus 0000:00
+pci_bus 0000:00: root bus resource [io  0x0000-0xffff]
+pci_bus 0000:00: root bus resource [mem 0x00000000-0xffffffff]
+pci_bus 0000:00: No busn resource found for root bus, will use [bus 00-ff]
+pci 0000:00:00.0: [8086:1237] type 00 class 0x060000 conventional PCI endpoint
+pci 0000:00:01.0: [8086:7000] type 00 class 0x060100 conventional PCI endpoint
+pci 0000:00:0c.0: [1af4:1043] type 00 class 0x000200 conventional PCI endpoint
+pci 0000:00:0c.0: BAR 0 [io  0xb800-0xb83f]
+pci 0000:00:0c.0: BAR 1 [io  0xb900-0xb90f]
+pci 0000:00:0c.0: BAR 2 [io  0xb700-0xb70f]
+pci 0000:00:0c.0: BAR 3 [io  0xb600-0xb60f]
+pci 0000:00:1e.0: [8086:7010] type 00 class 0x010180 conventional PCI endpoint
+pci 0000:00:1e.0: BAR 0 [io  0x01f0-0x01f7]
+pci 0000:00:1e.0: BAR 2 [io  0x0170-0x0177]
+pci 0000:00:1e.0: BAR 4 [io  0xb400-0xb40f]
+pci 0000:00:1e.0: BAR 0 [io  0x01f0-0x01f7]: legacy IDE quirk
+pci 0000:00:1e.0: BAR 1 [io  0x03f6]: legacy IDE quirk
+pci 0000:00:1e.0: BAR 2 [io  0x0170-0x0177]: legacy IDE quirk
+pci 0000:00:1e.0: BAR 3 [io  0x0376]: legacy IDE quirk
+pci_bus 0000:00: busn_res: [bus 00-ff] end is updated to 00
+vgaarb: loaded
+clocksource: Switched to clocksource pit
+pci_bus 0000:00: resource 4 [io  0x0000-0xffff]
+pci_bus 0000:00: resource 5 [mem 0x00000000-0xffffffff]
+pci 0000:00:01.0: PIIX3: Enabling Passive Release
+pci 0000:00:00.0: Limiting direct PCI/PCI transfers
+pci 0000:00:01.0: Activating ISA DMA hang workarounds
+PCI: CLS 0 bytes, default 64
+platform rtc_cmos: registered platform RTC device (no PNP device found)
+Unpacking initramfs...
+workingset: timestamp_bits=30 max_order=15 bucket_order=0
+Block layer SCSI generic (bsg) driver version 0.4 loaded (major 254)
+io scheduler mq-deadline registered
+io scheduler kyber registered
+Serial: 8250/16550 driver, 4 ports, IRQ sharing disabled
+serial8250: ttyS0 at I/O 0x3f8 (irq = 4, base_baud = 115200) is a 16550A
+scsi host0: ata_piix
+scsi host1: ata_piix
+ata1: PATA max MWDMA2 cmd 0x1f0 ctl 0x3f6 bmdma 0xb400 irq 14 lpm-pol 0
+ata2: PATA max MWDMA2 cmd 0x170 ctl 0x376 bmdma 0xb408 irq 15 lpm-pol 0
+printk: legacy console [hvc0] enabled
+ata1.00: ATA-0: v86 ATA HD, 1.00, max MWDMA2
+ata1.00: 8192 sectors, multi 0: LBA48 
+scsi 0:0:0:0: Direct-Access     ATA      v86 ATA HD       n/a  PQ: 0 ANSI: 5
+sd 0:0:0:0: [sda] 8192 512-byte logical blocks: (4.19 MB/4.00 MiB)
+sd 0:0:0:0: [sda] Write Protect is off
+sd 0:0:0:0: [sda] Write cache: disabled, read cache: enabled, doesn't support DPO or FUA
+sd 0:0:0:0: [sda] Preferred minimum I/O size 512 bytes
+ata2.00: ATAPI: v86 ATAPI CD-ROM, 1.00, max MWDMA2
+ sda: sda1
+scsi 1:0:0:0: CD-ROM            SONY     CD-ROM CDU-1000  1.1a PQ: 0 ANSI: 1 CCS
+sd 0:0:0:0: [sda] Attached SCSI disk
+Freeing initrd memory: 896K
+Freeing unused kernel image (initmem) memory: 228K
+Write protecting kernel text and read-only data: 2324k
+Run /init as init process
+GUEST-INIT: start, uname = 6.12.19
+GUEST-INIT: cmdline = console=hvc0 console=ttyS0 tsc=unstable idle=poll
+GUEST-INIT: dmesg, the kernel's own ATA/PCI/SCSI lines:
+libata version 3.00 loaded.
+pci 0000:00:00.0: [8086:1237] type 00 class 0x060000 conventional PCI endpoint
+pci 0000:00:01.0: [8086:7000] type 00 class 0x060100 conventional PCI endpoint
+pci 0000:00:0c.0: [1af4:1043] type 00 class 0x000200 conventional PCI endpoint
+pci 0000:00:0c.0: BAR 0 [io  0xb800-0xb83f]
+pci 0000:00:0c.0: BAR 1 [io  0xb900-0xb90f]
+pci 0000:00:0c.0: BAR 2 [io  0xb700-0xb70f]
+pci 0000:00:0c.0: BAR 3 [io  0xb600-0xb60f]
+pci 0000:00:1e.0: [8086:7010] type 00 class 0x010180 conventional PCI endpoint
+pci 0000:00:1e.0: BAR 0 [io  0x01f0-0x01f7]
+pci 0000:00:1e.0: BAR 2 [io  0x0170-0x0177]
+pci 0000:00:1e.0: BAR 4 [io  0xb400-0xb40f]
+pci 0000:00:1e.0: BAR 0 [io  0x01f0-0x01f7]: legacy IDE quirk
+pci 0000:00:1e.0: BAR 1 [io  0x03f6]: legacy IDE quirk
+pci 0000:00:1e.0: BAR 2 [io  0x0170-0x0177]: legacy IDE quirk
+pci 0000:00:1e.0: BAR 3 [io  0x0376]: legacy IDE quirk
+pci 0000:00:01.0: PIIX3: Enabling Passive Release
+pci 0000:00:00.0: Limiting direct PCI/PCI transfers
+pci 0000:00:01.0: Activating ISA DMA hang workarounds
+ata1: PATA max MWDMA2 cmd 0x1f0 ctl 0x3f6 bmdma 0xb400 irq 14 lpm-pol 0
+ata2: PATA max MWDMA2 cmd 0x170 ctl 0x376 bmdma 0xb408 irq 15 lpm-pol 0
+ata1.00: ATA-0: v86 ATA HD, 1.00, max MWDMA2
+ata1.00: 8192 sectors, multi 0: LBA48 
+scsi 0:0:0:0: Direct-Access     ATA      v86 ATA HD       n/a  PQ: 0 ANSI: 5
+sd 0:0:0:0: [sda] 8192 512-byte logical blocks: (4.19 MB/4.00 MiB)
+sd 0:0:0:0: [sda] Write Protect is off
+sd 0:0:0:0: [sda] Mode Sense: 00 3a 00 00
+sd 0:0:0:0: [sda] Write cache: disabled, read cache: enabled, doesn't support DPO or FUA
+sd 0:0:0:0: [sda] Preferred minimum I/O size 512 bytes
+ata2.00: ATAPI: v86 ATAPI CD-ROM, 1.00, max MWDMA2
+ sda: sda1
+scsi 1:0:0:0: CD-ROM            SONY     CD-ROM CDU-1000  1.1a PQ: 0 ANSI: 1 CCS
+sd 0:0:0:0: [sda] Attached SCSI disk
+GUEST-INIT: /sys/block: sda 
+GUEST-INIT: /dev/sda: present
+GUEST-INIT: /dev/sda1: present
+GUEST-INIT: md5 of /dev/sda's first 64 sectors: 87d5ec3151caf04d90236947e6f09874
+GUEST-INIT: /proc/filesystems ext4 entries: 1
+GUEST-INIT: waited 0 round(s) for /dev/hvc0
+GUEST-INIT: /dev/hvc*: /dev/hvc0 /dev/hvc1 /dev/hvc2 /dev/hvc3 /dev/hvc4 /dev/hvc5 /dev/hvc6 /dev/hvc7 
+GUEST-INIT: /sys/bus/virtio/devices: virtio0 
+GUEST-INIT: /proc/interrupts:
+           CPU0       
+  0:        872    XT-PIC      timer
+  2:          0    XT-PIC      cascade
+  4:        183    XT-PIC      ttyS0
+ 11:         29    XT-PIC      virtio0
+ 14:          5    XT-PIC      ata_piix
+ 15:          3    XT-PIC      ata_piix
+NMI:          0   Non-maskable interrupts
+ERR:          0
+GUEST-INIT: /proc/devices hvc entries: 1
+GUEST-INIT: dmesg, the kernel's own virtio/console lines:
+Kernel command line: console=hvc0 console=ttyS0 tsc=unstable idle=poll
+printk: legacy console [ttyS0] enabled
+printk: legacy console [hvc0] enabled
+GUEST-INIT: read back from /dev/hvc0: [VIRTIO-INPUT16]
+GUEST-INIT: end
+reboot: System halted

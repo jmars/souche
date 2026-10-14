@@ -1,0 +1,54 @@
+### THE SLICE-3 GATE'S OWN PIN CHECK (the same inputs, the same cmdline)
+  ### PINS (the inputs this gate is a claim about)
+    PASS  tests/images/vmlinuz-i386-v86guest sha256 f0278a8f2893eb93a8c857f3f2d5a589a5b9aa6a45033171bc5411fc10f658cd
+    PASS  tests/images/vmlinuz-i386-lean-control sha256 25be0d5358d9445712f6d04e59a7be9133acbd3f69ad0720a69e43d5ba844b3d
+    PASS  tests/images/guest-initrd-fxdisk.xz sha256 accc806d937260ed5abffafe0530efc701ebaf0383cb22cfc25b2680bf8e4d02
+    PASS  tests/images/busybox-i386-v86guest sha256 fce38d5b7a492b86d719a77a07b189661132981dac1ef98c8435c087118586e0
+    PASS  tests/images/disk-fmt-64m.img sha256 a2f0f6daac00c518727d7bf2981c2f6208dfe93e4973b06ffb2dc6c65ca0460c
+    PASS  a blank 64M image has sha256 3b6a07d0d404fab4e23b6d34bc6696a6a312dd92821332385e5af7c01c421351
+    PASS  /tmp/v86det/bin/v86c-prefix present, sha256 73a28df1300770d6877afe6c19de30ef1f0c42435f35ab14415c6187bc35b9d2
+    PASS  /tmp/v86det/bin/minibios-80m.bin present, sha256 19c54f2d57be09a46b4bf3ad13f6d381e47b5c23b105121489503aa0625458cb
+  ### THE ARCHIVE RE-PIN CHECK (the cmdline names the store the image carries)
+    PASS  exactly ONE fx-init store dir in the image
+    PASS  the store dir is the pinned one (/fx/store/54ce1971a82e89d78a83e3f805893b4e1651d714c62e69fda2c711ff8d3f2b69-fx-init)
+    PASS  the image's /usr/bin/busybox is the pinned build (by content sha256)
+    PASS  the busybox entry's size is the built artifact's
+    PASS  /bin/init -> the store dir the cmdline names
+  ### THE BUSYBOX ITSELF (run natively: a static i386 ELF runs on this host)
+    PASS  static elf_i386: ELF 32-bit LSB executable, Intel i386, version 1 (GNU/Linux), statically linked, BuildID[sha1]=6c8a9e591884d49723e4cdafbb11fbc28b5d87a7, for GNU/Linux 3.2.0, stripped
+    PASS  applet mkfs.ext2 present
+    PASS  applet rm present
+    PASS  applet cp present
+    PASS  applet mv present
+    PASS  applet sync present
+  ### THE DISKS
+    PASS  the formatted disk is 64 MiB
+    PASS  the formatted disk carries an ext2/ext4 superblock (0xef53 at 1024+56)
+    PASS  the formatted disk is not all zeros (formatted by the pinned busybox's own mkfs.ext2)
+  
+  ### m2-5 slice-3 gate: 0 FAILING assertion(s)
+  the cmdline this gate boots twice:
+    console=hvc0 console=ttyS0 tsc=unstable idle=poll rdinit=/fx/store/54ce1971a82e89d78a83e3f805893b4e1651d714c62e69fda2c711ff8d3f2b69-fx-init/fx-init fx.store=/fx/store
+$ /tmp/v86det/bin/v86c-prefix --bzimage tests/images/vmlinuz-i386-v86guest 4000000000 --cmdline '<above>' --hda /tmp/gate-m2-5-det/run1-disk.img \
+      --initrd tests/images/guest-initrd-fxdisk.xz --bios /tmp/v86det/bin/minibios-80m.bin --memory 80 --serial results/m2-5-det-run1-serial.txt
+  port rc=0 (a run ends at its instruction LIMIT: PID1 never halts)
+    v86c boot: firmware 65536 bytes at 0xf0000, option ROM 512 bytes at 0xc0000, memory 80 MiB, hda 67108864 bytes sha256 a2f0f6daac00c518727d7bf2981c2f6208dfe93e4973b06ffb2dc6c65ca0460c, initrd attached, cmdline 'console=hvc0 console=ttyS0 tsc=unstable idle=poll rdinit=/fx/store/54ce1971a82e89d78a83e3f805893b4e1651d714c62e69fda2c711ff8d3f2b69-fx-init/fx-init fx.store=/fx/store'
+    v86c boot: 4000057327 instructions, in_hlt=0, exception=-1, unimplemented=0, eip=0xc11de760 cs=0x60 cr0=0x80050033 cr3=0x9ce000
+    v86c boot: virtio console: 1242 bytes out, 0 bytes in, 1314 chain bytes read, 176 chain bytes written
+$ /tmp/v86det/bin/v86c-prefix --bzimage tests/images/vmlinuz-i386-v86guest 4000000000 --cmdline '<above>' --hda /tmp/gate-m2-5-det/run2-disk.img \
+      --initrd tests/images/guest-initrd-fxdisk.xz --bios /tmp/v86det/bin/minibios-80m.bin --memory 80 --serial results/m2-5-det-run2-serial.txt
+  port rc=0 (a run ends at its instruction LIMIT: PID1 never halts)
+    v86c boot: firmware 65536 bytes at 0xf0000, option ROM 512 bytes at 0xc0000, memory 80 MiB, hda 67108864 bytes sha256 a2f0f6daac00c518727d7bf2981c2f6208dfe93e4973b06ffb2dc6c65ca0460c, initrd attached, cmdline 'console=hvc0 console=ttyS0 tsc=unstable idle=poll rdinit=/fx/store/54ce1971a82e89d78a83e3f805893b4e1651d714c62e69fda2c711ff8d3f2b69-fx-init/fx-init fx.store=/fx/store'
+    v86c boot: 4000057221 instructions, in_hlt=0, exception=-1, unimplemented=0, eip=0xc11de760 cs=0x60 cr0=0x80050033 cr3=0x9ce000
+    v86c boot: virtio console: 1242 bytes out, 0 bytes in, 1314 chain bytes read, 176 chain bytes written
+### THE COMPARISON: byte-identical, no normalization
+  serial: 18782 vs 18782 bytes
+    29c332ffe9611f745a547a6b2764cb7167b8cf2dca9bd4b020253264fa1e28e8  run1
+    29c332ffe9611f745a547a6b2764cb7167b8cf2dca9bd4b020253264fa1e28e8  run2
+  PASS  the two runs' serial transcripts are BYTE-IDENTICAL
+  virtio: 1242 vs 1242 bytes
+    3b9d566c35f5ad6043e29c59d1894853d97186ec1c610c59740cf499e79b18d2  run1
+    3b9d566c35f5ad6043e29c59d1894853d97186ec1c610c59740cf499e79b18d2  run2
+  PASS  the two runs' virtio transcripts are BYTE-IDENTICAL
+
+### m2-5 determinism gate: 0 FAILING assertion(s)

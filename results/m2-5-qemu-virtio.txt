@@ -1,0 +1,35 @@
+scsi host0: ata_piix
+scsi host1: ata_piix
+ata1: PATA max MWDMA2 cmd 0x1f0 ctl 0x3f6 bmdma 0xc080 irq 14 lpm-pol 0
+ata2: PATA max MWDMA2 cmd 0x170 ctl 0x376 bmdma 0xc088 irq 15 lpm-pol 0
+ata1: found unknown device (class 0)
+ata1.00: ATA-7: QEMU HARDDISK, 2.5+, max UDMA/100
+ata1.00: 8192 sectors, multi 16: LBA48 
+ata2: found unknown device (class 0)
+ata2.00: ATAPI: QEMU DVD-ROM, 2.5+, max UDMA/100
+scsi 0:0:0:0: Direct-Access     ATA      QEMU HARDDISK    2.5+ PQ: 0 ANSI: 5
+sd 0:0:0:0: [sda] 8192 512-byte logical blocks: (4.19 MB/4.00 MiB)
+sd 0:0:0:0: [sda] Write Protect is off
+sd 0:0:0:0: [sda] Write cache: enabled, read cache: enabled, doesn't support DPO or FUA
+sd 0:0:0:0: [sda] Preferred minimum I/O size 512 bytes
+scsi 1:0:0:0: CD-ROM            QEMU     QEMU DVD-ROM     2.5+ PQ: 0 ANSI: 5
+ sda: sda1
+sd 0:0:0:0: [sda] Attached SCSI disk
+Freeing unused kernel image (initmem) memory: 228K
+Write protecting kernel text and read-only data: 2324k
+Run /init as init process
+GUEST-INIT: waited 0 round(s) for /dev/hvc0
+GUEST-INIT: /dev/hvc*: /dev/hvc0 /dev/hvc1 /dev/hvc2 /dev/hvc3 /dev/hvc4 /dev/hvc5 /dev/hvc6 /dev/hvc7 
+GUEST-INIT: /sys/bus/virtio/devices: virtio0 
+GUEST-INIT: /proc/interrupts:
+GUEST-INIT: /proc/devices hvc entries: 1
+GUEST-INIT: dmesg, the kernel's own virtio/console lines:
+Kernel command line: console=hvc0 console=ttyS0 tsc=unstable idle=poll
+printk: legacy console [ttyS0] enabled
+virtio-pci 0000:00:04.0: found PCI INT A -> IRQ 11
+printk: legacy console [hvc0] enabled
+GUEST-INIT: waiting for host input
+GUEST-INIT: read back from /dev/hvc0: []
+GUEST-INIT: end
+sd 0:0:0:0: [sda] Synchronizing SCSI cache
+reboot: System halted

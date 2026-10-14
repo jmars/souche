@@ -1,0 +1,64 @@
+=== M2-4 asymmetry rig: each mutation alone, then restored ===
+
+--- the untouched tree, as the control ---
+9920ea9f06ef2fde977b64773f8c33e2d6947ae99032dd15b54bc276d7f06864  src/hw/virtio.c
+ad7913d776d981abfc6cf4287452210f2949d6226c33d978e7ebaec863b8e2b5  src/hw/virtio_console.c
+579b806ea2edf959596949fc7710bec87332618bb60d613cf7bd727fb14fb482  tests/minibios.asm
+control selftest rc=0 :: hw_selftest: 541 checks, 0 failures, 0 skipped
+control boot rc=0 :: v86c boot: virtio console: 2391 bytes out, 15 bytes in, 2463 chain bytes read, 191 chain bytes written (inbound handshake fired)
+control boot: virtio0 interrupts = 26
+control boot: read-back line = 1
+
+=== M1: virtio.c -- the negotiated-feature mask removed ===
+M1 mutated: selftest rc=1 :: hw_selftest: 541 checks, 1 failures, 0 skipped
+    FAIL src/hw/hw_selftest.c:2094: vq_ind(0xB80C) & 0x00000800 == 0x00000000 (got 0x800, want 0x0)
+    FAIL virtio: the PCI function and its capability chain, feature negotiation, the queues, both directions of the console, the IRQ route (541 checks so far)
+M1 restored from the saved copy: selftest rc=0 :: hw_selftest: 541 checks, 0 failures, 0 skipped
+=== M2: virtio.c -- the FEATURES_OK refusal removed ===
+M2 mutated: selftest rc=1 :: hw_selftest: 541 checks, 1 failures, 0 skipped
+    FAIL src/hw/hw_selftest.c:2096: vq_inb(0xB814) & 0x08 == 0x00 (got 0x8, want 0x0)
+    FAIL virtio: the PCI function and its capability chain, feature negotiation, the queues, both directions of the console, the IRQ route (541 checks so far)
+M2 restored from the saved copy: selftest rc=0 :: hw_selftest: 541 checks, 0 failures, 0 skipped
+=== M3: virtio.c -- the chain's written-length accounting zeroed ===
+M3 mutated: selftest rc=1 :: hw_selftest: 541 checks, 2 failures, 0 skipped
+    FAIL src/hw/hw_selftest.c:2182: read32s(0x3408) == 1 (got 0x0, want 0x1)
+    FAIL src/hw/hw_selftest.c:2198: read32s(0x3408) == 8 (got 0x0, want 0x8)
+    FAIL virtio: the PCI function and its capability chain, feature negotiation, the queues, both directions of the console, the IRQ route (541 checks so far)
+M3 restored from the saved copy: selftest rc=0 :: hw_selftest: 541 checks, 0 failures, 0 skipped
+=== M4: virtio.c -- the WRITE descriptor flag ignored ===
+M4 mutated: selftest rc=1 :: hw_selftest: 541 checks, 8 failures, 0 skipped
+    FAIL src/hw/hw_selftest.c:2179: mem8[0x4400] == 0x58 (got 0x0, want 0x58)
+    FAIL src/hw/hw_selftest.c:2182: read32s(0x3408) == 1 (got 0x0, want 0x1)
+    FAIL src/hw/hw_selftest.c:2183: console->input_bytes == 1 (got 0x0, want 0x1)
+M4 restored from the saved copy: selftest rc=0 :: hw_selftest: 541 checks, 0 failures, 0 skipped
+=== M5: virtio.c -- the flush's ISR bit changed ===
+M5 mutated: selftest rc=1 :: hw_selftest: 541 checks, 2 failures, 0 skipped
+    FAIL src/hw/hw_selftest.c:2163: vq_inb(0xB700) == VIRTIO_ISR_QUEUE (got 0x2, want 0x1)
+    FAIL src/hw/hw_selftest.c:2242: vq_inb(0xB700) == VIRTIO_ISR_QUEUE (got 0x2, want 0x1)
+    FAIL virtio: the PCI function and its capability chain, feature negotiation, the queues, both directions of the console, the IRQ route (541 checks so far)
+M5 restored from the saved copy: selftest rc=0 :: hw_selftest: 541 checks, 0 failures, 0 skipped
+=== M6: virtio.c -- the bar-size rounding disabled ===
+M6 mutated: selftest rc=1 :: hw_selftest: 541 checks, 1 failures, 0 skipped
+    FAIL src/hw/hw_selftest.c:2053: vq_pci_read32(0x4C) & 0xFFFF == 0x40 (got 0x10, want 0x40)
+    FAIL virtio: the PCI function and its capability chain, feature negotiation, the queues, both directions of the console, the IRQ route (541 checks so far)
+M6 restored from the saved copy: selftest rc=0 :: hw_selftest: 541 checks, 0 failures, 0 skipped
+=== M7: virtio.c -- the notify register's index ignored ===
+M7 mutated: selftest rc=1 :: hw_selftest: 541 checks, 12 failures, 0 skipped
+    FAIL src/hw/hw_selftest.c:2144: virtio_sink_count == 3 (got 0x0, want 0x3)
+    FAIL src/hw/hw_selftest.c:2145: virtio_sink_bytes[0] == 'A' (got 0x0, want 0x41)
+    FAIL src/hw/hw_selftest.c:2146: virtio_sink_bytes[1] == 'B' (got 0x0, want 0x42)
+M7 restored from the saved copy: selftest rc=0 :: hw_selftest: 541 checks, 0 failures, 0 skipped
+=== M8: tests/minibios.asm -- the firmware's PIRQ-routing write deleted ===
+M8 mutated: boot rc=0 :: v86c boot: virtio console: 0 bytes out, 0 bytes in, 8 chain bytes read, 32 chain bytes written (inbound handshake NOT fired)
+    virtio0 interrupts: 
+    hvc0 console line: 0
+    read-back lines:   0
+M8 restored from the saved copy: boot rc=0 :: v86c boot: virtio console: 2391 bytes out, 15 bytes in, 2463 chain bytes read, 191 chain bytes written (inbound handshake fired)
+    virtio0 interrupts: 26
+    hvc0 console line: 2
+    read-back lines:   1
+
+--- the tree after the rig (must equal the control's sha256 lines above) ---
+9920ea9f06ef2fde977b64773f8c33e2d6947ae99032dd15b54bc276d7f06864  src/hw/virtio.c
+ad7913d776d981abfc6cf4287452210f2949d6226c33d978e7ebaec863b8e2b5  src/hw/virtio_console.c
+579b806ea2edf959596949fc7710bec87332618bb60d613cf7bd727fb14fb482  tests/minibios.asm

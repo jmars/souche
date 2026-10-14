@@ -1,0 +1,11 @@
+== PERF-4/M2 mutation rig 2026-10-12T23:22:26Z
+== the gates it drives: build/cpu_uop_exec_selftest (the M2 suite) and the nasm differential
+ARM 0 (control): the unmutated tree
+ARM 0: GREEN (rc=0) -- the rig's baseline
+ARM invalidation-off: CAUGHT (rc=1) :: FAIL src/cpu/uop_exec_selftest.c:255: ram32(0x3000) == 0x2A (got 0x0, want 0x2a)
+ARM smc-abort-off: CAUGHT (rc=1) :: FAIL src/cpu/uop_exec_selftest.c:255: ram32(0x3000) == 0x2A (got 0x0, want 0x2a)
+ARM no-mid-block-flush: CAUGHT (rc=1) :: FAIL staircase sample 0: cache-on counter 0, cache-off 4 (raw 0x0 / 0xfa0)
+ARM sti-pending-dropped: CAUGHT (rc=1) :: FAIL staircase sample 14: cache-on counter 84, cache-off 87 (raw 0x14820 / 0x153d8)
+ARM state-key-ignored: CAUGHT (rc=1) :: FAIL src/cpu/uop_exec_selftest.c:569: ram32(0x3004) == 0x00010001 (got 0x20000, want 0x10001)
+ARM fetch-internal-ip: CAUGHT (rc=1) :: [!] 0 of 4 selected test(s) produced no state from the actual leg, 0 were skipped (tests/nasm_skip_c.txt).
+== arms 6, caught 6, holes 0

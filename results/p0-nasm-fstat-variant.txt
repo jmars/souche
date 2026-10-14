@@ -1,0 +1,14 @@
+
+[+] Passed 113/113 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 10 were skipped (tests/nasm_skip.txt).
+[~] Skipped 10 test(s) (tests/nasm_skip.txt):
+	idiv16-overflow: reference panics "Unimplemented: #GP handler" (#DE -> empty IDT, hook DEBUG-gated)
+	idiv32-overflow: reference panics "Unimplemented: #GP handler" (#DE -> empty IDT, hook DEBUG-gated)
+	idiv8-overflow: reference panics "Unimplemented: #GP handler" (#DE -> empty IDT, hook DEBUG-gated)
+	jump: reference reports no exception and never halts (MEASURED: keeps executing at eip 0x42b001, past the 2 MiB RAM; fixture: SIGSEGV at 0x2404c7)
+	maskmovdqu: reference reports no exception and halts at 0x80078 (fixture: SIGSEGV at 0x80055)
+	maskmovq: reference reports no exception and halts at 0x8006e (fixture: SIGSEGV at 0x8004f)
+	mov_sreg_ud1: reference panics "Unimplemented: #GP handler" (#UD -> empty IDT, hook DEBUG-gated)
+	mov_sreg_ud2: reference panics "Unimplemented: #GP handler" (#UD -> empty IDT, hook DEBUG-gated)
+	pop_esp: reference reports no exception and halts at 0x8002f (fixture: SIGSEGV at 0x80023)
+	pop_esp2: reference reports no exception and halts at 0x80026 (fixture: SIGSEGV at 0x80023)

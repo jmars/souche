@@ -1,0 +1,12 @@
+aarch64-linux-cosmo-gcc: fatal error: no input files
+compilation terminated.
+aarch64-linux-cosmo-gcc: fatal error: no input files
+compilation terminated.
+aarch64-linux-cosmo-gcc: fatal error: no input files
+compilation terminated.
+aarch64-linux-cosmo-gcc: fatal error: no input files
+compilation terminated.
+aarch64-linux-cosmo-gcc: fatal error: no input files
+compilation terminated.
+aarch64-linux-cosmo-gcc: fatal error: no input files
+compilation terminated.

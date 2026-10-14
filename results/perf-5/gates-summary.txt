@@ -1,0 +1,31 @@
+== PERF-5 G3: 2026-10-13T01:17:00Z load=11.21 12.77 12.00
+make                                           rc=0
+make selftest                                  rc=0
+PASS kernel: the bzImage boot params, the option ROM, the real image (338 checks so far)
+PASS ide: geometry, IDENTIFY, READ SECTORS/DMA, the error status, the ATAPI command set (445 checks so far)
+PASS virtio: the PCI function and its capability chain, feature negotiation, the queues, both directions of the console, the IRQ route (541 checks so far)
+hw_selftest: 541 checks, 0 failures, 0 skipped
+  instructions decoded and checked   : 1555069
+  (b) address comparisons vs modrm_resolve: 1426777 (failures 0)
+uop_cache_selftest: 7934349 checks, 0 failures
+uop_exec_selftest: 102 checks, 0 failures
+make nasm (cache on)                           rc=0
+	maskmovq: P0 class B: same as maskmovdqu (fixture #GP at 0x8004f, port and JS reference both report eip 0x8006e / no exception)
+	pop_esp: the native fixture expects a #GP at 0x80023 from a store to address 0; address 0 is plain guest RAM in v86's flat 2 MiB memory model, so neither the reference nor the port takes a fault (P0 class B) and the C leg halts instead -- the same emulator-model gap, not a port defect
+	pop_esp2: same as pop_esp: the fixture's SIGSEGV comes from the host MMU writing to address 0, which the emulator does not model (P0 class B)
+nasm with --uop-cache off                      rc=0
+	maskmovq: P0 class B: same as maskmovdqu (fixture #GP at 0x8004f, port and JS reference both report eip 0x8006e / no exception)
+	pop_esp: the native fixture expects a #GP at 0x80023 from a store to address 0; address 0 is plain guest RAM in v86's flat 2 MiB memory model, so neither the reference nor the port takes a fault (P0 class B) and the C leg halts instead -- the same emulator-model gap, not a port defect
+	pop_esp2: same as pop_esp: the fixture's SIGSEGV comes from the host MMU writing to address 0, which the emulator does not model (P0 class B)
+make transcript-diff (cache on)                rc=0
+transcript-diff with --uop-cache off           rc=0
+the reference transcript is the same file in both legs
+1.5 G boot (on)                                rc=0
+in_hlt=0, exception=-1, unimplemented=0, eip=0xc1927800 cs=0x60 cr0=0x80050033 cr3=0x1ea1000
+1.5 G boot (off)                               rc=0
+in_hlt=0, exception=-1, unimplemented=0, eip=0xc1927800 cs=0x60 cr0=0x80050033 cr3=0x1ea1000
+-- final-state compare (the brief's gate):
+IDENTICAL: in_hlt=0, exception=-1, unimplemented=0, eip=0xc1927800 cs=0x60 cr0=0x80050033 cr3=0x1ea1000
+-- serial sha256 (the transcripts themselves):
+1687cafead6feb29b031e95b2ce6df9be279c95371342e33dfb7314edf7a3765  results/perf-5/boot-on-serial.txt
+6305c42ac11c4aaeaf252d46a03738e09e04400ef57b39759c8e448f94de2a38  results/perf-5/boot-off-serial.txt

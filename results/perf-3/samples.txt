@@ -1,0 +1,24 @@
+# perf_bench round 1 BEFORE (files OUT) bin=build/v86c limit=200000000 runs=1 2026-10-12T22:25:44Z
+# real user sys
+4.356 4.335 0.012
+# perf_bench round 1 AFTER (files IN the unity TU) bin=build/filesin/v86c limit=200000000 runs=1 2026-10-12T22:25:48Z
+# real user sys
+4.327 4.305 0.015
+# perf_bench round 2 BEFORE (files OUT) bin=build/v86c limit=200000000 runs=1 2026-10-12T22:25:52Z
+# real user sys
+4.337 4.318 0.014
+# perf_bench round 2 AFTER (files IN the unity TU) bin=build/filesin/v86c limit=200000000 runs=1 2026-10-12T22:25:57Z
+# real user sys
+4.312 4.295 0.011
+# perf_bench round 3 BEFORE (files OUT) bin=build/v86c limit=200000000 runs=1 2026-10-12T22:26:01Z
+# real user sys
+4.345 4.328 0.008
+# perf_bench round 3 AFTER (files IN the unity TU) bin=build/filesin/v86c limit=200000000 runs=1 2026-10-12T22:26:06Z
+# real user sys
+4.353 4.319 0.011
+# perf_bench round 4 BEFORE (files OUT) bin=build/v86c limit=200000000 runs=1 2026-10-12T22:26:10Z
+# real user sys
+4.380 4.343 0.014
+# perf_bench round 4 AFTER (files IN the unity TU) bin=build/filesin/v86c limit=200000000 runs=1 2026-10-12T22:26:14Z
+# real user sys
+4.352 4.318 0.014

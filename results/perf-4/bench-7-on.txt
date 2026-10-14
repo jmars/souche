@@ -1,0 +1,18 @@
+== perf_bench: make bench --uop-cache on
+bin=/tmp/v86c-on limit=200000000 kernel=tests/images/vmlinuz-i386 runs=7
+cores=32 load-before=4.61 5.70 7.81
+kernel=7.1.8-1-default cflags-host=cc (SUSE Linux) 16.2.0
+run  1: real 3.364s user 3.352s sys 0.011s  instr=200095214
+run  2: real 3.275s user 3.263s sys 0.010s  instr=200095214
+run  3: real 3.283s user 3.269s sys 0.012s  instr=200095214
+run  4: real 3.332s user 3.311s sys 0.012s  instr=200095214
+run  5: real 3.299s user 3.275s sys 0.013s  instr=200095214
+run  6: real 3.303s user 3.290s sys 0.010s  instr=200095214
+run  7: real 3.381s user 3.370s sys 0.007s  instr=200095214
+load-after=4.77 5.66 7.74
+n=7
+real: best 3.275  median 3.303  worst 3.381
+user: best 3.263  median 3.290  worst 3.370
+cpu (user+sys): best 3.273  median 3.300
+MIPS at best real: 61.10   at median real: 60.58
+raw samples appended to results/perf-4/bench-samples.txt

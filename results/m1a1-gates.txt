@@ -1,0 +1,245 @@
+M1a-1 (HANDOFF=v86c) -- raw gate evidence.  Generated 2026-10-11T22:10:53Z on the host.
+
+################ G1: make selftest ################
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -o build/cpu_selftest src/cpu/cpu_selftest.c src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/paging.c
+./build/cpu_selftest
+PASS reset/init values, state_flags, register accessors
+CASE  0 op=0 size= 8 a=0000000f b=00000001 cf_in=0 -> flags=0x010 table=0x010
+CASE  1 op=0 size= 8 a=000000ff b=00000001 cf_in=0 -> flags=0x055 table=0x055
+CASE  2 op=0 size=32 a=7fffffff b=00000001 cf_in=0 -> flags=0x894 table=0x894
+CASE  3 op=0 size=32 a=ffffffff b=00000001 cf_in=0 -> flags=0x055 table=0x055
+CASE  4 op=0 size=16 a=00007fff b=00000001 cf_in=0 -> flags=0x894 table=0x894
+CASE  5 op=0 size=16 a=0000ffff b=00000001 cf_in=0 -> flags=0x055 table=0x055
+CASE  6 op=2 size=32 a=00000000 b=00000001 cf_in=0 -> flags=0x095 table=0x095
+CASE  7 op=2 size=32 a=00000005 b=00000005 cf_in=0 -> flags=0x044 table=0x044
+CASE  8 op=2 size= 8 a=00000080 b=00000001 cf_in=0 -> flags=0x810 table=0x810
+CASE  9 op=2 size=16 a=00008000 b=00000001 cf_in=0 -> flags=0x814 table=0x814
+CASE 10 op=3 size=32 a=12345678 b=12345678 cf_in=0 -> flags=0x044 table=0x044
+CASE 11 op=3 size=32 a=00000001 b=00000002 cf_in=0 -> flags=0x095 table=0x095
+CASE 12 op=1 size= 8 a=0000007f b=00000000 cf_in=1 -> flags=0x890 table=0x890
+CASE 13 op=1 size=32 a=ffffffff b=00000000 cf_in=1 -> flags=0x055 table=0x055
+CASE 14 op=4 size=32 a=00000000 b=00000000 cf_in=1 -> flags=0x095 table=0x095
+CASE 15 op=4 size=32 a=00000100 b=00000001 cf_in=0 -> flags=0x014 table=0x014
+CASE 16 op=5 size=32 a=7fffffff b=00000000 cf_in=1 -> flags=0x895 table=0x895
+CASE 17 op=5 size= 8 a=0000007f b=00000000 cf_in=0 -> flags=0x890 table=0x890
+CASE 18 op=5 size=32 a=ffffffff b=00000000 cf_in=0 -> flags=0x054 table=0x054
+CASE 19 op=6 size= 8 a=00000080 b=00000000 cf_in=1 -> flags=0x811 table=0x811
+CASE 20 op=6 size=32 a=00000001 b=00000000 cf_in=1 -> flags=0x045 table=0x045
+CASE 21 op=7 size=32 a=00000001 b=00000000 cf_in=0 -> flags=0x095 table=0x095
+CASE 22 op=7 size=32 a=80000000 b=00000000 cf_in=0 -> flags=0x885 table=0x885
+CASE 23 op=7 size= 8 a=00000000 b=00000000 cf_in=0 -> flags=0x044 table=0x044
+PASS lazy flags: 24 (op,a,b,cf_in) cases + get_eflags/update_eflags
+PASS memory: router, slack at memory_size, device hook table, mmio windows
+PASS paging: 4 KiB translation, A/D bits, TLB read-only entry
+PASS paging: faults (absent, read-only/WP, user vs supervisor) + cr2/eip/delivery/error codes
+PASS paging: 4 MiB PSE page (translation, A/D, page boundary)
+PASS paging: page-crossing reads/writes (16/32/64/128-bit) + straddle fault
+PASS TLB: insert, invlpg, clear_tlb/global, set_cr3/set_cr0 flushes
+cpu_selftest: 443 checks, 0 failures
+RC=0
+
+################ G2: mutation probes (each invariant temporarily broken, then restored) ################
+BASELINE make selftest -> RC=0
+cpu_selftest: 441 checks, 0 failures
+
+=== MUTATION M1 reset: fpu_control_word 0x37F -> 0x37E ===
+make selftest -> RC=2
+FAIL src/cpu/cpu_selftest.c:86: cpu->fpu_control_word == 0x37F (got 0x37e, want 0x37f)
+cpu_selftest: 441 checks, 1 failures
+
+=== MUTATION M2 reset: FLAGS_DEFAULT -> 0 ===
+make selftest -> RC=2
+FAIL src/cpu/cpu_selftest.c:102: cpu->flags == FLAGS_DEFAULT (got 0x0, want 0x2)
+FAIL src/cpu/cpu_selftest.c:316: get_eflags() == FLAGS_DEFAULT | FLAG_ADJUST (got 0x10, want 0x12)
+FAIL src/cpu/cpu_selftest.c:317: get_eflags() == 0x00000012 (got 0x10, want 0x12)
+FAIL src/cpu/cpu_selftest.c:321: get_eflags() == FLAGS_DEFAULT (got 0x0, want 0x2)
+cpu_selftest: 441 checks, 4 failures
+
+=== MUTATION M3 flags getter: getcf's sub_mask -> 0 ===
+make selftest -> RC=2
+FAIL flags case 6 (op=2 a=0x0 b=0x1 size=32 cf_in=0): got CF=0 PF=1 AF=1 ZF=0 SF=1 OF=0, want 111010
+FAIL flags case 7 (op=2 a=0x5 b=0x5 size=32 cf_in=0): got CF=1 PF=1 AF=0 ZF=1 SF=0 OF=0, want 010100
+FAIL flags case 8 (op=2 a=0x80 b=0x1 size=8 cf_in=0): got CF=1 PF=0 AF=1 ZF=0 SF=0 OF=1, want 001001
+FAIL flags case 9 (op=2 a=0x8000 b=0x1 size=16 cf_in=0): got CF=1 PF=1 AF=1 ZF=0 SF=0 OF=1, want 011001
+cpu_selftest: 441 checks, 8 failures
+
+=== MUTATION M4 flags setter: dec no longer preserves CF ===
+make selftest -> RC=2
+FAIL flags case 19 (op=6 a=0x80 b=0x0 size=8 cf_in=1): got CF=0 PF=0 AF=1 ZF=0 SF=0 OF=1, want 101001
+FAIL flags case 20 (op=6 a=0x1 b=0x0 size=32 cf_in=1): got CF=0 PF=1 AF=0 ZF=1 SF=0 OF=0, want 110100
+cpu_selftest: 441 checks, 2 failures
+
+=== MUTATION M5 flags getter: getzf drops the op-size shift ===
+make selftest -> RC=2
+FAIL flags case 0 (op=0 a=0xf b=0x1 size=8 cf_in=0): got CF=0 PF=0 AF=1 ZF=1 SF=0 OF=0, want 001000
+FAIL flags case 2 (op=0 a=0x7fffffff b=0x1 size=32 cf_in=0): got CF=0 PF=1 AF=1 ZF=1 SF=1 OF=1, want 011011
+FAIL flags case 4 (op=0 a=0x7fff b=0x1 size=16 cf_in=0): got CF=0 PF=1 AF=1 ZF=1 SF=1 OF=1, want 011011
+FAIL flags case 12 (op=1 a=0x7f b=0x0 size=8 cf_in=1): got CF=0 PF=0 AF=1 ZF=1 SF=1 OF=1, want 001011
+cpu_selftest: 441 checks, 9 failures
+
+=== MUTATION M6 paging: the absent-PTE check is dropped ===
+make selftest -> RC=2
+FAIL src/cpu/cpu_selftest.c:463: cpu->pagefault
+FAIL src/cpu/cpu_selftest.c:465: cpu->cr[2] == 0x402000 (got 0x0, want 0x402000)
+FAIL src/cpu/cpu_selftest.c:466: cpu->instruction_pointer == 0xDEAD (got 0x1234, want 0xdead)
+FAIL src/cpu/cpu_selftest.c:467: delivery_count == 1 (got 0x0, want 0x1)
+cpu_selftest: 441 checks, 15 failures
+
+=== MUTATION M7 paging: cr2 gets the wrong address ===
+make selftest -> RC=2
+FAIL src/cpu/cpu_selftest.c:465: cpu->cr[2] == 0x402000 (got 0x402004, want 0x402000)
+FAIL src/cpu/cpu_selftest.c:514: cpu->cr[2] == 0x403000 (got 0x403004, want 0x403000)
+FAIL src/cpu/cpu_selftest.c:537: cpu->cr[2] == 0x405000 (got 0x405004, want 0x405000)
+FAIL src/cpu/cpu_selftest.c:546: cpu->cr[2] == 0x405000 (got 0x405004, want 0x405000)
+cpu_selftest: 441 checks, 5 failures
+
+=== MUTATION M8 paging: the PTE dirty bit is never set ===
+make selftest -> RC=2
+FAIL src/cpu/cpu_selftest.c:425: read32s(PT_PHYS + 0) == (int32_t)(DATA_PHYS | 3 | 0x20 | 0x40) (got 0x3023, want 0x3063)
+cpu_selftest: 441 checks, 1 failures
+
+=== MUTATION M9 paging: invlpg no longer invalidates ===
+make selftest -> RC=2
+src/cpu/paging.c:82:13: error: unused variable 'page' [-Werror=unused-variable]
+(no summary line)
+
+=== MUTATION M10 memory: the device hook read is bypassed ===
+make selftest -> RC=2
+FAIL src/cpu/cpu_selftest.c:787: read32s(MEM_SIZE + 0x100) == 0x42424242 (got 0x0, want 0x42424242)
+FAIL src/cpu/cpu_selftest.c:788: hook_reads == 1 (got 0x0, want 0x1)
+cpu_selftest: 441 checks, 2 failures
+
+=== MUTATION M11 memory: the +16-byte slack is dropped ===
+make selftest -> RC=0
+
+cpu_selftest: 441 checks, 0 failures
+
+=== MUTATION M12 memory: in_mapped_range loses the memory_size bound ===
+make selftest -> RC=2
+FAIL src/cpu/cpu_selftest.c:774: in_mapped_range(MEM_SIZE)
+FAIL src/cpu/cpu_selftest.c:780: read32s(MEM_SIZE + 0x100) == 0 (got 0x1234, want 0x0)
+FAIL src/cpu/cpu_selftest.c:787: read32s(MEM_SIZE + 0x100) == 0x42424242 (got 0x1234, want 0x42424242)
+FAIL src/cpu/cpu_selftest.c:788: hook_reads == 1 (got 0x0, want 0x1)
+(no summary line)
+
+RESTORED make selftest -> RC=0
+cpu_selftest: 441 checks, 0 failures
+=== M9b paging: invlpg leaves a bogus TLB entry ===
+make selftest -> RC=2
+FAIL src/cpu/cpu_selftest.c:678: tlb_data[0x400] == 0 (got 0x1, want 0x0)
+cpu_selftest: 443 checks, 1 failures
+=== M11b memory: the +16-byte slack is dropped ===
+make selftest -> RC=2
+FAIL src/cpu/cpu_selftest.c:761: mem8_alloc_size() == MEM_SIZE + 16 (got 0x800001, want 0x800010)
+cpu_selftest: 443 checks, 1 failures
+
+RESTORED make selftest -> RC=0
+cpu_selftest: 443 checks, 0 failures
+
+################ G3: make (cosmocc APE) ################
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -o build/v86c src/main.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o build/cpu/cpu_state.o src/cpu/cpu_state.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o build/cpu/flags.o src/cpu/flags.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o build/cpu/memory.o src/cpu/memory.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o build/cpu/paging.o src/cpu/paging.c
+make RC=0
+--- APE signature ---
+   M   Z   q   F   p   D   =   '
+--- ./build/v86c ---
+v86c M0 -- v86-to-C port (scaffold; the CPU core is not implemented yet)
+scope: x86 PC emulator, interpreter only, 386-level instructions
+non-goals: JIT, wasm, multicore, 64-bit mode, sound, NE2K, floppy, modem, 9p
+usage: ./build/v86c <image> <instruction-limit>
+       (no arguments prints this banner)
+RC=0
+
+################ G4: make oracle (tests/ and oracle/ untouched) ################
+python3 tests/model.py --out results/expected.json > /dev/null
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.txt
+python3 tests/check_transcript.py results/expected.json results/transcript.txt
+check_transcript: transcript matches tests/model.py (8 GPRs, EFLAGS, EIP, 561 instructions, 4096-byte window sha256)
+RC=0
+1a597ac159554271a380493a19aa52ca0b65481cdb6c979c407684c9c96e737a  tests/test.img
+
+################ INDEPENDENT CROSS-CHECK: the 24 flag cases under the npm v86 reference ################
+--- the guest image's own program (generated, /tmp/flagref/gen.py) ---
+	.intel_syntax noprefix
+	.section .mbheader, "a", @progbits
+	.align 4
+	.long	0x1BADB002
+	.long	0x00010000
+	.long	-(0x1BADB002 + 0x00010000)
+	.long	0x00100000
+	.long	0x00100000
+	.long	0
+	.long	0x00101000
+	.long	0x00100020
+	.section .text
+	.code32
+	.globl _start
+_start:
+	cld
+	mov	esp, 0x102000
+/* case 0: add8 a=0xf b=0x1 cf_in=0 */
+	mov	al, 0xf
+	mov	bl, 0x1
+...
+--- reference output (node /tmp/flagref/run.mjs) ---
+CASE  0 ref=0x010
+CASE  1 ref=0x055
+CASE  2 ref=0x894
+CASE  3 ref=0x055
+CASE  4 ref=0x894
+CASE  5 ref=0x055
+CASE  6 ref=0x095
+CASE  7 ref=0x044
+CASE  8 ref=0x810
+CASE  9 ref=0x814
+CASE 10 ref=0x044
+CASE 11 ref=0x095
+CASE 12 ref=0x890
+CASE 13 ref=0x055
+CASE 14 ref=0x095
+CASE 15 ref=0x014
+CASE 16 ref=0x895
+CASE 17 ref=0x890
+CASE 18 ref=0x054
+CASE 19 ref=0x811
+CASE 20 ref=0x045
+CASE 21 ref=0x095
+CASE 22 ref=0x885
+CASE 23 ref=0x044
+reference instruction count: 147
+--- three-way comparison: C port vs hand table vs reference ---
+cases compared: 24
+port-vs-reference mismatches: 0
+reference instruction count line: reference instruction count: 147
+VERDICT: all 24 flag cases agree (port == table == npm v86 reference)
+
+################ APPENDIX: final from-scratch re-verification ################
+--- G3 from a clean build/ (all four TUs + the APE) ---
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -o build/v86c src/main.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o build/cpu/cpu_state.o src/cpu/cpu_state.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o build/cpu/flags.o src/cpu/flags.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o build/cpu/memory.o src/cpu/memory.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o build/cpu/paging.o src/cpu/paging.c
+RC=0
+--- G4 make oracle ---
+python3 tests/model.py --out results/expected.json > /dev/null
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.txt
+python3 tests/check_transcript.py results/expected.json results/transcript.txt
+check_transcript: transcript matches tests/model.py (8 GPRs, EFLAGS, EIP, 561 instructions, 4096-byte window sha256)
+RC=0
+--- G5 make determinism (the M0 gate, still green) ---
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.run1.txt
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.run2.txt
+diff -u results/transcript.run1.txt results/transcript.run2.txt
+determinism: two consecutive oracle runs are byte-identical
+RC=0
+--- the reference cross-check, re-run ---
+cases compared: 24
+port-vs-reference mismatches: 0
+reference instruction count line: reference instruction count: 147
+VERDICT: all 24 flag cases agree (port == table == npm v86 reference)
+
+The cross-check instrument is preserved in-tree as results/flagref-{gen.py,run.mjs,cmp.py} (it ran with cwd=/tmp/flagref).

@@ -1,0 +1,281 @@
+
+[+] Passed 96/113 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 10 were skipped (tests/nasm_skip.txt).
+[~] Skipped 10 test(s) (tests/nasm_skip.txt):
+	idiv16-overflow: reference panics "Unimplemented: #GP handler" (#DE -> empty IDT, hook DEBUG-gated)
+	idiv32-overflow: reference panics "Unimplemented: #GP handler" (#DE -> empty IDT, hook DEBUG-gated)
+	idiv8-overflow: reference panics "Unimplemented: #GP handler" (#DE -> empty IDT, hook DEBUG-gated)
+	jump: reference reports no exception and never halts (MEASURED: keeps executing at eip 0x42b001, past the 2 MiB RAM; fixture: SIGSEGV at 0x2404c7)
+	maskmovdqu: reference reports no exception and halts at 0x80078 (fixture: SIGSEGV at 0x80055)
+	maskmovq: reference reports no exception and halts at 0x8006e (fixture: SIGSEGV at 0x8004f)
+	mov_sreg_ud1: reference panics "Unimplemented: #GP handler" (#UD -> empty IDT, hook DEBUG-gated)
+	mov_sreg_ud2: reference panics "Unimplemented: #GP handler" (#UD -> empty IDT, hook DEBUG-gated)
+	pop_esp: reference reports no exception and halts at 0x8002f (fixture: SIGSEGV at 0x80023)
+	pop_esp2: reference reports no exception and halts at 0x80026 (fixture: SIGSEGV at 0x80023)
+[-] Failed 17 test(s).
+
+[-] f2xm1.img:
+
+	st0
+	Actual:   0.6168066722416747
+	Expected: 0x0
+
+	st1
+	Actual:   -0.5
+	Expected: 0x0
+
+	st2
+	Actual:   0x1
+	Expected: 0x0
+
+	st4
+	Actual:   0x0
+	Expected: 0.6168066722416746
+
+	st5
+	Actual:   0x0
+	Expected: -0.5
+
+	st6
+	Actual:   0x0
+	Expected: 0x1
+
+[-] fdiv.img:
+
+	st0
+	Actual:   nan
+	Expected: 0x0
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+[-] fdiv-zero.img:
+
+	st1
+	Actual:   0x4d2
+	Expected: 0x0
+
+	st3
+	Actual:   0x0
+	Expected: 0x4d2
+
+[-] fdivr.img:
+
+	st0
+	Actual:   nan
+	Expected: 0x0
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+[-] fprem-distinct.img:
+
+	st0
+	Actual:   0x2
+	Expected: 0x0
+
+	st1
+	Actual:   0x3
+	Expected: 0x0
+
+	st2
+	Actual:   0xffffffff
+	Expected: 0x0
+
+	st3
+	Actual:   0x3
+	Expected: 0x0
+
+	st4
+	Actual:   0x0
+	Expected: 0x2
+
+	st5
+	Actual:   0x0
+	Expected: 0x3
+
+	st6
+	Actual:   0x0
+	Expected: 0xffffffff
+
+	st7
+	Actual:   0x0
+	Expected: 0x3
+
+[-] fptan.img:
+
+	st0
+	Actual:   0.7853981633974483
+	Expected: 0x0
+
+	st1
+	Actual:   0x1
+	Expected: 0x0
+
+	st2
+	Actual:   -1.2246467991473532e-16
+	Expected: 3.141592653589793
+
+	st3
+	Actual:   0x0
+	Expected: 0.7853981633974483
+
+	st4
+	Actual:   0x0
+	Expected: 0x1
+
+	st7
+	Actual:   3.141592653589793
+	Expected: 0x0
+
+[-] frndint.img:
+
+	st0
+	Actual:   0x1
+	Expected: 0x0
+
+	st1
+	Actual:   0x3
+	Expected: 0x0
+
+	st2
+	Actual:   0x3
+	Expected: 0x0
+
+	st4
+	Actual:   0x0
+	Expected: 0x1
+
+	st5
+	Actual:   0x0
+	Expected: 0x3
+
+	st6
+	Actual:   0x0
+	Expected: 0x3
+
+[-] fsave_frstor.img:
+
+	st0
+	Actual:   0x1
+	Expected: 0x0
+
+	st2
+	Actual:   0x0
+	Expected: 0x1
+
+[-] fscale.img:
+
+	st0
+	Actual:   25.132741228718345
+	Expected: 0x0
+
+	st1
+	Actual:   3.141592653589793
+	Expected: 0x0
+
+	st2
+	Actual:   0x0
+	Expected: 25.132741228718345
+
+	st3
+	Actual:   0x0
+	Expected: 3.141592653589793
+
+[-] fsqrt.img:
+
+	st0
+	Actual:   1.7724538509055159
+	Expected: 0x0
+
+	st1
+	Actual:   0x0
+	Expected: 1.772453850905516
+
+[-] fst-st-empty-tag.img:
+
+	st6
+	Actual:   0x0
+	Expected: 0x1
+
+	st7
+	Actual:   0x1
+	Expected: 0x0
+
+[-] fstm80.img:
+
+	st1
+	Actual:   0x0
+	Expected: 3.141592653589793
+
+	st7
+	Actual:   3.141592653589793
+	Expected: 0x0
+
+[-] fxtract.img:
+
+	st0
+	Actual:   1.5069580078125
+	Expected: 0x0
+
+	st1
+	Actual:   0xd
+	Expected: 0x0
+
+	st2
+	Actual:   0x0
+	Expected: 1.5069580078125
+
+	st3
+	Actual:   0x0
+	Expected: 0xd
+
+[-] fxtract-zero.img:
+
+	st1
+	Actual:   nan
+	Expected: 0x0
+
+	st3
+	Actual:   0x0
+	Expected: -inf
+
+[-] fyl2x.img:
+
+	st0
+	Actual:   1.651496129472319
+	Expected: 3.141592653589793
+
+	st1
+	Actual:   0x0
+	Expected: 1.6514961294723187
+
+	st7
+	Actual:   3.141592653589793
+	Expected: 0x0
+
+[-] fyl2x-zero.img:
+
+	st0
+	Actual:   nan
+	Expected: 0x0
+
+	st1
+	Actual:   0x0
+	Expected: -inf
+
+[-] fyl2xp1.img:
+
+	st0
+	Actual:   2.050185664242767
+	Expected: 3.141592653589793
+
+	st1
+	Actual:   0x0
+	Expected: 2.050185664242767
+
+	st7
+	Actual:   3.141592653589793
+	Expected: 0x0

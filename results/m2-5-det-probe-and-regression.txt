@@ -1,0 +1,53 @@
+### (A) MUTATION PROBE: put the RTC back on the host clock and re-run the RTC case
+mutated
+mutant hw_selftest rc=1 (nonzero + FAIL lines below IS the probe's PASS)
+FAIL src/hw/hw_selftest.c:578: io_port_read8(0x71) == bcd_of(3) (got 0x35, want 0x3)
+FAIL src/hw/hw_selftest.c:580: io_port_read8(0x71) == bcd_of(2) (got 0x42, want 0x2)
+FAIL src/hw/hw_selftest.c:582: io_port_read8(0x71) == bcd_of(0) (got 0x15, want 0x0)
+FAIL src/hw/hw_selftest.c:584: io_port_read8(0x71) == bcd_of(2) (got 0x3, want 0x2)
+FAIL src/hw/hw_selftest.c:586: io_port_read8(0x71) == bcd_of(1) (got 0x13, want 0x1)
+FAIL src/hw/hw_selftest.c:588: io_port_read8(0x71) == bcd_of(1) (got 0x10, want 0x1)
+FAIL src/hw/hw_selftest.c:590: io_port_read8(0x71) == bcd_of(24) (got 0x26, want 0x24)
+FAIL src/hw/hw_selftest.c:602: io_port_read8(0x71) == bcd_of(0) (got 0x35, want 0x0)
+FAIL src/hw/hw_selftest.c:604: io_port_read8(0x71) == bcd_of(0) (got 0x42, want 0x0)
+FAIL src/hw/hw_selftest.c:606: io_port_read8(0x71) == bcd_of(1) (got 0x15, want 0x1)
+FAIL src/hw/hw_selftest.c:608: io_port_read8(0x71) == bcd_of(1) (got 0x13, want 0x1)
+FAIL src/hw/hw_selftest.c:610: io_port_read8(0x71) == bcd_of(2) (got 0x3, want 0x2)
+rtc.c restored, sha256 bb88b0e62469d1acb0c47ea11547015cc357e570546ecec76f5fba1fb3596619
+restored-source stale binary rc=1 (expected: the restored source was NOT rebuilt yet)
+rebuilt hw_selftest rc=0 -- hw_selftest: 551 checks, 0 failures, 0 skipped
+
+### (B) THE SLICE-3 BOOT GATE, re-run on the fixed binary (regression)
+  PASS  the formatted disk is 64 MiB
+  PASS  the formatted disk carries an ext2/ext4 superblock (0xef53 at 1024+56)
+  PASS  the formatted disk is not all zeros (formatted by the pinned busybox's own mkfs.ext2)
+### GATE 3a, ARM A: a PRE-FORMATTED 64 MiB disk (C leg, build/v86c)
+$ /tmp/v86det/bin/v86c-fixed --bzimage tests/images/vmlinuz-i386-v86guest 4000000000 --cmdline 'console=hvc0 console=ttyS0 tsc=unstable idle=poll rdinit=/fx/store/54ce1971a82e89d78a83e3f805893b4e1651d714c62e69fda2c711ff8d3f2b69-fx-init/fx-init fx.store=/fx/store' --hda /tmp/gate-m2-5-guest/armA-c-disk.img \
+      --initrd tests/images/guest-initrd-fxdisk.xz --bios /tmp/v86det/bin/minibios-80m.bin --memory 80 --serial results/m2-5-guest-armA-c-serial.txt
+port rc=0 (a run ends at its instruction LIMIT: PID1 never halts)
+    v86c boot: firmware 65536 bytes at 0xf0000, option ROM 512 bytes at 0xc0000, memory 80 MiB, hda 67108864 bytes sha256 a2f0f6daac00c518727d7bf2981c2f6208dfe93e4973b06ffb2dc6c65ca0460c, initrd attached, cmdline 'console=hvc0 console=ttyS0 tsc=unstable idle=poll rdinit=/fx/store/54ce1971a82e89d78a83e3f805893b4e1651d714c62e69fda2c711ff8d3f2b69-fx-init/fx-init fx.store=/fx/store'
+    v86c boot: 4000053925 instructions, in_hlt=0, exception=-1, unimplemented=0, eip=0xc11de760 cs=0x60 cr0=0x80050033 cr3=0x9ce000
+    v86c boot: virtio console: 1242 bytes out, 0 bytes in, 1314 chain bytes read, 176 chain bytes written
+  disk sha256 before=a2f0f6daac00c518727d7bf2981c2f6208dfe93e4973b06ffb2dc6c65ca0460c after=a2f0f6daac00c518727d7bf2981c2f6208dfe93e4973b06ffb2dc6c65ca0460c
+  NOTE (MEASURED, both legs): the emulator held the disk in memory and did not flush it
+       back to this file -- so write->read-back is observable IN-GUEST only (see the header).
+--- assertions (C leg)
+  PASS  libata identified the disk (ata1.00)
+  PASS  the 64 MiB ATA disk (131072 sectors)
+  PASS  the kernel exec'd the store's fx-init (rdinit resolved)
+  PASS  fx-init read its store root from the cmdline
+  PASS  the guest MOUNTED the ATA disk (the kernel's own line)
+  PASS  fx-init's disk-store verdict, read back from the disk
+  PASS  the pivot ran (the boot chain continued past the disk)
+  PASS  the console service came up (dhake materialized /bin, silently)
+  PASS  THE BOOT VERDICT
+  PASS  the ramfs fallback did NOT fire
+  PASS  no mkfs failure
+  PASS  the disk store was not silently re-seeded
+  PASS  no kernel panic
+  PASS  the sda line came out of the virtio console
+  PASS  the mount line came out of the virtio console
+  PASS  the leg's disk input is the pinned artifact
+
+### m2-5 slice-3 gate: 0 FAILING assertion(s)
+### done

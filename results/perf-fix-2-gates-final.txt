@@ -1,0 +1,25 @@
+=== FINAL VERIFICATION (tree as this unit leaves it) ===
+--- source hashes ---
+0d6900dcac7d09d5c29b77082f0d9bf4ba9db8d95692361dcaaa99b05149d8b3  src/cpu/instructions.c
+8b46c9597f756221ed0b385a8fe51576a348b0ff983a27856b218765898043fc  src/cpu/cpu.c
+602f887d1c6045ccca718af81162975fc8bebc1e687245612ac3a34ab8c4049c  src/cpu/uop_cache.c
+5ed5786fb9f2d211b6620c0d7d81efadc6bfb8846b6df56422647de65da28d76  src/cpu/memory.c
+d08ea57647e0b42e6bfb8257e226f573b875e48c58207c314ff7291530c2d117  tests/perf_bench.sh
+
+--- make ---
+node gen/interpreter_uop.js
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+make rc=0
+
+--- make transcript-diff ---
+milestone: the C transcript is byte-identical to the reference's
+--- make nasm ---
+[+] Passed 118/118 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+--- make bench ---
+asserting: instruction count 200095214
+asserting: terminal guest state "in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0"
+asserting: serial output sha256 fae4924b13b07d441b0ad8458047d2f1d8abf0d1ec59876f44b88ef67d2d0b2a
+n=7
+real: best 3.193  median 3.256  worst 3.343
+MIPS at best real: 62.67   at median real: 61.45

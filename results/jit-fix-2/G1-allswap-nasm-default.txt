@@ -1,0 +1,138 @@
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+node gen/interpreter_uop.js
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+python3 gen/unity_c.py --watch src/hw/io.c src/hw/bus.c src/hw/pit.c src/hw/rtc.c src/hw/dma.c src/hw/ps2.c src/hw/acpi.c src/hw/pci.c src/hw/machine.c src/hw/uart.c src/hw/kernel.c src/hw/ide.c src/hw/virtio.c src/hw/virtio_console.c src/main.c v86/lib/softfloat/softfloat.c src/cpu/cpu_state.h src/cpu/flags.h src/cpu/memory.h src/cpu/paging.h src/cpu/arith.h src/cpu/modrm.h src/cpu/misc_instr.h src/cpu/string.h src/cpu/instructions.h src/cpu/instructions_0f.h src/cpu/sse_instr.h src/cpu/softfloat.h src/cpu/fpu.h src/cpu/exceptions.h src/cpu/pic.h src/cpu/cpu.h src/cpu/exec_boundary.h src/cpu/jit_mem.h src/cpu/jit_x64.h src/cpu/jit_codegen.h src/hw/io.h src/hw/bus.h src/hw/pit.h src/hw/rtc.h src/hw/dma.h src/hw/ps2.h src/hw/acpi.h src/hw/pci.h src/hw/machine.h src/hw/uart.h src/hw/kernel.h src/hw/ide.h src/hw/virtio.h src/hw/virtio_console.h -o build/unity.c src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/paging.c src/cpu/arith.c src/cpu/modrm.c src/cpu/misc_instr.c src/cpu/string.c src/cpu/instructions.c src/cpu/instructions_0f.c src/cpu/sse_instr.c src/cpu/softfloat.c src/cpu/fpu.c src/cpu/exceptions.c src/cpu/pic.c src/cpu/cpu.c src/cpu/exec_boundary.c src/cpu/uop_cache.c src/cpu/jit_mem.c src/cpu/jit_x64.c src/cpu/jit_codegen.c src/cpu/interpreter_gen.c src/cpu/uop_gen.c
+unity_c.py: 23 sources -> build/unity.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -I . -I src -c -o build/unity.o build/unity.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -I src -Wl,--gc-sections -o build/v86c src/main.c build/minibios_embed.c build/unity.o build/hw/io.o build/hw/bus.o build/hw/pit.o build/hw/rtc.o build/hw/dma.o build/hw/ps2.o build/hw/acpi.o build/hw/pci.o build/hw/machine.o build/hw/uart.o build/hw/kernel.o build/hw/ide.o build/hw/virtio.o build/hw/virtio_console.o build/sf/softfloat.o
+python3 tests/nasm_run.py --stage run \
+	--actual "build/v86c-nasm {img} {limit} --fixture" \
+	--skip-list tests/nasm_skip_c.txt
+Testing arith-optimisations.img
+Testing btc-imm.img
+Testing btc-reg16.img
+Testing btc-reg32.img
+Testing btr-imm.img
+Testing btr-reg16.img
+Testing btr-reg32.img
+Testing bts-imm.img
+Testing bts-reg16.img
+Testing bts-reg32.img
+Testing cmp16-setbe.img
+Testing cmpxchg.img
+Testing cmpxchg-setbe.img
+Testing cmpxchg8b.img
+Testing comiss.img
+Testing cvtpi2ps.img
+Testing cvtps2pi.img
+Testing cvttps2pi.img
+Testing double-segment-prefix.img
+Testing emms.img
+Testing f2xm1.img
+Testing fchs.img
+Testing fdecstp.img
+Testing fdiv.img
+Testing fdiv-zero.img
+Testing fdivr.img
+Testing fincstp.img
+Testing fprem.img
+Testing fprem-distinct.img
+Testing fprem1.img
+Testing fptan.img
+Testing fpu_m80.img
+Testing frndint.img
+Testing fsave_frstor.img
+Testing fscale.img
+Testing fsincos.img
+Testing fsqrt.img
+Testing fst-st-empty-tag.img
+Testing fstenv.img
+Testing fstm80.img
+Testing fstsw.img
+Testing fxtract.img
+Testing fxtract-zero.img
+Testing fyl2x.img
+Testing fyl2x-zero.img
+Testing fyl2xp1.img
+Testing idiv16-overflow.img
+Testing idiv32-overflow.img
+Testing idiv8-overflow.img
+Testing indirect-call.img
+Testing indirect-jump.img
+Testing jcxz.img
+Testing lea-nop.img
+Testing leave16.img
+Testing leave32.img
+Testing loop.img
+Testing loopnz.img
+Testing loopz.img
+Testing mov16.img
+Testing mov_sreg.img
+Testing mov_sreg_ud1.img
+Testing mov_sreg_ud2.img
+Testing movaps.img
+Testing movd.img
+Testing movntpd.img
+Testing movntps.img
+Testing movq.img
+Testing packssdw.img
+Testing packsswb.img
+Testing packuswb.img
+Testing paddb.img
+Testing paddd.img
+Testing paddsb.img
+Testing paddsw.img
+Testing paddusb.img
+Testing paddusw.img
+Testing paddw.img
+Testing pand.img
+Testing pandn.img
+Testing pcmpeqb.img
+Testing pcmpeqd.img
+Testing pcmpeqw.img
+Testing pcmpgtb.img
+Testing pcmpgtd.img
+Testing pcmpgtw.img
+Testing pmaddwd.img
+Testing pmulhw.img
+Testing pmullw.img
+Testing pmuludq.img
+Testing por.img
+Testing pshufw.img
+Testing pslld.img
+Testing psllq.img
+Testing psllw.img
+Testing psrad.img
+Testing psraw.img
+Testing psrld.img
+Testing psrlq.img
+Testing psrlw.img
+Testing psubb.img
+Testing psubd.img
+Testing psubsb.img
+Testing psubsw.img
+Testing psubusb.img
+Testing psubusw.img
+Testing psubw.img
+Testing punpckhbw.img
+Testing punpckhdq.img
+Testing punpckhwd.img
+Testing punpcklbw.img
+Testing punpckldq.img
+Testing punpcklwd.img
+Testing push.img
+Testing pushf.img
+Testing pxor.img
+Testing ret-imm.img
+Testing shufps-edgecase.img
+Testing ucomiss.img
+
+[+] Passed 118/118 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+[~] Skipped 5 test(s) (tests/nasm_skip_c.txt):
+	jump: src/cpu/cpu.c:83: assert(!in_mapped_range(phys_addr)) failed -- the fixture's jump reaches a region v86's flat 2 MiB memory model maps differently (P0 class B, the same model gap as pop_esp); unchanged since M1a-4
+	maskmovdqu: P0 class B: the native fixture expects a #GP at 0x80055 where the port writes below the stack, but address 0 is plain guest RAM in v86's flat model, so neither the reference nor the port faults. MEASURED: the JS reference leg gives the port's exact actual eip/exception (0x80078 / None)
+	maskmovq: P0 class B: same as maskmovdqu (fixture #GP at 0x8004f, port and JS reference both report eip 0x8006e / no exception)
+	pop_esp: the native fixture expects a #GP at 0x80023 from a store to address 0; address 0 is plain guest RAM in v86's flat 2 MiB memory model, so neither the reference nor the port takes a fault (P0 class B) and the C leg halts instead -- the same emulator-model gap, not a port defect
+	pop_esp2: same as pop_esp: the fixture's SIGSEGV comes from the host MMU writing to address 0, which the emulator does not model (P0 class B)

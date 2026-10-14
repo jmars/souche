@@ -1,0 +1,47 @@
+== every writer of segment_offsets[] / segment_is_null[], and what follows it
+  src/cpu/cpu_state.c         :121  void reset_cpu(void)                       no update_state_flags() after it
+  src/cpu/cpu_state.c         :123  void reset_cpu(void)                       no update_state_flags() after it
+  src/cpu/cpu_state.c         :203  void reset_cpu(void)                       ok
+  src/cpu/cpu_state.c         :204  void reset_cpu(void)                       ok
+  src/cpu/cpu_state.c         :209  void reset_cpu(void)                       ok
+  src/cpu/cpu_state.c         :210  void reset_cpu(void)                       ok
+  src/cpu/exceptions.c        :129  void switch_cs_real_mode(int32_t selector) no update_state_flags() after it
+  src/cpu/exceptions.c        :130  void switch_cs_real_mode(int32_t selector) no update_state_flags() after it
+  src/cpu/exceptions.c        :438  static void iret(bool is_16)               no update_state_flags() after it
+  src/cpu/exceptions.c        :468  static void iret(bool is_16)               ok
+  src/cpu/exceptions.c        :743  void call_interrupt_vector(int32_t interrupt, bool is_int, bool has_error_code, int32_t error_code) no update_state_flags() after it
+  src/cpu/exceptions.c        :843  bool switch_seg(int32_t reg, int32_t selector_raw) no update_state_flags() after it
+  src/cpu/exceptions.c        :844  bool switch_seg(int32_t reg, int32_t selector_raw) no update_state_flags() after it
+  src/cpu/exceptions.c        :869  bool switch_seg(int32_t reg, int32_t selector_raw) ok
+  src/cpu/exceptions.c        :918  bool switch_seg(int32_t reg, int32_t selector_raw) ok
+  src/cpu/exceptions.c        :920  bool switch_seg(int32_t reg, int32_t selector_raw) ok
+  src/cpu/exceptions.c        :1175 void far_jump(int32_t eip, int32_t selector, bool is_call, bool is_osize_32) ok
+  src/cpu/exceptions.c        :1177 void far_jump(int32_t eip, int32_t selector, bool is_call, bool is_osize_32) ok
+  src/cpu/exceptions.c        :1272 void far_jump(int32_t eip, int32_t selector, bool is_call, bool is_osize_32) ok
+  src/cpu/exceptions.c        :1276 void far_jump(int32_t eip, int32_t selector, bool is_call, bool is_osize_32) ok
+  src/cpu/exceptions.c        :1396 void far_return(int32_t eip, int32_t selector, int32_t stack_adjust, bool is_osize_32) no update_state_flags() after it
+  src/cpu/exceptions.c        :1414 void far_return(int32_t eip, int32_t selector, int32_t stack_adjust, bool is_osize_32) ok
+  src/cpu/exceptions.c        :1418 void far_return(int32_t eip, int32_t selector, int32_t stack_adjust, bool is_osize_32) ok
+  src/cpu/exceptions.c        :1583 void far_return(int32_t eip, int32_t selector, int32_t stack_adjust, bool is_osize_32) no update_state_flags() after it
+  src/cpu/exceptions.c        :1584 void far_return(int32_t eip, int32_t selector, int32_t stack_adjust, bool is_osize_32) no update_state_flags() after it
+  src/cpu/exceptions.c        :1630 void far_return(int32_t eip, int32_t selector, int32_t stack_adjust, bool is_osize_32) no update_state_flags() after it
+  src/cpu/exceptions.c        :1632 void far_return(int32_t eip, int32_t selector, int32_t stack_adjust, bool is_osize_32) no update_state_flags() after it
+  src/cpu/exceptions.c        :1693 void far_return(int32_t eip, int32_t selector, int32_t stack_adjust, bool is_osize_32) no update_state_flags() after it
+  src/cpu/exceptions.c        :1755 void load_tr(int32_t selector_raw)         no update_state_flags() after it
+  src/cpu/exceptions.c        :1779 void load_ldt(int32_t selector_raw)        no update_state_flags() after it
+  src/cpu/exceptions.c        :1816 void load_ldt(int32_t selector_raw)        no update_state_flags() after it
+  src/cpu/instructions_0f.c   :6462 void instr_0F34(void)                      ok
+  src/cpu/instructions_0f.c   :6464 void instr_0F34(void)                      ok
+  src/cpu/instructions_0f.c   :6470 void instr_0F34(void)                      ok
+  src/cpu/instructions_0f.c   :6472 void instr_0F34(void)                      ok
+  src/cpu/instructions_0f.c   :6492 void instr_0F35(void)                      ok
+  src/cpu/instructions_0f.c   :6494 void instr_0F35(void)                      ok
+  src/cpu/instructions_0f.c   :6500 void instr_0F35(void)                      ok
+  src/cpu/instructions_0f.c   :6502 void instr_0F35(void)                      ok
+  src/main.c                  :251  static void multiboot_set_state(uint32_t entrypoint) ok
+  src/main.c                  :252  static void multiboot_set_state(uint32_t entrypoint) ok
+
+writers found: 41
+mentions that are not writers (reads, declarations): 40
+
+VERDICT: 17 writer(s) in a segment-changing function have no update_state_flags() after them -- the EPOCH design would have to account for each of these

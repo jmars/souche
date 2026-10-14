@@ -1,0 +1,29 @@
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+node gen/interpreter_uop.js
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+python3 gen/unity_c.py --watch src/hw/io.c src/hw/bus.c src/hw/pit.c src/hw/rtc.c src/hw/dma.c src/hw/ps2.c src/hw/acpi.c src/hw/pci.c src/hw/machine.c src/hw/uart.c src/hw/kernel.c src/hw/ide.c src/hw/virtio.c src/hw/virtio_console.c src/main.c v86/lib/softfloat/softfloat.c src/cpu/cpu_state.h src/cpu/flags.h src/cpu/memory.h src/cpu/paging.h src/cpu/arith.h src/cpu/modrm.h src/cpu/misc_instr.h src/cpu/string.h src/cpu/instructions.h src/cpu/instructions_0f.h src/cpu/sse_instr.h src/cpu/softfloat.h src/cpu/fpu.h src/cpu/exceptions.h src/cpu/pic.h src/cpu/cpu.h src/cpu/exec_boundary.h src/hw/io.h src/hw/bus.h src/hw/pit.h src/hw/rtc.h src/hw/dma.h src/hw/ps2.h src/hw/acpi.h src/hw/pci.h src/hw/machine.h src/hw/uart.h src/hw/kernel.h src/hw/ide.h src/hw/virtio.h src/hw/virtio_console.h -o build/unity.c src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/paging.c src/cpu/arith.c src/cpu/modrm.c src/cpu/misc_instr.c src/cpu/string.c src/cpu/instructions.c src/cpu/instructions_0f.c src/cpu/sse_instr.c src/cpu/softfloat.c src/cpu/fpu.c src/cpu/exceptions.c src/cpu/pic.c src/cpu/cpu.c src/cpu/exec_boundary.c src/cpu/uop_cache.c src/cpu/interpreter_gen.c src/cpu/uop_gen.c
+unity_c.py: 20 sources -> build/unity.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -pg -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -I . -I src -c -o build/unity.o build/unity.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -pg -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/cpu/interpreter_gen.o src/cpu/interpreter_gen.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -pg -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/hw/io.o src/hw/io.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -pg -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/hw/bus.o src/hw/bus.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -pg -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/hw/pit.o src/hw/pit.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -pg -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/hw/rtc.o src/hw/rtc.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -pg -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/hw/dma.o src/hw/dma.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -pg -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/hw/ps2.o src/hw/ps2.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -pg -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/hw/acpi.o src/hw/acpi.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -pg -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/hw/pci.o src/hw/pci.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -pg -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/hw/machine.o src/hw/machine.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -pg -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/hw/uart.o src/hw/uart.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -pg -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/hw/kernel.o src/hw/kernel.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -pg -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/hw/ide.o src/hw/ide.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -pg -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/hw/virtio.o src/hw/virtio.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -pg -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -c -o build/hw/virtio_console.o src/hw/virtio_console.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -DSOFTFLOAT_FAST_INT64 -DINLINE_LEVEL=5 -DSOFTFLOAT_FAST_DIV32TO16 -DSOFTFLOAT_FAST_DIV64TO32 -ffunction-sections -fdata-sections -c -o build/sf/softfloat.o v86/lib/softfloat/softfloat.c
+as --32 -o build/minibios.o tests/minibios.asm
+ld -m elf_i386 -Ttext 0 -o build/minibios.elf build/minibios.o
+ld: warning: cannot find entry symbol _start; defaulting to 00000000
+objcopy -O binary -j .text build/minibios.elf build/minibios.bin
+python3 gen/minibios_bin.py build/minibios.bin build/minibios_embed.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -pg -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -I src -Wl,--gc-sections -o build/v86c src/main.c build/minibios_embed.c build/unity.o build/hw/io.o build/hw/bus.o build/hw/pit.o build/hw/rtc.o build/hw/dma.o build/hw/ps2.o build/hw/acpi.o build/hw/pci.o build/hw/machine.o build/hw/uart.o build/hw/kernel.o build/hw/ide.o build/hw/virtio.o build/hw/virtio_console.o build/sf/softfloat.o

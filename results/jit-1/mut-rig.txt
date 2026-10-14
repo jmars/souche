@@ -1,0 +1,18 @@
+# JIT-1 (M1) mutation rig -- every arm must make `build/cpu_jit_codegen_selftest` FAIL
+#   sources: jit_x64.c 0b1dd1e9216d4b06, jit_codegen.c dea56c6e85dc2fca
+
+control (no mutation)                        build rc=0 run rc=0  PASS as required
+recipe direction swapped                     run rc=1   CAUGHT (FAIL src/cpu/jit_codegen_selftest.c:697: ram32(TRACE) == 0x22222222 (got 0x0, want 0x22222222))
+spill spills only one register               run rc=1   CAUGHT (FAIL src/cpu/jit_codegen_selftest.c:695: snap[arm].cpu.reg32[ECX] == 0x22222222 (got 0x11111111, want 0x22222222))
+reload reloads only one register             run rc=1   CAUGHT (FAIL src/cpu/jit_codegen_selftest.c:695: snap[arm].cpu.reg32[ECX] == 0x22222222 (got 0x0, want 0x22222222))
+SMC abort check never taken                  run rc=1   CAUGHT (FAIL src/cpu/jit_codegen_selftest.c:958: ram32(TRACE) == 0x2A (got 0x0, want 0x2a))
+materialisation-fault check dropped          run rc=1   CAUGHT (FAIL src/cpu/jit_codegen_selftest.c:805: arm_flushes[2] == arm_flushes[1] (got 0x3, want 0x2))
+prefixes store dropped                       run rc=1   CAUGHT (FAIL src/cpu/jit_codegen_selftest.c:769: snap[2].vec == 7 (got 0x0, want 0x7))
+flush drops the counter add                  run rc=-6  CAUGHT (suite failed)
+previous_ip store dropped                    run rc=1   CAUGHT (FAIL src/cpu/jit_codegen_selftest.c:624: x->previous_ip == y->previous_ip (got 0x100e, want 0x1000))
+page-cross mask broken                       run rc=1   CAUGHT (FAIL src/cpu/jit_codegen_selftest.c:805: arm_flushes[2] == arm_flushes[1] (got 0x1, want 0x2))
+encoder takes REX.R from the wrong bit       run rc=-11 CAUGHT (FAIL byte pin: mov r32,r32 (r12d,r11d) (got 3 bytes, want 3))
+
+restoration: sources byte-identical=True, build rc=0 run rc=0 PASS as required
+
+VERDICT: 10/10 mutation arms CAUGHT; control and restoration PASS

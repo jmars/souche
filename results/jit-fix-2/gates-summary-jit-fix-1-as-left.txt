@@ -1,0 +1,95 @@
+== JIT-FIX-1 GATES: 2026-10-13T16:33:39Z load=1.78 1.35 1.35
+assemble probe.img                                       rc=0
+G1 probe: --jit on == --jit off (fixed tree)             rc=0
+assemble probe2.img                                      rc=0
+G1 probe2: --jit on == --jit off (fixed tree)            rc=0
+"eax":"0x111134de",
+"ebx":"0x222234ab",
+"ecx":"0x4444abb6",
+"edi":"0x00000034",
+"edx":"0x8888ab34",
+"esi":"0x000000de",
+G2 blocker: FAILS as it must (rc=2)                      rc=0
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0xffffffffffffffef, want 0x0)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0xffffffffffffffef, want 0x0)
+FAIL src/cpu/jit_codegen_selftest.c:1546: (uint32_t)snap[arm].cpu.reg32[EAX] == 0x000000C0u (got 0x1111c0, want 0xc0)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0xffffffffffffffde, want 0x0)
+G2 blocker: restored (cmp vs the saved copy)             rc=0
+G2 read-only-fixed: green as measured (rc=0)             rc=0
+jit_codegen_selftest: 2778 checks, 0 failures
+G2 read-only-fixed: restored (cmp vs the saved copy)     rc=0
+G2 write-only-fixed: FAILS as it must (rc=2)             rc=0
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0xffffffffffffffef, want 0x0)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0xffffffffffffffef, want 0x0)
+FAIL src/cpu/jit_codegen_selftest.c:1546: (uint32_t)snap[arm].cpu.reg32[EAX] == 0x000000C0u (got 0x1111c0, want 0xc0)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0xffffffffffffffde, want 0x0)
+G2 write-only-fixed: restored (cmp vs the saved copy)    rc=0
+G2 leaky: FAILS as it must (rc=2)                        rc=0
+FAIL src/cpu/jit_selftest.c:463: b == a
+FAIL src/cpu/jit_selftest.c:481: d == c
+FAIL src/cpu/jit_selftest.c:513: f == e
+FAIL src/cpu/jit_selftest.c:530: g == page0
+G2 leaky: restored (cmp vs the saved copy)               rc=0
+G2 jcc-swapped: FAILS as it must (rc=2)                  rc=0
+FAIL src/cpu/jit_codegen_selftest.c:697: x->instruction_pointer == y->instruction_pointer (got 0x1005, want 0x1003)
+FAIL src/cpu/jit_codegen_selftest.c:698: x->previous_ip == y->previous_ip (got 0x1004, want 0x1002)
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x2, want 0x0)
+G2 jcc-swapped: restored (cmp vs the saved copy)         rc=0
+G2 encoder-mutated: FAILS as it must (rc=2)              rc=0
+FAIL byte pin: not r/m32 (eax) (got 2 bytes, want 2)
+jit_codegen_selftest: 2778 checks, 1 failures
+G2 encoder-mutated: restored (cmp vs the saved copy)     rc=0
+G2 no-readonly-fold: FAILS as it must (rc=2)             rc=0
+FAIL src/cpu/jit_codegen_selftest.c:1331: entry & (TLB_VALID | TLB_READONLY) == TLB_VALID (got 0x3, want 0x1)
+jit_codegen_selftest: 2778 checks, 1 failures
+G2 no-readonly-fold: restored (cmp vs the saved copy)    rc=0
+G2 restored tree: jit-codegen-selftest green             rc=0
+jit_codegen_selftest: 2778 checks, 0 failures
+G2 restored tree: jit-selftest green                     rc=0
+jit-selftest: 51 checks, 0 failures
+make                                                     rc=0
+2ee29c846da219dc88b5e5a05a52cf72301fab3b07cc7385d3cdaadc5d3bf703  build/v86c
+make selftest                                            rc=0
+cpu_selftest: 3522 checks, 0 failures
+cpu_m1c_selftest: 228 checks, 0 failures
+hw_selftest: 551 checks, 0 failures, 0 skipped
+uop_cache_selftest: 7934349 checks, 0 failures
+uop_exec_selftest: 102 checks, 0 failures
+jit_codegen_selftest: 2778 checks, 0 failures
+selftest: all suites green
+make nasm (default)                                      rc=0
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+	jump: src/cpu/cpu.c:83: assert(!in_mapped_range(phys_addr)) failed -- the fixture's jump reaches a region v86's flat 2 MiB memory model maps differently (P0 class B, the same model gap as pop_esp); unchanged since M1a-4
+nasm with --uop-cache off                                rc=0
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+	jump: src/cpu/cpu.c:83: assert(!in_mapped_range(phys_addr)) failed -- the fixture's jump reaches a region v86's flat 2 MiB memory model maps differently (P0 class B, the same model gap as pop_esp); unchanged since M1a-4
+nasm with --jit on                                       rc=0
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+	jump: src/cpu/cpu.c:83: assert(!in_mapped_range(phys_addr)) failed -- the fixture's jump reaches a region v86's flat 2 MiB memory model maps differently (P0 class B, the same model gap as pop_esp); unchanged since M1a-4
+make transcript-diff (default)                           rc=0
+transcript-diff with --jit off (vs the JS reference)     rc=0
+transcript-diff with --jit on (vs the JS reference)      rc=0
+1.5 G boot (off)                                         rc=0
+in_hlt=0, exception=-1, unimplemented=0, eip=0xc1927800 cs=0x60 cr0=0x80050033 cr3=0x1ea1000
+1.5 G boot (onjit)                                       rc=0
+in_hlt=0, exception=-1, unimplemented=0, eip=0xc1927800 cs=0x60 cr0=0x80050033 cr3=0x1ea1000
+1.5 G final state IDENTICAL: in_hlt=0, exception=-1, unimplemented=0, eip=0xc1927800 cs=0x60 cr0=0x80050033 cr3=0x1ea1000
+7044a6f6b3f1d3a734e91186e1acac1c4634200ece3eb69069befdd1e99e1aee  results/jit-fix-1/boot-1.5g-off-serial.txt
+7044a6f6b3f1d3a734e91186e1acac1c4634200ece3eb69069befdd1e99e1aee  results/jit-fix-1/boot-1.5g-onjit-serial.txt
+the --jit on 1.5 G serial is BYTE-IDENTICAL to the default leg
+-- the leaked-span line on the 1.5 G boot (must be a COUNTER, not a paging failure):
+  "block table is full" occurrences: 630776
+aarch64 compile jit_codegen.c                            rc=0
+aarch64 compile jit_codegen_selftest.c                   rc=0
+aarch64 compile jit_mem.c                                rc=0
+aarch64 compile jit_x64.c                                rc=0
+aarch64 compile uop_cache.c                              rc=0
+aarch64 compile jit_selftest.c                           rc=0
+bench --jit off                                          rc=0
+bench --jit on                                           rc=0
+jit off  best 2.713  median 2.836 s
+jit on   best 1.571  median 1.677 s
+ratio (off/on, >1 means the JIT is faster): best 1.727  median 1.691
+== done 2026-10-13T16:37:58Z load=3.38 2.70 1.94
+== WORST RC ACROSS ALL ROWS: 0

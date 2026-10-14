@@ -1,0 +1,138 @@
+=== G4a: make BUILD=/tmp/m1b2-build (from an empty dir), rc and any diagnostic ===
+rc=0
+--- diagnostics (whole log, minus the compile-command echo):
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1891 implemented, 31 unimplemented, 1895 names defined (unchanged)
+--- (empty means clean under -Wall -Wextra -Werror)
+
+=== G4b: make transcript-diff ===
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o build/cpu/instructions_0f.o src/cpu/instructions_0f.c
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1891 implemented, 31 unimplemented, 1895 names defined (unchanged)
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -I src -Wl,--gc-sections -o build/v86c src/main.c build/cpu/cpu_state.o build/cpu/flags.o build/cpu/memory.o build/cpu/paging.o build/cpu/arith.o build/cpu/modrm.o build/cpu/misc_instr.o build/cpu/string.o build/cpu/instructions.o build/cpu/instructions_0f.o build/cpu/sse_instr.o build/cpu/softfloat.o build/cpu/fpu.o build/cpu/cpu.o build/cpu/exec_boundary.o build/cpu/interpreter_gen.o build/sf/softfloat.o
+./build/v86c tests/test.img 1000000 > results/transcript.c.txt
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.js.txt
+diff -u results/transcript.js.txt results/transcript.c.txt
+milestone: the C transcript is byte-identical to the reference's
+rc=0
+
+=== G2: make selftest ===
+PASS instr: the MMX/SSE 0F groups -- the x87 aliasing transition, the mov/movmask/shuffle family, the integer group's wraps and saturations, the shift clamps, the comparisons, the conversions and the fault surface
+PASS fpu: the tag/status/control words, TOP, push/pop and both stack-fault paths
+PASS fpu: softfloat conversions -- f32/f64/i32/i64 round trips (the ABI claim), the F80 constants and the arithmetic operators
+PASS fpu: fstenv32/fldenv32, fsave32/frstor32 and FXSAVE/FXRSTOR round trips (incl. the #gp on an invalid mxcsr)
+PASS fpu: rounding modes, precision control, the result/exception status bits, the integer stores and fprem/fbstp/f2xm1/fsqrt
+cpu_selftest: 3522 checks, 0 failures
+rc=0
+
+=== G1: make nasm ===
+grep: warning: stray \ before -
+grep: warning: stray \ before ~
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1891 implemented, 31 unimplemented, 1895 names defined (unchanged)
+	--actual "build/v86c-nasm {img} {limit} --fixture" \
+	--skip-list tests/nasm_skip_c.txt
+[+] Passed 118/118 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+[~] Skipped 5 test(s) (tests/nasm_skip_c.txt):
+	jump: src/cpu/cpu.c:83: assert(!in_mapped_range(phys_addr)) failed -- the fixture's jump reaches a region v86's flat 2 MiB memory model maps differently (P0 class B, the same model gap as pop_esp); unchanged since M1a-4
+	maskmovdqu: P0 class B: the native fixture expects a #GP at 0x80055 where the port writes below the stack, but address 0 is plain guest RAM in v86's flat model, so neither the reference nor the port faults. MEASURED: the JS reference leg gives the port's exact actual eip/exception (0x80078 / None)
+	maskmovq: P0 class B: same as maskmovdqu (fixture #GP at 0x8004f, port and JS reference both report eip 0x8006e / no exception)
+	pop_esp: the native fixture expects a #GP at 0x80023 from a store to address 0; address 0 is plain guest RAM in v86's flat 2 MiB memory model, so neither the reference nor the port takes a fault (P0 class B) and the C leg halts instead -- the same emulator-model gap, not a port defect
+	pop_esp2: same as pop_esp: the fixture's SIGSEGV comes from the host MMU writing to address 0, which the emulator does not model (P0 class B)
+
+=== the emitter census (make's own output) ===
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1891 implemented, 31 unimplemented, 1895 names defined (unchanged)
+
+=== the 31 remaining unimplemented symbols (all M1b-1's M1c-owned deferrals) ===
+instructions_0f::instr_0F30"
+instructions_0f::instr_0F31"
+instructions_0f::instr_0F32"
+instructions_0f::instr_0F34"
+instructions_0f::instr_0F35"
+instructions_0f::instr16_0F00_2_mem"
+instructions_0f::instr16_0F00_2_reg"
+instructions_0f::instr16_0F00_3_mem"
+instructions_0f::instr16_0F00_3_reg"
+instructions_0f::instr16_0F00_4_mem"
+instructions_0f::instr16_0F00_4_reg"
+instructions_0f::instr16_0F00_5_mem"
+instructions_0f::instr16_0F00_5_reg"
+instructions_0f::instr16_0F02_mem"
+instructions_0f::instr16_0F02_reg"
+instructions_0f::instr16_0F03_mem"
+instructions_0f::instr16_0F03_reg"
+instructions_0f::instr16_0FC7_6_reg"
+instructions_0f::instr32_0F00_2_mem"
+instructions_0f::instr32_0F00_2_reg"
+instructions_0f::instr32_0F00_3_mem"
+instructions_0f::instr32_0F00_3_reg"
+instructions_0f::instr32_0F00_4_mem"
+instructions_0f::instr32_0F00_4_reg"
+instructions_0f::instr32_0F00_5_mem"
+instructions_0f::instr32_0F00_5_reg"
+instructions_0f::instr32_0F02_mem"
+instructions_0f::instr32_0F02_reg"
+instructions_0f::instr32_0F03_mem"
+instructions_0f::instr32_0F03_reg"
+instructions_0f::instr32_0FC7_6_reg"
+
+=== G3: the asymmetry rig -- sh /tmp/m1b2-mut/rig.sh (a SCRATCH copy of the tree; see the rig's header) ===
+--- arms and results (raw):
+scratch tree: /tmp/m1b2-mut/tree
+pristine: cpu_selftest: 3522 checks, 0 failures
+=== ARM M1 (src/cpu/sse_instr.c)
+  BEFORE: selftest rc=2  nasm rc=0
+FAIL src/cpu/cpu_selftest.c:5403: cpu->fpu_stack_empty == 0x00 (got 0xff, want 0x0)
+FAIL src/cpu/cpu_selftest.c:5413: fpu_load_tag_word() == 0x1515 (got 0xffff, want 0x1515)
+[+] Passed 118/118 tests.
+  AFTER (restored): selftest rc=0  nasm rc=0
+cpu_selftest: 3522 checks, 0 failures
+[+] Passed 118/118 tests.
+  restore: byte-identical
+=== ARM M2 (src/cpu/instructions_0f.c)
+  BEFORE: selftest rc=2  nasm rc=0
+FAIL src/cpu/cpu_selftest.c:5638: read_mmx64s(1) == 0xFFFEFFFEFFFEFFFEull (got 0xfe00fe00fe00fe00, want 0xfffefffefffefffe)
+[+] Passed 118/118 tests.
+  AFTER (restored): selftest rc=0  nasm rc=0
+cpu_selftest: 3522 checks, 0 failures
+[+] Passed 118/118 tests.
+  restore: byte-identical
+=== ARM M3 (src/cpu/sse_instr.c)
+  BEFORE: selftest rc=2  nasm rc=0
+FAIL src/cpu/cpu_selftest.c:5766: read_reg32(EAX) == -2 (got 0xfffffffffffffffd, want 0xfffffffffffffffe)
+FAIL src/cpu/cpu_selftest.c:5770: read_reg32(EAX) == 2 (got 0x3, want 0x2)
+[+] Passed 118/118 tests.
+  AFTER (restored): selftest rc=0  nasm rc=0
+cpu_selftest: 3522 checks, 0 failures
+[+] Passed 118/118 tests.
+  restore: byte-identical
+=== ARM M4 (src/cpu/instructions_0f.c)
+  BEFORE: selftest rc=2  nasm rc=0
+FAIL src/cpu/cpu_selftest.c:5507: read_xmm128s(2).u8[0] == 0x0C (got 0xc0, want 0xc)
+FAIL src/cpu/cpu_selftest.c:5508: read_xmm128s(2).u8[1] == 0xC0 (got 0xc, want 0xc0)
+[+] Passed 118/118 tests.
+  AFTER (restored): selftest rc=0  nasm rc=0
+cpu_selftest: 3522 checks, 0 failures
+[+] Passed 118/118 tests.
+  restore: byte-identical
+=== ARM M5 (src/cpu/instructions_0f.c)
+  BEFORE: selftest rc=0  nasm rc=0
+[+] Passed 118/118 tests.
+  AFTER (restored): selftest rc=0  nasm rc=0
+cpu_selftest: 3522 checks, 0 failures
+[+] Passed 118/118 tests.
+  restore: byte-identical
+=== ARM M5H (the harness's mm-register branch made reachable)
+  PRISTINE port, corrected comparison: [+] Passed 118/118 tests.
+  BEFORE (mutated): nasm rc=2  [+] Passed 117/118 tests.
+[-] punpcklbw.img:
+  AFTER (both restored): [+] Passed 118/118 tests.
+
+=== the scope, checked: every one of the 533 scope symbols is now DEFINED ===
+comm -12 of the 533 scope symbols with what the emitter still stops on (must be empty):
+(end)
+
+=== the M0 transcript gate's coverage of THIS unit: NOT ESTABLISHED ===
+The transcript image is checked byte-for-byte (G4b, empty diff), but nothing in this unit
+establishes whether that image EXECUTES an MMX/SSE encoding at all -- the port has no
+instruction trace to read, so the honest statement is that G4b is a NON-REGRESSION gate of
+unknown coverage here, not evidence about the MMX/SSE groups.

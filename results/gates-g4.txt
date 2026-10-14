@@ -1,0 +1,18 @@
+=== G4: cosmocc APE build + run ===
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -o build/v86c src/main.c
+G4 make RC=0
+-rwxr-xr-x. 1 jaye jaye 599140 Oct 11 21:30 build/v86c
+0000000   M   Z   q   F   p   D   =   '  \n  \n  \0 020  \0 370  \0  \0
+od: write error: Broken pipe
+build/v86c: DOS/MBR boot sector; partition 1 : ID=0x7f, active, start-CHS (0x0,0,1), end-CHS (0x3ff,255,63), startsector 0, 4294967295 sectors
+v86c M0 -- v86-to-C port (scaffold; the CPU core is not implemented yet)
+scope: x86 PC emulator, interpreter only, 386-level instructions
+non-goals: JIT, wasm, multicore, 64-bit mode, sound, NE2K, floppy, modem, 9p
+usage: ./build/v86c <image> <instruction-limit>
+       (no arguments prints this banner)
+G4 run RC=0
+v86c M0 -- v86-to-C port (scaffold; the CPU core is not implemented yet)
+scope: x86 PC emulator, interpreter only, 386-level instructions
+non-goals: JIT, wasm, multicore, 64-bit mode, sound, NE2K, floppy, modem, 9p
+./build/v86c: M0 scaffold only; cannot emulate tests/test.img yet
+G4 argv-form RC=2 (intentional: M0 does not emulate)

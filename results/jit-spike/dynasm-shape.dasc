@@ -1,0 +1,33 @@
+|// JIT-SPIKE Q2(a): THE SAME NATIVE BLOCK, EMITTED BY LuaJIT's DynASM.
+|//
+|// This file is a C file with DynASM lines in it: `minilua dynasm.lua -o dynasm-shape.h
+|// dynasm-shape.dasc` rewrites every `|` line into a `dasm_put(...)` call and emits the
+|// assembled action list at the top.  That is exactly how LuaJIT itself uses it
+|// (vendor/luajit/src/Makefile:675-677: `$(DASM) $(DASM_FLAGS) -o $@ $(DASM_DASC)`).
+|//
+|// The block is results/jit-spike/x64enc.c's emit_A(): the shape-A loop with the guest's
+|// registers in host registers, the back edge inside the block, and the HOST's callee-saved
+|// rbx preserved across it.  `n` is a RUNTIME operand (it arrives in edi and is moved to r8d);
+|// `seed` arrives in esi, exactly as in the encoder route's emit_A() -- so the two routes'
+|// byte streams are directly comparable, which is the whole point of doing both.
+|.arch x64
+|.actionlist spike_actionlist
+
+void spike_A_emit(Dst_DECL)
+{
+  | push rbx
+  | mov r8d, edi
+  | xor eax, eax
+  | xor ebx, ebx
+  | mov ecx, esi
+  | xor edi, edi
+  |1:
+  | add eax, ebx
+  | sub ecx, ebx
+  | xor edi, esi
+  | dec r8d
+  | jnz <1
+  | mov eax, edi
+  | pop rbx
+  | ret
+}

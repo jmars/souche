@@ -1,0 +1,155 @@
+node gen/interpreter_uop.js
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+python3 tests/nasm_run.py --stage translate
+
+[+] Translated + assembled + linked 123/123 file(s)
+python3 gen/nasm_corpus.py --out build/nasm_corpus.bin build/nasm
+[+] build/nasm_corpus.bin: 123 images, 10893 .text bytes
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -Wl,--gc-sections -o build/cpu_uop_selftest src/cpu/uop_cache_selftest.c src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/paging.c src/cpu/arith.c src/cpu/modrm.c src/cpu/misc_instr.c src/cpu/string.c src/cpu/instructions.c src/cpu/instructions_0f.c src/cpu/sse_instr.c src/cpu/softfloat.c src/cpu/fpu.c src/cpu/exceptions.c src/cpu/pic.c src/cpu/cpu.c src/cpu/exec_boundary.c src/cpu/uop_cache.c src/cpu/jit_mem.c build/cpu/interpreter_gen.o build/cpu/uop_gen.o build/sf/softfloat.o
+uop-unity: the decoder and its tables compile inside the shipped unity TU
+./build/cpu_selftest
+PASS reset/init values, state_flags, register accessors
+CASE  0 op=0 size= 8 a=0000000f b=00000001 cf_in=0 -> flags=0x010 table=0x010
+CASE  1 op=0 size= 8 a=000000ff b=00000001 cf_in=0 -> flags=0x055 table=0x055
+CASE  2 op=0 size=32 a=7fffffff b=00000001 cf_in=0 -> flags=0x894 table=0x894
+CASE  3 op=0 size=32 a=ffffffff b=00000001 cf_in=0 -> flags=0x055 table=0x055
+CASE  4 op=0 size=16 a=00007fff b=00000001 cf_in=0 -> flags=0x894 table=0x894
+CASE  5 op=0 size=16 a=0000ffff b=00000001 cf_in=0 -> flags=0x055 table=0x055
+CASE  6 op=2 size=32 a=00000000 b=00000001 cf_in=0 -> flags=0x095 table=0x095
+CASE  7 op=2 size=32 a=00000005 b=00000005 cf_in=0 -> flags=0x044 table=0x044
+CASE  8 op=2 size= 8 a=00000080 b=00000001 cf_in=0 -> flags=0x810 table=0x810
+CASE  9 op=2 size=16 a=00008000 b=00000001 cf_in=0 -> flags=0x814 table=0x814
+CASE 10 op=3 size=32 a=12345678 b=12345678 cf_in=0 -> flags=0x044 table=0x044
+CASE 11 op=3 size=32 a=00000001 b=00000002 cf_in=0 -> flags=0x095 table=0x095
+CASE 12 op=1 size= 8 a=0000007f b=00000000 cf_in=1 -> flags=0x890 table=0x890
+CASE 13 op=1 size=32 a=ffffffff b=00000000 cf_in=1 -> flags=0x055 table=0x055
+CASE 14 op=4 size=32 a=00000000 b=00000000 cf_in=1 -> flags=0x095 table=0x095
+CASE 15 op=4 size=32 a=00000100 b=00000001 cf_in=0 -> flags=0x014 table=0x014
+CASE 16 op=5 size=32 a=7fffffff b=00000000 cf_in=1 -> flags=0x895 table=0x895
+CASE 17 op=5 size= 8 a=0000007f b=00000000 cf_in=0 -> flags=0x890 table=0x890
+CASE 18 op=5 size=32 a=ffffffff b=00000000 cf_in=0 -> flags=0x054 table=0x054
+CASE 19 op=6 size= 8 a=00000080 b=00000000 cf_in=1 -> flags=0x811 table=0x811
+CASE 20 op=6 size=32 a=00000001 b=00000000 cf_in=1 -> flags=0x045 table=0x045
+CASE 21 op=7 size=32 a=00000001 b=00000000 cf_in=0 -> flags=0x095 table=0x095
+CASE 22 op=7 size=32 a=80000000 b=00000000 cf_in=0 -> flags=0x885 table=0x885
+CASE 23 op=7 size= 8 a=00000000 b=00000000 cf_in=0 -> flags=0x044 table=0x044
+PASS lazy flags: 24 (op,a,b,cf_in) cases + get_eflags/update_eflags
+PASS memory: router, slack at memory_size, device hook table, mmio windows
+PASS paging: 4 KiB translation, A/D bits, TLB read-only entry
+PASS paging: faults (absent, read-only/WP, user vs supervisor) + cr2/eip/delivery/error codes
+PASS paging: 4 MiB PSE page (translation, A/D, page boundary)
+PASS paging: page-crossing reads/writes (16/32/64/128-bit) + straddle fault
+PASS TLB: insert, invlpg, clear_tlb/global, set_cr3/set_cr0 flushes
+PASS arith: 170 shift/rotate/shld/shrd cases (host-CPU-derived) + count==0
+PASS arith: 46 mul/imul + 44 div/idiv cases (host-CPU-derived) + xadd/cmpxchg
+PASS arith: 180 BCD cases (32-bit host probe) + aam 0 -> #de
+PASS arith: bt/bsf/bsr/popcnt, logic flag clears, saturating helpers
+PASS modrm: 32- and 16-bit addressing, SIB, segment defaults and overrides
+PASS modrm: read_imm8/16/32s fetch, cross-page imm, moffs, faults, get_seg #gp
+PASS misc: push/pop/pusha/enter/lss, stack-pointer helpers, fault paths
+PASS misc: jmp/jcc/loop/jcxz, setcc/cmov, xchg/bswap, condition predicates
+PASS misc: task_switch_test/-_mmx (CR0.EM/TS -> #ud/#nm), set_mxcsr
+PASS string: rep movsb fast path, the per-page iteration limit + rewind, DF=1, the 16-bit slow path
+PASS string: rep cmps/scas termination, the surviving comparison's flags, no-rep forms
+PASS string: rep/no-rep stos and lods (page-bounded stosd, last-unit capture)
+PASS string: rep ins/outs through the port-I/O seat, the IOPL abort, IN/OUT instructions
+PASS instr: ALU memory forms, the immediate groups, not/neg/mul/div, shift groups, inc/dec CF
+PASS instr: xchg both directions, mov r/m<->reg, mov sreg both ways, lea's offset-only address, pop r/m16
+PASS instr: call/jmp/ret/retf, the FF group, int3/int/into with no error code, iret, the 0F escape
+PASS instr: fwait/#NM, pushf/popf (and its #gp), sahf/lahf, the flag ops, cli/sti (+ the shadow re-dispatch), hlt, aam/aad/salc/xlat, cbw/cwd, jcc/loop
+PASS instr: the moffs forms, the A4-AF string wrappers (incl. a segment override), arpl, the 66/67/F0/F2/F3 prefixes and the segment prefixes
+PASS instr: read-modify-write across a page boundary (virt_boundary), no write on a fault, the string slow path's partial effects
+PASS instr: the non-MMX/SSE 0F table -- cpuid, mov cr/dr, sldt/str, the 01 group and invlpg, setcc, cmovcc (incl. its fault), bt/bts/btr/btc, bsf/bsr, cmpxchg, xadd, bswap, shld/shrd, popcnt, movzx/movsx, imul, push/pop fs/gs, lss, the 0F AE group, cmpxchg8b, hadd/hsub, clts and the undefined encodings
+PASS instr: the MMX/SSE 0F groups -- the x87 aliasing transition, the mov/movmask/shuffle family, the integer group's wraps and saturations, the shift clamps, the comparisons, the conversions and the fault surface
+PASS fpu: the tag/status/control words, TOP, push/pop and both stack-fault paths
+PASS fpu: softfloat conversions -- f32/f64/i32/i64 round trips (the ABI claim), the F80 constants and the arithmetic operators
+PASS fpu: fstenv32/fldenv32, fsave32/frstor32 and FXSAVE/FXRSTOR round trips (incl. the #gp on an invalid mxcsr)
+PASS fpu: rounding modes, precision control, the result/exception status bits, the integer stores and fprem/fbstp/f2xm1/fsqrt
+cpu_selftest: 3522 checks, 0 failures
+./build/cpu_m1c_selftest
+test_pagefault_delivery_and_iret #PF through an IDT, the frame, the iret return
+PASS #PF through an IDT, the frame, the iret return
+
+test_dispatcher_fault_flag R5F: the dispatcher's read of the fault flag (same-page handler, control, fetch fault)
+PASS R5F: the dispatcher's read of the fault flag (same-page handler, control, fetch fault)
+
+test_gp_delivery #GP/#UD frames, both gate sizes
+PASS #GP/#UD frames, both gate sizes
+
+test_fault_during_delivery R3: a fault raised INSIDE an interrupt delivery
+PASS R3: a fault raised INSIDE an interrupt delivery
+
+test_gate_types interrupt vs trap gates, the software-int DPL check
+PASS interrupt vs trap gates, the software-int DPL check
+
+test_pic_and_irq the PIC: ICW programming, priority, a delivered IRQ
+PASS the PIC: ICW programming, priority, a delivered IRQ
+
+test_task_switch a task switch through a TSS
+PASS a task switch through a TSS
+
+test_segments switch_seg and lar/lsl/verr/verw
+PASS switch_seg and lar/lsl/verr/verw
+
+test_m1c_opcodes the 31 landed 0F encodings
+PASS the 31 landed 0F encodings
+
+cpu_m1c_selftest: 228 checks, 0 failures
+./build/hw_selftest
+CLOCK: a 10 ms PIT reload (0x2E9C = 11932 ticks) fires at 10001 instructions (1 instruction = 1 us, so 10 ms = 10000 us; the rollover test is a strict inequality, hence +1)
+PASS clock: 1 guest instruction = 1 us, through the PIT, the PM timer and the TSC (12 checks so far)
+PASS io: the port map, the unclaimed-port contract (D-F1), the mmap half + R1F (37 checks so far)
+PASS pit: the ports, the latch, the arithmetic, and a delivered IRQ0 (63 checks so far)
+PASS rtc: the CMOS round-trip, the status registers, BCD vs the host clock (89 checks so far)
+PASS dma: the registers, a transfer into guest memory, and the reverse (116 checks so far)
+PASS ps2: a scancode, the identify replies, a mouse packet, IntelliMouse id (163 checks so far)
+PASS pci: config space, an absent device, the I/O bar move, the stops (190 checks so far)
+PASS acpi: PM1, the GPE registers, the PM timer, IRQ9 (205 checks so far)
+PASS timer seat: main_loop wakes a halted guest on IRQ0 (211 checks so far)
+PORT-0x80 PROBE: `out 0x80, 0x21` -> stopped=0 | `in al, 0x80` -> value=0xff stopped=0 
+PASS G4: the CPU's own in/out -- the PIT, and the port-0x80 probe (D-F1) (234 checks so far)
+PASS uart: a byte out of the sink, the line status, the divisor, the seam (266 checks so far)
+PASS kernel: the bzImage boot params, the option ROM, the real image (338 checks so far)
+PASS ide: geometry, IDENTIFY, READ SECTORS/DMA, the error status, the ATAPI command set (445 checks so far)
+PASS virtio: the PCI function and its capability chain, feature negotiation, the queues, both directions of the console, the IRQ route (541 checks so far)
+hw_selftest: 541 checks, 0 failures, 0 skipped
+./build/cpu_uop_selftest build/nasm_corpus.bin
+framing_tests (c) the block framing: page end, block end, no_bib, cap, no descriptor
+PASS (c) the block framing: page end, block end, no_bib, cap, no descriptor
+
+hand_table (a)/(b) the hand table: forms, both operand sizes, sib, prefixes
+PASS (a)/(b) the hand table: forms, both operand sizes, sib, prefixes
+
+sweep_opcode_forms (a)/(b) every base and 0F opcode x {reg,mem,sib} forms x {16,32}
+PASS (a)/(b) every base and 0F opcode x {reg,mem,sib} forms x {16,32}
+
+sweep_prefixes (a)/(b) every prefix byte and the prefix combinations
+PASS (a)/(b) every prefix byte and the prefix combinations
+
+sweep_sib (a)/(b) every sib byte x mod, and the 16-bit file's forms
+PASS (a)/(b) every sib byte x mod, and the 16-bit file's forms
+
+  corpus: 123 images, 3045 instructions walked
+uop_cache_selftest coverage:
+  dispatch cases decoded (base+0F) x (16+32 keys), of 1024: 996
+    not reached: 00F 026 02E 036 03E 062 064 065 066 067 0F0 0F1 0F2 0F3 10F 126 12E 136 13E 162 164 165 166 167 1F0 1F1 1F2 1F3
+  streams probed                     : 31954
+  instructions decoded and checked   : 1555069
+    length PINNED by the interpreter : 1551551 (6829 of them via a rel-branch target)
+    length unpinned                  : 402 (of which 201 named/allowed)
+    no descriptor (block falls back) : 263 (interpreter agreed: 263)
+    (a) DECODE-TIME stops the decoder has a descriptor for (must be 0): 0
+    runtime stops (sandbox-caused, counted not compared)        : 48 (8 distinct) e.g. iret: CS selector is invalid (upstream panic "Unimplemented: CS selector
+  io ports reached by probes (stubbed): 164384 reads, 164384 writes
+    probes skipped: the body is DBG_ASSERT(false) in this build : 108
+    probes skipped: 16-bit mode + 66 prefix + a control transfer, where the
+                   port's own upstream-inherited dbg_assert!s fire on guest-reachable operands : 1
+    probes whose advance was not a length (delivery/far transfer): 6586
+    blocks produced                  : 31691 (block-end 8056, page-end 1, cap 23630)
+  (b) address comparisons vs modrm_resolve: 1426777 (failures 0)
+      forms: 16-bit 356307, 32-bit 1053569, sib 16901
+uop_cache_selftest: 7934349 checks, 0 failures
+./build/cpu_uop_exec_selftest
+./build/cpu_jit_selftest

@@ -1,0 +1,77 @@
+--- REBOOT-FIX-1 GATES (results/reboot-fix-1.md) — raw evidence, all runs on this tree ---
+tree: src/cpu/{uop_cache.c,cpu.c,cpu_state.c} + tests/{reboot-geom.asm,reboot-fwpage.asm}
++ Makefile image rules + tests/gate-reboot-1.sh arms. Upstream v86/ untouched.
+
+--- G2 PRE-FIX ASYMMETRY: tests/reboot-geom.img (PADS=13) on the tree BEFORE the
+    cpu.c assert fix (a build with the three-line conjunct stashed; no other delta) ---
+$ ./build/v86c tests/reboot-geom.img 2000000              -> rc 134 (SIGABRT)
+./src/cpu/cpu.c:204: assert(cpu->instruction_counter != initial_instruction_counter
+  || uop_pending != 0) failed
+$ ./build/v86c tests/reboot-geom.img 2000000 --jit off    -> rc 134 (same assert line)
+$ ./build/v86c tests/reboot-geom.img 2000000 --uop-cache off -> rc 134 (same assert line)
+(third config: "jit: --jit needs the uop cache's invalidation hooks; --uop-cache off
+ was also given. JIT off." — the pure interpreted executor, same abort.)
+
+--- G2 POST-FIX: the shipped tree ---
+=== POST-FIX (the shipped tree), geom PADS=13, three configs ===
+flags='' rc=0 verdict=1611489293 instruction_count=63 :: 0 assert lines
+flags='--jit off' rc=0 verdict=1611489293 instruction_count=63 :: 0 assert lines
+flags='--uop-cache off' rc=0 verdict=1611489293 instruction_count=63 :: 0 assert lines
+(verdict 1611489293 = 0x600D600D GOLD; python3 tests/reboot_window_model.py 2 <tx> rc 0
+ for each — the whole 4 KiB window matches the independent model.)
+
+--- G1: tests/reboot-fwpage.img (the trigger executed from page 0xFF000, the reset
+    vector overwritten with a marker-writing stub, witness word 0x101028) ---
+PRE-FIX (unfixed tree)  : GOLD in all three configs, window model rc 0 (the corner was
+  never reachable — see the report's SF1 section), instruction_count 50/50/50.
+=== fwpage, shipped tree, three configs (GOLD pre-fix too: the corner was never reachable) ===
+flags='' rc=0 verdict=1611489293 instruction_count=50
+flags='--jit off' rc=0 verdict=1611489293 instruction_count=50
+flags='--uop-cache off' rc=0 verdict=1611489293 instruction_count=50
+Its job is the TRIPWIRE: any future trigger that stops ending its reference batch at
+the trigger routes the compiled TAIL arm through the overwritten reset vector and this
+arm fails as verdict 0xFACD0007 + a broken window hash.
+
+--- G3: the gate ---
+$ make minibios-mem            -> nothing to be done (fresh)
+$ sh tests/gate-reboot-1.sh    -> gate-reboot-1: 39 passed, 0 failed   (21 baseline + 18 new)
+$ REBOOT_KERNEL_ARM=1 sh tests/gate-reboot-1.sh
+  gate-reboot-1: 39 passed, 0 failed
+  gate-reboot-1 kernel arm: PASS (two boots, the disk write survived, rc 0)
+  gate-reboot-1 (with kernel arm): 39 passed, 0 failed
+  (A first kernel-arm run Bus-errored — a self-inflicted collision: it ran CONCURRENTLY
+   with results/reboot-1-mut-rig.sh, which rebuilds build/v86c mid-flight; the gate
+   executed a binary being rewritten. Re-run alone: PASS. One writer per lane.)
+
+--- G3: the mutation rig (results/reboot-1-mut-rig.sh) ---
+MUT M1 omit reset_cpu: CAUGHT (EBX: -87228414 -87228414)
+MUT M2 omit ps2_reset: CAUGHT (EBX: -87228413 -87228413)
+MUT M3 omit pit_init: CAUGHT (EBX: -87228412 -87228412)
+MUT M5 omit uop_cache_clear: NOT CAUGHT by the two-boot image (EBX: 1611489293 1611489293)
+mut-rig: tree restored and rebuilt   [rc 0 — the same verdicts as REBOOT-1's baseline:
+M5's NOT-CAUGHT is the expected result (the review, §2 "THE CACHE CLEAR")]
+
+--- G4 ---
+$ make                                     -> rc 0 (cosmocc APE, x86-64 + aarch64)
+$ make selftest -> selftest: all suites green
+  cpu_selftest: 3522 checks, 0 failures          (baseline 3522 — unchanged)
+  cpu_m1c_selftest: 228 checks, 0 failures       (228 — unchanged)
+  hw_selftest: 551 checks, 0 failures, 0 skipped (551 — unchanged)
+  uop_cache_selftest: 7934349 checks, 0 failures (7934349 — unchanged)
+  uop_exec_selftest: 102 checks, 0 failures      (102 — unchanged)
+  jit-selftest: 51 checks, 0 failures            (51 — unchanged)
+  jit_codegen_selftest: 2978 checks, 0 failures  (2978 — unchanged)
+  (jit_codegen's exit-kind tallies unchanged: return 4, tail 15, abort 1, block-end 107)
+$ make nasm        -> [+] Passed 118/118 tests. (5 named skips, as baseline) rc 0
+$ make transcript-diff -> milestone: the C transcript is byte-identical to the reference's  rc 0
+$ sh tests/gate-m2-5-determinism.sh
+  PASS  the two runs' virtio transcripts are BYTE-IDENTICAL
+  instructions executed: 4000053925 vs 4000053925
+  PASS  the two runs executed the SAME instruction count (4000053925)
+  ### m2-5 determinism gate: 0 FAILING assertion(s)   rc 0   (the pinned count unchanged)
+$ make bench       -> rc 0; verified (every run): 200095214 instructions + the terminal
+  guest state clause + the serial sha256. Measured 125.53/117.98 MIPS (best/median real)
+  vs REBOOT-1's 122.53/120.18 on the same host — within this host's run-to-run noise;
+  the workload's verified clause (not a MIPS threshold) is the gate, and it passed.
+$ aarch64          -> build/v86c.aarch64.elf + the seven selftest .aarch64.elf halves
+  relinked fresh from the current sources (cosmocc builds both APE halves every make).

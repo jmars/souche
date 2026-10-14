@@ -1,0 +1,33 @@
+== the JIT's coverage on the three gate workloads (--jit on --jit-stats)
+
+-- 1. the M0 image (tests/test.img, 1 M instructions, the transcript-diff workload)
+uop-cache: instructions 561 (uops 561, mid-batch fallback steps 0, interpreted_run instructions 0 -> fallback 0.000%)
+jit: pages alloc 1, blocks compiled 1 (live 1), lookups 4 (hits 0, misses 4), execs 15, invalidations 0, deferred frees 0, W^X flips 1, pool exhausted 0
+jit: blocks compiled 1 in 4 attempts (reused 0); refused: fit 3 (149 uops), pool 0, empty 0
+jit: block sizes: compiled 17 uops in 3727 bytes (mean 219.2 B/uop, 17.0 uops/block); refused-for-fit 149 uops in 3 blocks (mean 49.7)
+jit: uops executed inlined 1 / called 114 -> 0.87% dynamic inlined (compile-time: 3 with a recipe, 163 without)
+jit: recipe table: 1 entry -- see results/jit-1-m1.md for what M2 adds
+
+-- 2. a nasm corpus image (the 118/118 gate's own workload)
+build/nasm/arith-optimisations.img
+build/nasm/btc-imm.img
+build/nasm/btc-reg16.img
+--- build/nasm/arith-optimisations.img
+    jit: pages alloc 0, blocks compiled 0 (live 0), lookups 1 (hits 0, misses 1), execs 0, invalidations 0, deferred frees 0, W^X flips 0, pool exhausted 0
+    jit: blocks compiled 0 in 1 attempts (reused 0); refused: fit 1 (22 uops), pool 0, empty 0
+    jit: uops executed inlined 0 / called 0 -> 0.00% dynamic inlined (compile-time: 0 with a recipe, 22 without)
+--- build/nasm/btc-imm.img
+    jit: pages alloc 0, blocks compiled 0 (live 0), lookups 1 (hits 0, misses 1), execs 0, invalidations 0, deferred frees 0, W^X flips 0, pool exhausted 0
+    jit: blocks compiled 0 in 1 attempts (reused 0); refused: fit 1 (37 uops), pool 0, empty 0
+    jit: uops executed inlined 0 / called 0 -> 0.00% dynamic inlined (compile-time: 0 with a recipe, 37 without)
+--- build/nasm/btc-reg16.img
+    jit: pages alloc 0, blocks compiled 0 (live 0), lookups 1 (hits 0, misses 1), execs 0, invalidations 0, deferred frees 0, W^X flips 0, pool exhausted 0
+    jit: blocks compiled 0 in 1 attempts (reused 0); refused: fit 1 (35 uops), pool 0, empty 0
+    jit: uops executed inlined 0 / called 0 -> 0.00% dynamic inlined (compile-time: 0 with a recipe, 35 without)
+
+-- 3. the 200 M kernel boot (make bench's workload)
+jit: pages alloc 550, blocks compiled 550 (live 279), lookups 740 (hits 0, misses 740), execs 146236, invalidations 271, deferred frees 11, W^X flips 821, pool exhausted 0
+jit: blocks compiled 550 in 740 attempts (reused 0); refused: fit 190 (8998 uops), pool 0, empty 0
+jit: block sizes: compiled 3051 uops in 887655 bytes (mean 290.9 B/uop, 5.5 uops/block); refused-for-fit 8998 uops in 190 blocks (mean 47.4)
+jit: uops executed inlined 45645 / called 591916 -> 7.16% dynamic inlined (compile-time: 617 with a recipe, 11432 without)
+jit: recipe table: 1 entry -- see results/jit-1-m1.md for what M2 adds

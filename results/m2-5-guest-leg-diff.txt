@@ -1,0 +1,13 @@
+74,77d73
+< pci 0000:00:12.0: [1234:1111] type 00 class 0x030000 conventional PCI endpoint
+< pci 0000:00:12.0: BAR 0 [mem 0xe0000000-0xe07fffff pref]
+< pci 0000:00:12.0: ROM [mem 0xfebe0000-0xfebeffff pref]
+< pci 0000:00:12.0: Video device with shadowed ROM at [mem 0x000c0000-0x000dffff]
+87,89d82
+< pci 0000:00:12.0: vgaarb: setting as boot VGA device
+< pci 0000:00:12.0: vgaarb: bridge control possible
+< pci 0000:00:12.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
+106d98
+< scsi host0: ata_piix
+107a100
+> scsi host0: ata_piix

@@ -1,0 +1,9 @@
+# perf_bench JIT-FIX-1 --jit off bin=/home/jaye/futaie/souche/results/jit-fix-2/gate-g1/v86c-jitoff limit=200000000 runs=7 2026-10-13T16:52:09Z
+# real user sys
+2.820 2.781 0.037
+2.799 2.760 0.039
+2.983 2.940 0.043
+2.849 2.809 0.040
+2.931 2.890 0.041
+2.832 2.794 0.038
+2.825 2.785 0.040

@@ -1,0 +1,23 @@
+Link geometry vs v86's loader: MEASURED.
+v86 finds a multiboot image by scanning MULTIBOOT_SEARCH_BYTES = 8192 bytes of the
+FILE (v86/src/cpu.js:1327-1338). No magic in that window -> load_multiboot falls
+through without setting eip, the guest starts at the reset vector 0xffff0 and every
+compared field is garbage (MEASURED at the time: eip stuck in the BIOS area, esp=0x100).
+ld places the orphan .multiboot section after the last allocated section, so anything
+that pushes a section's file offset past 8192 takes .multiboot with it.
+
+ld default (with -z separate-code), gas default (.note.gnu.property present) .multiboot past 8192: 63/123
+
++ -z noseparate-code                                                     .multiboot past 8192: 4/123
+      psllq, psllw, psrlq, psrlw
+
++ -z noseparate-code and as -mx86-used-note=no  <- as shipped            .multiboot past 8192: 0/123
+
+The three geometry variants agree on .text=0x80000, .bss=0x100000, entry 0x80000 and
+the PT_LOAD paddrs; only the file offsets move. With both flags the shipped pipeline
+puts .multiboot at file offset 0x111c-0x11c0 for every image.
+Attribution against the first differential run (results/p0-nasm-baseline.txt):
+  * all 63 loader-broken images appear in that run's 82-failure list, and no
+    loader-broken image passed;
+  * the remaining 19 failures are 16 x87-ordering tests + 3 reference blind spots;
+  * 63 + 19 = 82 = that run's failure count, exactly.

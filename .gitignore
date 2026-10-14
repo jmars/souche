@@ -1,0 +1,30 @@
+# --- build products and scratch -------------------------------------------------
+build/
+build-det/
+*.o
+*.com.dbg
+*.aarch64.elf
+gmon.out
+fpuprobe.s
+__pycache__/
+*.pyc
+*.tmp
+
+# --- third-party, FETCHED not vendored ------------------------------------------
+# v86/ is the read-only reference this port is defined against (and the source of
+# gen/x86_table.js and the nasm corpus), so a clone must fetch it:
+#     git clone --depth 1 https://github.com/copy/v86.git v86
+v86/
+oracle/node_modules/
+
+# --- bulk evidence that a gate regenerates -------------------------------------
+# The reports name the script that produces each of these; they are 10-26 MB apiece
+# of boot diagnostics and saved emulator binaries, and committing them buys nothing
+# a re-run does not.  The small evidence (transcripts, sha lists, mutation rigs,
+# captures) stays.
+results/**/boot-*-stderr.txt
+results/**/*-det-run*-stderr.txt
+results/**/v86c-base
+results/**/v86c-chain
+results/**/v86c-final
+results/**/*.elf

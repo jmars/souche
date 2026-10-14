@@ -1,0 +1,14 @@
+v86c: jit: x86-64 W^X code pages: mmap RW -> write -> mprotect RX. Linux VERIFIED (this build); macOS MAP_JIT/Apple Silicon UNVERIFIED (pthread_jit_write_protect_np is NOT used); Windows UNVERIFIED. aarch64 has no backend: compiled out (V86C_JIT_X64=0).
+v86c boot: kernel 7729664 bytes sha256 ce1f6dad86646efaa980fed238c7ed7e4189fd90c30f99a3788df9c9429cc5c9
+v86c boot: firmware 65536 bytes at 0xf0000, option ROM 512 bytes at 0xc0000, memory 64 MiB, hda none, initrd none, cmdline 'console=ttyS0'
+v86c boot: reset cs=0xf000 eip=0xffff0
+v86c boot: 200095214 instructions, in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0
+uop-cache: lookups 15317242 (hits 15316502 = 100.00%, decodes 740, decode-fails 0)
+uop-cache: instructions 200095213 (uops 200095213, mid-batch fallback steps 0, interpreted_run instructions 0 -> fallback 0.000%)
+uop-cache: flushes 257574, discards 0, SMC aborts 11, invalidated blocks 308, cache clears 0, block ends 4217
+uop-cache: arena peak 12049/65536 uops, block peak 740/8192
+jit: pages alloc 550, blocks compiled 550 (live 279), lookups 740 (hits 0, misses 740), execs 146236, invalidations 271, deferred frees 11, W^X flips 821, pool exhausted 0
+jit: blocks compiled 550 in 740 attempts (reused 0); refused: fit 190 (8998 uops), pool 0, empty 0
+jit: block sizes: compiled 3051 uops in 887655 bytes (mean 290.9 B/uop, 5.5 uops/block); refused-for-fit 8998 uops in 190 blocks (mean 47.4)
+jit: uops executed inlined 45645 / called 591916 -> 7.16% dynamic inlined (compile-time: 617 with a recipe, 11432 without)
+jit: recipe table: 1 entry -- see results/jit-1-m1.md for what M2 adds

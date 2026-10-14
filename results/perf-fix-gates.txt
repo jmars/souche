@@ -1,0 +1,232 @@
+=== PERF-FIX GATE RUN 2026-10-12T22:50:47Z
+=== source snapshot sha256 (unity sources):
+5b64f859ccc7557df537748754b96ae42b930eee482b99da9844bfdfcbceac74  -
+
+=== G4a make
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+node gen/interpreter_uop.js
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+rc=0
+
+=== G4b make selftest
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -Wl,--gc-sections -o build/cpu_selftest src/cpu/cpu_selftest.c src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/paging.c src/cpu/arith.c src/cpu/modrm.c src/cpu/misc_instr.c src/cpu/string.c src/cpu/instructions.c src/cpu/instructions_0f.c src/cpu/sse_instr.c src/cpu/softfloat.c src/cpu/fpu.c build/sf/softfloat.o
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: /tmp/fatcosmocc.hocxogz9ivot0.o: in function `write_blob':
+memory.c:(.text+0x27b): undefined reference to `uop_invalidate_range'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: /tmp/fatcosmocc.hocxogz9ivot0.o: in function `write8':
+memory.c:(.text+0x7df): undefined reference to `uop_page_code_len'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: memory.c:(.text+0x7e8): undefined reference to `uop_page_code'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: memory.c:(.text+0x80f): undefined reference to `uop_invalidate_page'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: /tmp/fatcosmocc.hocxogz9ivot0.o: in function `write16':
+memory.c:(.text+0x89f): undefined reference to `uop_page_code_len'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: memory.c:(.text+0x8a8): undefined reference to `uop_page_code'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: memory.c:(.text+0x8cf): undefined reference to `uop_invalidate_page'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: /tmp/fatcosmocc.hocxogz9ivot0.o: in function `write32':
+memory.c:(.text+0x967): undefined reference to `uop_page_code_len'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: memory.c:(.text+0x970): undefined reference to `uop_page_code'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: memory.c:(.text+0x9b7): undefined reference to `uop_invalidate_page'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: /tmp/fatcosmocc.bj0aee7wf2el0.o: in function `safe_write8':
+paging.c:(.text+0x15ef): undefined reference to `uop_page_code_len'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: paging.c:(.text+0x15f8): undefined reference to `uop_page_code'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: paging.c:(.text+0x1624): undefined reference to `uop_invalidate_page'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: /tmp/fatcosmocc.bj0aee7wf2el0.o: in function `safe_write16':
+paging.c:(.text+0x16b8): undefined reference to `uop_page_code_len'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: paging.c:(.text+0x16c1): undefined reference to `uop_page_code'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: paging.c:(.text+0x1774): undefined reference to `uop_invalidate_page'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: /tmp/fatcosmocc.bj0aee7wf2el0.o: in function `safe_write32':
+paging.c:(.text+0x17e2): undefined reference to `uop_page_code_len'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: paging.c:(.text+0x17eb): undefined reference to `uop_page_code'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: paging.c:(.text+0x188c): undefined reference to `uop_invalidate_page'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: /tmp/fatcosmocc.bj0aee7wf2el0.o: in function `safe_write64':
+paging.c:(.text+0x1924): undefined reference to `uop_page_code_len'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: paging.c:(.text+0x192d): undefined reference to `uop_page_code'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: paging.c:(.text+0x193b): undefined reference to `uop_invalidate_page'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: /tmp/fatcosmocc.bj0aee7wf2el0.o: in function `safe_write128':
+paging.c:(.text+0x1a2c): undefined reference to `uop_page_code_len'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: paging.c:(.text+0x1a35): undefined reference to `uop_page_code'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: paging.c:(.text+0x1a43): undefined reference to `uop_invalidate_page'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: /tmp/fatcosmocc.oaxvh4mzm3fi3.o: in function `string_instruction':
+string.c:(.text+0x1034): undefined reference to `uop_page_code_len'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: string.c:(.text+0x103d): undefined reference to `uop_page_code'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: string.c:(.text+0x10bd): undefined reference to `uop_page_code_len'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: string.c:(.text+0x10c6): undefined reference to `uop_page_code'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: string.c:(.text+0x10ea): undefined reference to `uop_page_code_len'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: string.c:(.text+0x119b): undefined reference to `uop_page_code_len'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: string.c:(.text+0x11ac): undefined reference to `uop_page_code'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: string.c:(.text+0x12b8): undefined reference to `uop_invalidate_range'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: string.c:(.text+0x12d7): undefined reference to `uop_page_code_len'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: string.c:(.text+0x12e8): undefined reference to `uop_page_code'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: string.c:(.text+0x1342): undefined reference to `uop_page_code_len'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: string.c:(.text+0x13eb): undefined reference to `uop_invalidate_range'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: string.c:(.text+0x1452): undefined reference to `uop_page_code_len'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: string.c:(.text+0x145b): undefined reference to `uop_page_code'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: string.c:(.text+0x14d1): undefined reference to `uop_invalidate_page'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: string.c:(.text+0x14e4): undefined reference to `uop_invalidate_page'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: string.c:(.text+0x158a): undefined reference to `uop_page_code'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: string.c:(.text+0x15ad): undefined reference to `uop_invalidate_page'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: string.c:(.text+0x1631): undefined reference to `uop_invalidate_page'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: string.c:(.text+0x16a7): undefined reference to `uop_invalidate_page'
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: string.c:(.text+0x17ba): undefined reference to `uop_invalidate_page'
+collect2: error: ld returned 1 exit status
+make: *** [Makefile:415: build/cpu_selftest] Error 1
+selftest rc=2
+   ^^ FAILURE IS NOT MINE: the concurrent M2/PERF-3 unit's cpu.c/uop_cache.c/modrm.c/paging.c/
+      string.c/memory.c now call uop_page_code/uop_page_code_len/uop_invalidate_page/
+      uop_invalidate_range, and SELFTEST_SRC (the per-TU selftest source list, that unit's to
+      wire) does not list src/cpu/uop_cache.c.  `make` is rc=0 (the unity TU includes it), so
+      build/v86c is unaffected; only build/cpu_selftest's link is.  Re-run below once the tree
+      settles.  PERF-FIX touches none of those files.
+=== G4c make nasm
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+[+] Passed 118/118 tests.
+[~] Skipped 5 test(s) (tests/nasm_skip_c.txt):
+	jump: src/cpu/cpu.c:83: assert(!in_mapped_range(phys_addr)) failed -- the fixture's jump reaches a region v86's flat 2 MiB memory model maps differently (P0 class B, the same model gap as pop_esp); unchanged since M1a-4
+rc=0 (full log /tmp/pf-nasm.log)
+
+=== G4d make transcript-diff
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+node gen/interpreter_uop.js
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+./build/v86c tests/test.img 1000000 > results/transcript.c.txt
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.js.txt
+diff -u results/transcript.js.txt results/transcript.c.txt
+milestone: the C transcript is byte-identical to the reference's
+
+=== G4e make bench
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+node gen/interpreter_uop.js
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+tests/perf_bench.sh --runs 7 --bin build/v86c --label "make bench"
+== perf_bench: make bench
+bin=build/v86c limit=200000000 kernel=tests/images/vmlinuz-i386 runs=7
+cores=32 load-before=10.54 11.33 10.69
+kernel=7.1.8-1-default cflags-host=cc (SUSE Linux) 16.2.0
+perf_bench: run 1 executed 200095212 instructions, expected 200095214
+perf_bench: the workload was not the same -- refusing to report a number
+make: *** [Makefile:343: bench] Error 1
+
+=== G4e make bench (refused: the workload instruction count moved -- see the note)
+NOTE: tests/perf_bench.sh pins EXPECT_INSTRS=200095214 and refuses to report otherwise.
+      EVERY binary built from the current tree reports 200095212, 3/3 runs each:
+        build/v86c (the tree)                  200095212 200095212 200095212
+        build/pf-n3/v86c-before (PRE-FIX instr) 200095212 200095212 200095212
+        build/pf-n3/v86c-after  (the tree)      200095212 200095212 200095212
+      The PRE-FIX leg reporting the same number is the asymmetry test that says ITEM 2 is
+      NOT the cause: the 2-instruction difference from PERF-1's 200095214 is a property of
+      the REST of the tree (the only other difference from PERF-1's measurement is the
+      concurrent M2/PERF-3 unit's work) or of this host.  Recorded as a FINDING.
+      The bench is therefore re-run with --expect-instrs 200095212 so the TIMING number
+      exists; the substituted constant is this run's observed count, not a re-pin.
+=== G4e make bench --expect-instrs 200095212
+== perf_bench: make bench (PERF-FIX)
+bin=build/v86c limit=200000000 kernel=tests/images/vmlinuz-i386 runs=7
+cores=32 load-before=9.74 10.88 10.57
+kernel=7.1.8-1-default cflags-host=cc (SUSE Linux) 16.2.0
+run  1: real 3.224s user 3.203s sys 0.013s  instr=200095212
+run  2: real 3.234s user 3.214s sys 0.013s  instr=200095212
+run  3: real 3.213s user 3.190s sys 0.012s  instr=200095212
+run  4: real 3.255s user 3.237s sys 0.008s  instr=200095212
+run  5: real 3.220s user 3.203s sys 0.011s  instr=200095212
+run  6: real 3.219s user 3.193s sys 0.015s  instr=200095212
+run  7: real 3.243s user 3.220s sys 0.012s  instr=200095212
+load-after=10.75 11.02 10.62
+n=7
+real: best 3.213  median 3.224  worst 3.255
+user: best 3.190  median 3.203  worst 3.237
+cpu (user+sys): best 3.202  median 3.216
+MIPS at best real: 62.28   at median real: 62.06
+
+=== ATTRIBUTION of the bench delta to THIS unit (the two rig binaries differ ONLY in the 14 asserts)
+build/pf-n3/v86c-before: 3.346 3.346 3.362 3.375 3.354 
+build/pf-n3/v86c-after: 3.296 3.292 3.267 3.293 3.293 
+
+=== INTERLEAVED attribution (before=pre-fix asserts, after=the tree; same sources, only instructions.c differs)
+pair 1 before 3.292
+pair 1 after  3.213
+pair 2 before 3.273
+pair 2 after  3.218
+pair 3 before 3.289
+pair 3 after  3.226
+pair 4 before 3.283
+pair 4 after  3.229
+pair 5 before 3.279
+pair 5 after  3.212
+pair 6 before 3.283
+pair 6 after  3.258
+
+=== G4b' the selftest suites that DO link (build/cpu_selftest is blocked by the concurrent unit -- see above)
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+
+[+] Translated + assembled + linked 123/123 file(s)
+[+] build/nasm_corpus.bin: 123 images, 10893 .text bytes
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: build/cpu/uop_cache.o:(.bss+0x0): multiple definition of `uop_page_code_len'; /tmp/fatcosmocc.xz1tr5aubj3s2.o:(.bss+0x0): first defined here
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: build/cpu/uop_cache.o:(.bss+0x8): multiple definition of `uop_page_code'; /tmp/fatcosmocc.xz1tr5aubj3s2.o:(.bss+0x8): first defined here
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: build/cpu/uop_cache.o:(.bss+0x20): multiple definition of `uop_stats'; /tmp/fatcosmocc.xz1tr5aubj3s2.o:(.bss+0x20): first defined here
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: build/cpu/uop_cache.o: in function `uop_materialize_addr':
+uop_cache.c:(.text+0x270): multiple definition of `uop_materialize_addr'; /tmp/fatcosmocc.xz1tr5aubj3s2.o:uop_cache.c:(.text+0x270): first defined here
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: build/cpu/uop_cache.o: in function `uop_shape_of':
+uop_cache.c:(.text+0x3a0): multiple definition of `uop_shape_of'; /tmp/fatcosmocc.xz1tr5aubj3s2.o:uop_cache.c:(.text+0x3a0): first defined here
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: build/cpu/uop_cache.o: in function `uop_stop_name':
+uop_cache.c:(.text+0x430): multiple definition of `uop_stop_name'; /tmp/fatcosmocc.xz1tr5aubj3s2.o:uop_cache.c:(.text+0x430): first defined here
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: build/cpu/uop_cache.o: in function `uop_decode_block':
+uop_cache.c:(.text+0x450): multiple definition of `uop_decode_block'; /tmp/fatcosmocc.xz1tr5aubj3s2.o:uop_cache.c:(.text+0x450): first defined here
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: build/cpu/uop_cache.o:(.bss+0x94): multiple definition of `uop_last_stop'; /tmp/fatcosmocc.xz1tr5aubj3s2.o:(.bss+0x94): first defined here
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: build/cpu/uop_cache.o:(.bss+0x90): multiple definition of `uop_last_stop_eip'; /tmp/fatcosmocc.xz1tr5aubj3s2.o:(.bss+0x90): first defined here
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: build/cpu/uop_cache.o: in function `uop_stats_reset':
+uop_cache.c:(.text+0xe20): multiple definition of `uop_stats_reset'; /tmp/fatcosmocc.xz1tr5aubj3s2.o:uop_cache.c:(.text+0xe20): first defined here
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: build/cpu/uop_cache.o: in function `uop_cache_clear':
+uop_cache.c:(.text+0xe40): multiple definition of `uop_cache_clear'; /tmp/fatcosmocc.xz1tr5aubj3s2.o:uop_cache.c:(.text+0xe40): first defined here
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: build/cpu/uop_cache.o: in function `uop_cache_init':
+uop_cache.c:(.text+0xe70): multiple definition of `uop_cache_init'; /tmp/fatcosmocc.xz1tr5aubj3s2.o:uop_cache.c:(.text+0xe70): first defined here
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: build/cpu/uop_cache.o: in function `uop_invalidate_page':
+uop_cache.c:(.text+0x1020): multiple definition of `uop_invalidate_page'; /tmp/fatcosmocc.xz1tr5aubj3s2.o:uop_cache.c:(.text+0x1020): first defined here
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: build/cpu/uop_cache.o: in function `uop_invalidate_range':
+uop_cache.c:(.text+0x1040): multiple definition of `uop_invalidate_range'; /tmp/fatcosmocc.xz1tr5aubj3s2.o:uop_cache.c:(.text+0x1040): first defined here
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: build/cpu/uop_cache.o: in function `uop_run':
+uop_cache.c:(.text+0x10d0): multiple definition of `uop_run'; /tmp/fatcosmocc.xz1tr5aubj3s2.o:uop_cache.c:(.text+0x10d0): first defined here
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: build/cpu/uop_cache.o: in function `uop_stats_print':
+uop_cache.c:(.text+0x1a50): multiple definition of `uop_stats_print'; /tmp/fatcosmocc.xz1tr5aubj3s2.o:uop_cache.c:(.text+0x1a50): first defined here
+/home/jaye/.local/cosmo/bin/../libexec/gcc/x86_64-linux-cosmo/14.1.0/ld.bfd: build/cpu/uop_cache.o:(.data+0x0): multiple definition of `uop_cache_enabled'; /tmp/fatcosmocc.xz1tr5aubj3s2.o:(.data+0x0): first defined here
+collect2: error: ld returned 1 exit status
+make: *** [Makefile:430: build/cpu_uop_selftest] Error 1
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+
+=== G4b'' the suites measured DIRECTLY (the make selftest target is blocked by the concurrent unit's per-TU link wiring)
+  build/cpu_selftest            rc=0  cpu_selftest: 3522 checks, 0 failures      <- the count PERF-1R documented, unchanged
+  build/hw_selftest             rc=0  hw_selftest: 541 checks, 0 failures, 0 skipped
+  build/cpu_uop_exec_selftest   rc=0  uop_exec_selftest: 31 checks, 0 failures   (the M2 unit's own new suite)
+  build/cpu_m1c_selftest        rc=139 SEGFAULT at test_dispatcher_fault_flag -- NOT this unit: the PRE-FIX-instructions.c rebuild segfaults identically:
+    build/pf-m1c/m1c-before        rc=139 test_dispatcher_fault_flag R5F: the dispatcher's read of the fault flag (same-pa
+    build/pf-m1c/m1c-after         rc=139 test_dispatcher_fault_flag R5F: the dispatcher's read of the fault flag (same-pa
+    (m1c-before/m1c-after are the m1c selftest built by hand from the tree's CPU_SRC, with
+     src/cpu/instructions.c swapped for the pre-fix artifact and a controlled include path;
+     both crash in the same test, so the crash is the concurrent unit's in-flight state.)
+  build/cpu_uop_selftest        does not link: "multiple definition of `uop_run'" plus
+     8 more uop_* symbols -- the Makefile now lists BOTH src/cpu/uop_cache.c (in the source
+     list) and build/cpu/uop_cache.o (as an object) on that link line.  Their wiring.
+  make selftest rc=2 (first attempt at 22:52: SELFTEST_SRC lacked uop_cache.c -> undefined
+     uop_* refs; second attempt at 22:58: cpu_selftest now links, cpu_uop_selftest has the
+     duplicate-definition error above).
+=== G4b''' THIS UNIT'S OWN PART OF `make selftest`
+  unity_symbols.py: 2579 per-TU / 2579 unity defined globals, identical sets; 55 of 55 outside references preserved
+  unity-symbols: per-TU and unity defined-global symbol sets identical, outside references preserved
+  (green, and it runs BEFORE the suites: it is a prerequisite, so a bare `make selftest`
+     already fails the build rather than the test if the unity guard is violated)
+
+=== CORRECTION (appended later; records are append-only) -- the m1c-before/m1c-after pair above
+The two hand-built m1c selftests (built 22:58 from the tree AS IT THEN WAS, one per instructions.c
+revision) both segfaulted at test_dispatcher_fault_flag.  That DID establish what it was built for
+(the crash is not caused by removing the 14 asserts -- both legs crash identically), but the pair
+was compiled from the concurrent unit's MID-EDIT state, so it is NOT evidence about the tree's own
+binary and must not be read as "the m1c selftest is broken".  SUPERSEDED BY, both measured later:
+  * build/cpu_m1c_selftest (the tree's own, mtime 23:02) run directly: 6/6 runs rc=0,
+    "cpu_m1c_selftest: 228 checks, 0 failures";
+  * `make selftest` rc=0 with every suite green (results/perf-fix-gates-final.txt).

@@ -1,0 +1,59 @@
+== JIT-6 GATES: 2026-10-13T22:59:26Z load=5.29 3.12 3.57
+G1a chain never attempted: the engage pin fires -> FAILS as it must rc=0
+FAIL chain: the chain never engaged (links 0, tails 4)
+G1b pending dropped at the link: state mismatch -> FAILS as it must rc=0
+FAIL src/cpu/jit_codegen_selftest.c:699: x->instruction_counter == y->instruction_counter (got 0x3, want 0x2)
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x1, want 0x0)
+G1c RCX/RDX reloads swapped: state mismatch -> FAILS as it must  rc=0
+  jne (materialised, ZF=0): reg32[1] 0xc0de vs 0x12345678
+  jne (materialised, ZF=0): reg32[2] 0x12345678 vs 0xc0de
+FAIL src/cpu/jit_codegen_selftest.c:707: memcmp(x, y, sizeof(cpu_state_t)) == 0 (got 0x66, want 0x0)
+G1d key drops virt+state: the decoy is entered, test_chain_key fires -> FAILS as it must rc=0
+FAIL src/cpu/jit_selftest.c:621: jit_chain_target() == a + 0x10
+G1e cache gate dropped: the miss arm fires -> FAILS as it must   rc=0
+FAIL src/cpu/jit_selftest.c:636: jit_chain_target() == NULL
+arms restored (cmp vs the saved copies)                          rc=0
+make                                                             rc=0
+make selftest                                                    rc=0
+cpu_selftest: 3522 checks, 0 failures
+cpu_m1c_selftest: 228 checks, 0 failures
+hw_selftest: 551 checks, 0 failures, 0 skipped
+uop_cache_selftest: 7934349 checks, 0 failures
+uop_exec_selftest: 102 checks, 0 failures
+jit-selftest: 68 checks, 0 failures
+jit_codegen_selftest: 3006 checks, 0 failures
+make minibios-mem                                                rc=0
+make nasm (default)                                              rc=0
+nasm with --uop-cache off                                        rc=0
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+	jump: src/cpu/cpu.c:83: assert(!in_mapped_range(phys_addr)) failed -- the fixture's jump reaches a region v86's flat 2 MiB memory model maps differently (P0 class B, the same model gap as pop_esp); unchanged since M1a-4
+nasm with --jit on                                               rc=0
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+	jump: src/cpu/cpu.c:83: assert(!in_mapped_range(phys_addr)) failed -- the fixture's jump reaches a region v86's flat 2 MiB memory model maps differently (P0 class B, the same model gap as pop_esp); unchanged since M1a-4
+make transcript-diff (default)                                   rc=0
+transcript-diff with --jit off (vs the JS reference)             rc=0
+transcript-diff with --jit on (vs the JS reference)              rc=0
+1.5 G boot (off)                                                 rc=0
+in_hlt=0, exception=-1, unimplemented=0, eip=0xc1927800 cs=0x60 cr0=0x80050033 cr3=0x1ea1000
+1.5 G boot (onjit)                                               rc=0
+in_hlt=0, exception=-1, unimplemented=0, eip=0xc1927800 cs=0x60 cr0=0x80050033 cr3=0x1ea1000
+1.5 G final state IDENTICAL: in_hlt=0, exception=-1, unimplemented=0, eip=0xc1927800 cs=0x60 cr0=0x80050033 cr3=0x1ea1000
+1.5 G final state identical (off vs --jit on)                    rc=0
+1.5 G serial byte-identical                                      rc=0
+7044a6f6b3f1d3a734e91186e1acac1c4634200ece3eb69069befdd1e99e1aee  results/jit-6/boot-1.5g-off-serial.txt
+7044a6f6b3f1d3a734e91186e1acac1c4634200ece3eb69069befdd1e99e1aee  results/jit-6/boot-1.5g-onjit-serial.txt
+sh tests/gate-reboot-1.sh                                        rc=0
+gate-reboot-1: 39 passed, 0 failed
+aarch64 compile src/cpu/jit_mem.c                                rc=1
+aarch64 compile src/cpu/jit_x64.c                                rc=1
+aarch64 compile src/cpu/jit_codegen.c                            rc=1
+probe-forced-fail run completes                                  rc=0
+probe-fail is REPORTED (the caps line)                           rc=0
+probe-fail arm names its hook                                    rc=0
+probe-fail machine still correct (transcript == JS reference)    rc=0
+== WORST RC ACROSS ALL ROWS: 1
+aarch64 compile src/cpu/jit_mem.c                                rc=0
+aarch64 compile src/cpu/jit_x64.c                                rc=0
+aarch64 compile src/cpu/jit_codegen.c                            rc=0
+aarch64 compile src/cpu/uop_cache.c                              rc=0
+aarch64 re-run worst rc: 0

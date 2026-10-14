@@ -1,0 +1,75 @@
+========================================================================
+M1a-2 ORACLE EVIDENCE -- the host CPU as an independent oracle for the ALU
+========================================================================
+
+WHY.  The unit's own tests must not be the only thing that says the ported flag
+formulas are right: a test whose expected values were derived from the same
+reading of the code as the implementation proves nothing.  So the expectations
+in src/cpu/cpu_selftest.c are MEASURED, not derived: the host x86-64 CPU
+executes the same operation and its real result + real EFLAGS are captured.
+
+THE RIG (sources kept beside this file so the run is reproducible):
+  results/m1a2-oracle-gen.py      generates the per-(op,width,count) wrappers +
+                                  dispatch tables; each wrapper sets the incoming
+                                  flags to (2 | cf_in), executes the real
+                                  instruction, and captures pushfq.
+  results/m1a2-oracle-driver.c    drives every case through BOTH the hardware
+                                  wrapper and this unit's C function, compares,
+                                  and prints the C table rows it is asked to.
+  results/m1a2-oracle-probe32.c   a 32-bit (i386) freestanding program: the BCD
+                                  opcodes (DAA/DAS/AAA/AAS/AAM/AAD) are #UD in
+                                  long mode, so real hardware can only be asked
+                                  in a 32-bit process.  It also forks a child
+                                  that executes `aam 0` and reports the wait
+                                  status, i.e. measures the #DE.
+
+BUILD + RUN (from the repository root; the harness links this unit's real sources):
+  cc -std=gnu11 -O2 -Wall -Wextra -I src/cpu -o /tmp/optruth \
+     results/m1a2-oracle-driver.c src/cpu/cpu_state.c src/cpu/flags.c \
+     src/cpu/memory.c src/cpu/paging.c src/cpu/arith.c src/cpu/modrm.c \
+     src/cpu/misc_instr.c
+  /tmp/optruth <no-args>      # full matrix + the C table rows
+  cc -m32 -O2 -ffreestanding -fno-pic -fno-stack-protector \
+     -mpreferred-stack-boundary=2 -c -o /tmp/probe32.o results/m1a2-oracle-probe32.c
+  ld -m elf_i386 -o /tmp/probe32 /tmp/probe32.o -e _start
+
+WHAT IS COMPARED.  For shl/shr/sar/shld/shrd: result, CF, and ZF/SF/PF (all
+defined by the SDM), plus OF only when count == 1 -- the SDM leaves OF undefined
+for count > 1, and there is deliberately nothing to assert it against, so those
+rows carry exp_of = -1.  For rol/ror/rcl/rcr: result, CF, and OF at count == 1;
+ZF/SF/PF/AF are asserted UNCHANGED, which is what both the SDM and the hardware
+do.  For mul/imul: both result halves + CF/OF (ZF/SF/PF are undefined there and
+are not compared).  For div/idiv: quotient, remainder, and the #DE condition
+(recovered from the host's SIGFPE).  For the BCD family: AL, AH, CF, AF.
+
+RESULT 1 -- the full matrix, against the HOST CPU:
+/* compared=8657 mismatches=0 */
+
+(One oracle bug was found and fixed during this work, and it matters for how the
+number should be read: div8's remainder lives in AH, so capturing it from DX
+returned 0 for every case.  With that bug the harness reported 35 "mismatches"
+that were entirely its own.  The 8657/0 above is with the corrected capture, and
+the div8/idiv8 remainder column is now exercised.  A harness that cannot fail
+would have been the other failure mode; the 14 mutations in results/m1a2-gates.txt
+include a real regression probe of the port itself.)
+
+RESULT 2 -- the BCD family, 32-bit probe vs the port: 1320 rows, identical
+EXCEPT AAD's CF and AF (sum(c.values()) = 124 of 5280 fields differ, all of them AAD):
+  differing fields by (op, field):
+    aad AF: 64
+    aad CF: 60
+  examples:
+    hw  : aad 04 03 0 0 | 22 00 0 1
+    port: aad 04 03 0 0 | 22 00 0 0
+    hw  : aad 0a ff 0 0 | 00 00 1 1
+    port: aad 0a ff 0 0 | 00 00 0 0
+  reading: AAD's CF and AF are UNDEFINED by the SDM ("CF, OF and AF are
+  undefined after AAD"), so this is not a port defect -- it is upstream's own
+  choice (arith.rs:347-357 clears AF, and sets CF only when the result exceeds
+  0xFFFF, which reading AAD's own arithmetic cannot produce) diverging from what
+  this host happens to leave behind.  The port reproduces upstream exactly, and
+  the AAD rows in the selftest assert AL/AH only.  Recorded because a guest that
+  reads CF after AAD sees the upstream behaviour, not the hardware's.
+
+RESULT 3 -- `aam 0` raises #DE on the hardware:
+  aam0 #DE:SIGFPE

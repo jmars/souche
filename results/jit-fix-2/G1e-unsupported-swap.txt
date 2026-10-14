@@ -1,0 +1,6 @@
+jcc8-swap-b0   selftest rc=2 [jit_codegen_selftest: 2975 checks, 3 failures] | bench 200 M: instr=200095214 state=in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0
+jcc8-swap-s6   selftest rc=2 [jit_codegen_selftest: 2975 checks, 2 failures] | bench 200 M: instr=200095214 state=in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0
+-- the pins the bench asserts (EXPECT_INSTRS / EXPECT_STATE):
+63:EXPECT_INSTRS=200095214
+67:EXPECT_STATE="in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0"
+restored: ok

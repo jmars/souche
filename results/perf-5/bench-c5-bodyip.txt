@@ -1,0 +1,14 @@
+== perf-5-ab: c4-hoist vs c5-body-ip  pairs=4
+load-before=14.52 11.53 9.96
+a    real 3.239s  instr=ok state=ok serial=ok
+b    real 2.998s  instr=ok state=ok serial=ok
+b    real 3.016s  instr=ok state=ok serial=ok
+a    real 3.216s  instr=ok state=ok serial=ok
+a    real 3.217s  instr=ok state=ok serial=ok
+b    real 2.981s  instr=ok state=ok serial=ok
+b    real 2.928s  instr=ok state=ok serial=ok
+a    real 3.140s  instr=ok state=ok serial=ok
+load-after=14.12 11.65 10.04
+c4-hoist   n=4 best 3.140 median 3.216 worst 3.239
+c5-body-ip n=4 best 2.928 median 2.990 worst 3.016
+ratio c4-hoist/c5-body-ip: best 0.9325x  median 0.9294x  (>1 means c5-body-ip is slower)

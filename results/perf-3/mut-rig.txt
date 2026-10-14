@@ -1,0 +1,20 @@
+ARM 0  control: the shipped decoder, no mutation            NOT CAUGHT (checker still green)  binary=fab33b870762
+        first:                    port's own upstream-inherited dbg_assert!s fire on guest-reachable operands : 1
+ARM 1  dec_read16 consumes ONE extra byte (imm16 widths)    caught (rc=1)  binary=1dafa02812bc
+        first: FAIL src/cpu/uop_cache_selftest.c:1145: uops[2].len == 5 (got 0x7, want 0x5)
+results/perf-3-mut-rig.sh: line 41: 881235 Aborted                    (core dumped) "./$CHECKER" "$CORPUS" > /tmp/perf-3-mut-run.log 2>&1
+ARM 2  0x66 is not a prefix byte any more                   caught (rc=134)  binary=00c17531be27
+        first: FAIL src/cpu/uop_cache_selftest.c:935: u->len == h->want_len (got 0x1, want 0x4)
+ARM 3  the prefix accumulator leaks across instructions (the bug the checker found) caught (rc=1)  binary=acfe88874ab2
+        first: FAIL src/cpu/uop_cache_selftest.c:648: (a) mem-[EAX]/[BX+SI]: opcode 0x05 at 0x4008 (is32=0 pfx=0x20 pfx_len=0): interpreter advanced 3, decoder says 
+ARM 4  a sib base of EBP with a displacement uses DS instead of SS caught (rc=1)  binary=65ed9cdb0331
+        first: FAIL src/cpu/uop_cache_selftest.c:940: u->seg == h->want_seg (got 0x3, want 0x2)
+ARM 5  sib index field 4 (no index) becomes an index        caught (rc=1)  binary=456acf46a8fb
+        first: FAIL src/cpu/uop_cache_selftest.c:938: u->index == h->want_index (got 0x4, want 0xff)
+ARM 6  a block_end instruction no longer ends the block     caught (rc=1)  binary=e02be91e8262
+        first: FAIL src/cpu/uop_cache_selftest.c:1143: n == 3 (got 0x40, want 0x3)
+ARM 7  a fixed_g MEMORY form gets the REGISTER form's shape caught (rc=1)  binary=43468d599a95
+        first: FAIL src/cpu/uop_cache_selftest.c:740: is_mem_shape(u->shape) == u->addr_kind != UOP_ADDR_NONE (got 0x0, want 0x1)
+ARM 8  the decode window is two pages wide (crossing instructions get decoded) caught (rc=1)  binary=74a397f4ef47
+        first: FAIL src/cpu/uop_cache_selftest.c:1116: n == 7 (got 0x40, want 0x7)
+done (the decoder is restored to the shipped bytes: 81fe754d2dd0)

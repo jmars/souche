@@ -1,0 +1,14 @@
+  block: 15 bytes published and executed, sum(8) = 92
+FAIL src/cpu/jit_selftest.c:328: jit_stats.invalidations >= invalidations_before + 1
+FAIL src/cpu/jit_selftest.c:339: page2 == NULL
+FAIL src/cpu/jit_selftest.c:349: ram32(DATA_ADDR) == 0x22 (got 0x11, want 0x22)
+  stale-block probe: block dropped on the guest write, the executor's re-compile ran the new immediate (0x11)
+FAIL src/cpu/jit_selftest.c:408: jit_stats.deferred_frees == deferred + 1 (got 0x0, want 0x1)
+FAIL src/cpu/jit_selftest.c:409: jit_cache_lookup(0x9000, 0x9000, 0) == NULL
+FAIL src/cpu/jit_selftest.c:418: again == buf
+  deferred recycle: page not flipped under the executing block, reused after exit
+jit: publish: 0x7ffd323ba540 is not in the code pool
+jit: publish: code page 4 is not writable
+  refusals: pool exhausted after 252 pages, reported 1 time(s)
+jit-selftest: 29 checks, 6 failures
+jit: pages alloc 256, blocks compiled 2 (live 2), lookups 3 (hits 3, misses 0), execs 3, invalidations 0, deferred frees 0, W^X flips 255, pool exhausted 1

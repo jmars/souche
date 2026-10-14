@@ -1,0 +1,19 @@
+scsi host1: ata_piix
+ata1: PATA max MWDMA2 cmd 0x1f0 ctl 0x3f6 bmdma 0xb400 irq 14 lpm-pol 0
+ata2: PATA max MWDMA2 cmd 0x170 ctl 0x376 bmdma 0xb408 irq 15 lpm-pol 0
+ata1.00: ATA-0: v86 ATA HD, 1.00, max MWDMA2
+ata1.00: 131072 sectors, multi 0: LBA48 
+scsi 0:0:0:0: Direct-Access     ATA      v86 ATA HD       n/a  PQ: 0 ANSI: 5
+ata2.00: ATAPI: v86 ATAPI CD-ROM, 1.00, max MWDMA2
+sd 0:0:0:0: [sda] 131072 512-byte logical blocks: (67.1 MB/64.0 MiB)
+sd 0:0:0:0: [sda] Write Protect is off
+sd 0:0:0:0: [sda] Write cache: disabled, read cache: enabled, doesn't support DPO or FUA
+sd 0:0:0:0: [sda] Preferred minimum I/O size 512 bytes
+scsi 1:0:0:0: CD-ROM            SONY     CD-ROM CDU-1000  1.1a PQ: 0 ANSI: 1 CCS
+sd 0:0:0:0: [sda] Attached SCSI disk
+Freeing initrd memory: 3488K
+Freeing unused kernel image (initmem) memory: 228K
+Write protecting kernel text and read-only data: 2324k
+Run /fx/store/54ce1971a82e89d78a83e3f805893b4e1651d714c62e69fda2c711ff8d3f2b69-fx-init/fx-init as init process
+EXT4-fs (sda): mounted filesystem bca8c481-2fd0-41bc-9001-b0a466163a9a r/w without journal. Quota mode: disabled.
+ext4 filesystem being mounted at /fx/disk supports timestamps until 2038-01-19 (0x7fffffff)

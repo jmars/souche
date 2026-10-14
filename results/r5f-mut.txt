@@ -1,0 +1,101 @@
+=== mutB ===
+shadow cpu.c sha: c590aad208b8337f95fc9f01c5248a4ec8e96a32c40e75aa7a4d17614a0f18ba  live: d8dc732a47433495bc6537e670ebaac1a0ceb7dbacc18005f6e3659e114721f3
+shadow 0F.c  sha: 9d410ce36cc63262a3b8cec485881be256839c3002d70e6b235b463a1ed0c103  live: 9d410ce36cc63262a3b8cec485881be256839c3002d70e6b235b463a1ed0c103
+---- probe same ----
+same: handler=1010 before: eip=1000 counter=0 marker=0 esp=1f00 pf=0
+/tmp/r5f-mut/cpu/cpu.c:167: [31;1massert(cpu->instruction_counter != initial_instruction_counter) failed[0m (cosmoaddr2line /tmp/r5f-probe.bin.com.dbg 44d646 401c90 4020fc 4015f4)
+results/r5f-probe.sh: line 28: 3961721 Aborted                    (core dumped) "$BIN" "$mode" 3
+rc=134
+---- probe diff ----
+diff: handler=4010 before: eip=1000 counter=0 marker=0 esp=1f00 pf=0
+diff: after 1: eip=4010 counter=1 marker=0 esp=1ef0 pf=1 unimplemented=0
+diff: after 2: eip=1000 counter=4 marker=1 esp=1f00 pf=0 unimplemented=0
+diff: after 3: eip=4010 counter=5 marker=1 esp=1ef0 pf=1 unimplemented=0
+rc=0
+---- probe fetch ----
+fetch: handler=1010 before: eip=2804 counter=0 marker=0 esp=1f00 pf=0
+fetch: after 1: eip=1010 counter=0 marker=0 esp=1ef0 pf=1 unimplemented=0
+fetch: after 2: eip=2804 counter=3 marker=1 esp=1f00 pf=0 unimplemented=0
+fetch: after 3: eip=1010 counter=3 marker=1 esp=1ef0 pf=1 unimplemented=0
+rc=0
+--- the shipped m1c selftest against this shadow ---
+
+/tmp/r5f-mut/cpu/cpu.c:167: [31;1massert(cpu->instruction_counter != initial_instruction_counter) failed[0m (cosmoaddr2line /tmp/r5f-mut-selftest.com.dbg 4557e6 40dc36 4019f0 401f8c 4015f4)
+rc=134 (a nonzero rc or an abort above is the mutation being caught)
+
+=== mutA ===
+shadow cpu.c sha: b5d80c609f6d56db3657017ba3a0ba47402865c044b7dd49047e47f49c9e2e79  live: d8dc732a47433495bc6537e670ebaac1a0ceb7dbacc18005f6e3659e114721f3
+shadow 0F.c  sha: 9d410ce36cc63262a3b8cec485881be256839c3002d70e6b235b463a1ed0c103  live: 9d410ce36cc63262a3b8cec485881be256839c3002d70e6b235b463a1ed0c103
+---- probe same ----
+same: handler=1010 before: eip=1000 counter=0 marker=0 esp=1f00 pf=0
+same: after 1: eip=1000 counter=4 marker=1 esp=1f00 pf=0 unimplemented=0
+same: after 2: eip=1000 counter=8 marker=2 esp=1f00 pf=0 unimplemented=0
+same: after 3: eip=1000 counter=12 marker=3 esp=1f00 pf=0 unimplemented=0
+rc=0
+---- probe diff ----
+diff: handler=4010 before: eip=1000 counter=0 marker=0 esp=1f00 pf=0
+diff: after 1: eip=4010 counter=1 marker=0 esp=1ef0 pf=0 unimplemented=0
+diff: after 2: eip=1000 counter=4 marker=1 esp=1f00 pf=0 unimplemented=0
+diff: after 3: eip=4010 counter=5 marker=1 esp=1ef0 pf=0 unimplemented=0
+rc=0
+---- probe fetch ----
+fetch: handler=1010 before: eip=2804 counter=0 marker=0 esp=1f00 pf=0
+fetch: after 1: eip=2804 counter=3 marker=0 esp=1f00 pf=0 unimplemented=0
+fetch: after 2: eip=2804 counter=6 marker=0 esp=1f00 pf=0 unimplemented=0
+fetch: after 3: eip=2804 counter=9 marker=0 esp=1f00 pf=0 unimplemented=0
+rc=0
+--- the shipped m1c selftest against this shadow ---
+
+FAIL /tmp/r5f-mut/cpu/m1c_selftest.c:426: cpu->instruction_counter == before (got 0x3, want 0x0)
+FAIL /tmp/r5f-mut/cpu/m1c_selftest.c:427: cpu->pagefault
+FAIL /tmp/r5f-mut/cpu/m1c_selftest.c:428: cpu->instruction_pointer == HANDLER_EIP (got 0x9000, want 0x8000)
+FAIL /tmp/r5f-mut/cpu/m1c_selftest.c:430: read_reg32(ESP) == STACK_TOP - 16 (got 0x7000, want 0x6ff0)
+FAIL /tmp/r5f-mut/cpu/m1c_selftest.c:434: r5f_marker() == 1 (got 0x0, want 0x1)
+FAIL R5F: the dispatcher's read of the fault flag (same-page handler, control, fetch fault)
+
+
+
+
+
+
+
+
+cpu_m1c_selftest: 222 checks, 5 failures
+rc=1 (a nonzero rc or an abort above is the mutation being caught)
+
+=== mutC ===
+shadow cpu.c sha: d8dc732a47433495bc6537e670ebaac1a0ceb7dbacc18005f6e3659e114721f3  live: d8dc732a47433495bc6537e670ebaac1a0ceb7dbacc18005f6e3659e114721f3
+shadow 0F.c  sha: bbad1a520821c9be090f6bbed02993b98a241b75504090165c75582cb3673f4d  live: 9d410ce36cc63262a3b8cec485881be256839c3002d70e6b235b463a1ed0c103
+---- probe same ----
+same: handler=1010 before: eip=1000 counter=0 marker=0 esp=1f00 pf=0
+same: after 1: eip=1000 counter=4 marker=1 esp=1f00 pf=0 unimplemented=0
+same: after 2: eip=1000 counter=8 marker=2 esp=1f00 pf=0 unimplemented=0
+same: after 3: eip=1000 counter=12 marker=3 esp=1f00 pf=0 unimplemented=0
+rc=0
+---- probe diff ----
+diff: handler=4010 before: eip=1000 counter=0 marker=0 esp=1f00 pf=0
+diff: after 1: eip=4010 counter=1 marker=0 esp=1ef0 pf=0 unimplemented=0
+diff: after 2: eip=1000 counter=4 marker=1 esp=1f00 pf=0 unimplemented=0
+diff: after 3: eip=4010 counter=5 marker=1 esp=1ef0 pf=0 unimplemented=0
+rc=0
+---- probe fetch ----
+fetch: handler=1010 before: eip=2804 counter=0 marker=0 esp=1f00 pf=0
+fetch: after 1: eip=1010 counter=0 marker=0 esp=1ef0 pf=1 unimplemented=0
+fetch: after 2: eip=2804 counter=3 marker=1 esp=1f00 pf=0 unimplemented=0
+fetch: after 3: eip=1010 counter=3 marker=1 esp=1ef0 pf=1 unimplemented=0
+rc=0
+--- the shipped m1c selftest against this shadow ---
+
+
+
+
+
+
+
+
+/tmp/r5f-mut/cpu/instructions_0f.c:6286: [31;1massert((value & ~((uint64_t)1 << 11)) == 0) failed[0m (cosmoaddr2line /tmp/r5f-mut-selftest.com.dbg 44a297 412270 401ba9 401f8c 4015f4)
+rc=134 (a nonzero rc or an abort above is the mutation being caught)
+
+=== the live tree (never mutated) ===
+live cpu.c sha: d8dc732a47433495bc6537e670ebaac1a0ceb7dbacc18005f6e3659e114721f3  (want d8dc732a47433495bc6537e670ebaac1a0ceb7dbacc18005f6e3659e114721f3)
+live 0F.c  sha: 9d410ce36cc63262a3b8cec485881be256839c3002d70e6b235b463a1ed0c103  (want 9d410ce36cc63262a3b8cec485881be256839c3002d70e6b235b463a1ed0c103)

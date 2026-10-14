@@ -1,0 +1,18 @@
+== building probe against ROOT=src ==
+---- probe same ----
+same: handler=1010 before: eip=1000 counter=0 marker=0 esp=1f00 pf=0
+src/cpu/cpu.c:145: [31;1massert(cpu->instruction_counter != initial_instruction_counter) failed[0m (cosmoaddr2line /tmp/r5f-probe.bin.com.dbg 44d716 401c90 4020fc 4015f4)
+results/r5f-probe.sh: line 28: 3837271 Aborted                    (core dumped) "$BIN" "$mode" 3
+rc=134
+---- probe diff ----
+diff: handler=4010 before: eip=1000 counter=0 marker=0 esp=1f00 pf=0
+diff: after 1: eip=4010 counter=1 marker=0 esp=1ef0 pf=1 unimplemented=0
+diff: after 2: eip=1000 counter=4 marker=1 esp=1f00 pf=0 unimplemented=0
+diff: after 3: eip=4010 counter=5 marker=1 esp=1ef0 pf=1 unimplemented=0
+rc=0
+---- probe fetch ----
+fetch: handler=1010 before: eip=2804 counter=0 marker=0 esp=1f00 pf=0
+fetch: after 1: eip=1010 counter=0 marker=0 esp=1ef0 pf=1 unimplemented=0
+fetch: after 2: eip=2804 counter=3 marker=1 esp=1f00 pf=0 unimplemented=0
+fetch: after 3: eip=1010 counter=3 marker=1 esp=1ef0 pf=1 unimplemented=0
+rc=0

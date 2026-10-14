@@ -1,0 +1,13 @@
+== interleaved ON/OFF, 3 pairs, with the ORDER ALTERNATING inside the pair (PERF-1's own rule)
+   cmd: ./build/v86c --bzimage tests/images/vmlinuz-i386 200000000 --cmdline 'console=ttyS0' [--uop-cache on|off]
+   load before: 4.90 6.20 8.14 3/1394 1084116
+pair 1:
+   on real 3.370s instr=200095214
+   off real 4.720s instr=200095214
+pair 2:
+   off real 4.771s instr=200095214
+   on real 3.275s instr=200095214
+pair 3:
+   on real 3.398s instr=200095214
+   off real 4.804s instr=200095214
+   load after: 4.30 5.97 8.03 2/1387 1084182

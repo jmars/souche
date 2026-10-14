@@ -1,0 +1,457 @@
+# M1a-4 raw gate evidence -- every command, its output and its exit code.
+# Host: openSUSE MicroOS, cosmocc at ~/.local/cosmo/bin/cosmocc, node v26.8.1.
+
+
+===== G0: a FROM-SCRATCH build (generator + 13 TUs + link), into a private build dir
+
+$ rm -rf /tmp/m1a4-build && make BUILD=/tmp/m1a4-build
+# all 13 CPU translation units compile clean under -Wall -Wextra -Werror
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o /tmp/m1a4-build/cpu/cpu_state.o src/cpu/cpu_state.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o /tmp/m1a4-build/cpu/flags.o src/cpu/flags.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o /tmp/m1a4-build/cpu/memory.o src/cpu/memory.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o /tmp/m1a4-build/cpu/paging.o src/cpu/paging.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o /tmp/m1a4-build/cpu/arith.o src/cpu/arith.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o /tmp/m1a4-build/cpu/modrm.o src/cpu/modrm.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o /tmp/m1a4-build/cpu/misc_instr.o src/cpu/misc_instr.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o /tmp/m1a4-build/cpu/string.o src/cpu/string.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o /tmp/m1a4-build/cpu/instructions.o src/cpu/instructions.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o /tmp/m1a4-build/cpu/instructions_0f.o src/cpu/instructions_0f.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o /tmp/m1a4-build/cpu/cpu.o src/cpu/cpu.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o /tmp/m1a4-build/cpu/exec_boundary.o src/cpu/exec_boundary.c
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 839 implemented, 1083 unimplemented, 843 names defined (unchanged)
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o /tmp/m1a4-build/cpu/interpreter_gen.o src/cpu/interpreter_gen.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -I src -o /tmp/m1a4-build/v86c src/main.c /tmp/m1a4-build/cpu/cpu_state.o /tmp/m1a4-build/cpu/flags.o /tmp/m1a4-build/cpu/memory.o /tmp/m1a4-build/cpu/paging.o /tmp/m1a4-build/cpu/arith.o /tmp/m1a4-build/cpu/modrm.o /tmp/m1a4-build/cpu/misc_instr.o /tmp/m1a4-build/cpu/string.o /tmp/m1a4-build/cpu/instructions.o /tmp/m1a4-build/cpu/instructions_0f.o /tmp/m1a4-build/cpu/cpu.o /tmp/m1a4-build/cpu/exec_boundary.o /tmp/m1a4-build/cpu/interpreter_gen.o
+exit=0
+
+$ ls -l /tmp/m1a4-build/v86c /tmp/m1a4-build/cpu/interpreter_gen.o
+-rw-r--r--. 1 jaye jaye  318912 Oct 11 23:50 /tmp/m1a4-build/cpu/interpreter_gen.o
+-rwxr-xr-x. 1 jaye jaye 1339118 Oct 11 23:50 /tmp/m1a4-build/v86c
+exit=0
+
+
+===== G1: THE MILESTONE -- the C transcript vs the reference's
+
+$ make transcript-diff
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 839 implemented, 1083 unimplemented, 843 names defined (unchanged)
+./build/v86c tests/test.img 1000000 > results/transcript.c.txt
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.js.txt
+diff -u results/transcript.js.txt results/transcript.c.txt
+milestone: the C transcript is byte-identical to the reference's
+exit=0
+
+$ diff <(./build/v86c tests/test.img 1000000) <(node oracle/run.mjs tests/test.img 1000000) && echo 'EMPTY DIFF: byte-identical'
+EMPTY DIFF: byte-identical
+exit=0
+
+$ diff <(./build/v86c tests/test.img 1000000) <(./build/v86c tests/test.img 1000000) && echo 'two C runs byte-identical'
+two C runs byte-identical
+exit=0
+
+$ /tmp/m1a4-build/v86c tests/test.img 1000000 | diff - results/transcript.js.txt && echo 'the from-scratch build is byte-identical too'
+the from-scratch build is byte-identical too
+exit=0
+
+# the transcript itself:
+{
+  "cpu": {
+    "control_registers": {
+      "cr0": "0x00000001",
+      "cr2": "0x00000000",
+      "cr3": "0x00000000"
+    },
+    "eflags": "0x00000046",
+    "eip": "0x00100119",
+    "gpr": {
+      "eax": "0x10203040",
+      "ebp": "0x00102000",
+      "ebx": "0x0f0f00f1",
+      "ecx": "0x00000010",
+      "edi": "0x00000010",
+      "edx": "0x00000000",
+      "esi": "0xc487eb71",
+      "esp": "0x00102000"
+    },
+    "segments": {
+      "cs": {
+        "base": "0x00000000",
+        "limit": "0xffffffff",
+        "selector": "0x0008"
+      },
+      "ds": {
+        "base": "0x00000000",
+        "limit": "0xffffffff",
+        "selector": "0x0010"
+      },
+      "es": {
+        "base": "0x00000000",
+        "limit": "0xffffffff",
+        "selector": "0x0010"
+      },
+      "fs": {
+        "base": "0x00000000",
+        "limit": "0xffffffff",
+        "selector": "0x0010"
+      },
+      "gs": {
+        "base": "0x00000000",
+        "limit": "0xffffffff",
+        "selector": "0x0010"
+      },
+      "ss": {
+        "base": "0x00000000",
+        "limit": "0xffffffff",
+        "selector": "0x0010"
+      }
+    },
+    "x87": {
+      "control_word": "0x037f",
+      "data": [
+        "0x000000000x00000000",
+        "0x000000000x00000000",
+        "0x000000000x00000000",
+        "0x000000000x00000000",
+        "0x000000000x00000000",
+        "0x000000000x00000000",
+        "0x000000000x00000000",
+        "0x000000000x00000000"
+      ],
+      "stack_empty": "0xff",
+      "stack_ptr": "0x0000",
+      "status_word": "0x0000",
+      "tag_word": "0xffff"
+    }
+  },
+  "image": {
+    "bytes": 283,
+    "entry_address": "0x00100020",
+    "load_address": "0x00100000",
+    "sha256": "1a597ac159554271a380493a19aa52ca0b65481cdb6c979c407684c9c96e737a"
+  },
+  "instruction_count": 561,
+  "instruction_limit": 1000000,
+  "memory_window": {
+    "address": "0x00101000",
+    "bytes": 4096,
+    "sha256": "9b4639eca15ccfca5c91cb48bc6ae3fc1dd2826fc86c88ee290eaeb16fc4d6fb"
+  }
+}
+
+$ diff <(./build/v86c tests/test.img 1000000 --fixture) <(node oracle/nasm_state.mjs tests/test.img 1000000) && echo 'FIXTURE MODE: identical on the M0 image as well'
+FIXTURE MODE: identical on the M0 image as well
+exit=0
+
+
+===== G2: the nasm differential gate, C leg
+
+$ make nasm
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 839 implemented, 1083 unimplemented, 843 names defined (unchanged)
+python3 tests/nasm_run.py --stage run \
+	--actual "build/v86c-nasm {img} {limit} --fixture" \
+	--skip-list tests/nasm_skip_c.txt
+Testing arith-optimisations.img
+Testing double-segment-prefix.img
+Testing idiv16-overflow.img
+Testing idiv32-overflow.img
+Testing idiv8-overflow.img
+Testing indirect-call.img
+Testing indirect-jump.img
+Testing jcxz.img
+Testing lea-nop.img
+Testing leave16.img
+Testing leave32.img
+Testing loop.img
+Testing loopnz.img
+Testing loopz.img
+Testing mov16.img
+Testing mov_sreg.img
+Testing mov_sreg_ud1.img
+Testing mov_sreg_ud2.img
+Testing push.img
+Testing pushf.img
+Testing ret-imm.img
+
+[+] Passed 21/21 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 102 were skipped (tests/nasm_skip_c.txt).
+[~] Skipped 102 test(s) (tests/nasm_skip_c.txt):
+	btc-imm: unimplemented instructions_0f::instr16_0FBA_7_mem
+	btc-reg16: unimplemented instructions_0f::instr16_0FBB_mem
+	btc-reg32: unimplemented instructions_0f::instr32_0FBB_mem
+	btr-imm: unimplemented instructions_0f::instr16_0FBA_6_mem
+	btr-reg16: unimplemented instructions_0f::instr16_0FB3_mem
+	btr-reg32: unimplemented instructions_0f::instr32_0FB3_mem
+	bts-imm: unimplemented instructions_0f::instr16_0FBA_5_mem
+	bts-reg16: unimplemented instructions_0f::instr16_0FAB_mem
+	bts-reg32: unimplemented instructions_0f::instr32_0FAB_mem
+	cmp16-setbe: unimplemented instructions_0f::instr_0F96_reg
+	cmpxchg: unimplemented instructions_0f::instr32_0FB1_reg
+	cmpxchg-setbe: unimplemented instructions_0f::instr32_0FB1_reg
+	cmpxchg8b: unimplemented instructions_0f::instr32_0FC7_1_mem
+	comiss: unimplemented instructions_0f::instr_660F6E_mem
+	cvtpi2ps: unimplemented instructions_0f::instr_0F2A_mem
+	cvtps2pi: unimplemented instructions_0f::instr_0FAE_3_mem
+	cvttps2pi: unimplemented instructions_0f::instr_0F28_mem
+	emms: unimplemented instructions_0f::instr_0F77
+	f2xm1: unimplemented instructions::instr32_D9_5_reg
+	fchs: unimplemented instructions::instr32_D9_5_reg
+	fdecstp: unimplemented instructions::instr32_D9_6_reg
+	fdiv: unimplemented instructions::instr32_D9_5_reg
+	fdiv-zero: unimplemented instructions::instr_DB_0_mem
+	fdivr: unimplemented instructions::instr32_D9_5_reg
+	fincstp: unimplemented instructions::instr32_D9_6_reg
+	fprem: unimplemented instructions::instr32_D9_5_reg
+	fprem-distinct: unimplemented instructions::instr_DB_0_mem
+	fprem1: unimplemented instructions::instr32_D9_5_reg
+	fptan: unimplemented instructions::instr32_D9_5_reg
+	fpu_m80: unimplemented instructions::instr_DB_5_mem
+	frndint: unimplemented instructions::instr32_D9_5_reg
+	fsave_frstor: unimplemented instructions::instr32_D9_5_reg
+	fscale: unimplemented instructions::instr32_D9_5_reg
+	fsincos: unimplemented instructions::instr32_D9_5_reg
+	fsqrt: unimplemented instructions::instr32_D9_5_reg
+	fst-st-empty-tag: unimplemented instructions::instr32_D9_5_reg
+	fstenv: unimplemented instructions::instr32_D9_6_mem
+	fstm80: unimplemented instructions::instr32_D9_7_mem
+	fstsw: unimplemented instructions::instr_DF_4_reg
+	fxtract: unimplemented instructions::instr_DB_0_mem
+	fxtract-zero: unimplemented instructions::instr_DB_0_mem
+	fyl2x: unimplemented instructions::instr32_D9_5_reg
+	fyl2x-zero: unimplemented instructions::instr_DB_0_mem
+	fyl2xp1: unimplemented instructions::instr32_D9_5_reg
+	jump: src/cpu/cpu.c:83: [31;1massert(!in_mapped_range(phys_addr)) failed[0m (cosmoaddr2line /home/jaye/futaie/souche/build/v86c.com.dbg 42edd2 42ee75 42f161 401c20 4021dc 4015f4)
+	maskmovdqu: unimplemented instructions_0f::instr_F30F6F_mem
+	maskmovq: unimplemented instructions_0f::instr_0F6F_mem
+	movaps: unimplemented instructions_0f::instr_0F28_mem
+	movd: unimplemented instructions_0f::instr_0F6E_mem
+	movntpd: unimplemented instructions_0f::instr_660F28_mem
+	movntps: unimplemented instructions_0f::instr_660F28_mem
+	movq: unimplemented instructions_0f::instr_0F6F_mem
+	packssdw: unimplemented instructions_0f::instr_0F6F_mem
+	packsswb: unimplemented instructions_0f::instr_0F6F_mem
+	packuswb: unimplemented instructions_0f::instr_0F6F_mem
+	paddb: unimplemented instructions_0f::instr_0F6F_mem
+	paddd: unimplemented instructions_0f::instr_0F6F_mem
+	paddsb: unimplemented instructions_0f::instr_0F6F_mem
+	paddsw: unimplemented instructions_0f::instr_0F6F_mem
+	paddusb: unimplemented instructions_0f::instr_0F6F_mem
+	paddusw: unimplemented instructions_0f::instr_0F6F_mem
+	paddw: unimplemented instructions_0f::instr_0F6F_mem
+	pand: unimplemented instructions_0f::instr_0F6F_mem
+	pandn: unimplemented instructions_0f::instr_0F6F_mem
+	pcmpeqb: unimplemented instructions_0f::instr_0F6F_mem
+	pcmpeqd: unimplemented instructions_0f::instr_0F6F_mem
+	pcmpeqw: unimplemented instructions_0f::instr_0F6F_mem
+	pcmpgtb: unimplemented instructions_0f::instr_0F6F_mem
+	pcmpgtd: unimplemented instructions_0f::instr_0F6F_mem
+	pcmpgtw: unimplemented instructions_0f::instr_0F6F_mem
+	pmaddwd: unimplemented instructions_0f::instr_0F6F_mem
+	pmulhw: unimplemented instructions_0f::instr_0F6F_mem
+	pmullw: unimplemented instructions_0f::instr_0F6F_mem
+	pmuludq: unimplemented instructions_0f::instr_0F6E_mem
+	pop_esp: the native fixture expects a #GP at 0x80023 from a store to address 0; address 0 is plain guest RAM in v86's flat 2 MiB memory model, so neither the reference nor the port takes a fault (P0 class B) and the C leg halts instead -- the same emulator-model gap, not a port defect
+	pop_esp2: same as pop_esp: the fixture's SIGSEGV comes from the host MMU writing to address 0, which the emulator does not model (P0 class B)
+	por: unimplemented instructions_0f::instr_0F6F_mem
+	pshufw: unimplemented instructions_0f::instr_0F6F_mem
+	pslld: unimplemented instructions_0f::instr_0F6F_mem
+	psllq: unimplemented instructions_0f::instr_0F6F_mem
+	psllw: unimplemented instructions_0f::instr_0F6F_mem
+	psrad: unimplemented instructions_0f::instr_0F6F_mem
+	psraw: unimplemented instructions_0f::instr_0F6F_mem
+	psrld: unimplemented instructions_0f::instr_0F6F_mem
+	psrlq: unimplemented instructions_0f::instr_0F6F_mem
+	psrlw: unimplemented instructions_0f::instr_0F6F_mem
+	psubb: unimplemented instructions_0f::instr_0F6F_mem
+	psubd: unimplemented instructions_0f::instr_0F6F_mem
+	psubsb: unimplemented instructions_0f::instr_0F6F_mem
+	psubsw: unimplemented instructions_0f::instr_0F6F_mem
+	psubusb: unimplemented instructions_0f::instr_0F6F_mem
+	psubusw: unimplemented instructions_0f::instr_0F6F_mem
+	psubw: unimplemented instructions_0f::instr_0F6F_mem
+	punpckhbw: unimplemented instructions_0f::instr_0F6F_mem
+	punpckhdq: unimplemented instructions_0f::instr_0F6F_mem
+	punpckhwd: unimplemented instructions_0f::instr_0F6F_mem
+	punpcklbw: unimplemented instructions_0f::instr_0F6F_mem
+	punpckldq: unimplemented instructions_0f::instr_0F6F_mem
+	punpcklwd: unimplemented instructions_0f::instr_0F6F_mem
+	pxor: unimplemented instructions_0f::instr_0F6F_mem
+	shufps-edgecase: unimplemented instructions_0f::instr_F30F6F_mem
+	ucomiss: unimplemented instructions_0f::instr_660F6E_mem
+exit=0
+
+
+===== G2 NEGATIVE CONTROL 1: one perturbed EXPECTED field, actual = the C port
+
+$ mkdir -p /tmp/nc1 && cp build/nasm/mov16.fixture /tmp/nc1/ && python3 - <<'EOF'
+import re
+p='/tmp/nc1/mov16.fixture'
+t=open(p).read()
+m=re.search(r'---BEGIN JSON---\n\[\n    (-?\d+),', t)
+print('original cpu.reg32[0] =', m.group(1))
+t=t[:m.start(1)]+str(int(m.group(1))^0x10203040)+t[m.end(1):]
+open(p,'w').write(t)
+EOF
+original cpu.reg32[0] = -889281199
+exit=0
+
+$ python3 tests/nasm_run.py --stage run --actual "build/v86c-nasm {img} {limit} --fixture" --skip-list tests/nasm_skip_c.txt --reuse-fixtures --fixture-dir /tmp/nc1 --filter '^mov16$'
+Testing mov16.img
+
+[+] Passed 0/1 tests.
+[!] 0 of 1 selected test(s) produced no state from the actual leg, 0 were skipped (tests/nasm_skip_c.txt).
+[-] Failed 1 test(s).
+
+[-] mov16.img:
+
+	cpu.reg32[0]
+	Actual:   0xcafea551
+	Expected: 0xdade9511
+exit=1
+
+
+===== G2 NEGATIVE CONTROL 2: the two class-B entries REMOVED from the skip list
+# (the skip list is not a hiding place: take an entry out and the failure it covers is reported)
+
+$ grep -v '^pop_esp' tests/nasm_skip_c.txt > /tmp/skip-no-popesp.txt && python3 tests/nasm_run.py --stage run --actual "build/v86c-nasm {img} {limit} --fixture" --skip-list /tmp/skip-no-popesp.txt --filter '^pop_esp2?$'
+Testing pop_esp.img
+Testing pop_esp2.img
+
+[+] Passed 0/2 tests.
+[!] 0 of 2 selected test(s) produced no state from the actual leg, 0 were skipped (/tmp/skip-no-popesp.txt).
+[-] Failed 2 test(s).
+
+[-] pop_esp.img:
+
+	exception eip
+	Actual:   0x8002f
+	Expected: 0x80023
+
+	Exception
+	Actual:   None
+	Expected: GP
+
+[-] pop_esp2.img:
+
+	exception eip
+	Actual:   0x80026
+	Expected: 0x80023
+
+	Exception
+	Actual:   None
+	Expected: GP
+exit=1
+
+
+===== G2 NEGATIVE CONTROL 3: no perturbation -> the report is not always-on
+
+$ python3 tests/nasm_run.py --stage run --actual "build/v86c-nasm {img} {limit} --fixture" --skip-list tests/nasm_skip_c.txt --filter '^mov16$'
+Testing mov16.img
+
+[+] Passed 1/1 tests.
+[!] 0 of 1 selected test(s) produced no state from the actual leg, 0 were skipped (tests/nasm_skip_c.txt).
+exit=0
+
+
+===== G3: the pre-existing gates still green
+
+$ make selftest 2>&1 | tail -3
+PASS instr: the moffs forms, the A4-AF string wrappers (incl. a segment override), arpl, the 66/67/F0/F2/F3 prefixes and the segment prefixes
+PASS instr: read-modify-write across a page boundary (virt_boundary), no write on a fault, the string slow path's partial effects
+cpu_selftest: 2968 checks, 0 failures
+exit=0
+
+$ make selftest >/dev/null 2>&1; echo 'make selftest exit above'
+make selftest exit above
+exit=0
+
+$ make oracle
+python3 tests/model.py --out results/expected.json > /dev/null
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.txt
+python3 tests/check_transcript.py results/expected.json results/transcript.txt
+check_transcript: transcript matches tests/model.py (8 GPRs, EFLAGS, EIP, 561 instructions, 4096-byte window sha256)
+exit=0
+
+
+===== G4: the generator is reproducible, and the Makefile wiring is real
+
+$ node gen/interpreter_c.js >/dev/null && cp src/cpu/interpreter_gen.c /tmp/gen1.c && node gen/interpreter_c.js >/dev/null && cp src/cpu/interpreter_gen.c /tmp/gen2.c && diff /tmp/gen1.c /tmp/gen2.c && echo 'run twice: EMPTY diff' && sha256sum /tmp/gen1.c /tmp/gen2.c
+run twice: EMPTY diff
+bb53cf87e7969d27277e6d7c549bf7e1a6571b0b826386b32dfcb87e693c6f93  /tmp/gen1.c
+bb53cf87e7969d27277e6d7c549bf7e1a6571b0b826386b32dfcb87e693c6f93  /tmp/gen2.c
+exit=0
+
+$ rm src/cpu/interpreter_gen.c && make >/dev/null 2>&1 && echo 'make rebuilt it from a deleted state' && diff /tmp/gen1.c src/cpu/interpreter_gen.c && echo 'recreated byte-identical'
+make rebuilt it from a deleted state
+recreated byte-identical
+exit=0
+
+$ touch gen/interpreter_c.js && make 2>&1 | head -2
+# the emitter is a real prerequisite of the generated file
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 839 implemented, 1083 unimplemented, 843 names defined (unchanged)
+exit=0
+
+$ node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 839 implemented, 1083 unimplemented, 843 names defined (unchanged)
+exit=0
+
+
+===== G5 (extra): the EXIT-CODE CONTRACT, checked against the reference
+# README.md ss1: a guest CPU exception, or a guest that does not halt within the limit, is a
+# NONZERO exit and NO transcript.  Two purpose-built images exercise both.
+
+$ ls -l /tmp/timg/de.img /tmp/timg/loop.img
+-rwxr-xr-x. 1 jaye jaye 42 Oct 11 23:50 /tmp/timg/de.img
+-rwxr-xr-x. 1 jaye jaye 34 Oct 11 23:50 /tmp/timg/loop.img
+exit=0
+
+$ for t in de loop; do ./build/v86c /tmp/timg/$t.img 1000 >/tmp/timg/$t.c 2>/tmp/timg/$t.cerr; echo "C $t rc=$? stdout=$(wc -c </tmp/timg/$t.c)B stderr: $(cat /tmp/timg/$t.cerr)"; node oracle/run.mjs /tmp/timg/$t.img 1000 >/tmp/timg/$t.js 2>/tmp/timg/$t.jserr; echo "JS $t rc=$? stdout=$(wc -c </tmp/timg/$t.js)B stderr: $(head -1 /tmp/timg/$t.jserr)"; done
+C de rc=1 stdout=0B stderr: v86c: guest raised cpu exception 0 after 3 instructions; transcript not produced
+JS de rc=1 stdout=0B stderr: panicked at src/rust/cpu/cpu.rs:819:13:
+C loop rc=1 stdout=0B stderr: v86c: guest did not halt within 1000 instructions (reached 200002)
+JS loop rc=1 stdout=0B stderr: guest did not halt within 1000 instructions (reached 200002, in_hlt=0)
+exit=0
+
+
+===== G6 (extra): the deferred-symbol census the emitter prints
+
+$ node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 839 implemented, 1083 unimplemented, 843 names defined (unchanged)
+exit=0
+
+$ grep -c 'unimplemented_instruction' src/cpu/interpreter_gen.c
+1084
+exit=0
+
+$ grep -o 'unimplemented_instruction("[^"]*"' src/cpu/interpreter_gen.c | sed 's/.*("//;s/"//' | sed 's/_mem$//;s/_reg$//' | sort -u | wc -l
+592
+exit=0
+
+
+===== G7 (extra): the LIMIT does not bind the same way one might assume -- and the C leg agrees with the reference about that too
+# upstream's main_loop runs a whole LOOP_COUNTER (100003 instruction) chunk per call, so a
+# limit smaller than the program has no effect on either leg; both halt, both report 561.
+$ for L in 10 100 1000; do ./build/v86c tests/test.img $L > /tmp/lc.txt; c=$?; node oracle/run.mjs tests/test.img $L > /tmp/lj.txt; j=$?; echo "limit=$L C rc=$c bytes=$(wc -c </tmp/lc.txt) | JS rc=$j bytes=$(wc -c </tmp/lj.txt) | identical=$(diff -q /tmp/lc.txt /tmp/lj.txt >/dev/null && echo yes || echo no)"; done
+limit=10 C rc=0 bytes=1966 | JS rc=0 bytes=1966 | identical=yes
+limit=100 C rc=0 bytes=1967 | JS rc=0 bytes=1967 | identical=yes
+limit=1000 C rc=0 bytes=1968 | JS rc=0 bytes=1968 | identical=yes
+
+===== CURRENCY CHECK: sha256 of every file this unit's evidence depends on (recorded at the end of the unit, after the final all-green sweep)
+3ee0c23f7c3e33de97312f3ff207f92068039404f3d6f563b6516820084018e6  gen/interpreter_c.js
+bb53cf87e7969d27277e6d7c549bf7e1a6571b0b826386b32dfcb87e693c6f93  src/cpu/interpreter_gen.c
+b4bd2dde9ad6467eb0da22793080c34a00028693d88df6841ac717f33c59c501  src/cpu/cpu.c
+c58b00835a25b65b494120e2725682d786e3d03d81b2d0849cc020e61a43f157  src/cpu/cpu.h
+9f74f1fb17d0c5eaea42bbef773117353141c018958e755d339410f17893e873  src/cpu/exec_boundary.c
+9b97a0089d1d751fc98f21114418635fb1b834c68b15d2c61b5cfbca5fd1febb  src/cpu/exec_boundary.h
+0947a2537e08c8b7e38e866cb746e7f1127a0bbec3f3765f2fe15c5126baae0c  src/cpu/instructions_0f.c
+f144fdcd837cf664416f7530229df2cca6994f095d648bc6f399b901a002b0ec  src/cpu/instructions_0f.h
+e528103207c32997797d1287bc0f7b7762239686eb6f98315192af911d7689b7  src/main.c
+d9ce9f66edf50db0b2dc71dde94bc7931d153ef64f7828c691b4926c135d2960  Makefile
+7a494e449ca46dd4530762b28217396d4e236e0e6ed3f3babf4f0597a588ff61  tests/nasm_skip_c.txt
+e4de746b59cc511c382d6b4629aec93c12d1a64b811a6597b34d7263d7d1e3a9  tests/nasm_run.py
+272218337ad6d6f46d0cfdc00ca57e7a5296546a7a50ed5ace7c755b30870240  v86/gen/x86_table.js
+cee6c629e7bebcd1cca7d3ae9a12e57dfc968a69e60b7220d483a7949e4d4090  src/cpu/instructions.c
+70f7f84193add5c6d92294f452d8dc652f8cc3c3871f0a8a8c189ee3f731fc44  src/cpu/string.c
+8bb8eca53f5c5ccbb1ef2c532c2d4a493180a5e5b44da87bceb6c0a8f094cd61  results/transcript.c.txt
+8bb8eca53f5c5ccbb1ef2c532c2d4a493180a5e5b44da87bceb6c0a8f094cd61  results/transcript.js.txt

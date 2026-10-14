@@ -1,0 +1,14 @@
+== perf-5-ab: c4-hoist vs c2b-stats(revert arm)  pairs=4
+load-before=10.44 10.33 9.48
+a    real 3.174s  instr=ok state=ok serial=ok
+b    real 3.369s  instr=ok state=ok serial=ok
+b    real 3.309s  instr=ok state=ok serial=ok
+a    real 3.146s  instr=ok state=ok serial=ok
+a    real 3.137s  instr=ok state=ok serial=ok
+b    real 3.284s  instr=ok state=ok serial=ok
+b    real 3.287s  instr=ok state=ok serial=ok
+a    real 3.148s  instr=ok state=ok serial=ok
+load-after=11.84 10.70 9.62
+c4-hoist   n=4 best 3.137 median 3.147 worst 3.174
+c2b-stats(revert arm) n=4 best 3.284 median 3.298 worst 3.369
+ratio c4-hoist/c2b-stats(revert arm): best 1.0469x  median 1.0480x  (>1 means c2b-stats(revert arm) is slower)

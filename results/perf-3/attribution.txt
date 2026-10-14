@@ -1,0 +1,56 @@
+== PART 1: the pre-unit Makefile (PERF-3's additions removed) vs the shipped one ==
+   lines differing: 72
+   IDENTICAL: the shipped binary's code is unchanged by this unit:
+   b8f247fb054445758c7ea33a9c58f4dd82048aa734dee2c59fe0ecbc30aafcb4  /tmp/perf-3-pre.dbg
+   b8f247fb054445758c7ea33a9c58f4dd82048aa734dee2c59fe0ecbc30aafcb4  /tmp/perf-3-ship.dbg
+
+== PART 2: the files-IN-the-unity-TU arm (what the plan would ship, what M2 will) ==
+   references to the two files in the arm Makefile: 4
+   --- Makefile	2026-10-12 22:19:38.454457797 +0000
+   +++ /tmp/Makefile.filesin	2026-10-12 22:25:39.637407406 +0000
+   @@ -94,7 +94,7 @@
+               src/cpu/sse_instr.c \
+               src/cpu/softfloat.c src/cpu/fpu.c \
+               src/cpu/exceptions.c src/cpu/pic.c \
+   -           src/cpu/cpu.c src/cpu/exec_boundary.c
+   +           src/cpu/cpu.c src/cpu/exec_boundary.c src/cpu/uop_cache.c
+    CPU_HDR := src/cpu/cpu_state.h src/cpu/flags.h src/cpu/memory.h src/cpu/paging.h \
+               src/cpu/arith.h src/cpu/modrm.h src/cpu/misc_instr.h \
+               src/cpu/string.h src/cpu/instructions.h src/cpu/instructions_0f.h \
+   @@ -234,7 +234,7 @@
+    # 4.970 s on the same build), while it costs the hw rule its -Werror (the inlined io.c
+    # port-map accesses trip -Warray-bounds) and puts 14 files' file-local statics in one
+    # namespace for no measured gain.  Keep src/hw per-TU.
+   -UNITY_SRC := $(CPU_SRC) $(GEN_C)
+   +UNITY_SRC := $(CPU_SRC) $(GEN_C) $(UOP_GEN)
+    UNITY_C := $(BUILD)/unity.c
+    UNITY_OBJ := $(BUILD)/unity.o
+    
+   built
+
+== interleaved: 4 rounds of (shipped = files OUT, then files IN) ==
+   NOTE: the ORDER in each pair is fixed, so a drifting host biases the first one.  Three
+   runs of this arm have now read +1.9% (4 rounds, load climbing 9.0 -> 10.3 with the
+   files-IN binary always second), -0.2% and +0.2% (6 rounds each) -- i.e. NO SIGNAL.
+   Read the summary as a noise band, not as a number.
+real: best 4.356  median 4.356  worst 4.356
+MIPS at best real: 45.94   at median real: 45.94
+real: best 4.327  median 4.327  worst 4.327
+MIPS at best real: 46.24   at median real: 46.24
+real: best 4.337  median 4.337  worst 4.337
+MIPS at best real: 46.14   at median real: 46.14
+real: best 4.312  median 4.312  worst 4.312
+MIPS at best real: 46.40   at median real: 46.40
+real: best 4.345  median 4.345  worst 4.345
+MIPS at best real: 46.05   at median real: 46.05
+real: best 4.353  median 4.353  worst 4.353
+MIPS at best real: 45.97   at median real: 45.97
+real: best 4.380  median 4.380  worst 4.380
+MIPS at best real: 45.68   at median real: 45.68
+real: best 4.352  median 4.352  worst 4.352
+MIPS at best real: 45.98   at median real: 45.98
+
+== summary (every interleaved sample in results/perf-3/samples.txt) ==
+   OUT  n=4  best 4.337  median 4.351  all=[4.356, 4.337, 4.345, 4.38]
+   IN   n=4  best 4.312  median 4.340  all=[4.327, 4.312, 4.353, 4.352]
+   median difference (IN - OUT): -0.011 s = -0.25%  -- inside this host's drift at the load printed above

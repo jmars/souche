@@ -1,0 +1,66 @@
+== JIT-SPIKE G4: 2026-10-13T11:28:09Z load=23.92 23.98 22.79
+make                                           rc=0
+cd931687b8b0c5d55d0dbfe2433afafa53f35736874df7ff3fa52947c862fc43  build/v86c
+make selftest                                  rc=0
+PASS kernel: the bzImage boot params, the option ROM, the real image (338 checks so far)
+PASS ide: geometry, IDENTIFY, READ SECTORS/DMA, the error status, the ATAPI command set (445 checks so far)
+PASS virtio: the PCI function and its capability chain, feature negotiation, the queues, both directions of the console, the IRQ route (541 checks so far)
+hw_selftest: 541 checks, 0 failures, 0 skipped
+  (b) address comparisons vs modrm_resolve: 1426777 (failures 0)
+uop_cache_selftest: 7934349 checks, 0 failures
+uop_exec_selftest: 102 checks, 0 failures
+jit-selftest: 29 checks, 0 failures
+make nasm (cache on)                           rc=0
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+	jump: src/cpu/cpu.c:83: assert(!in_mapped_range(phys_addr)) failed -- the fixture's jump reaches a region v86's flat 2 MiB memory model maps differently (P0 class B, the same model gap as pop_esp); unchanged since M1a-4
+nasm with --uop-cache off                      rc=0
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+	jump: src/cpu/cpu.c:83: assert(!in_mapped_range(phys_addr)) failed -- the fixture's jump reaches a region v86's flat 2 MiB memory model maps differently (P0 class B, the same model gap as pop_esp); unchanged since M1a-4
+make transcript-diff (cache on)                rc=0
+transcript-diff with --uop-cache off           rc=0
+--jit off (no flag) == PRE-CHANGE binary bytes rc=0
+--jit off (explicit) == PRE-CHANGE binary bytes rc=0
+{
+  "cpu": {
+    "control_registers": {
+1.5 G boot (on)                                rc=0
+in_hlt=0, exception=-1, unimplemented=0, eip=0xc1927800 cs=0x60 cr0=0x80050033 cr3=0x1ea1000
+1.5 G boot (off)                               rc=0
+in_hlt=0, exception=-1, unimplemented=0, eip=0xc1927800 cs=0x60 cr0=0x80050033 cr3=0x1ea1000
+1.5 G boot (onjit)                             rc=0
+in_hlt=0, exception=-1, unimplemented=0, eip=0xc1927800 cs=0x60 cr0=0x80050033 cr3=0x1ea1000
+-- final-state compare (the brief's gate):
+IDENTICAL: in_hlt=0, exception=-1, unimplemented=0, eip=0xc1927800 cs=0x60 cr0=0x80050033 cr3=0x1ea1000
+-- serial sha256 + the jit smoke lines:
+28b3b75b1fed90c12acdc5ac749ef02ba117de35e9f204b63e38b5b060e60c3b  results/jit-spike/boot-on-serial.txt
+ddb118c65e75886323c4406d7aa7f5322e92a8b9904a8540dbf133726a603d6d  results/jit-spike/boot-off-serial.txt
+74bcb0801edf7e4cca3fae18c691db96c437c0dfd61a07026e9350d7ca43f5de  results/jit-spike/boot-onjit-serial.txt
+v86c: jit: x86-64 W^X code pages: mmap RW -> write -> mprotect RX. Linux VERIFIED (this build); macOS MAP_JIT/Apple Silicon UNVERIFIED (pthread_jit_write_protect_np is NOT used); Windows UNVERIFIED. aarch64 has no backend: compiled out (V86C_JIT_X64=0).
+--jit on initializes and reports its caps      rc=0
+--uop-cache off --jit on is refused with the reason rc=0
+--jit off == no flag, on stderr too            rc=0
+$ ./build/v86c tests/test.img 1000 --jit on --uop-cache-stats  (stderr)
+v86c: jit: x86-64 W^X code pages: mmap RW -> write -> mprotect RX. Linux VERIFIED (this build); macOS MAP_JIT/Apple Silicon UNVERIFIED (pthread_jit_write_protect_np is NOT used); Windows UNVERIFIED. aarch64 has no backend: compiled out (V86C_JIT_X64=0).
+uop-cache: lookups 130 (hits 126 = 96.92%, decodes 4, decode-fails 0)
+uop-cache: instructions 561 (uops 561, mid-batch fallback steps 0, interpreted_run instructions 0 -> fallback 0.000%)
+$ ./build/v86c tests/test.img 1000                                     (stderr, default)
+$ ./build/v86c tests/test.img 1000 --jit off                           (stderr)
+$ ./build/v86c tests/test.img 1000 --uop-cache off --jit on            (stderr)
+jit: --jit needs the uop cache's invalidation hooks; --uop-cache off was also given. JIT off.
+make bench                                     rc=0
+run  5: real 3.624s user 3.589s sys 0.035s  instr=200095214  state=ok serial=ok
+run  6: real 3.621s user 3.586s sys 0.029s  instr=200095214  state=ok serial=ok
+run  7: real 2.915s user 2.885s sys 0.026s  instr=200095214  state=ok serial=ok
+load-after=23.57 23.76 22.87
+n=7
+real: best 2.915  median 3.621  worst 3.646
+user: best 2.885  median 3.586  worst 3.601
+cpu (user+sys): best 2.911  median 3.615
+MIPS at best real: 68.64   at median real: 55.26
+verified (every run): 200095214 instructions, the terminal guest state clause
+                      above, and the guest's serial output sha256 -- every number in
+                      this output times THAT workload; none of them asserts it.
+aarch64 compile jit_mem.c                      rc=0
+aarch64 compile uop_cache.c                    rc=0
+aarch64 compile jit_selftest.c                 rc=0
+== done: 2026-10-13T11:30:21Z load=23.57 23.76 22.87

@@ -1,0 +1,19 @@
+== building probe against ROOT=src ==
+---- probe same ----
+same: handler=1010 before: eip=1000 counter=0 marker=0 esp=1f00 pf=0
+same: after 1: eip=1000 counter=4 marker=1 esp=1f00 pf=0 unimplemented=0
+same: after 2: eip=1000 counter=8 marker=2 esp=1f00 pf=0 unimplemented=0
+same: after 3: eip=1000 counter=12 marker=3 esp=1f00 pf=0 unimplemented=0
+rc=0
+---- probe diff ----
+diff: handler=4010 before: eip=1000 counter=0 marker=0 esp=1f00 pf=0
+diff: after 1: eip=4010 counter=1 marker=0 esp=1ef0 pf=0 unimplemented=0
+diff: after 2: eip=1000 counter=4 marker=1 esp=1f00 pf=0 unimplemented=0
+diff: after 3: eip=4010 counter=5 marker=1 esp=1ef0 pf=0 unimplemented=0
+rc=0
+---- probe fetch ----
+fetch: handler=1010 before: eip=2804 counter=0 marker=0 esp=1f00 pf=0
+fetch: after 1: eip=1010 counter=0 marker=0 esp=1ef0 pf=1 unimplemented=0
+fetch: after 2: eip=2804 counter=3 marker=1 esp=1f00 pf=0 unimplemented=0
+fetch: after 3: eip=1010 counter=3 marker=1 esp=1ef0 pf=1 unimplemented=0
+rc=0

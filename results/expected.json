@@ -1,0 +1,22 @@
+{
+  "cpu": {
+    "eflags": "0x00000046",
+    "eip": "0x00100119",
+    "gpr": {
+      "eax": "0x10203040",
+      "ebp": "0x00102000",
+      "ebx": "0x0f0f00f1",
+      "ecx": "0x00000010",
+      "edi": "0x00000010",
+      "edx": "0x00000000",
+      "esi": "0xc487eb71",
+      "esp": "0x00102000"
+    }
+  },
+  "instruction_count": 561,
+  "memory_window": {
+    "address": "0x00101000",
+    "bytes": 4096,
+    "sha256": "9b4639eca15ccfca5c91cb48bc6ae3fc1dd2826fc86c88ee290eaeb16fc4d6fb"
+  }
+}

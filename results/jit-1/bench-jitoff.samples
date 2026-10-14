@@ -1,0 +1,36 @@
+# perf_bench JIT-1 M1 --jit off bin=/home/jaye/futaie/souche/results/jit-1/v86c-jitoff limit=200000000 runs=7 2026-10-13T12:02:40Z
+# real user sys
+2.444 2.436 0.008
+2.542 2.534 0.008
+2.405 2.397 0.009
+2.557 2.548 0.009
+2.536 2.527 0.010
+2.406 2.396 0.010
+2.410 2.399 0.011
+# perf_bench JIT-1 M1 --jit off bin=/home/jaye/futaie/souche/results/jit-1/v86c-jitoff limit=200000000 runs=7 2026-10-13T12:41:28Z
+# real user sys
+2.467 2.455 0.011
+2.445 2.438 0.006
+2.616 2.604 0.013
+2.456 2.446 0.009
+2.617 2.607 0.010
+2.423 2.415 0.008
+2.489 2.478 0.011
+# perf_bench JIT-1 M1 --jit off bin=/home/jaye/futaie/souche/results/jit-1/v86c-jitoff limit=200000000 runs=7 2026-10-13T12:44:32Z
+# real user sys
+2.581 2.570 0.011
+2.602 2.592 0.009
+2.531 2.519 0.012
+2.615 2.606 0.009
+2.498 2.488 0.010
+2.564 2.555 0.009
+2.454 2.447 0.007
+# perf_bench JIT-1 M1 --jit off bin=/home/jaye/futaie/souche/results/jit-1/v86c-jitoff limit=200000000 runs=7 2026-10-13T12:50:09Z
+# real user sys
+2.443 2.432 0.012
+2.463 2.453 0.010
+2.613 2.606 0.008
+2.532 2.521 0.011
+2.433 2.423 0.010
+2.515 2.506 0.008
+2.434 2.429 0.005

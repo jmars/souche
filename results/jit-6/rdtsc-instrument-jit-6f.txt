@@ -1,0 +1,25 @@
+# JIT-6F — the rdtsc attribution instrument, CORRECTED (raw evidence)
+#
+# HOW TO RUN (the invocation is part of the record -- results/jit-6/ had no runner):
+#   python3 results/jit-6/make-rdtsc-variant.py      # builds /tmp/j6-rdtsc (needs v86/ for the table)
+#   cd /tmp/j6-rdtsc && make                        # cosmocc APE (x86-64 + aarch64 passes)
+#   J6_PAIR_COST=54 build/v86c --bzimage <kernel> 200000000 --cmdline 'console=ttyS0' \
+#       --jit-stats --uop-cache-stats >/dev/null 2>this.txt
+# NOTE: flags must come AFTER --bzimage (argv[1]==--bzimage selects boot_main).
+#
+# RUN 1 -- the script as published BEFORE the fix (the '+ j6_t_seg' raw total, on this host):
+#   j6: t_uoprun 5147056110 cyc / 238547 calls; t_dispatch_raw 949061756707190 cyc / 243783 brackets
+#   [the 9.49e14 is the host TSC since boot -- dispatch_raw = t_dispatch + t_seg, and t_seg is an
+#    ABSOLUTE rdtsc value, not a duration.  The published 1.080 G is not reproducible here.]
+#
+# RUN 2 -- the CORRECTED script (complete segments only; first and last dropped) on the
+# CHAINED tree (this session):
+v86c boot: 200095214 instructions, in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0
+j6: t_uoprun 5097814120 cyc / 238547 calls; t_dispatch_raw 77617085 cyc / 243783 brackets
+j6: NOTE t_dispatch is the C BETWEEN blocks (exit handling + loop top + hash probe); it EXCLUDES the prologue/epilogue, which run inside the block -- a LOWER bound on what chaining removes.
+j6: pair_cost 54 cyc -> dispatch_est 64452803 cyc, interior_est 5033361317 cyc
+uop-cache: lookups 15317515 (hits 15316502 = 99.99%, decodes 740, decode-fails 0)
+uop-cache: instructions 200095213 (uops 200095213, mid-batch fallback steps 0, interpreted_run instructions 0 -> fallback 0.000%)
+uop-cache: flushes 257574, discards 0, SMC aborts 11, invalidated blocks 308, cache clears 0, block ends 4217
+uop-cache: arena peak 12049/65536 uops, block peak 740/8192
+jit: exits: return 234330, tail 5227, abort 10, block-end 4217; chain links 15073458

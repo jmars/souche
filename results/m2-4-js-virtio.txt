@@ -1,0 +1,46 @@
+GUEST-INIT: waited 15 round(s) for /dev/hvc0
+GUEST-INIT: /dev/hvc*:
+GUEST-INIT: /sys/bus/virtio/devices:
+GUEST-INIT: virtio0's ids and its driver:
+  virtio0/vendor = 0x1af4
+  virtio0/device = 0x0003
+  virtio0 (ls): device driver features modalias power status subsystem uevent vendor virtio-ports 
+  /sys/bus/virtio/drivers: virtio_console virtio_rproc_serial 
+GUEST-INIT: /proc/modules (virtio):
+GUEST-INIT: /proc/interrupts:
+GUEST-INIT: /proc/devices (hvc/virtio):
+GUEST-INIT: dmesg (virtio/hvc/console), the KERNEL's own lines:
+GUEST-INIT: written to /dev/hvc0 by the guest (userspace write through the device)
+[    0.177570] Kernel command line: console=hvc0 console=ttyS0
+[    1.076212] Console: colour EGA 80x25
+[    1.076507] printk: console [ttyS0] enabled
+[    6.123640] pci 0000:00:00.0: [8086:1237] type 00 class 0x060000
+[    6.143734] pci 0000:00:01.0: [8086:7000] type 00 class 0x060100
+[    6.146104] pci 0000:00:0c.0: [1af4:1043] type 00 class 0x000200
+[    6.146751] pci 0000:00:0c.0: BAR 0 [io  0xb800-0xb83f]
+[    6.147199] pci 0000:00:0c.0: BAR 1 [io  0xb900-0xb90f]
+[    6.148585] pci 0000:00:0c.0: BAR 2 [io  0xb700-0xb70f]
+[    6.149050] pci 0000:00:0c.0: BAR 3 [io  0xb600-0xb60f]
+[    6.152980] pci 0000:00:12.0: [1234:1111] type 00 class 0x030000
+[    6.153490] pci 0000:00:12.0: BAR 0 [mem 0xe0000000-0xe07fffff pref]
+[    6.154159] pci 0000:00:12.0: ROM [mem 0xfebe0000-0xfebeffff pref]
+[    6.154714] pci 0000:00:12.0: Video device with shadowed ROM at [mem 0x000c0000-0x000dffff]
+[    6.156216] pci 0000:00:1e.0: [8086:7010] type 00 class 0x010180
+[    6.156845] pci 0000:00:1e.0: BAR 2 [io  0x0170-0x0177]
+[    6.158437] pci 0000:00:1e.0: BAR 4 [io  0xb400-0xb40f]
+[    6.158937] pci 0000:00:1e.0: BAR 0 [io  0x01f0-0x01f7]: legacy IDE quirk
+[    6.159344] pci 0000:00:1e.0: BAR 1 [io  0x03f6]: legacy IDE quirk
+[    6.159730] pci 0000:00:1e.0: BAR 2 [io  0x0170-0x0177]: legacy IDE quirk
+[    6.160138] pci 0000:00:1e.0: BAR 3 [io  0x0376]: legacy IDE quirk
+[    6.202040] pci 0000:00:12.0: vgaarb: setting as boot VGA device
+[    6.202403] pci 0000:00:12.0: vgaarb: bridge control possible
+[    6.202748] pci 0000:00:12.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
+[    6.637837] pci 0000:00:01.0: PIIX3: Enabling Passive Release
+[    6.638269] pci 0000:00:00.0: Limiting direct PCI/PCI transfers
+[    6.638736] pci 0000:00:01.0: Activating ISA DMA hang workarounds
+[   14.518367] printk: console [hvc0] enabled
+GUEST-INIT: waiting for host inputVIRTIO-INPUT16
+
+GUEST-INIT: read back from /dev/hvc0: [VIRTIO-INPUT16]
+GUEST-INIT: read back from /dev/hvc0: [VIRTIO-INPUT16]
+GUEST-INIT: end

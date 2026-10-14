@@ -1,0 +1,36 @@
+== PERF-FIX-3 asymmetry rig 2026-10-13T00:06:22Z
+== gates: build/cpu_uop_exec_selftest (the M2 suite with the four new pins) and results/perf-4-recon.sh
+
+ARM 0 CONTROL: the unmutated tree
+   GREEN: selftest rc 0 (0 failures), recon rc 0
+
+ARM 1 BLOCKER-1 inverse: the SAFE_READ_WRITE* hooks removed (paging.h)
+   CAUGHT: selftest rc 1 (3 failures); the pin 'smc-rmw:' and the assertion 'ram32(0x3000) == 0x2A', recon rc 1 (must be NONZERO: the extended gate closes the class)
+      FAIL src/cpu/uop_exec_selftest.c:324: ram32(0x3000) == 0x2A (got 0x0, want 0x2a)
+      FAIL src/cpu/uop_exec_selftest.c:326: uop_stats.aborts >= 1
+      FAIL src/cpu/uop_exec_selftest.c:327: uop_stats.invalidations >= 1
+      smc-rmw: xor byte [mem] patch executed, aborts 0, invalidations 0
+
+ARM 2 SHOULD-FIX-1 inverse: the write16 straddle hook removed (memory.c)
+   CAUGHT: selftest rc 1 (2 failures); the pin 'straddle-w16:' and the assertion 'ram32(0x3000) == 0x11'
+      FAIL src/cpu/uop_exec_selftest.c:395: uop_stats.invalidations - invalidations_before == 1 (got 0x0, want 0x1)
+      FAIL src/cpu/uop_exec_selftest.c:405: ram32(0x3000) == 0x11 (got 0x22, want 0x11)
+      straddle-w16: write16(0xFFF) invalidated the next page (0x3000 stayed 0x22)
+
+ARM 3 SHOULD-FIX-1 inverse: the write32 straddle hook removed (memory.c)
+   CAUGHT: selftest rc 1 (2 failures); the pin 'straddle-w32:' and the assertion 'ram32(0x3000) == 0x11'
+      FAIL src/cpu/uop_exec_selftest.c:395: uop_stats.invalidations - invalidations_before == 1 (got 0x0, want 0x1)
+      FAIL src/cpu/uop_exec_selftest.c:405: ram32(0x3000) == 0x11 (got 0x22, want 0x11)
+      straddle-w32: write32(0xFFD) invalidated the next page (0x3000 stayed 0x22)
+
+ARM 4 SHOULD-FIX-2a, THE REVIEW'S PRESCRIPTION (materialise before the guard)
+   CAUGHT: selftest rc 1 (1 failures); the pin 'guard-order:' and the assertion 'on == 7'
+      FAIL src/cpu/uop_exec_selftest.c:536: on == 7 (got 0xd, want 0x7)
+      guard-order: delivered vector cache-on 13 / cache-off 7 (7 = #NM, 13 = #GP)
+
+ARM 5 SHOULD-FIX-2b inverse: `return true` on a materialise fault (uop_cache.c)
+   CAUGHT: selftest rc 1 (1 failures); the pin 'faulted-flush:' and the assertion 'flushes_on == 4'
+      FAIL src/cpu/uop_exec_selftest.c:643: flushes_on == 4 (got 0x5, want 0x4)
+      faulted-flush: cache-on batch ends 5 (must be 4), guest rdtsc 6000/6999
+
+== ARMS: 5, CAUGHT: 5, HOLES: 0 (a hole is an arm the gates could not see)

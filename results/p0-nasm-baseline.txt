@@ -1,0 +1,3013 @@
+
+[-] 5 test(s) failed to build/generate:
+
+[-] idiv16-overflow:
+	reference leg failed on idiv16-overflow: panicked at src/rust/cpu/cpu.rs:819:13:
+Unimplemented: #GP handler
+wasm://wasm/v86.wasm-007a84ce:1
+
+
+RuntimeError: unreachable
+    at v86.wasm._RNvCsdtSMxSA38aw_7___rustc10rust_panic (wasm://wasm/v86.wasm-007a84ce:wasm-function[1565]:0xbcb9c)
+    at v86.wasm._RNvNtCs4BkbFkxXoBt_3std9panicking15panic_with_hook (wasm://wasm/v86.wasm-007a84ce:wasm-function[1563]:0xbc8ff)
+    at v86.wasm._RNCNvNtCs4BkbFkxXoBt_3std9panicking13panic_handler0B5_ (wasm://wasm/v86.wasm-007a84ce:wasm-function[1570]:0xbcc34)
+    at v86.wasm._RINvNtNtCs4BkbFkxXoBt_3std3sys9backtrace26___rust_end_short_backtraceNCNvNtB6_9panicking13panic_handler0zEB6_ (wasm://wasm/v86.wasm-007a84ce:wasm-function[1569]:0xbcbce)
+    at v86.wasm._RNvCsdtSMxSA38aw_7___rustc17rust_begin_unwind (wasm://wasm/v86.wasm-007a84ce:wasm-function[1542]:0xbb27a)
+    at v86.wasm._RNvNtCs8hZryZq3oeI_4core9panicking9panic_fmt (wasm://wasm/v86.wasm-007a84ce:wasm-function[1528]:0xba19f)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu3cpu21call_interrupt_vector (wasm://wasm/v86.wasm-007a84ce:wasm-function[2513]:0x101c49)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu12instructions16instr16_F7_7_reg (wasm://wasm/v86.wasm-007a84ce:wasm-function[3013]:0x12d64a)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863gen11interpreter3run (wasm://wasm/v86.wasm-007a84ce:wasm-function[2412]:0xfbf7e)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu3cpu22run_prefix_instruction (wasm://wasm/v86.wasm-007a84ce:wasm-function[2429]:0xfd488)
+
+Node.js v26.8.1
+
+[-] idiv32-overflow:
+	reference leg failed on idiv32-overflow: panicked at src/rust/cpu/cpu.rs:819:13:
+Unimplemented: #GP handler
+wasm://wasm/v86.wasm-007a84ce:1
+
+
+RuntimeError: unreachable
+    at v86.wasm._RNvCsdtSMxSA38aw_7___rustc10rust_panic (wasm://wasm/v86.wasm-007a84ce:wasm-function[1565]:0xbcb9c)
+    at v86.wasm._RNvNtCs4BkbFkxXoBt_3std9panicking15panic_with_hook (wasm://wasm/v86.wasm-007a84ce:wasm-function[1563]:0xbc8ff)
+    at v86.wasm._RNCNvNtCs4BkbFkxXoBt_3std9panicking13panic_handler0B5_ (wasm://wasm/v86.wasm-007a84ce:wasm-function[1570]:0xbcc34)
+    at v86.wasm._RINvNtNtCs4BkbFkxXoBt_3std3sys9backtrace26___rust_end_short_backtraceNCNvNtB6_9panicking13panic_handler0zEB6_ (wasm://wasm/v86.wasm-007a84ce:wasm-function[1569]:0xbcbce)
+    at v86.wasm._RNvCsdtSMxSA38aw_7___rustc17rust_begin_unwind (wasm://wasm/v86.wasm-007a84ce:wasm-function[1542]:0xbb27a)
+    at v86.wasm._RNvNtCs8hZryZq3oeI_4core9panicking9panic_fmt (wasm://wasm/v86.wasm-007a84ce:wasm-function[1528]:0xba19f)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu3cpu21call_interrupt_vector (wasm://wasm/v86.wasm-007a84ce:wasm-function[2513]:0x101c49)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu12instructions16instr32_F7_7_reg (wasm://wasm/v86.wasm-007a84ce:wasm-function[3023]:0x12dfdc)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863gen11interpreter3run (wasm://wasm/v86.wasm-007a84ce:wasm-function[2412]:0xfc337)
+    at v86.wasm.main_loop (wasm://wasm/v86.wasm-007a84ce:wasm-function[3293]:0x1496dc)
+
+Node.js v26.8.1
+
+[-] idiv8-overflow:
+	reference leg failed on idiv8-overflow: panicked at src/rust/cpu/cpu.rs:819:13:
+Unimplemented: #GP handler
+wasm://wasm/v86.wasm-007a84ce:1
+
+
+RuntimeError: unreachable
+    at v86.wasm._RNvCsdtSMxSA38aw_7___rustc10rust_panic (wasm://wasm/v86.wasm-007a84ce:wasm-function[1565]:0xbcb9c)
+    at v86.wasm._RNvNtCs4BkbFkxXoBt_3std9panicking15panic_with_hook (wasm://wasm/v86.wasm-007a84ce:wasm-function[1563]:0xbc8ff)
+    at v86.wasm._RNCNvNtCs4BkbFkxXoBt_3std9panicking13panic_handler0B5_ (wasm://wasm/v86.wasm-007a84ce:wasm-function[1570]:0xbcc34)
+    at v86.wasm._RINvNtNtCs4BkbFkxXoBt_3std3sys9backtrace26___rust_end_short_backtraceNCNvNtB6_9panicking13panic_handler0zEB6_ (wasm://wasm/v86.wasm-007a84ce:wasm-function[1569]:0xbcbce)
+    at v86.wasm._RNvCsdtSMxSA38aw_7___rustc17rust_begin_unwind (wasm://wasm/v86.wasm-007a84ce:wasm-function[1542]:0xbb27a)
+    at v86.wasm._RNvNtCs8hZryZq3oeI_4core9panicking9panic_fmt (wasm://wasm/v86.wasm-007a84ce:wasm-function[1528]:0xba19f)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu3cpu21call_interrupt_vector (wasm://wasm/v86.wasm-007a84ce:wasm-function[2513]:0x101c49)
+    at v86.wasm.instr_F6_7_reg (wasm://wasm/v86.wasm-007a84ce:wasm-function[3003]:0x12cd73)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863gen11interpreter3run (wasm://wasm/v86.wasm-007a84ce:wasm-function[2412]:0xfbbc0)
+    at v86.wasm.main_loop (wasm://wasm/v86.wasm-007a84ce:wasm-function[3293]:0x1496dc)
+
+Node.js v26.8.1
+
+[-] mov_sreg_ud1:
+	reference leg failed on mov_sreg_ud1: panicked at src/rust/cpu/cpu.rs:819:13:
+Unimplemented: #GP handler
+wasm://wasm/v86.wasm-007a84ce:1
+
+
+RuntimeError: unreachable
+    at v86.wasm._RNvCsdtSMxSA38aw_7___rustc10rust_panic (wasm://wasm/v86.wasm-007a84ce:wasm-function[1565]:0xbcb9c)
+    at v86.wasm._RNvNtCs4BkbFkxXoBt_3std9panicking15panic_with_hook (wasm://wasm/v86.wasm-007a84ce:wasm-function[1563]:0xbc8ff)
+    at v86.wasm._RNCNvNtCs4BkbFkxXoBt_3std9panicking13panic_handler0B5_ (wasm://wasm/v86.wasm-007a84ce:wasm-function[1570]:0xbcc34)
+    at v86.wasm._RINvNtNtCs4BkbFkxXoBt_3std3sys9backtrace26___rust_end_short_backtraceNCNvNtB6_9panicking13panic_handler0zEB6_ (wasm://wasm/v86.wasm-007a84ce:wasm-function[1569]:0xbcbce)
+    at v86.wasm._RNvCsdtSMxSA38aw_7___rustc17rust_begin_unwind (wasm://wasm/v86.wasm-007a84ce:wasm-function[1542]:0xbb27a)
+    at v86.wasm._RNvNtCs8hZryZq3oeI_4core9panicking9panic_fmt (wasm://wasm/v86.wasm-007a84ce:wasm-function[1528]:0xba19f)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu3cpu21call_interrupt_vector (wasm://wasm/v86.wasm-007a84ce:wasm-function[2513]:0x101c49)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu3cpu10trigger_ud (wasm://wasm/v86.wasm-007a84ce:wasm-function[2049]:0xd3012)
+    at v86.wasm.instr_8E_mem (wasm://wasm/v86.wasm-007a84ce:wasm-function[2704]:0x112297)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863gen11interpreter3run (wasm://wasm/v86.wasm-007a84ce:wasm-function[2412]:0xf6ecb)
+
+Node.js v26.8.1
+
+[-] mov_sreg_ud2:
+	reference leg failed on mov_sreg_ud2: panicked at src/rust/cpu/cpu.rs:819:13:
+Unimplemented: #GP handler
+wasm://wasm/v86.wasm-007a84ce:1
+
+
+RuntimeError: unreachable
+    at v86.wasm._RNvCsdtSMxSA38aw_7___rustc10rust_panic (wasm://wasm/v86.wasm-007a84ce:wasm-function[1565]:0xbcb9c)
+    at v86.wasm._RNvNtCs4BkbFkxXoBt_3std9panicking15panic_with_hook (wasm://wasm/v86.wasm-007a84ce:wasm-function[1563]:0xbc8ff)
+    at v86.wasm._RNCNvNtCs4BkbFkxXoBt_3std9panicking13panic_handler0B5_ (wasm://wasm/v86.wasm-007a84ce:wasm-function[1570]:0xbcc34)
+    at v86.wasm._RINvNtNtCs4BkbFkxXoBt_3std3sys9backtrace26___rust_end_short_backtraceNCNvNtB6_9panicking13panic_handler0zEB6_ (wasm://wasm/v86.wasm-007a84ce:wasm-function[1569]:0xbcbce)
+    at v86.wasm._RNvCsdtSMxSA38aw_7___rustc17rust_begin_unwind (wasm://wasm/v86.wasm-007a84ce:wasm-function[1542]:0xbb27a)
+    at v86.wasm._RNvNtCs8hZryZq3oeI_4core9panicking9panic_fmt (wasm://wasm/v86.wasm-007a84ce:wasm-function[1528]:0xba19f)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu3cpu21call_interrupt_vector (wasm://wasm/v86.wasm-007a84ce:wasm-function[2513]:0x101c49)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu3cpu10trigger_ud (wasm://wasm/v86.wasm-007a84ce:wasm-function[2049]:0xd3012)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863cpu12instructions14instr16_8C_mem (wasm://wasm/v86.wasm-007a84ce:wasm-function[2702]:0x1121f7)
+    at v86.wasm._RNvNtNtCsijeCOoyg2kL_3v863gen11interpreter3run (wasm://wasm/v86.wasm-007a84ce:wasm-function[2412]:0xf6d66)
+
+Node.js v26.8.1
+
+[+] Passed 36/118 tests.
+[-] Failed 82 test(s).
+
+[-] comiss.img:
+
+	cpu.reg32[0]
+	Actual:   0x0
+	Expected: 0x45
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	st5
+	Actual:   0x0
+	Expected: nan
+
+	st6
+	Actual:   0x0
+	Expected: nan
+
+	xmm0.int32[0] (cpu.reg_xmm[0])
+	Actual:   0x0
+	Expected: 0x447a0000
+
+	xmm1.int32[0] (cpu.reg_xmm[4])
+	Actual:   0x0
+	Expected: 0x7fa00000
+
+	mem[101FDC]
+	Actual:   0x0
+	Expected: 0x45
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] cvtpi2ps.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	xmm0.int32[0] (cpu.reg_xmm[0])
+	Actual:   0x0
+	Expected: 0x3f800000
+
+	xmm0.int32[1] (cpu.reg_xmm[1])
+	Actual:   0x0
+	Expected: 0x40000000
+
+	xmm1.int32[0] (cpu.reg_xmm[4])
+	Actual:   0x0
+	Expected: 0xc996b438
+
+	xmm1.int32[2] (cpu.reg_xmm[6])
+	Actual:   0x0
+	Expected: 0x3f800000
+
+	xmm1.int32[3] (cpu.reg_xmm[7])
+	Actual:   0x0
+	Expected: 0x3f800000
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] cvtps2pi.img:
+
+	cpu.reg32[0]
+	Actual:   0x0
+	Expected: 0x7f80
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	st5
+	Actual:   0x0
+	Expected: nan
+
+	st6
+	Actual:   0x0
+	Expected: nan
+
+	st7
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] cvttps2pi.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	xmm0.int32[0] (cpu.reg_xmm[0])
+	Actual:   0x0
+	Expected: 0x4f000000
+
+	xmm0.int32[1] (cpu.reg_xmm[1])
+	Actual:   0x0
+	Expected: 0xcf000000
+
+	xmm0.int32[2] (cpu.reg_xmm[2])
+	Actual:   0x0
+	Expected: 0x449a75b2
+
+	xmm0.int32[3] (cpu.reg_xmm[3])
+	Actual:   0x0
+	Expected: 0x4f000000
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] emms.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] f2xm1.img:
+
+	st0
+	Actual:   0.6168066722416747
+	Expected: 0x0
+
+	st1
+	Actual:   -0.5
+	Expected: 0x0
+
+	st2
+	Actual:   0x1
+	Expected: 0x0
+
+	st4
+	Actual:   0x0
+	Expected: 0.6168066722416746
+
+	st5
+	Actual:   0x0
+	Expected: -0.5
+
+	st6
+	Actual:   0x0
+	Expected: 0x1
+
+[-] fdiv.img:
+
+	st0
+	Actual:   nan
+	Expected: 0x0
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+[-] fdiv-zero.img:
+
+	st1
+	Actual:   0x4d2
+	Expected: 0x0
+
+	st3
+	Actual:   0x0
+	Expected: 0x4d2
+
+[-] fdivr.img:
+
+	st0
+	Actual:   nan
+	Expected: 0x0
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+[-] fprem-distinct.img:
+
+	st0
+	Actual:   0x2
+	Expected: 0x0
+
+	st1
+	Actual:   0x3
+	Expected: 0x0
+
+	st2
+	Actual:   0xffffffff
+	Expected: 0x0
+
+	st3
+	Actual:   0x3
+	Expected: 0x0
+
+	st4
+	Actual:   0x0
+	Expected: 0x2
+
+	st5
+	Actual:   0x0
+	Expected: 0x3
+
+	st6
+	Actual:   0x0
+	Expected: 0xffffffff
+
+	st7
+	Actual:   0x0
+	Expected: 0x3
+
+[-] fptan.img:
+
+	st0
+	Actual:   0.7853981633974483
+	Expected: 0x0
+
+	st1
+	Actual:   0x1
+	Expected: 0x0
+
+	st2
+	Actual:   -1.2246467991473532e-16
+	Expected: 3.141592653589793
+
+	st3
+	Actual:   0x0
+	Expected: 0.7853981633974483
+
+	st4
+	Actual:   0x0
+	Expected: 0x1
+
+	st7
+	Actual:   3.141592653589793
+	Expected: 0x0
+
+[-] frndint.img:
+
+	st0
+	Actual:   0x1
+	Expected: 0x0
+
+	st1
+	Actual:   0x3
+	Expected: 0x0
+
+	st2
+	Actual:   0x3
+	Expected: 0x0
+
+	st4
+	Actual:   0x0
+	Expected: 0x1
+
+	st5
+	Actual:   0x0
+	Expected: 0x3
+
+	st6
+	Actual:   0x0
+	Expected: 0x3
+
+[-] fsave_frstor.img:
+
+	st0
+	Actual:   0x1
+	Expected: 0x0
+
+	st2
+	Actual:   0x0
+	Expected: 0x1
+
+[-] fscale.img:
+
+	st0
+	Actual:   25.132741228718345
+	Expected: 0x0
+
+	st1
+	Actual:   3.141592653589793
+	Expected: 0x0
+
+	st2
+	Actual:   0x0
+	Expected: 25.132741228718345
+
+	st3
+	Actual:   0x0
+	Expected: 3.141592653589793
+
+[-] fsqrt.img:
+
+	st0
+	Actual:   1.7724538509055159
+	Expected: 0x0
+
+	st1
+	Actual:   0x0
+	Expected: 1.772453850905516
+
+[-] fst-st-empty-tag.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st6
+	Actual:   0x0
+	Expected: 0x1
+
+	fpu status word
+	Actual:   0x0
+	Expected: 0x800
+
+	mem[101FE4]
+	Actual:   0x0
+	Expected: 0x3f800000
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] fstm80.img:
+
+	st1
+	Actual:   0x0
+	Expected: 3.141592653589793
+
+	st7
+	Actual:   3.141592653589793
+	Expected: 0x0
+
+[-] fxtract.img:
+
+	st0
+	Actual:   1.5069580078125
+	Expected: 0x0
+
+	st1
+	Actual:   0xd
+	Expected: 0x0
+
+	st2
+	Actual:   0x0
+	Expected: 1.5069580078125
+
+	st3
+	Actual:   0x0
+	Expected: 0xd
+
+[-] fxtract-zero.img:
+
+	st1
+	Actual:   nan
+	Expected: 0x0
+
+	st3
+	Actual:   0x0
+	Expected: -inf
+
+[-] fyl2x.img:
+
+	st0
+	Actual:   1.651496129472319
+	Expected: 3.141592653589793
+
+	st1
+	Actual:   0x0
+	Expected: 1.6514961294723187
+
+	st7
+	Actual:   3.141592653589793
+	Expected: 0x0
+
+[-] fyl2x-zero.img:
+
+	st0
+	Actual:   nan
+	Expected: 0x0
+
+	st1
+	Actual:   0x0
+	Expected: -inf
+
+[-] fyl2xp1.img:
+
+	st0
+	Actual:   2.050185664242767
+	Expected: 3.141592653589793
+
+	st1
+	Actual:   0x0
+	Expected: 2.050185664242767
+
+	st7
+	Actual:   3.141592653589793
+	Expected: 0x0
+
+[-] jump.img:
+
+	exception eip
+	Actual:   0x42b001
+	Expected: 0x2404c7
+
+	Exception
+	Actual:   None
+	Expected: GP
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] maskmovdqu.img:
+
+	exception eip
+	Actual:   0xea001
+	Expected: 0x80055
+
+	Exception
+	Actual:   None
+	Expected: GP
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] maskmovq.img:
+
+	exception eip
+	Actual:   0xea001
+	Expected: 0x8004f
+
+	Exception
+	Actual:   None
+	Expected: GP
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] mov16.img:
+
+	cpu.reg32[0]
+	Actual:   0x0
+	Expected: 0xcafea551
+
+	cpu.reg32[1]
+	Actual:   0x0
+	Expected: 0xcafea551
+
+	cpu.reg32[2]
+	Actual:   0x0
+	Expected: 0xdeadb055
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[6]
+	Actual:   0x0
+	Expected: 0x1bada551
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] mov_sreg.img:
+
+	cpu.reg32[1]
+	Actual:   0x0
+	Expected: 0xdead0000
+
+	cpu.reg32[2]
+	Actual:   0x0
+	Expected: 0xdead0000
+
+	cpu.reg32[3]
+	Actual:   0x0
+	Expected: 0xffff0000
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	eflags
+	Actual:   0x44
+	Expected: 0x84
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] movaps.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	xmm0.int32[0] (cpu.reg_xmm[0])
+	Actual:   0x0
+	Expected: 0x60d629ca
+
+	xmm0.int32[1] (cpu.reg_xmm[1])
+	Actual:   0x0
+	Expected: 0x614b7484
+
+	xmm0.int32[2] (cpu.reg_xmm[2])
+	Actual:   0x0
+	Expected: 0x6195ea11
+
+	xmm0.int32[3] (cpu.reg_xmm[3])
+	Actual:   0x0
+	Expected: 0x61c619c7
+
+	xmm1.int32[0] (cpu.reg_xmm[4])
+	Actual:   0x0
+	Expected: 0x60d629ca
+
+	xmm1.int32[1] (cpu.reg_xmm[5])
+	Actual:   0x0
+	Expected: 0x614b7484
+
+	xmm1.int32[2] (cpu.reg_xmm[6])
+	Actual:   0x0
+	Expected: 0x6195ea11
+
+	xmm1.int32[3] (cpu.reg_xmm[7])
+	Actual:   0x0
+	Expected: 0x61c619c7
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] movd.img:
+
+	cpu.reg32[0]
+	Actual:   0x0
+	Expected: 0x42
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	st6
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] movntpd.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	xmm0.int32[0] (cpu.reg_xmm[0])
+	Actual:   0x0
+	Expected: 0x60d629ca
+
+	xmm0.int32[1] (cpu.reg_xmm[1])
+	Actual:   0x0
+	Expected: 0x614b7484
+
+	xmm0.int32[2] (cpu.reg_xmm[2])
+	Actual:   0x0
+	Expected: 0x6195ea11
+
+	xmm0.int32[3] (cpu.reg_xmm[3])
+	Actual:   0x0
+	Expected: 0x61c619c7
+
+	xmm1.int32[0] (cpu.reg_xmm[4])
+	Actual:   0x0
+	Expected: 0x60d629ca
+
+	xmm1.int32[1] (cpu.reg_xmm[5])
+	Actual:   0x0
+	Expected: 0x614b7484
+
+	xmm1.int32[2] (cpu.reg_xmm[6])
+	Actual:   0x0
+	Expected: 0x6195ea11
+
+	xmm1.int32[3] (cpu.reg_xmm[7])
+	Actual:   0x0
+	Expected: 0x61c619c7
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] movntps.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	xmm0.int32[0] (cpu.reg_xmm[0])
+	Actual:   0x0
+	Expected: 0x60d629ca
+
+	xmm0.int32[1] (cpu.reg_xmm[1])
+	Actual:   0x0
+	Expected: 0x614b7484
+
+	xmm0.int32[2] (cpu.reg_xmm[2])
+	Actual:   0x0
+	Expected: 0x6195ea11
+
+	xmm0.int32[3] (cpu.reg_xmm[3])
+	Actual:   0x0
+	Expected: 0x61c619c7
+
+	xmm1.int32[0] (cpu.reg_xmm[4])
+	Actual:   0x0
+	Expected: 0x60d629ca
+
+	xmm1.int32[1] (cpu.reg_xmm[5])
+	Actual:   0x0
+	Expected: 0x614b7484
+
+	xmm1.int32[2] (cpu.reg_xmm[6])
+	Actual:   0x0
+	Expected: 0x6195ea11
+
+	xmm1.int32[3] (cpu.reg_xmm[7])
+	Actual:   0x0
+	Expected: 0x61c619c7
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] movq.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] packssdw.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] packsswb.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] packuswb.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	st5
+	Actual:   0x0
+	Expected: nan
+
+	st6
+	Actual:   0x0
+	Expected: nan
+
+	st7
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] paddb.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] paddd.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] paddsb.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] paddsw.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] paddusb.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] paddusw.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] paddw.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] pand.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] pandn.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] pcmpeqb.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] pcmpeqd.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] pcmpeqw.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] pcmpgtb.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	st5
+	Actual:   0x0
+	Expected: nan
+
+	st6
+	Actual:   0x0
+	Expected: nan
+
+	st7
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] pcmpgtd.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] pcmpgtw.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] pmaddwd.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] pmulhw.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] pmullw.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] pmuludq.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	st5
+	Actual:   0x0
+	Expected: nan
+
+	xmm1.int32[0] (cpu.reg_xmm[4])
+	Actual:   0x0
+	Expected: 0x1
+
+	xmm1.int32[1] (cpu.reg_xmm[5])
+	Actual:   0x0
+	Expected: 0xfffffffe
+
+	xmm1.int32[2] (cpu.reg_xmm[6])
+	Actual:   0x0
+	Expected: 0x1
+
+	xmm1.int32[3] (cpu.reg_xmm[7])
+	Actual:   0x0
+	Expected: 0xfffffffe
+
+	xmm2.int32[0] (cpu.reg_xmm[8])
+	Actual:   0x0
+	Expected: 0xffff
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] pop_esp.img:
+
+	exception eip
+	Actual:   0x8002f
+	Expected: 0x80023
+
+	Exception
+	Actual:   None
+	Expected: GP
+
+[-] pop_esp2.img:
+
+	exception eip
+	Actual:   0x80026
+	Expected: 0x80023
+
+	Exception
+	Actual:   None
+	Expected: GP
+
+[-] por.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] pshufw.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st6
+	Actual:   0x0
+	Expected: nan
+
+	st7
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] pslld.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st6
+	Actual:   0x0
+	Expected: nan
+
+	xmm0.int32[0] (cpu.reg_xmm[0])
+	Actual:   0x0
+	Expected: 0xd6807f80
+
+	xmm0.int32[1] (cpu.reg_xmm[1])
+	Actual:   0x0
+	Expected: 0x80006700
+
+	xmm1.int32[0] (cpu.reg_xmm[4])
+	Actual:   0x0
+	Expected: 0xc0000000
+
+	xmm1.int32[1] (cpu.reg_xmm[5])
+	Actual:   0x0
+	Expected: 0x80000000
+
+	xmm6.int32[0] (cpu.reg_xmm[24])
+	Actual:   0x0
+	Expected: 0xa0c0e100
+
+	xmm6.int32[1] (cpu.reg_xmm[25])
+	Actual:   0x0
+	Expected: 0x20406080
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] psllq.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	st6
+	Actual:   0x0
+	Expected: nan
+
+	xmm0.int32[0] (cpu.reg_xmm[0])
+	Actual:   0x0
+	Expected: 0x83038400
+
+	xmm0.int32[1] (cpu.reg_xmm[1])
+	Actual:   0x0
+	Expected: 0x81018202
+
+	xmm2.int32[1] (cpu.reg_xmm[9])
+	Actual:   0x0
+	Expected: 0x1c200000
+
+	xmm3.int32[0] (cpu.reg_xmm[12])
+	Actual:   0x0
+	Expected: 0xf0000000
+
+	xmm3.int32[1] (cpu.reg_xmm[13])
+	Actual:   0x0
+	Expected: 0xeadad00f
+
+	xmm6.int32[0] (cpu.reg_xmm[24])
+	Actual:   0x0
+	Expected: 0xb5a01fe0
+
+	xmm6.int32[1] (cpu.reg_xmm[25])
+	Actual:   0x0
+	Expected: 0xa00019d5
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] psllw.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	st6
+	Actual:   0x0
+	Expected: nan
+
+	xmm0.int32[0] (cpu.reg_xmm[0])
+	Actual:   0x0
+	Expected: 0xd6807f80
+
+	xmm0.int32[1] (cpu.reg_xmm[1])
+	Actual:   0x0
+	Expected: 0x80006700
+
+	xmm3.int32[0] (cpu.reg_xmm[12])
+	Actual:   0x0
+	Expected: 0xa000c000
+
+	xmm3.int32[1] (cpu.reg_xmm[13])
+	Actual:   0x0
+	Expected: 0xf000f000
+
+	xmm4.int32[0] (cpu.reg_xmm[16])
+	Actual:   0x0
+	Expected: 0xaa00cc00
+
+	xmm4.int32[1] (cpu.reg_xmm[17])
+	Actual:   0x0
+	Expected: 0xff00ff00
+
+	xmm6.int32[0] (cpu.reg_xmm[24])
+	Actual:   0x0
+	Expected: 0x35407980
+
+	xmm6.int32[1] (cpu.reg_xmm[25])
+	Actual:   0x0
+	Expected: 0x5fe01fe0
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] psrad.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st6
+	Actual:   0x0
+	Expected: nan
+
+	xmm0.int32[0] (cpu.reg_xmm[0])
+	Actual:   0x0
+	Expected: 0xa0c0e
+
+	xmm0.int32[1] (cpu.reg_xmm[1])
+	Actual:   0x0
+	Expected: 0x20406
+
+	xmm1.int32[0] (cpu.reg_xmm[4])
+	Actual:   0x0
+	Expected: 0x5
+
+	xmm1.int32[1] (cpu.reg_xmm[5])
+	Actual:   0x0
+	Expected: 0x1
+
+	xmm2.int32[0] (cpu.reg_xmm[8])
+	Actual:   0x0
+	Expected: 0xffffffff
+
+	xmm2.int32[1] (cpu.reg_xmm[9])
+	Actual:   0x0
+	Expected: 0xffffffff
+
+	xmm6.int32[0] (cpu.reg_xmm[24])
+	Actual:   0x0
+	Expected: 0xfd6d6807
+
+	xmm6.int32[1] (cpu.reg_xmm[25])
+	Actual:   0x0
+	Expected: 0xfc680006
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] psraw.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st6
+	Actual:   0x0
+	Expected: nan
+
+	xmm0.int32[0] (cpu.reg_xmm[0])
+	Actual:   0x0
+	Expected: 0xffff0000
+
+	xmm0.int32[1] (cpu.reg_xmm[1])
+	Actual:   0x0
+	Expected: 0xffff0000
+
+	xmm1.int32[0] (cpu.reg_xmm[4])
+	Actual:   0x0
+	Expected: 0xffff0000
+
+	xmm1.int32[1] (cpu.reg_xmm[5])
+	Actual:   0x0
+	Expected: 0xffff0000
+
+	xmm2.int32[0] (cpu.reg_xmm[8])
+	Actual:   0x0
+	Expected: 0xa000e
+
+	xmm2.int32[1] (cpu.reg_xmm[9])
+	Actual:   0x0
+	Expected: 0x20006
+
+	xmm6.int32[0] (cpu.reg_xmm[24])
+	Actual:   0x0
+	Expected: 0x280038
+
+	xmm6.int32[1] (cpu.reg_xmm[25])
+	Actual:   0x0
+	Expected: 0x80018
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] psrld.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st6
+	Actual:   0x0
+	Expected: nan
+
+	xmm2.int32[0] (cpu.reg_xmm[8])
+	Actual:   0x0
+	Expected: 0xa0c0e
+
+	xmm2.int32[1] (cpu.reg_xmm[9])
+	Actual:   0x0
+	Expected: 0x20406
+
+	xmm6.int32[0] (cpu.reg_xmm[24])
+	Actual:   0x0
+	Expected: 0x283038
+
+	xmm6.int32[1] (cpu.reg_xmm[25])
+	Actual:   0x0
+	Expected: 0x81018
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] psrlq.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	st6
+	Actual:   0x0
+	Expected: nan
+
+	xmm1.int32[0] (cpu.reg_xmm[4])
+	Actual:   0x0
+	Expected: 0x9d5b5a01
+
+	xmm1.int32[1] (cpu.reg_xmm[5])
+	Actual:   0x0
+	Expected: 0x15a0001
+
+	xmm3.int32[0] (cpu.reg_xmm[12])
+	Actual:   0x0
+	Expected: 0x81018
+
+	xmm4.int32[0] (cpu.reg_xmm[16])
+	Actual:   0x0
+	Expected: 0x2040608
+
+	xmm6.int32[0] (cpu.reg_xmm[24])
+	Actual:   0x0
+	Expected: 0x20283038
+
+	xmm6.int32[1] (cpu.reg_xmm[25])
+	Actual:   0x0
+	Expected: 0x81018
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] psrlw.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st6
+	Actual:   0x0
+	Expected: nan
+
+	xmm2.int32[0] (cpu.reg_xmm[8])
+	Actual:   0x0
+	Expected: 0xa000e
+
+	xmm2.int32[1] (cpu.reg_xmm[9])
+	Actual:   0x0
+	Expected: 0x20006
+
+	xmm6.int32[0] (cpu.reg_xmm[24])
+	Actual:   0x0
+	Expected: 0x280038
+
+	xmm6.int32[1] (cpu.reg_xmm[25])
+	Actual:   0x0
+	Expected: 0x80018
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] psubb.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] psubd.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] psubsb.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] psubsw.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] psubusb.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] psubusw.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] psubw.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] punpckhbw.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] punpckhdq.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] punpckhwd.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] punpcklbw.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	st5
+	Actual:   0x0
+	Expected: nan
+
+	st6
+	Actual:   0x0
+	Expected: nan
+
+	st7
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] punpckldq.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	st5
+	Actual:   0x0
+	Expected: nan
+
+	st6
+	Actual:   0x0
+	Expected: nan
+
+	st7
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] punpcklwd.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	st5
+	Actual:   0x0
+	Expected: nan
+
+	st6
+	Actual:   0x0
+	Expected: nan
+
+	st7
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] push.img:
+
+	cpu.reg32[0]
+	Actual:   0x0
+	Expected: 0xcafe0000
+
+	cpu.reg32[1]
+	Actual:   0x0
+	Expected: 0xdeadbeef
+
+	cpu.reg32[2]
+	Actual:   0x0
+	Expected: 0xd00d
+
+	cpu.reg32[3]
+	Actual:   0x0
+	Expected: 0xdeadbeef
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fde
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	mem[101FC8]
+	Actual:   0x0
+	Expected: 0xcafe
+
+	mem[101FCC]
+	Actual:   0x0
+	Expected: 0xbeefcafe
+
+	mem[101FD0]
+	Actual:   0x0
+	Expected: 0xdeadbeef
+
+	mem[101FD4]
+	Actual:   0x0
+	Expected: 0xbeefd00d
+
+	mem[101FD8]
+	Actual:   0x0
+	Expected: 0xdead
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] pxor.img:
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	st5
+	Actual:   0x0
+	Expected: nan
+
+	st6
+	Actual:   0x0
+	Expected: nan
+
+	st7
+	Actual:   0x0
+	Expected: nan
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt
+
+[-] ucomiss.img:
+
+	cpu.reg32[0]
+	Actual:   0x0
+	Expected: 0x45
+
+	cpu.reg32[4]
+	Actual:   0xfa
+	Expected: 0x101fe0
+
+	cpu.reg32[7]
+	Actual:   0x1
+	Expected: 0x0
+
+	st0
+	Actual:   0x0
+	Expected: nan
+
+	st1
+	Actual:   0x0
+	Expected: nan
+
+	st2
+	Actual:   0x0
+	Expected: nan
+
+	st3
+	Actual:   0x0
+	Expected: nan
+
+	st4
+	Actual:   0x0
+	Expected: nan
+
+	st5
+	Actual:   0x0
+	Expected: nan
+
+	st6
+	Actual:   0x0
+	Expected: nan
+
+	xmm0.int32[0] (cpu.reg_xmm[0])
+	Actual:   0x0
+	Expected: 0x447a0000
+
+	xmm1.int32[0] (cpu.reg_xmm[4])
+	Actual:   0x0
+	Expected: 0x7fa00000
+
+	mem[101FDC]
+	Actual:   0x0
+	Expected: 0x45
+
+	eflags
+	Actual:   0x44
+	Expected: 0x0
+
+	guest did not halt within 1000000 instructions
+	Actual:   still running
+	Expected: hlt

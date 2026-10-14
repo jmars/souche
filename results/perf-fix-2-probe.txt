@@ -1,0 +1,57 @@
+pre-fix instructions.c sha256 == the stored artifact: 38256a3bc7b5379015382a6e80b1ceede625ea94ab53cd7fc6ac185e1eb8b197
+unity sources: 20 files, flags: -std=gnu11 -O2 -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror
+before.c/after.c differ in exactly: 2 line(s)
+-------------------------------------------------------------------
+SOURCE SNAPSHOT (sha256 over the unity sources, before -> after the two compiles)
+  8f057f288522fd04619e50cb5e44ab334426564b47d24dbcac2e3c702bb71875
+  8f057f288522fd04619e50cb5e44ab334426564b47d24dbcac2e3c702bb71875
+BINARIES
+  before (pre-fix instructions.c): 0e5bae34d2fb0e2c  2437457 bytes
+  after  (the tree):               f6167cf4826242a5  2437179 bytes
+-------------------------------------------------------------------
+PROBE IMAGES
+  MODE=6     814 bytes  sha256=151b8a5e99fcd626
+  MODE=7     814 bytes  sha256=061c9b4ce1fa1ce9
+  MODE=8     814 bytes  sha256=518d9901a413ea43
+  MODE=9     814 bytes  sha256=7be3047ae3ae2e04
+-------------------------------------------------------------------
+THE RUNS (MODE=6 callf m16:32, MODE=7 callf ptr16:32, MODE=8 jmpf m16:32, MODE=9 the
+         control: the same instruction with a < 64 KiB new_ip)
+
+MODE=6
+  before : rc=134  stop=/home/jaye/futaie/souche/build/pf2/instructions.prefix.c:2320: [31;1massert(((uint32_t)new_ip & 0xFFFF0000u) == 0) fa
+  after  : rc=0    stop=none
+  reference: rc=0  C transcript vs reference: IDENTICAL
+  eip/instruction count  : C   eip=0x0010022e instructions=12
+                           ref eip=0x0010022e instructions=12
+  C leg rc=0
+
+MODE=7
+  before : rc=134  stop=/home/jaye/futaie/souche/build/pf2/instructions.prefix.c:1156: [31;1massert(((uint32_t)new_ip & 0xFFFF0000u) == 0) fa
+  after  : rc=0    stop=none
+  reference: rc=0  C transcript vs reference: IDENTICAL
+  eip/instruction count  : C   eip=0x0010022e instructions=12
+                           ref eip=0x0010022e instructions=12
+  C leg rc=0
+
+MODE=8
+  before : rc=134  stop=/home/jaye/futaie/souche/build/pf2/instructions.prefix.c:2353: [31;1massert(((uint32_t)new_ip & 0xFFFF0000u) == 0) fa
+  after  : rc=0    stop=none
+  reference: rc=0  C transcript vs reference: IDENTICAL
+  eip/instruction count  : C   eip=0x0010022e instructions=12
+                           ref eip=0x0010022e instructions=12
+  C leg rc=0
+
+MODE=9
+  before : rc=0    stop=none
+  after  : rc=0    stop=none
+  reference: rc=0  C transcript vs reference: IDENTICAL
+  eip/instruction count  : C   eip=0x0010032e instructions=12
+                           ref eip=0x0010032e instructions=12
+  C leg rc=0
+-------------------------------------------------------------------
+raw transcripts: build/pf2/{c,js}.<mode>.txt
+
+note: any 'Aborted (core dumped)' line this script's SHELL prints on STDERR is the
+      shell reporting an intentional rc=134 leg above; a leg's own stop message is the
+      one printed in the 'stop=' field on STDOUT.

@@ -1,0 +1,3 @@
+unity_c.py: 20 sources -> build/pf-n3/after.c
+results/perf-fix-n3.sh: line 167: 1024914 Aborted                    (core dumped) ( "$WORK/v86c-after" "$img" "$LIMIT" > "$WORK/c.$mode.txt" 2> "$WORK/c.$mode.err" ) 2> /dev/null
+results/perf-fix-n3.sh: line 167: 1025084 Aborted                    (core dumped) ( "$WORK/v86c-after" "$img" "$LIMIT" > "$WORK/c.$mode.txt" 2> "$WORK/c.$mode.err" ) 2> /dev/null

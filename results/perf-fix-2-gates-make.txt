@@ -1,0 +1,20 @@
+=== G4a make ===
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+node gen/interpreter_uop.js
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+make rc=0
+
+=== G4b make selftest ===
+      |             ^~~~~~~~~~~~~~~~~~
+src/cpu/uop_exec_selftest.c:472:13: error: 'test_guard_order' defined but not used [-Werror=unused-function]
+  472 | static void test_guard_order(void)
+      |             ^~~~~~~~~~~~~~~~
+src/cpu/uop_exec_selftest.c:366:13: error: 'test_straddle_write' defined but not used [-Werror=unused-function]
+  366 | static void test_straddle_write(void)
+      |             ^~~~~~~~~~~~~~~~~~~
+src/cpu/uop_exec_selftest.c:301:13: error: 'test_smc_rmw' defined but not used [-Werror=unused-function]
+  301 | static void test_smc_rmw(void)
+      |             ^~~~~~~~~~~~
+cc1: all warnings being treated as errors
+make: *** [Makefile:446: build/cpu_uop_exec_selftest] Error 1
+selftest rc=0

@@ -1,0 +1,26 @@
+=== make nasm, cache OFF (the actual command with --uop-cache off) ===
+                      ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.13/subprocess.py", line 1820, in _posix_spawn
+    self.pid = os.posix_spawn(executable, args, env, **kwargs)
+               ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 8] Exec format error: 'build/v86c'
+
+=== make bench (7 runs, cache ON = the shipped default) ===
+asserting: terminal guest state "in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0"
+asserting: serial output sha256 fae4924b13b07d441b0ad8458047d2f1d8abf0d1ec59876f44b88ef67d2d0b2a
+run  1: real 3.333s user 3.288s sys 0.018s  instr=200095214  state=ok serial=ok
+run  2: real 3.358s user 3.315s sys 0.014s  instr=200095214  state=ok serial=ok
+run  3: real 3.286s user 3.266s sys 0.010s  instr=200095214  state=ok serial=ok
+run  4: real 3.262s user 3.243s sys 0.012s  instr=200095214  state=ok serial=ok
+run  5: real 3.256s user 3.240s sys 0.011s  instr=200095214  state=ok serial=ok
+run  6: real 3.282s user 3.261s sys 0.012s  instr=200095214  state=ok serial=ok
+run  7: real 3.286s user 3.268s sys 0.009s  instr=200095214  state=ok serial=ok
+load-after=11.88 15.27 14.04
+n=7
+real: best 3.256  median 3.286  worst 3.358
+user: best 3.240  median 3.266  worst 3.315
+cpu (user+sys): best 3.251  median 3.276
+MIPS at best real: 61.45   at median real: 60.89
+verified (every run): 200095214 instructions, the terminal guest state clause
+                      above, and the guest's serial output sha256 -- every number in
+                      this output times THAT workload; none of them asserts it.

@@ -1,0 +1,83 @@
+{
+  "cpu": {
+    "control_registers": {
+      "cr0": "0x00000001",
+      "cr2": "0x00000000",
+      "cr3": "0x00000000"
+    },
+    "eflags": "0x00000002",
+    "eip": "0x0010007f",
+    "gpr": {
+      "eax": "0x111134de",
+      "ebp": "0x00000000",
+      "ebx": "0x222234ab",
+      "ecx": "0x4444abb6",
+      "edi": "0x00556634",
+      "edx": "0x8888ab34",
+      "esi": "0x009abcde",
+      "esp": "0x00102000"
+    },
+    "segments": {
+      "cs": {
+        "base": "0x00000000",
+        "limit": "0xffffffff",
+        "selector": "0x0008"
+      },
+      "ds": {
+        "base": "0x00000000",
+        "limit": "0xffffffff",
+        "selector": "0x0010"
+      },
+      "es": {
+        "base": "0x00000000",
+        "limit": "0xffffffff",
+        "selector": "0x0010"
+      },
+      "fs": {
+        "base": "0x00000000",
+        "limit": "0xffffffff",
+        "selector": "0x0010"
+      },
+      "gs": {
+        "base": "0x00000000",
+        "limit": "0xffffffff",
+        "selector": "0x0010"
+      },
+      "ss": {
+        "base": "0x00000000",
+        "limit": "0xffffffff",
+        "selector": "0x0010"
+      }
+    },
+    "x87": {
+      "control_word": "0x037f",
+      "data": [
+        "0x000000000x00000000",
+        "0x000000000x00000000",
+        "0x000000000x00000000",
+        "0x000000000x00000000",
+        "0x000000000x00000000",
+        "0x000000000x00000000",
+        "0x000000000x00000000",
+        "0x000000000x00000000"
+      ],
+      "stack_empty": "0xff",
+      "stack_ptr": "0x0000",
+      "status_word": "0x0000",
+      "tag_word": "0xffff"
+    }
+  },
+  "image": {
+    "bytes": 127,
+    "entry_address": "0x00100020",
+    "load_address": "0x00100000",
+    "sha256": "4619215333cca21093f351ae47d26ea06576fbe9d0d6a5450399d2e27dcce3b9"
+  },
+  "instruction_count": 23,
+  "instruction_limit": 100000,
+  "memory_window": {
+    "address": "0x00101000",
+    "bytes": 4096,
+    "sha256": "e7bf8f69102fc97d0d3ed0b5dce08fedcb104fc825f6677e0af50741c0a03d8f"
+  }
+}

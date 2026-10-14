@@ -1,0 +1,14 @@
+== PERF-5 mutation rig (one inverse mutation per arm)
+-- control
+0 control: the tree as built                   PASS           rc=0   OK
+1 the inline lookup ignores the override prefix FAIL           rc=1   OK
+2 the inline lookup never faults on a null segment FAIL           rc=1   OK
+3 the lookup drops the uop's default segment   FAIL           rc=1   OK
+5 the per-uop stats accumulator is never published FAIL           rc=1   OK
+6 body_ip drops the custom_modrm_resolve +1 (nasm) FAIL           rc=1   OK
+-- restore + integrity
+7 restored tree (== control)                   PASS           rc=0   OK
+uop_cache.c restored byte-identical
+uop_exec_selftest.c restored byte-identical
+arms=7 caught=7 holes=0
+RIG RC=0

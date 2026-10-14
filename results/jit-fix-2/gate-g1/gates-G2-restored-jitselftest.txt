@@ -1,0 +1,21 @@
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+node gen/interpreter_uop.js
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror -Wl,--gc-sections -o build/cpu_jit_selftest src/cpu/jit_selftest.c src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/paging.c src/cpu/arith.c src/cpu/modrm.c src/cpu/misc_instr.c src/cpu/string.c src/cpu/instructions.c src/cpu/instructions_0f.c src/cpu/sse_instr.c src/cpu/softfloat.c src/cpu/fpu.c src/cpu/exceptions.c src/cpu/pic.c src/cpu/cpu.c src/cpu/exec_boundary.c src/cpu/uop_cache.c src/cpu/jit_mem.c src/cpu/jit_x64.c src/cpu/jit_codegen.c build/cpu/interpreter_gen.o build/cpu/uop_gen.o build/sf/softfloat.o
+./build/cpu_jit_selftest
+jit: bind: the span at page 0 does not match the block
+  failed bind (span mismatch): the span is back at the same page: yes
+jit: bind: physical page 524032 is outside the guest's memory
+  failed bind (page out of range): the span is back at the same page: yes
+jit: bind: the block table is full (2048)
+  failed bind (table full after 2048 blocks): the refused span came back: yes
+  after the clear: the pool is all free again (first reservation is page 0: yes)
+  block: 15 bytes published and executed, sum(8) = 92
+  stale-block probe: block dropped on the guest write, the executor's re-compile ran the new immediate (0x22)
+  deferred recycle: page not flipped under the executing block, reused after exit
+jit: publish: 0x7fff2b3a6130 is not in the code pool
+jit: publish: code page 4 is not writable
+  refusals: pool exhausted after 4092 pages, reported 1 time(s)
+jit-selftest: 51 checks, 0 failures
+jit: pages alloc 6157, blocks compiled 2056 (live 2), lookups 4 (hits 1, misses 3), execs 4, invalidations 6, deferred frees 1, W^X flips 8209, pool exhausted 1

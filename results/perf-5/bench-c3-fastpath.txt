@@ -1,0 +1,14 @@
+== perf-5-ab: c2-seg-inline vs c23-plus-fastpath  pairs=4
+load-before=11.42 10.54 9.40
+a    real 3.207s  instr=ok state=ok serial=ok
+b    real 3.233s  instr=ok state=ok serial=ok
+b    real 3.248s  instr=ok state=ok serial=ok
+a    real 3.218s  instr=ok state=ok serial=ok
+a    real 3.209s  instr=ok state=ok serial=ok
+b    real 3.213s  instr=ok state=ok serial=ok
+b    real 3.203s  instr=ok state=ok serial=ok
+a    real 3.173s  instr=ok state=ok serial=ok
+load-after=10.11 10.30 9.36
+c2-seg-inline n=4 best 3.173 median 3.208 worst 3.218
+c23-plus-fastpath n=4 best 3.203 median 3.223 worst 3.248
+ratio c2-seg-inline/c23-plus-fastpath: best 1.0095x  median 1.0047x  (>1 means c23-plus-fastpath is slower)

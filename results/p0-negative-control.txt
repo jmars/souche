@@ -1,0 +1,71 @@
+Negative control: one field of one native fixture is perturbed, and the runner must
+REPORT it -- otherwise a 'pass' says nothing. Each branch exercises one comparison
+path that the 113 passing tests depend on (GPR/memory, x87, the exception branch).
+All other 2115 fields are asserted byte-identical to the unperturbed fixture.
+
+==============================================================================
+NEGATIVE CONTROL 1/3 -- one GPR field (cpu.reg32[0] = eax): 0 -> 0x10203040
+==============================================================================
+field 0: 0 -> 270544960
+$ python3 tests/nasm_run.py --stage run --fixture-dir /tmp/p0-neg1 --reuse-fixtures --filter ^arith-optimisations$
+Testing arith-optimisations.img
+
+[+] Passed 0/1 tests.
+[!] 0 of 1 selected test(s) produced no state from the actual leg, 0 were skipped (tests/nasm_skip.txt).
+[-] Failed 1 test(s).
+
+[-] arith-optimisations.img:
+
+	cpu.reg32[0]
+	Actual:   0x0
+	Expected: 0x10203040
+-> exit 1
+
+==============================================================================
+NEGATIVE CONTROL 2/3 -- one x87 field (st0): "invalid" -> 1.5
+==============================================================================
+field 9: 'invalid' -> 1.5
+$ python3 tests/nasm_run.py --stage run --fixture-dir /tmp/p0-neg2 --reuse-fixtures --filter ^fdiv$
+Testing fdiv.img
+
+[+] Passed 0/1 tests.
+[!] 0 of 1 selected test(s) produced no state from the actual leg, 0 were skipped (tests/nasm_skip.txt).
+[-] Failed 1 test(s).
+
+[-] fdiv.img:
+
+	st0
+	Actual:   nan
+	Expected: 1.5
+-> exit 1
+
+==============================================================================
+NEGATIVE CONTROL 3/3 -- the exception kind: arith-optimisations is made to claim "(signal SIGFPE)"
+==============================================================================
+prepended the line '(signal SIGFPE)' to the fixture (nothing else touched)
+$ python3 tests/nasm_run.py --stage run --fixture-dir /tmp/p0-neg3 --reuse-fixtures --filter ^arith-optimisations$
+Testing arith-optimisations.img
+
+[+] Passed 0/1 tests.
+[!] 0 of 1 selected test(s) produced no state from the actual leg, 0 were skipped (tests/nasm_skip.txt).
+[-] Failed 1 test(s).
+
+[-] arith-optimisations.img:
+
+	exception eip
+	Actual:   0x8003d
+	Expected: 0x8003c
+
+	Exception
+	Actual:   None
+	Expected: DE
+-> exit 1
+
+
+CONTRAST (same fixture, no field touched):
+$ python3 tests/nasm_run.py --stage run --fixture-dir /tmp/p0-neg0 --reuse-fixtures --filter ^arith-optimisations$
+Testing arith-optimisations.img
+
+[+] Passed 1/1 tests.
+[!] 0 of 1 selected test(s) produced no state from the actual leg, 0 were skipped (tests/nasm_skip.txt).
+-> exit 0

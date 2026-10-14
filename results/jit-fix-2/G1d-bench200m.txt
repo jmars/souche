@@ -1,0 +1,17 @@
+fixed            run1 rc=0 instr=200095214 state=in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0 serial=fae4924b13b07d44
+fixed            run2 rc=0 instr=200095214 state=in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0 serial=fae4924b13b07d44
+jcc8-swap-bbe    run1 rc=0 instr=280921 state=in_hlt=1, exception=-1, unimplemented=0, eip=0x219a3c1 cs=0x10 cr0=0x60000011 cr3=0x0 serial=fae4924b13b07d44
+jcc8-swap-bbe    run2 rc=0 instr=280921 state=in_hlt=1, exception=-1, unimplemented=0, eip=0x219a3c1 cs=0x10 cr0=0x60000011 cr3=0x0 serial=fae4924b13b07d44
+jcc8-swap-aea    run1 rc=0 instr=200097867 state=in_hlt=0, exception=-1, unimplemented=0, eip=0x219a760 cs=0x10 cr0=0x60000011 cr3=0x0 serial=fae4924b13b07d44
+jcc8-swap-aea    run2 rc=0 instr=200097867 state=in_hlt=0, exception=-1, unimplemented=0, eip=0x219a760 cs=0x10 cr0=0x60000011 cr3=0x0 serial=fae4924b13b07d44
+jcc32-swap-bbe   run1 rc=0 instr=530745 state=in_hlt=1, exception=-1, unimplemented=0, eip=0x219a3c1 cs=0x10 cr0=0x60000011 cr3=0x0 serial=fae4924b13b07d44
+jcc32-swap-bbe   run2 rc=0 instr=530745 state=in_hlt=1, exception=-1, unimplemented=0, eip=0x219a3c1 cs=0x10 cr0=0x60000011 cr3=0x0 serial=fae4924b13b07d44
+jcc32-swap-aea   run1 rc=0 instr=542688 state=in_hlt=1, exception=-1, unimplemented=0, eip=0x219a3c1 cs=0x10 cr0=0x60000011 cr3=0x0 serial=fae4924b13b07d44
+jcc32-swap-aea   run2 rc=0 instr=542688 state=in_hlt=1, exception=-1, unimplemented=0, eip=0x219a3c1 cs=0x10 cr0=0x60000011 cr3=0x0 serial=fae4924b13b07d44
+all-swap         run1 rc=0 instr=270070 state=in_hlt=1, exception=-1, unimplemented=0, eip=0x219a3c1 cs=0x10 cr0=0x60000011 cr3=0x0 serial=fae4924b13b07d44
+all-swap         run2 rc=0 instr=270070 state=in_hlt=1, exception=-1, unimplemented=0, eip=0x219a3c1 cs=0x10 cr0=0x60000011 cr3=0x0 serial=fae4924b13b07d44
+restored: ok
+-- the bench's own pins:
+63:EXPECT_INSTRS=200095214
+67:EXPECT_STATE="in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0"
+68:EXPECT_SERIAL_SHA="fae4924b13b07d441b0ad8458047d2f1d8abf0d1ec59876f44b88ef67d2d0b2a"

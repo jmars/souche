@@ -1,0 +1,244 @@
+# perf_bench BASELINE cosmocc -O2 (unmodified tree) bin=build/v86c limit=200000000 runs=7 2026-10-12T20:53:02Z
+# real user sys
+6.432 6.382 0.041
+6.421 6.371 0.040
+6.393 6.342 0.041
+6.367 6.319 0.040
+6.441 6.397 0.037
+6.419 6.371 0.040
+6.419 6.371 0.040
+# perf_bench BASELINE host glibc/gcc-16.2.0 -O2 (same source) bin=build/glibc/v86c limit=200000000 runs=7 2026-10-12T20:55:10Z
+# real user sys
+5.137 5.093 0.041
+5.163 5.118 0.041
+5.122 5.073 0.046
+5.107 5.061 0.041
+5.196 5.152 0.040
+5.272 5.227 0.039
+5.210 5.164 0.041
+# perf_bench SPIKE unity build (cosmocc -O2, cpu+hw+gen in one TU) bin=build/spike/v86c limit=200000000 runs=5 2026-10-12T20:57:27Z
+# real user sys
+5.054 5.010 0.039
+5.099 5.053 0.042
+5.021 4.974 0.042
+4.993 4.951 0.039
+4.962 4.917 0.042
+# perf_bench SPIKE unity build (host glibc gcc-16.2.0 -O2, one TU) bin=build/spike/v86c-glibc limit=200000000 runs=5 2026-10-12T20:58:07Z
+# real user sys
+3.882 3.841 0.038
+3.804 3.756 0.044
+3.770 3.726 0.040
+3.948 3.908 0.038
+3.952 3.913 0.038
+# perf_bench SPIKE unity CPU-only TU + per-TU hw (cosmocc -O2) bin=build/spike/v86c-u2 limit=200000000 runs=5 2026-10-12T20:58:50Z
+# real user sys
+5.066 5.020 0.042
+5.166 5.126 0.039
+5.103 5.063 0.038
+5.037 4.993 0.040
+4.970 4.918 0.045
+# perf_bench MIXED: cosmocc-compiled objfiles (gcc 14.1.0) linked against host glibc bin=build/spike/v86c-mixed limit=200000000 runs=5 2026-10-12T20:59:47Z
+# real user sys
+6.547 6.494 0.044
+6.588 6.540 0.039
+6.501 6.456 0.040
+6.532 6.481 0.040
+6.438 6.388 0.042
+# perf_bench A: per-TU cosmocc + optimizer flags overridden bin=build/fl/v86c limit=200000000 runs=5 2026-10-12T21:00:58Z
+# real user sys
+5.539 5.466 0.067
+5.571 5.501 0.063
+5.479 5.427 0.045
+5.504 5.453 0.042
+5.634 5.588 0.040
+# perf_bench B: unity (cpu+hw+gen) + optimizer flags overridden bin=build/spike/v86c-fl limit=200000000 runs=5 2026-10-12T21:01:38Z
+# real user sys
+4.389 4.337 0.045
+4.585 4.535 0.044
+4.520 4.473 0.043
+4.563 4.510 0.048
+4.558 4.513 0.040
+# perf_bench FLAG-ONLY per-TU cosmocc + -foptimize-sibling-calls bin=build/f_sib/v86c limit=200000000 runs=4 2026-10-12T21:02:16Z
+# real user sys
+5.116 5.062 0.045
+5.143 5.100 0.037
+5.109 5.065 0.040
+5.382 5.336 0.041
+# perf_bench FLAG-ONLY per-TU cosmocc + -finline-functions-called-once bin=build/f_calledonce/v86c limit=200000000 runs=4 2026-10-12T21:02:45Z
+# real user sys
+5.721 5.671 0.044
+5.630 5.582 0.039
+5.662 5.619 0.036
+5.615 5.567 0.040
+# perf_bench FLAG-ONLY per-TU cosmocc + -fschedule-insns2 bin=build/f_sched2/v86c limit=200000000 runs=4 2026-10-12T21:03:14Z
+# real user sys
+5.575 5.524 0.040
+5.866 5.821 0.037
+5.530 5.484 0.037
+5.757 5.706 0.044
+# perf_bench FLAG-ONLY per-TU cosmocc +  -momit-leaf-frame-pointer bin=build/f_leaf/v86c limit=200000000 runs=4 2026-10-12T21:03:42Z
+# real user sys
+5.430 5.388 0.038
+5.504 5.460 0.040
+5.593 5.557 0.033
+5.657 5.613 0.038
+# perf_bench per-TU cosmocc: -foptimize-sibling-calls bin=build/m_sib/v86c limit=200000000 runs=4 2026-10-12T21:04:26Z
+# real user sys
+5.173 5.131 0.038
+5.174 5.126 0.044
+5.154 5.110 0.040
+5.183 5.138 0.041
+# perf_bench per-TU cosmocc: -foptimize-sibling-calls -momit-leaf-frame-pointer bin=build/m_sibleaf/v86c limit=200000000 runs=4 2026-10-12T21:04:52Z
+# real user sys
+5.279 5.240 0.036
+5.412 5.370 0.039
+5.562 5.515 0.039
+5.413 5.370 0.039
+# perf_bench per-TU cosmocc: -foptimize-sibling-calls -finline-functions-called-once bin=build/m_sibonce/v86c limit=200000000 runs=4 2026-10-12T21:05:18Z
+# real user sys
+5.355 5.309 0.041
+5.276 5.228 0.044
+5.173 5.130 0.041
+5.200 5.161 0.037
+# perf_bench per-TU cosmocc: -foptimize-sibling-calls -fschedule-insns2 bin=build/m_sibsched/v86c limit=200000000 runs=4 2026-10-12T21:05:44Z
+# real user sys
+5.167 5.123 0.042
+5.283 5.243 0.038
+5.223 5.186 0.034
+5.223 5.177 0.043
+# perf_bench CPU-unity: -foptimize-sibling-calls bin=build/spike/u_sib limit=200000000 runs=4 2026-10-12T21:06:34Z
+# real user sys
+4.582 4.533 0.043
+4.605 4.555 0.043
+4.562 4.514 0.043
+4.562 4.515 0.041
+# perf_bench CPU-unity: -foptimize-sibling-calls -momit-leaf-frame-pointer bin=build/spike/u_sibleaf limit=200000000 runs=4 2026-10-12T21:07:07Z
+# real user sys
+4.649 4.604 0.039
+4.671 4.623 0.043
+4.664 4.617 0.041
+4.667 4.623 0.040
+# perf_bench CPU-unity: -foptimize-sibling-calls -finline-functions-called-once bin=build/spike/u_sibonce limit=200000000 runs=4 2026-10-12T21:07:40Z
+# real user sys
+4.610 4.568 0.036
+4.421 4.378 0.041
+4.430 4.387 0.039
+4.457 4.412 0.041
+# perf_bench CPU-unity: -foptimize-sibling-calls -finline-functions-called-once -fschedule-insns2 -momit-leaf-frame-pointer bin=build/spike/u_all4 limit=200000000 runs=4 2026-10-12T21:08:13Z
+# real user sys
+4.581 4.541 0.036
+4.558 4.511 0.041
+4.552 4.507 0.041
+4.452 4.408 0.043
+# perf_bench unity patch0: -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 bin=build/spike/r_patch0 limit=200000000 runs=4 2026-10-12T21:09:01Z
+# real user sys
+4.358 4.315 0.040
+4.338 4.299 0.037
+4.234 4.194 0.038
+4.376 4.336 0.036
+# perf_bench unity patch0leaf: -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -momit-leaf-frame-pointer bin=build/spike/r_patch0leaf limit=200000000 runs=4 2026-10-12T21:09:33Z
+# real user sys
+4.456 4.411 0.042
+4.267 4.229 0.035
+4.243 4.203 0.037
+4.331 4.288 0.041
+# perf_bench ALL-unity + PERF flags (cosmocc) bin=build/spike/r_allu limit=200000000 runs=4 2026-10-12T21:10:53Z
+# real user sys
+4.224 4.180 0.042
+4.232 4.188 0.042
+4.254 4.201 0.050
+4.202 4.163 0.036
+# perf_bench ALL-unity + PERF flags (host glibc gcc-16.2.0) bin=build/spike/g_allu limit=200000000 runs=4 2026-10-12T21:11:22Z
+# real user sys
+3.863 3.805 0.054
+3.851 3.795 0.053
+3.822 3.755 0.064
+3.782 3.730 0.049
+# perf_bench round4 cpu7: -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0  bin=build/spike/q_cpu7 limit=200000000 runs=7 2026-10-12T21:12:31Z
+# real user sys
+4.315 4.266 0.043
+4.159 4.117 0.040
+4.413 4.364 0.044
+4.360 4.311 0.044
+4.399 4.351 0.045
+4.357 4.307 0.044
+4.334 4.288 0.042
+# perf_bench round4 cpuO3: -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -O3 bin=build/spike/q_cpuO3 limit=200000000 runs=7 2026-10-12T21:13:38Z
+# real user sys
+4.492 4.446 0.040
+4.452 4.409 0.038
+4.496 4.449 0.040
+4.428 4.384 0.040
+4.456 4.414 0.037
+4.504 4.460 0.038
+4.434 4.387 0.043
+# perf_bench FINAL: unity + PERF_CFLAGS (cosmocc -O2) bin=build/v86c limit=200000000 runs=7 2026-10-12T21:14:45Z
+# real user sys
+4.293 4.245 0.043
+4.429 4.376 0.049
+4.443 4.392 0.048
+4.287 4.248 0.035
+4.195 4.178 0.012
+4.095 4.082 0.007
+4.193 4.180 0.008
+# perf_bench ATTRIBUTION: per-TU link, same  bin=build/revert/v86c limit=200000000 runs=7 2026-10-12T21:18:23Z
+# real user sys
+5.171 5.157 0.012
+5.429 5.417 0.011
+5.275 5.261 0.012
+5.158 5.149 0.009
+5.165 5.153 0.011
+5.155 5.148 0.007
+5.157 5.148 0.009
+# perf_bench ROUTE-A a_pertu_nof bin=build/a_pertu_nof/v86c limit=200000000 runs=5 2026-10-12T21:19:11Z
+# real user sys
+5.331 5.322 0.008
+5.359 5.347 0.010
+5.406 5.389 0.013
+5.453 5.437 0.012
+5.607 5.597 0.009
+# perf_bench ROUTE-A a_pertu_fl bin=build/a_pertu_fl/v86c limit=200000000 runs=5 2026-10-12T21:19:37Z
+# real user sys
+4.349 4.337 0.009
+4.375 4.364 0.008
+4.442 4.428 0.013
+4.486 4.472 0.011
+4.355 4.345 0.008
+# perf_bench ROUTE-A a_unity_fl bin=build/a_unity_fl/v86c limit=200000000 runs=5 2026-10-12T21:20:13Z
+# real user sys
+4.265 4.252 0.011
+4.229 4.216 0.011
+4.446 4.434 0.009
+4.277 4.264 0.011
+4.240 4.228 0.010
+# perf_bench FINAL SHIPPED: unity + PERF_CFLAGS (cosmocc -O2) bin=build/v86c limit=200000000 runs=7 2026-10-12T21:23:34Z
+# real user sys
+4.132 4.119 0.013
+4.059 4.050 0.008
+3.932 3.927 0.004
+4.072 4.061 0.010
+4.005 3.989 0.015
+3.978 3.970 0.008
+4.026 4.017 0.009
+# perf_bench glibc gcc-16.2.0 UNITY + the same flags (the gap, like for like) bin=build/glibc/v86c limit=200000000 runs=5 2026-10-12T21:24:04Z
+# real user sys
+3.729 3.717 0.011
+3.850 3.842 0.007
+3.740 3.732 0.007
+3.662 3.654 0.007
+3.737 3.725 0.011
+# PERF-1 INTERLEAVED BLOCK (the flag attribution that controls for drift): 4 rounds x 3 binaries back to back, TIMEFORMAT=%R, all runs asserted 200095214 instructions.
+# all3 = unity + -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 (SHIPPED); nopatch = unity + sib + calledonce; sibonly = unity + sib
+# binary real_seconds(interleaved)
+# (one all3 sample was corrupted by the shell TIMEFORMAT capture and is EXCLUDED -> all3 has n=3: 4.023 4.012 3.985)
+nopatch 4.555
+sibonly 4.448
+all3 4.023
+nopatch 4.272
+sibonly 4.306
+all3 4.012
+nopatch 4.314
+sibonly 4.308
+all3 3.985
+nopatch 4.231
+sibonly 4.366

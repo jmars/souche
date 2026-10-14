@@ -1,0 +1,67 @@
+=== M1b-3 GATES (raw) ===
+Mon Oct 12 12:35:42 PM UTC 2026
+
+--- G4a make (cosmocc, -Wall -Wextra -Werror) ---
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o build/cpu/instructions.o src/cpu/instructions.c
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1358 implemented, 564 unimplemented, 1362 names defined (unchanged)
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -I src -Wl,--gc-sections -o build/v86c src/main.c build/cpu/cpu_state.o build/cpu/flags.o build/cpu/memory.o build/cpu/paging.o build/cpu/arith.o build/cpu/modrm.o build/cpu/misc_instr.o build/cpu/string.o build/cpu/instructions.o build/cpu/instructions_0f.o build/cpu/softfloat.o build/cpu/fpu.o build/cpu/cpu.o build/cpu/exec_boundary.o build/cpu/interpreter_gen.o build/sf/softfloat.o
+RC=0
+
+--- G4b make transcript-diff (the M0 transcript must stay byte-identical) ---
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1358 implemented, 564 unimplemented, 1362 names defined (unchanged)
+./build/v86c tests/test.img 1000000 > results/transcript.c.txt
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.js.txt
+diff -u results/transcript.js.txt results/transcript.c.txt
+milestone: the C transcript is byte-identical to the reference's
+RC=0
+
+--- G4c make oracle ---
+python3 tests/model.py --out results/expected.json > /dev/null
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.txt
+python3 tests/check_transcript.py results/expected.json results/transcript.txt
+check_transcript: transcript matches tests/model.py (8 GPRs, EFLAGS, EIP, 561 instructions, 4096-byte window sha256)
+RC=0
+
+--- G2 make selftest ---
+PASS instr: the moffs forms, the A4-AF string wrappers (incl. a segment override), arpl, the 66/67/F0/F2/F3 prefixes and the segment prefixes
+PASS instr: read-modify-write across a page boundary (virt_boundary), no write on a fault, the string slow path's partial effects
+PASS instr: the non-MMX/SSE 0F table -- cpuid, mov cr/dr, sldt/str, the 01 group and invlpg, setcc, cmovcc (incl. its fault), bt/bts/btr/btc, bsf/bsr, cmpxchg, xadd, bswap, shld/shrd, popcnt, movzx/movsx, imul, push/pop fs/gs, lss, the 0F AE group, cmpxchg8b, hadd/hsub, clts and the undefined encodings
+PASS fpu: the tag/status/control words, TOP, push/pop and both stack-fault paths
+PASS fpu: softfloat conversions -- f32/f64/i32/i64 round trips (the ABI claim), the F80 constants and the arithmetic operators
+PASS fpu: fstenv32/fldenv32, fsave32/frstor32 and FXSAVE/FXRSTOR round trips (incl. the #gp on an invalid mxcsr)
+PASS fpu: rounding modes, precision control, the result/exception status bits, the integer stores and fprem/fbstp/f2xm1/fsqrt
+cpu_selftest: 3349 checks, 0 failures
+RC=0
+
+--- G1 make nasm ---
+[+] Passed 60/60 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 63 were skipped (tests/nasm_skip_c.txt).
+RC=0
+
+
+--- G4d forced rebuild of THIS UNIT's translation units (fpu.c, softfloat.c, instructions.c) + the vendor object, to re-prove -Werror cleanliness from scratch rather than from a no-op make ---
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o build/cpu/instructions.o src/cpu/instructions.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o build/cpu/softfloat.o src/cpu/softfloat.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o build/cpu/fpu.o src/cpu/fpu.c
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1358 implemented, 564 unimplemented, 1362 names defined (unchanged)
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -DSOFTFLOAT_FAST_INT64 -DINLINE_LEVEL=5 -DSOFTFLOAT_FAST_DIV32TO16 -DSOFTFLOAT_FAST_DIV64TO32 -ffunction-sections -fdata-sections -c -o build/sf/softfloat.o v86/lib/softfloat/softfloat.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -I src -Wl,--gc-sections -o build/v86c src/main.c build/cpu/cpu_state.o build/cpu/flags.o build/cpu/memory.o build/cpu/paging.o build/cpu/arith.o build/cpu/modrm.o build/cpu/misc_instr.o build/cpu/string.o build/cpu/instructions.o build/cpu/instructions_0f.o build/cpu/softfloat.o build/cpu/fpu.o build/cpu/cpu.o build/cpu/exec_boundary.o build/cpu/interpreter_gen.o build/sf/softfloat.o
+RC=0
+
+--- final re-confirmation after the forced rebuild ---
+diff -u results/transcript.js.txt results/transcript.c.txt
+milestone: the C transcript is byte-identical to the reference's
+RC=0
+[+] Passed 60/60 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 63 were skipped (tests/nasm_skip_c.txt).
+RC=0
+
+--- FINAL re-verification (after M1b-1 landed more 0F work, which moved the shared skip list to 63) ---
+[+] Passed 60/60 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 63 were skipped (tests/nasm_skip_c.txt).
+RC=0
+milestone: the C transcript is byte-identical to the reference's
+RC=0

@@ -1,0 +1,401 @@
+== A. THE HOOK SITES (every uop_invalidate_* call in the port) ==
+src/cpu/paging.c:653:         * knows holds no code, which is exactly the test uop_invalidate_page_fast makes
+src/cpu/paging.c:655:        uop_invalidate_page_fast(phys_addr);
+src/cpu/paging.c:680:        uop_invalidate_page_fast(phys_addr);
+src/cpu/paging.c:702:        uop_invalidate_page_fast(phys_addr); /* plan ss4.1 row 5 */
+src/cpu/paging.c:732:            uop_invalidate_page_fast(phys_addr); /* plan ss4.1 row 5's 64-bit arm */
+src/cpu/paging.c:760:            uop_invalidate_page_fast(phys_addr); /* plan ss4.1 row 5's 128-bit arm; the
+src/cpu/memory.c:79:        uop_invalidate_range(offset, length);
+src/cpu/memory.c:356:         * because the cache's tables are empty (uop_invalidate_page_fast is a load of a
+src/cpu/memory.c:358:        uop_invalidate_page_fast(addr);
+src/cpu/memory.c:378:        uop_invalidate_page_fast(addr);
+src/cpu/memory.c:379:        if ((addr & 0xFFFu) == 0xFFFu) uop_invalidate_page_fast(addr + 1u);
+src/cpu/memory.c:400:        uop_invalidate_page_fast(addr);
+src/cpu/memory.c:401:        if ((addr & 0xFFFu) >= 0xFFDu) uop_invalidate_page_fast(addr + 3u);
+src/cpu/string.c:280:                uop_invalidate_page_fast(phys_dst);
+src/cpu/string.c:300:                    uop_invalidate_range(phys_dst, count_until_page_end * (uint32_t)size_bytes);
+src/cpu/string.c:312:                    uop_invalidate_range(phys_dst, count_until_page_end);
+src/cpu/string.c:318:                    uop_invalidate_page_fast(phys_dst);
+src/cpu/string.c:322:                    uop_invalidate_page_fast(phys_dst);
+src/cpu/uop_cache.c:977:void uop_invalidate_page(uint32_t phys_addr)
+src/cpu/uop_cache.c:1009:void uop_invalidate_range(uint32_t phys_addr, uint32_t length)
+src/cpu/uop_cache.c:1016:		if (uop_page_head[page] != 0) uop_invalidate_page(page << 12);
+src/cpu/uop_cache.h:307: * at all and `uop_invalidate_page` returns immediately -- so the cache-off transcript must
+src/cpu/uop_cache.h:338:void uop_invalidate_page(uint32_t phys_addr);
+src/cpu/uop_cache.h:342:void uop_invalidate_range(uint32_t phys_addr, uint32_t length);
+src/cpu/uop_cache.h:381:static inline void uop_invalidate_page_fast(uint32_t phys_addr)
+src/cpu/uop_cache.h:385:		uop_invalidate_page(phys_addr);
+src/cpu/paging.h:140: *   - the non-straddle write arm HOOKS THE UOP CACHE (uop_invalidate_page_fast, upstream's
+src/cpu/paging.h:167:            uop_invalidate_page_fast(phys_addr_);                                       \
+src/cpu/paging.h:191:                uop_invalidate_page_fast(phys_addr_);                                   \
+src/cpu/paging.h:217:                uop_invalidate_page_fast(phys_addr_);                                   \
+
+== B. THE GUEST-RAM WRITE SITES (the plan's other list) ==
+   scope: src/cpu/memory.c src/cpu/paging.c src/cpu/paging.h src/cpu/string.c
+          src/main.c src/hw/*.c   [paging.h + the SAFE_READ_WRITE pattern ARE PERF-FIX-3:
+          the macro family was the whole class the M2 scope could not see]
+src/cpu/string.c:281:                if (size == STR_B) write8_no_mmap_or_dirty_check(phys_dst, src_val);
+src/cpu/string.c:282:                else if (size == STR_W) write16_no_mmap_or_dirty_check(phys_dst, src_val);
+src/cpu/string.c:283:                else write32_no_mmap_or_dirty_check(phys_dst, src_val);
+src/cpu/string.c:301:                    memcpy_no_mmap_or_dirty_check(phys_src, phys_dst,
+src/cpu/string.c:313:                    memset_no_mmap_or_dirty_check(phys_dst, (uint8_t)src_val, count_until_page_end);
+src/cpu/string.c:319:                    write16_no_mmap_or_dirty_check(phys_dst, src_val);
+src/cpu/string.c:323:                    write32_no_mmap_or_dirty_check(phys_dst, src_val);
+src/cpu/paging.h:125: *     SAFE_READ_WRITE8(addr, add8(x_, read_reg8(r)));
+src/cpu/paging.h:151:#define SAFE_READ_WRITE8(addr_expr, value_expr)                                       \
+src/cpu/paging.h:168:            write8_no_mmap_or_dirty_check(phys_addr_, value_);                          \
+src/cpu/paging.h:172:#define SAFE_READ_WRITE16(addr_expr, value_expr)                                      \
+src/cpu/paging.h:192:                write16_no_mmap_or_dirty_check(phys_addr_, value_);                     \
+src/cpu/paging.h:197:#define SAFE_READ_WRITE32(addr_expr, value_expr)                                      \
+src/cpu/paging.h:218:                write32_no_mmap_or_dirty_check(phys_addr_, value_);                     \
+src/cpu/paging.c:656:        write8_no_mmap_or_dirty_check(phys_addr, value);
+src/cpu/paging.c:681:        write16_no_mmap_or_dirty_check(phys_addr, value);
+src/cpu/paging.c:703:        write32_no_mmap_or_dirty_check(phys_addr, value);
+src/cpu/paging.c:733:            write64_no_mmap_or_dirty_check(phys_addr, value);
+src/cpu/paging.c:763:            write128_no_mmap_or_dirty_check(phys_addr, value);
+src/cpu/memory.c:48:    memset(mem8 + addr, 0, size);
+src/cpu/memory.c:80:        memcpy(mem8 + offset, data, length);
+src/cpu/memory.c:359:        write8_no_mmap_or_dirty_check(addr, value);
+src/cpu/memory.c:363:void write8_no_mmap_or_dirty_check(uint32_t addr, int32_t value) { mem8[addr] = (uint8_t)value; }
+src/cpu/memory.c:380:        write16_no_mmap_or_dirty_check(addr, value);
+src/cpu/memory.c:384:void write16_no_mmap_or_dirty_check(uint32_t addr, int32_t value)
+src/cpu/memory.c:387:    memcpy(mem8 + addr, &v, sizeof(v));
+src/cpu/memory.c:402:        write32_no_mmap_or_dirty_check(addr, value);
+src/cpu/memory.c:406:void write32_no_mmap_or_dirty_check(uint32_t addr, int32_t value)
+src/cpu/memory.c:408:    memcpy(mem8 + addr, &value, sizeof(value));
+src/cpu/memory.c:411:void write64_no_mmap_or_dirty_check(uint32_t addr, uint64_t value)
+src/cpu/memory.c:413:    memcpy(mem8 + addr, &value, sizeof(value));
+src/cpu/memory.c:416:void write128_no_mmap_or_dirty_check(uint32_t addr, reg128 value)
+src/cpu/memory.c:418:    memcpy(mem8 + addr, &value, sizeof(value));
+src/cpu/memory.c:421:void memset_no_mmap_or_dirty_check(uint32_t addr, uint8_t value, uint32_t count)
+src/cpu/memory.c:423:    memset(mem8 + addr, value, count);
+src/cpu/memory.c:426:void memcpy_no_mmap_or_dirty_check(uint32_t src_addr, uint32_t dst_addr, uint32_t count)
+src/cpu/memory.c:430:    memmove(mem8 + dst_addr, mem8 + src_addr, count); /* upstream ptr::copy, overlap-safe */
+src/cpu/memory.c:455:        vga_mem8[addr - VGA_LFB_ADDRESS] = (uint8_t)value;
+src/cpu/memory.c:467:        memcpy(vga_mem8 + (addr - VGA_LFB_ADDRESS), &v, sizeof(v));
+src/cpu/memory.c:478:        memcpy(vga_mem8 + (addr - VGA_LFB_ADDRESS), &value, sizeof(value));
+src/cpu/memory.c:497:        memcpy(vga_mem8 + (addr - VGA_LFB_ADDRESS), &value, sizeof(value));
+src/cpu/memory.c:508:        memcpy(vga_mem8 + (addr - VGA_LFB_ADDRESS), &v0, sizeof(v0));
+src/cpu/memory.c:509:        memcpy(vga_mem8 + (addr - VGA_LFB_ADDRESS + 8), &v1, sizeof(v1));
+src/hw/kernel.c:72:    memcpy(mem8 + addr, blob, length);
+src/hw/kernel.c:238:    mem8[cmd_line_ptr + strlen(cmdline)] = 0;
+src/hw/hw_selftest.c:120:    for (int i = 0; i < 8; i++) mem8[addr + i] = (uint8_t)(v >> (8 * i));
+src/hw/hw_selftest.c:237:    mem8[0x100 + (addr & 0xFF)] = (uint8_t)value;
+src/hw/hw_selftest.c:663:    mem8[0x1000] = 0x77;
+src/hw/hw_selftest.c:664:    mem8[0x1001] = 0x88;
+src/hw/hw_selftest.c:1041:    mem8[0x5FFE] = 0xFA; /* cli */
+src/hw/hw_selftest.c:1042:    mem8[0x5FFF] = 0xF4; /* hlt */
+src/hw/hw_selftest.c:1046:    memcpy(mem8 + HANDLER_EIP, handler, sizeof(handler));
+src/hw/hw_selftest.c:1798:        for (int i = 0; i < 512; i++) mem8[dest + i] = 0;
+src/hw/hw_selftest.c:2136:    memcpy(mem8 + 0x4000, "ABC", 3);
+src/hw/hw_selftest.c:2175:    mem8[0x4400] = 0x00;
+src/main.c:233:	memcpy(mem8 + addr, blob, length);
+src/main.c:994:	memcpy(mem8 + BOOT_OPTION_ROM_ADDRESS, loaded.option_rom, loaded.option_rom_length);
+src/main.c:998:	memcpy(mem8 + BOOT_FIRMWARE_ADDRESS, firmware, firmware_length);
+
+== C. THE CLASS CHECK (PERF-FIX-3/BLOCKER-1): every writer is hooked or exempt ==
+   EXEMPT-LOADER-TIME           src/main.c:233: memcpy(mem8 + addr, blob, length);
+                                  -> EXEMPT-LOADER-TIME (loader_write_blob: a loader translation unit, pre-guest)
+   EXEMPT-LOADER-TIME           src/main.c:994: memcpy(mem8 + BOOT_OPTION_ROM_ADDRESS, loaded.option_rom, loaded.option_rom_length);
+                                  -> EXEMPT-LOADER-TIME (boot_main: a loader translation unit, pre-guest)
+   EXEMPT-LOADER-TIME           src/main.c:998: memcpy(mem8 + BOOT_FIRMWARE_ADDRESS, firmware, firmware_length);
+                                  -> EXEMPT-LOADER-TIME (boot_main: a loader translation unit, pre-guest)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:632: mem8[0x4FFE] = 0x11;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:633: mem8[0x4FFF] = 0x22;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:634: mem8[0x5000] = 0x33;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:635: mem8[0x5001] = 0x44;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:782: mem8[MEM_SIZE - 1] = 0x7F;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:784: mem8[MEM_SIZE] = 0x11; /* inside the 16-byte slack, past memory_size */
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:789: mem8[MEM_SIZE + 15] = 0x5A; /* the LAST byte the allocation covers */
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:791: mem8[MEM_SIZE + 15] = 0;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:792: mem8[MEM_SIZE] = 0;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:793: mem8[MEM_SIZE - 1] = 0;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2079: mem8[0x8000] = 0x10;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2097: mem8[0x8000] = 0x34;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2107: mem8[0x8000] = 0x24;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2113: mem8[0x8000] = 0x91;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2119: mem8[0x8000] = 0x25; /* scale 0, index 100 (none), base 101 */
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2127: mem8[0x8000] = 0x25;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2128: mem8[0x8001] = 0x08;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2134: mem8[0x8000] = 0x64;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2173: mem8[0x8000] = 0x10;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2184: mem8[0x8000] = 0xF0;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2206: mem8[0x8000] = 0x10;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2210: mem8[0x8000] = 0x24;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2220: mem8[0x8000] = 0x08;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2235: mem8[0x8000] = 0x78;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2236: mem8[0x8001] = 0x56;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2237: mem8[0x8002] = 0x34;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2238: mem8[0x8003] = 0x12;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2260: mem8[0x8008] = 0xFF;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2274: mem8[0x3000] = 0x5A; /*  virtual 0x8000 (the page's first byte) */
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2275: mem8[0x3FFF] = 0x11; /* last byte of 0x8000's page */
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2276: mem8[0x4000] = 0x22; /* the physical neighbour a stale cache would read */
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2277: mem8[0x5000] = 0x33; /* the first byte of 0x9000's page */
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:2320: mem8[DATA_PHYS] = 0x5A;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/cpu_selftest.c:4164: mem8[0xB0000] = 0x00;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/m1c_selftest.c:112: mem8[addr + i] = (uint8_t)(v >> (8 * i));
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/m1c_selftest.c:119: mem8[addr + i] = (uint8_t)(v >> (8 * i));
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/m1c_selftest.c:334: mem8[eip + 0] = 0xFF; mem8[eip + 1] = 0x05; wr32(eip + 2, R5F_MARKER);
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/m1c_selftest.c:335: mem8[eip + 6] = 0x83; mem8[eip + 7] = 0xC4; mem8[eip + 8] = 0x04;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/m1c_selftest.c:336: mem8[eip + 9] = 0xCF;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/m1c_selftest.c:342: mem8[eip + 0] = 0xA1; wr32(eip + 1, ABSENT_B);
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/m1c_selftest.c:720: memset(mem8 + TSS_NEW, 0, 104);
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/m1c_selftest.c:808: mem8[GDT_BASE + 3 * 8 + 5] &= (uint8_t)~1; /* clear accessed */
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-LOADER-TIME           src/cpu/memory.c:48: memset(mem8 + addr, 0, size);
+                                  -> EXEMPT-LOADER-TIME (zero_memory: runs before the guest's first instruction)
+   OK                           src/cpu/memory.c:80: memcpy(mem8 + offset, data, length);
+                                  -> OK (hooked within 8 lines above)
+   OK                           src/cpu/memory.c:359: write8_no_mmap_or_dirty_check(addr, value);
+                                  -> OK (hooked within 8 lines above)
+   EXEMPT-DEFINITION            src/cpu/memory.c:363: void write8_no_mmap_or_dirty_check(uint32_t addr, int32_t value) { mem8[addr] = (uint8_t
+                                  -> EXEMPT-DEFINITION (this line IS the store the hook guards)
+   OK                           src/cpu/memory.c:380: write16_no_mmap_or_dirty_check(addr, value);
+                                  -> OK (hooked within 8 lines above)
+   EXEMPT-DEFINITION            src/cpu/memory.c:384: void write16_no_mmap_or_dirty_check(uint32_t addr, int32_t value)
+                                  -> EXEMPT-DEFINITION (this line IS the store the hook guards)
+   EXEMPT-DEFINITION            src/cpu/memory.c:387: memcpy(mem8 + addr, &v, sizeof(v));
+                                  -> EXEMPT-DEFINITION (this line IS the store the hook guards)
+   OK                           src/cpu/memory.c:402: write32_no_mmap_or_dirty_check(addr, value);
+                                  -> OK (hooked within 8 lines above)
+   EXEMPT-DEFINITION            src/cpu/memory.c:406: void write32_no_mmap_or_dirty_check(uint32_t addr, int32_t value)
+                                  -> EXEMPT-DEFINITION (this line IS the store the hook guards)
+   EXEMPT-DEFINITION            src/cpu/memory.c:408: memcpy(mem8 + addr, &value, sizeof(value));
+                                  -> EXEMPT-DEFINITION (this line IS the store the hook guards)
+   EXEMPT-DEFINITION            src/cpu/memory.c:411: void write64_no_mmap_or_dirty_check(uint32_t addr, uint64_t value)
+                                  -> EXEMPT-DEFINITION (this line IS the store the hook guards)
+   EXEMPT-DEFINITION            src/cpu/memory.c:413: memcpy(mem8 + addr, &value, sizeof(value));
+                                  -> EXEMPT-DEFINITION (this line IS the store the hook guards)
+   EXEMPT-DEFINITION            src/cpu/memory.c:416: void write128_no_mmap_or_dirty_check(uint32_t addr, reg128 value)
+                                  -> EXEMPT-DEFINITION (this line IS the store the hook guards)
+   EXEMPT-DEFINITION            src/cpu/memory.c:418: memcpy(mem8 + addr, &value, sizeof(value));
+                                  -> EXEMPT-DEFINITION (this line IS the store the hook guards)
+   EXEMPT-DEFINITION            src/cpu/memory.c:421: void memset_no_mmap_or_dirty_check(uint32_t addr, uint8_t value, uint32_t count)
+                                  -> EXEMPT-DEFINITION (this line IS the store the hook guards)
+   EXEMPT-DEFINITION            src/cpu/memory.c:423: memset(mem8 + addr, value, count);
+                                  -> EXEMPT-DEFINITION (this line IS the store the hook guards)
+   EXEMPT-DEFINITION            src/cpu/memory.c:426: void memcpy_no_mmap_or_dirty_check(uint32_t src_addr, uint32_t dst_addr, uint32_t count)
+                                  -> EXEMPT-DEFINITION (this line IS the store the hook guards)
+   EXEMPT-DEFINITION            src/cpu/memory.c:430: memmove(mem8 + dst_addr, mem8 + src_addr, count); /* upstream ptr::copy, overlap-safe */
+                                  -> EXEMPT-DEFINITION (this line IS the store the hook guards)
+   EXEMPT-DECLARATION           src/cpu/memory.h:113: void write8_no_mmap_or_dirty_check(uint32_t addr, int32_t value);
+                                  -> EXEMPT-DECLARATION (a header prototype is not a write)
+   EXEMPT-DECLARATION           src/cpu/memory.h:114: void write16_no_mmap_or_dirty_check(uint32_t addr, int32_t value);
+                                  -> EXEMPT-DECLARATION (a header prototype is not a write)
+   EXEMPT-DECLARATION           src/cpu/memory.h:115: void write32_no_mmap_or_dirty_check(uint32_t addr, int32_t value);
+                                  -> EXEMPT-DECLARATION (a header prototype is not a write)
+   EXEMPT-DECLARATION           src/cpu/memory.h:116: void write64_no_mmap_or_dirty_check(uint32_t addr, uint64_t value);
+                                  -> EXEMPT-DECLARATION (a header prototype is not a write)
+   EXEMPT-DECLARATION           src/cpu/memory.h:117: void write128_no_mmap_or_dirty_check(uint32_t addr, reg128 value);
+                                  -> EXEMPT-DECLARATION (a header prototype is not a write)
+   EXEMPT-DECLARATION           src/cpu/memory.h:118: void memset_no_mmap_or_dirty_check(uint32_t addr, uint8_t value, uint32_t count);
+                                  -> EXEMPT-DECLARATION (a header prototype is not a write)
+   EXEMPT-DECLARATION           src/cpu/memory.h:119: void memcpy_no_mmap_or_dirty_check(uint32_t src_addr, uint32_t dst_addr, uint32_t count)
+                                  -> EXEMPT-DECLARATION (a header prototype is not a write)
+   OK                           src/cpu/paging.c:656: write8_no_mmap_or_dirty_check(phys_addr, value);
+                                  -> OK (hooked within 8 lines above)
+   OK                           src/cpu/paging.c:681: write16_no_mmap_or_dirty_check(phys_addr, value);
+                                  -> OK (hooked within 8 lines above)
+   OK                           src/cpu/paging.c:703: write32_no_mmap_or_dirty_check(phys_addr, value);
+                                  -> OK (hooked within 8 lines above)
+   OK                           src/cpu/paging.c:733: write64_no_mmap_or_dirty_check(phys_addr, value);
+                                  -> OK (hooked within 8 lines above)
+   OK                           src/cpu/paging.c:763: write128_no_mmap_or_dirty_check(phys_addr, value);
+                                  -> OK (hooked within 8 lines above)
+   OK                           src/cpu/paging.h:168: write8_no_mmap_or_dirty_check(phys_addr_, value_);                          \
+                                  -> OK (hooked within 8 lines above)
+   OK                           src/cpu/paging.h:192: write16_no_mmap_or_dirty_check(phys_addr_, value_);                     \
+                                  -> OK (hooked within 8 lines above)
+   OK                           src/cpu/paging.h:218: write32_no_mmap_or_dirty_check(phys_addr_, value_);                     \
+                                  -> OK (hooked within 8 lines above)
+   OK                           src/cpu/string.c:281: if (size == STR_B) write8_no_mmap_or_dirty_check(phys_dst, src_val);
+                                  -> OK (hooked within 8 lines above)
+   OK                           src/cpu/string.c:282: else if (size == STR_W) write16_no_mmap_or_dirty_check(phys_dst, src_val);
+                                  -> OK (hooked within 8 lines above)
+   OK                           src/cpu/string.c:283: else write32_no_mmap_or_dirty_check(phys_dst, src_val);
+                                  -> OK (hooked within 8 lines above)
+   OK                           src/cpu/string.c:301: memcpy_no_mmap_or_dirty_check(phys_src, phys_dst,
+                                  -> OK (hooked within 8 lines above)
+   OK                           src/cpu/string.c:313: memset_no_mmap_or_dirty_check(phys_dst, (uint8_t)src_val, count_until_page_end);
+                                  -> OK (hooked within 8 lines above)
+   OK                           src/cpu/string.c:319: write16_no_mmap_or_dirty_check(phys_dst, src_val);
+                                  -> OK (hooked within 8 lines above)
+   OK                           src/cpu/string.c:323: write32_no_mmap_or_dirty_check(phys_dst, src_val);
+                                  -> OK (hooked within 8 lines above)
+   EXEMPT-SELFTEST              src/cpu/uop_cache_selftest.c:163: for (int i = 0; i < 8; i++) mem8[addr + i] = (uint8_t)(v >> (8 * i));
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_cache_selftest.c:274: memcpy(mem8 + CODE_PAGE, code_pristine, CODE_SIZE);
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_cache_selftest.c:275: memcpy(mem8 + CODE_PAGE + offset, bytes, (size_t)len);
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_cache_selftest.c:1193: memset(mem8 + CODE_PAGE, 0x90, CODE_SIZE);
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_cache_selftest.c:1202: mem8[CODE_PAGE + 6 * i + 0] = 0x8B;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_cache_selftest.c:1203: mem8[CODE_PAGE + 6 * i + 1] = 0x05;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_cache_selftest.c:1204: mem8[CODE_PAGE + 6 * i + 2] = 0x00;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_cache_selftest.c:1205: mem8[CODE_PAGE + 6 * i + 3] = 0x10;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_cache_selftest.c:1206: mem8[CODE_PAGE + 6 * i + 4] = 0x00;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_cache_selftest.c:1207: mem8[CODE_PAGE + 6 * i + 5] = 0x00;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:124: for (int i = 0; i < 8; i++) mem8[addr + i] = (uint8_t)(v >> (8 * i));
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:191: memset(mem8, 0, GUEST_RAM);
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:213: memcpy(mem8 + addr, bytes, (size_t)len);
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:457: mem8[a + 0] = 0x36; /* the SS override -- see the header */
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:458: mem8[a + 1] = 0xC6; /* mov byte [VEC_RECORD], imm8 */
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:459: mem8[a + 2] = 0x05;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:460: mem8[a + 3] = (uint8_t)(VEC_RECORD & 0xFF);
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:461: mem8[a + 4] = (uint8_t)((VEC_RECORD >> 8) & 0xFF);
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:462: mem8[a + 5] = (uint8_t)((VEC_RECORD >> 16) & 0xFF);
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:463: mem8[a + 6] = (uint8_t)((VEC_RECORD >> 24) & 0xFF);
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:464: mem8[a + 7] = (uint8_t)v;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:465: mem8[a + 8] = 0xF4; /* hlt */
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:511: mem8[VEC_RECORD] = 0;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:616: mem8[VEC_RECORD] = 0;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:796: mem8[0x2005] = 0x90; /* the sti -> nop */
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:797: mem8[0x2006] = 0x90; /* the shadow nop stays a nop */
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:936: mem8[0x3010] = 2; /* the loop counter: two passes, so the second one must HIT the cache 
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:1057: mem8[VEC_RECORD] = 0;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:1076: memcpy(mem8 + es, &v[3], 4);
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:1077: memcpy(mem8 + fs, &v[2], 4);
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:1078: memcpy(mem8 + ss, &v[1], 4);
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/cpu/uop_exec_selftest.c:1079: memcpy(mem8 + ds, &v[0], 4);
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/hw/hw_selftest.c:120: for (int i = 0; i < 8; i++) mem8[addr + i] = (uint8_t)(v >> (8 * i));
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/hw/hw_selftest.c:237: mem8[0x100 + (addr & 0xFF)] = (uint8_t)value;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/hw/hw_selftest.c:663: mem8[0x1000] = 0x77;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/hw/hw_selftest.c:664: mem8[0x1001] = 0x88;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/hw/hw_selftest.c:1041: mem8[0x5FFE] = 0xFA; /* cli */
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/hw/hw_selftest.c:1042: mem8[0x5FFF] = 0xF4; /* hlt */
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/hw/hw_selftest.c:1046: memcpy(mem8 + HANDLER_EIP, handler, sizeof(handler));
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/hw/hw_selftest.c:1798: for (int i = 0; i < 512; i++) mem8[dest + i] = 0;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/hw/hw_selftest.c:2136: memcpy(mem8 + 0x4000, "ABC", 3);
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-SELFTEST              src/hw/hw_selftest.c:2175: mem8[0x4400] = 0x00;
+                                  -> EXEMPT-SELFTEST (builds code images by hand; the library default OFF)
+   EXEMPT-LOADER-TIME           src/hw/kernel.c:72: memcpy(mem8 + addr, blob, length);
+                                  -> EXEMPT-LOADER-TIME (?: a loader translation unit, pre-guest)
+   EXEMPT-LOADER-TIME           src/hw/kernel.c:238: mem8[cmd_line_ptr + strlen(cmdline)] = 0;
+                                  -> EXEMPT-LOADER-TIME (die: a loader translation unit, pre-guest)
+   checked 129 hits: 19 hooked, 110 exempt-classified, 0 FAIL
+   EXEMPT-CLASS EXEMPT-DECLARATION       7
+   EXEMPT-CLASS EXEMPT-DEFINITION        13
+   EXEMPT-CLASS EXEMPT-LOADER-TIME       6
+   EXEMPT-CLASS EXEMPT-SELFTEST          84
+   EXEMPT-CLASS OK                       19
+   VERDICT: THE RECONCILIATION IS EMPTY (every writer hooked or exempt)
+CHECK_RC=0
+
+== D. THE LOADER-TIME WRITERS (before the guest runs; hook inert by construction) ==
+   src/main.c      : the multiboot/ELF loader and the boot firmware/option-ROM copies
+   src/hw/kernel.c : the bzImage loader's own static write_blob + the cmdline byte
+   src/cpu/memory.c zero_memory (memset) -- called by main.c's loader and the selftests
+   (the device DMA paths are NOT here: dma.c:240, ide.c:829 and virtio.c:1409 all call
+    the CPU's write_blob, which is hooked -- see list A)
+
+== E. THE SHAPES SCANNED, AND THIS GATE'S BLIND SPOTS (the honest part) ==
+   SCANNED, with the measurement that settles each:
+   1. direct calls      -- the six *_no_mmap_or_dirty_check writers and every memcpy/memset
+                           into mem8: section C checks each hit's hook window.
+   2. FUNCTION-LIKE MACROS -- the shape that beat the previous gate.  paging.h's
+                           SAFE_READ_WRITE8/16/32 are now in list B AND their bodies are
+                           checked by C (a macro's arm is where the hook must sit).  The tree
+                           has no other multi-line macro that writes guest RAM (MEASURED: rg
+                           '#define' over src/cpu/*.h -- only these three contain a write).
+   3. STATIC INLINE FUNCTIONS in headers -- MEASURED: none writes guest RAM (the only inline
+                           in memory.h is in_mapped_range, a predicate).
+   4. ALIASES            -- MEASURED: no `#define <name> write*`/`*_no_mmap*` alias exists
+                           (rg '#define\s+\w+\s+(write|mem)' -> empty), and no writer is
+                           reached through a function pointer that writes guest RAM: the
+                           function-pointer tables are src/hw/io.c's io_mmap DEVICE hooks
+                           (device registers, vga_mem8) and the CPU's memory_devices hooks;
+                           the device paths that DO write guest RAM call the CPU's
+                           write_blob/write16/write32 (hooked).
+   5. POINTER ALIASES    -- MEASURED: the only pointer handed out into guest RAM is
+                           src/hw/virtio.c:69 virtio_guest_read_blob, typed `const uint8_t *`
+                           and used only as a memcpy SOURCE; no `uint8_t *p = ... mem8`
+                           store-through and no `&mem8[` exists outside memory.c's own
+                           definitions (rg, both empty).
+   BLIND SPOTS -- what section C cannot see, stated so a reader can attack it:
+   * A writer reached ONLY through a function pointer (a new device hook that stores into
+     mem8 directly) is not in any writer list; the device inventory is manual (see 4).
+   * A pointer alias into guest RAM written through after the fact (a `uint8_t *` parameter
+     that is mem8 + n at the call site) is invisible to a textual scan.
+   * `results/` probes and the selftest files (.c files excluded from C by name) write mem8
+     by hand; they are not the shipped machine -- the library default OFF exists for exactly
+     that reason (results/perf-4-uop-exec.md ss3).

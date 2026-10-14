@@ -1,0 +1,231 @@
+minibios: option ROM at c000
+Linux version 6.12.19 (build@debian) (gcc (Debian 14.2.0-19) 14.2.0, GNU ld (GNU Binutils for Debian) 2.44) #1 2025-03-13 12:15:54 UTC
+BIOS-provided physical RAM map:
+BIOS-e820: [mem 0x0000000000000000-0x000000000009fbff] usable
+BIOS-e820: [mem 0x000000000009fc00-0x000000000009ffff] reserved
+BIOS-e820: [mem 0x00000000000f0000-0x00000000000fffff] reserved
+BIOS-e820: [mem 0x0000000000100000-0x0000000004ffffff] usable
+process: using polling idle threads
+Notice: NX (Execute Disable) protection cannot be enabled: non-PAE kernel!
+tsc: Detected 1000.000 MHz processor
+last_pfn = 0x5000 max_arch_pfn = 0x100000
+x86/PAT: PAT support disabled because CONFIG_X86_PAT is disabled in the kernel.
+x86/PAT: Configuration [0-7]: WB  WT  UC- UC  WB  WT  UC- UC  
+RAMDISK: [mem 0x04000000-0x04367fff]
+80MB LOWMEM available.
+  mapped low ram: 0 - 05000000
+  low ram: 0 - 05000000
+Zone ranges:
+  Normal   [mem 0x0000000000001000-0x0000000004ffffff]
+Movable zone start for each node
+Early memory node ranges
+  node   0: [mem 0x0000000000001000-0x000000000009efff]
+  node   0: [mem 0x0000000000100000-0x0000000004ffffff]
+Initmem setup node 0 [mem 0x0000000000001000-0x0000000004ffffff]
+On node 0, zone Normal: 1 pages in unavailable ranges
+On node 0, zone Normal: 97 pages in unavailable ranges
+[mem 0x05000000-0xffffffff] available for PCI devices
+clocksource: refined-jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645519600211568 ns
+Kernel command line: console=hvc0 console=ttyS0 tsc=unstable idle=poll rdinit=/fx/store/54ce1971a82e89d78a83e3f805893b4e1651d714c62e69fda2c711ff8d3f2b69-fx-init/fx-init fx.store=/fx/store
+tsc: Marking TSC unstable due to boot parameter
+random: crng init done
+Dentry cache hash table entries: 16384 (order: 4, 65536 bytes, linear)
+Inode-cache hash table entries: 8192 (order: 3, 32768 bytes, linear)
+Built 1 zonelists, mobility grouping on.  Total pages: 20382
+mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+Checking if this processor honours the WP bit even in supervisor mode...Ok.
+SLUB: HWalign=64, Order=0-1, MinObjects=0, CPUs=1, Nodes=1
+NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+printk: legacy console [ttyS0] enabled
+Calibrating delay loop (skipped), value calculated using timer frequency.. 2000.00 BogoMIPS (lpj=4000000)
+Last level iTLB entries: 4KB 64, 2MB 64, 4MB 64
+Last level dTLB entries: 4KB 64, 2MB 0, 4MB 64, 1GB 0
+CPU: Intel Pentium III (Katmai) (family: 0x6, model: 0x7, stepping: 0x3)
+Speculative Store Bypass: Vulnerable
+L1TF: Kernel not compiled for PAE. No mitigation for L1TF
+x86/fpu: x87 FPU will use FXSAVE
+pid_max: default: 32768 minimum: 301
+Mount-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+Performance Events: 
+no APIC, boot with the "lapic" boot parameter to force-enable it.
+no hardware sampling interrupt available.
+PMU not available due to virtualization, using software events only.
+signal: max sigframe size: 1440
+Memory: 72896K/81528K available (1917K kernel code, 635K rwdata, 404K rodata, 228K init, 208K bss, 8340K reserved, 0K cma-reserved)
+devtmpfs: initialized
+clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 7645041785100000 ns
+futex hash table entries: 256 (order: -1, 3072 bytes, linear)
+clocksource: pit: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 1601818034827 ns
+PCI: Using configuration type 1 for base access
+SCSI subsystem initialized
+PCI: Probing PCI hardware
+PCI host bridge to bus 0000:00
+pci_bus 0000:00: root bus resource [io  0x0000-0xffff]
+pci_bus 0000:00: root bus resource [mem 0x00000000-0xffffffff]
+pci_bus 0000:00: No busn resource found for root bus, will use [bus 00-ff]
+pci 0000:00:00.0: [8086:1237] type 00 class 0x060000 conventional PCI endpoint
+pci 0000:00:01.0: [8086:7000] type 00 class 0x060100 conventional PCI endpoint
+pci 0000:00:0c.0: [1af4:1043] type 00 class 0x000200 conventional PCI endpoint
+pci 0000:00:0c.0: BAR 0 [io  0xb800-0xb83f]
+pci 0000:00:0c.0: BAR 1 [io  0xb900-0xb90f]
+pci 0000:00:0c.0: BAR 2 [io  0xb700-0xb70f]
+pci 0000:00:0c.0: BAR 3 [io  0xb600-0xb60f]
+pci 0000:00:1e.0: [8086:7010] type 00 class 0x010180 conventional PCI endpoint
+pci 0000:00:1e.0: BAR 0 [io  0x01f0-0x01f7]
+pci 0000:00:1e.0: BAR 2 [io  0x0170-0x0177]
+pci 0000:00:1e.0: BAR 4 [io  0xb400-0xb40f]
+pci 0000:00:1e.0: BAR 0 [io  0x01f0-0x01f7]: legacy IDE quirk
+pci 0000:00:1e.0: BAR 1 [io  0x03f6]: legacy IDE quirk
+pci 0000:00:1e.0: BAR 2 [io  0x0170-0x0177]: legacy IDE quirk
+pci 0000:00:1e.0: BAR 3 [io  0x0376]: legacy IDE quirk
+pci_bus 0000:00: busn_res: [bus 00-ff] end is updated to 00
+vgaarb: loaded
+clocksource: Switched to clocksource pit
+pci_bus 0000:00: resource 4 [io  0x0000-0xffff]
+pci_bus 0000:00: resource 5 [mem 0x00000000-0xffffffff]
+pci 0000:00:01.0: PIIX3: Enabling Passive Release
+pci 0000:00:00.0: Limiting direct PCI/PCI transfers
+pci 0000:00:01.0: Activating ISA DMA hang workarounds
+PCI: CLS 0 bytes, default 64
+platform rtc_cmos: registered platform RTC device (no PNP device found)
+Unpacking initramfs...
+workingset: timestamp_bits=30 max_order=15 bucket_order=0
+Block layer SCSI generic (bsg) driver version 0.4 loaded (major 254)
+io scheduler mq-deadline registered
+io scheduler kyber registered
+Serial: 8250/16550 driver, 4 ports, IRQ sharing disabled
+serial8250: ttyS0 at I/O 0x3f8 (irq = 4, base_baud = 115200) is a 16550A
+printk: legacy console [hvc0] enabled
+scsi host0: ata_piix
+scsi host1: ata_piix
+ata1: PATA max MWDMA2 cmd 0x1f0 ctl 0x3f6 bmdma 0xb400 irq 14 lpm-pol 0
+ata2: PATA max MWDMA2 cmd 0x170 ctl 0x376 bmdma 0xb408 irq 15 lpm-pol 0
+ata1.00: ATA-0: v86 ATA HD, 1.00, max MWDMA2
+ata1.00: 131072 sectors, multi 0: LBA48 
+scsi 0:0:0:0: Direct-Access     ATA      v86 ATA HD       n/a  PQ: 0 ANSI: 5
+ata2.00: ATAPI: v86 ATAPI CD-ROM, 1.00, max MWDMA2
+sd 0:0:0:0: [sda] 131072 512-byte logical blocks: (67.1 MB/64.0 MiB)
+sd 0:0:0:0: [sda] Write Protect is off
+sd 0:0:0:0: [sda] Write cache: disabled, read cache: enabled, doesn't support DPO or FUA
+sd 0:0:0:0: [sda] Preferred minimum I/O size 512 bytes
+scsi 1:0:0:0: CD-ROM            SONY     CD-ROM CDU-1000  1.1a PQ: 0 ANSI: 1 CCS
+sd 0:0:0:0: [sda] Attached SCSI disk
+Freeing initrd memory: 3488K
+Freeing unused kernel image (initmem) memory: 228K
+Write protecting kernel text and read-only data: 2324k
+Run /fx/store/54ce1971a82e89d78a83e3f805893b4e1651d714c62e69fda2c711ff8d3f2b69-fx-init/fx-init as init process
+fx-init: store from kernel command line fx.store=/fx/store
+fx-init: boot start store /fx/store
+EXT4-fs (sda): mounted filesystem <uuid> r/w without journal. Quota mode: disabled.
+ext4 filesystem being mounted at /fx/disk supports timestamps until 2038-01-19 (0x7fffffff)
+cp: can't preserve times of '/fx/disk/store/ff234a4b775daa61f8273073648981f26c8dde8ac198ee739d866cb87ccb9866-dhall-c/.provisioned-by-build-store': Function not implemented
+cp: can't preserve times of '/fx/disk/store/ff234a4b775daa61f8273073648981f26c8dde8ac198ee739d866cb87ccb9866-dhall-c': Function not implemented
+cp: can't preserve times of '/fx/disk/store/c646492ea4785cb83dc04a389380fb70e4f8eab5a0de43f289b641316d713251-fxstore/.provisioned-by-build-store': Function not implemented
+cp: can't preserve times of '/fx/disk/store/c646492ea4785cb83dc04a389380fb70e4f8eab5a0de43f289b641316d713251-fxstore': Function not implemented
+cp: can't preserve times of '/fx/disk/store/970babc820e4e7da9c99df6f05109a3640ed179576428adfddf8b1754f3b5280-system-generation/etc/passwd': Function not implemented
+cp: can't preserve times of '/fx/disk/store/970babc820e4e7da9c99df6f05109a3640ed179576428adfddf8b1754f3b5280-system-generation/etc/hostname': Function not implemented
+cp: can't preserve times of '/fx/disk/store/970babc820e4e7da9c99df6f05109a3640ed179576428adfddf8b1754f3b5280-system-generation/etc/group': Function not implemented
+cp: can't preserve times of '/fx/disk/store/970babc820e4e7da9c99df6f05109a3640ed179576428adfddf8b1754f3b5280-system-generation/etc': Function not implemented
+cp: can't preserve times of '/fx/disk/store/970babc820e4e7da9c99df6f05109a3640ed179576428adfddf8b1754f3b5280-system-generation/config.dhall': Function not implemented
+cp: can't preserve times of '/fx/disk/store/970babc820e4e7da9c99df6f05109a3640ed179576428adfddf8b1754f3b5280-system-generation/Dhakefile.dhall': Function not implemented
+cp: can't preserve times of '/fx/disk/store/970babc820e4e7da9c99df6f05109a3640ed179576428adfddf8b1754f3b5280-system-generation': Function not implemented
+cp: can't preserve times of '/fx/disk/store/93211caf5c164c874e634691688a4ed1de89f324ca0f1cd7ceeb814bfcd07743-fxctl/fxctl': Function not implemented
+cp: can't preserve times of '/fx/disk/store/93211caf5c164c874e634691688a4ed1de89f324ca0f1cd7ceeb814bfcd07743-fxctl': Function not implemented
+cp: can't preserve times of '/fx/disk/store/8ec74aebab6dbe9e02cf90da0e6a6e6d4a0074a32c9587f73733e353a7466e6d-dhake/dhake.com': Function not implemented
+cp: can't preserve times of '/fx/disk/store/8ec74aebab6dbe9e02cf90da0e6a6e6d4a0074a32c9587f73733e353a7466e6d-dhake': Function not implemented
+cp: can't preserve times of '/fx/disk/store/8415e57597135dc38c3a3a4617f468411b342bb329ebc09cc1342d52296bf551-fake-service/fakesvc': Function not implemented
+cp: can't preserve times of '/fx/disk/store/8415e57597135dc38c3a3a4617f468411b342bb329ebc09cc1342d52296bf551-fake-service': Function not implemented
+cp: can't preserve times of '/fx/disk/store/79d46d5ac4ab4dc395b3ce098c79e21f14a6d49dbd285e058d4caa5cd0818204-datalog-dafsa/.provisioned-by-build-store': Function not implemented
+cp: can't preserve times of '/fx/disk/store/79d46d5ac4ab4dc395b3ce098c79e21f14a6d49dbd285e058d4caa5cd0818204-datalog-dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/658c40b5d2ba18b443c043df1c92c357d014f380bce1e5af67f976581c148183-fx-activate/fx-activate': Function not implemented
+cp: can't preserve times of '/fx/disk/store/658c40b5d2ba18b443c043df1c92c357d014f380bce1e5af67f976581c148183-fx-activate': Function not implemented
+cp: can't preserve times of '/fx/disk/store/54ce1971a82e89d78a83e3f805893b4e1651d714c62e69fda2c711ff8d3f2b69-fx-init/fx-init': Function not implemented
+cp: can't preserve times of '/fx/disk/store/54ce1971a82e89d78a83e3f805893b4e1651d714c62e69fda2c711ff8d3f2b69-fx-init': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/user.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/txn.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/tool_fxstore.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/symbols.array': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/svc_probe.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/svc_env.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/svc_console.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/svc_bin.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/svc_backoff.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/svc_argv.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/svc.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/store.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/srcstore.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/src_of.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/CURRENT': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/user.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/tool_fxstore.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/terms.bin': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/symbols.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/symbols.array': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/svc_probe.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/svc_env.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/svc_console.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/svc_bin.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/svc_backoff.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/svc_argv.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/svc.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/store.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/srcstore.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/src_of.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/root.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/provides.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/pkg.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/manifest.txt': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/install.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/generation_config.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/generation.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/dep.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/closure.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/boot_grace.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/agent_svc.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3/activate_root.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/3': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/2/terms.bin': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/2/symbols.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/2/symbols.array': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/2/store.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/2/srcstore.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/2/manifest.txt': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/2': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/1/terms.bin': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/1/symbols.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/1/symbols.array': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/1/store.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/1/srcstore.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/1/root.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/1/pkg.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/1/manifest.txt': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/1/dep.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/1/closure.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots/1': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/snapshots': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/root.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/root.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/rels.txt': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/provides.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/pkg.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/pkg.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/install.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/generation_config.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/generation.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/dep.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/dep.dafsa': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/closure.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/boot_grace.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/agent_svc.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/activate_root.wal': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db/LOCK': Function not implemented
+cp: can't preserve times of '/fx/disk/store/.db': Function not implemented
+cp: can't preserve times of '/fx/disk/store': Function not implemented
+fx-init: disk store mounted (current v3)
+fx-init: pivot_root EINVAL (initramfs root is the namespace root) — switch_root fallback (MS_MOVE + chroot) applied
+fx-init: pivoted to tmpfs root (magic 0x1021994)
+fx-init: warning: virtio control: open /dev/vport0p3: No such device or address
+fx-init: fifo control up (/run/fx/control.in + /run/fx/control.out)
+fx-init: no UNIX control socket (/run/fx/control.sock: socket failed: Function not implemented — this kernel has no socket layer: CONFIG_NET is not set) — the fifo pair (/run/fx/control.in + control.out) carries the protocol for in-guest fxctl
+fx> fx-init: boot-ok v3

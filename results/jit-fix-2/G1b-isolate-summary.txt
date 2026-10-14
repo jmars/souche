@@ -1,0 +1,7 @@
+fixed: transcript --jit on == JS reference  (the wider gate does NOT see it)
+jcc8-swap-bbe: transcript --jit on DIFFERS from JS  (the wider gate SEES it)
+jcc8-swap-aea: transcript --jit on == JS reference  (the wider gate does NOT see it)
+jcc32-swap-bbe: transcript --jit on == JS reference  (the wider gate does NOT see it)
+jcc32-swap-aea: transcript --jit on == JS reference  (the wider gate does NOT see it)
+all-swap: transcript --jit on DIFFERS from JS  (the wider gate SEES it)
+restored: ok

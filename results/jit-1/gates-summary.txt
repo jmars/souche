@@ -1,0 +1,101 @@
+== JIT-1 (M1) G2: 2026-10-13T12:47:00Z load=1.13 1.25 1.40
+make                                                 rc=0
+bb32733b9257e4195f904df5d1925ba0b896f2da9fbacac7a191a52957e4edcc  build/v86c
+make selftest                                        rc=0
+cpu_selftest: 3522 checks, 0 failures
+cpu_m1c_selftest: 228 checks, 0 failures
+hw_selftest: 541 checks, 0 failures, 0 skipped
+uop_cache_selftest: 7934349 checks, 0 failures
+uop_exec_selftest: 102 checks, 0 failures
+jit_codegen_selftest: 363 checks, 0 failures
+selftest: all suites green
+make nasm (cache on, jit off)                        rc=0
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+	jump: src/cpu/cpu.c:83: assert(!in_mapped_range(phys_addr)) failed -- the fixture's jump reaches a region v86's flat 2 MiB memory model maps differently (P0 class B, the same model gap as pop_esp); unchanged since M1a-4
+nasm with --uop-cache off                            rc=0
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+	jump: src/cpu/cpu.c:83: assert(!in_mapped_range(phys_addr)) failed -- the fixture's jump reaches a region v86's flat 2 MiB memory model maps differently (P0 class B, the same model gap as pop_esp); unchanged since M1a-4
+nasm with --jit on                                   rc=0
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+	jump: src/cpu/cpu.c:83: assert(!in_mapped_range(phys_addr)) failed -- the fixture's jump reaches a region v86's flat 2 MiB memory model maps differently (P0 class B, the same model gap as pop_esp); unchanged since M1a-4
+nasm with --uop-cache off --jit on                   rc=0
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+	jump: src/cpu/cpu.c:83: assert(!in_mapped_range(phys_addr)) failed -- the fixture's jump reaches a region v86's flat 2 MiB memory model maps differently (P0 class B, the same model gap as pop_esp); unchanged since M1a-4
+make transcript-diff (cache on, jit off)             rc=0
+transcript-diff with --uop-cache off                 rc=0
+transcript-diff with --jit off                       rc=0
+transcript-diff with --jit on                        rc=0
+--jit off == no flag (stdout)                        rc=0
+--jit off == SPIKE-ERA (pre-change) transcript       rc=0
+--jit off == PRE-SPIKE BINARY's bytes                rc=0
+200 M boot (off)                                     rc=0
+in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0
+200 M boot (on)                                      rc=0
+in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0
+200 M boot (cacheoff)                                rc=0
+in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0
+-- 200 M final-state compare + serial sha:
+IDENTICAL: in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0
+fae4924b13b07d441b0ad8458047d2f1d8abf0d1ec59876f44b88ef67d2d0b2a  results/jit-1/boot200m-cacheoff-serial.txt
+fae4924b13b07d441b0ad8458047d2f1d8abf0d1ec59876f44b88ef67d2d0b2a  results/jit-1/boot200m-off-serial.txt
+fae4924b13b07d441b0ad8458047d2f1d8abf0d1ec59876f44b88ef67d2d0b2a  results/jit-1/boot200m-on-serial.txt
+the --jit on serial output is BYTE-IDENTICAL to --jit off
+jit: pages alloc 550, blocks compiled 550 (live 279), lookups 740 (hits 0, misses 740), execs 146236, invalidations 271, deferred frees 11, W^X flips 821, pool exhausted 0
+jit: blocks compiled 550 in 740 attempts (reused 0); refused: fit 190 (8998 uops), pool 0, empty 0
+jit: block sizes: compiled 3051 uops in 887655 bytes (mean 290.9 B/uop, 5.5 uops/block); refused-for-fit 8998 uops in 190 blocks (mean 47.4)
+jit: uops executed inlined 45645 / called 591916 -> 7.16% dynamic inlined (compile-time: 617 with a recipe, 11432 without)
+jit: recipe table: 1 entry -- see results/jit-1-m1.md for what M2 adds
+1.5 G boot (on)                                      rc=0
+in_hlt=0, exception=-1, unimplemented=0, eip=0xc1927800 cs=0x60 cr0=0x80050033 cr3=0x1ea1000
+1.5 G boot (off)                                     rc=0
+in_hlt=0, exception=-1, unimplemented=0, eip=0xc1927800 cs=0x60 cr0=0x80050033 cr3=0x1ea1000
+1.5 G boot (onjit)                                   rc=0
+in_hlt=0, exception=-1, unimplemented=0, eip=0xc1927800 cs=0x60 cr0=0x80050033 cr3=0x1ea1000
+1.5 G final state IDENTICAL: in_hlt=0, exception=-1, unimplemented=0, eip=0xc1927800 cs=0x60 cr0=0x80050033 cr3=0x1ea1000
+bac97364137398daf8cc29be0cc112f06bf5fda5b5e8d18b9567352d53e057ac  results/jit-1/boot-1.5g-jitoff-run1-serial.txt
+7e1fbbb5511737945bcf1f8b6a18cc70633f81bfa117b54f3ef1c3747adafcee  results/jit-1/boot-1.5g-jitoff-run2-serial.txt
+0b59705bb0ce42b7ac70f9e4b6ad4260a100ea19cbecf15744dddb3703bb01e7  results/jit-1/boot-1.5g-off-serial.txt
+d7b8f2d74a97ecebdf8a1d96bd4550e6a1c4598185dbf0a211811ef3947cbc5e  results/jit-1/boot-1.5g-onjit-serial.txt
+58821d0a991c84b41a242e6c68b1a2c225781a939bf2793e0f22d3bc1bf0b2fc  results/jit-1/boot-1.5g-on-serial.txt
+--jit on initializes and reports its caps            rc=0
+--uop-cache off --jit on is refused with its reason  rc=0
+make bench (--jit off)                               rc=0
+run  4: real 2.532s user 2.521s sys 0.011s  instr=200095214  state=ok serial=ok
+run  5: real 2.433s user 2.423s sys 0.010s  instr=200095214  state=ok serial=ok
+run  6: real 2.515s user 2.506s sys 0.008s  instr=200095214  state=ok serial=ok
+run  7: real 2.434s user 2.429s sys 0.005s  instr=200095214  state=ok serial=ok
+load-after=1.35 1.41 1.44
+n=7
+real: best 2.433  median 2.463  worst 2.613
+user: best 2.423  median 2.453  worst 2.606
+cpu (user+sys): best 2.433  median 2.463
+MIPS at best real: 82.24   at median real: 81.24
+verified (every run): 200095214 instructions, the terminal guest state clause
+                      above, and the guest's serial output sha256 -- every number in
+                      this output times THAT workload; none of them asserts it.
+raw samples appended to results/jit-1/bench-jitoff.samples
+make bench (--jit on)                                rc=0
+run  4: real 2.517s user 2.506s sys 0.010s  instr=200095214  state=ok serial=ok
+run  5: real 2.626s user 2.613s sys 0.012s  instr=200095214  state=ok serial=ok
+run  6: real 2.502s user 2.489s sys 0.012s  instr=200095214  state=ok serial=ok
+run  7: real 2.567s user 2.559s sys 0.008s  instr=200095214  state=ok serial=ok
+load-after=1.32 1.40 1.44
+n=7
+real: best 2.432  median 2.567  worst 2.626
+user: best 2.416  median 2.559  worst 2.613
+cpu (user+sys): best 2.432  median 2.567
+MIPS at best real: 82.28   at median real: 77.95
+verified (every run): 200095214 instructions, the terminal guest state clause
+                      above, and the guest's serial output sha256 -- every number in
+                      this output times THAT workload; none of them asserts it.
+raw samples appended to results/jit-1/bench-jiton.samples
+jit off  best 2.405  median 2.494 s
+jit on   best 2.402  median 2.516 s
+ratio (off/on, >1 means the JIT is faster): best 1.001  median 0.991
+aarch64 compile jit_mem.c                            rc=0
+aarch64 compile uop_cache.c                          rc=0
+aarch64 compile jit_selftest.c                       rc=0
+aarch64 compile jit_x64.c                            rc=0
+aarch64 compile jit_codegen.c                        rc=0
+aarch64 compile jit_codegen_selftest.c               rc=0
+== done 2026-10-13T12:50:27Z load=1.32 1.40 1.44

@@ -1,0 +1,804 @@
+/*
+ * jit_mem.c -- the executable-memory substrate.  See jit_mem.h for the design, the keying, the
+ * platform caveats and the aarch64 posture; this file is the implementation and the pool.
+ *
+ * WHY THE POOL IS A FIXED ARRAY OF PAGES AND NOT A BUMP ARENA.  W^X works at PAGE granularity,
+ * so the unit of both "publish" and "recycle" is a page.  A bump arena would make recycling
+ * impossible (there is no per-block protection), and the property this layer exists to provide
+ * -- a written guest page's block must not run stale -- is exactly a recycling property.  One
+ * block per page is the spike's simplification: it costs up to 4 KiB per block (vs ~64 B in
+ * upstream's JIT) and buys page-exact invalidation.  MEASURED cost of the simplification is in
+ * results/jit-spike.md ss4.
+ */
+
+#include "jit_mem.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "memory.h"   /* mem8_alloc_size -- the guest page count the page registry is sized from */
+#include "cpu_state.h" /* cpu, CACHED_MASK_ALL -- jit_chain_target reads the fetch translation */
+#include "uop_cache.h" /* the shared dirty-page bitmap and uop_cache_init */
+#include "jit_codegen.h" /* jit_codegen_stats.chains -- the chain link's own counter */
+
+/* JIT-FIX-2 era (HANDOFF=v86c-jit): THE DEFAULT IS NOW **ON**, because the plan's own ship rule
+ * is met — results/jit-plan.md §8: "default ON only at >= 1.3x with all §6 gates green".  MEASURED
+ * by the orchestrator on the 200,095,214-instruction kernel boot, interleaved A/B: `--jit off`
+ * 2.878-3.034 s vs `--jit on` 1.677-1.782 s = **1.72x best**, at 91.14% dynamic inlined coverage
+ * with 0 fit refusals, and every gate green in BOTH modes (make; selftest 3522/228/551/7,934,349/
+ * 102/51/2978 checks; nasm 118/118; transcript-diff byte-identical; the `--jit on` transcript
+ * byte-identical to the pinned JS reference, sha256 8bb8eca5…cd61; the 1.5 G boot's final state;
+ * aarch64 still builds).
+ *
+ * `--jit off` REMAINS the pre-JIT path exactly (the plan's own gate: cache-off must reproduce
+ * today's bytes).  The reversal is this one line.  The safety story that justifies the flip:
+ * the blocker that this unit's review found (the high-byte mask emitted in the sign-extending
+ * imm8 form, which shipped through every gate green) is FIXED, its fix was independently reviewed
+ * (results/jit-fix-1r-review.md: "nothing here blocks the orchestrator's default-ON decision on
+ * correctness grounds"), and the gate that was missing when it shipped now exists (9 high-byte
+ * differential cases, 24 FAIL lines on the pre-fix tree). */
+bool jit_enabled = true;
+jit_stats_t jit_stats;
+
+#if V86C_JIT_X64
+
+#include <errno.h>
+#include <sys/mman.h>
+
+/* one code page's state */
+enum { JP_FREE = 0, JP_RW = 1, JP_RX = 2, JP_DEFER = 3 };
+
+#define JIT_PAGE_NONE 0xFFFFFFFFu
+
+/* the hash's lazy-deletion tombstone, uop_cache.c's UOP_HASH_DEAD: a dead slot does NOT
+ * terminate a probe (only a zero slot does), so a probe must TEST FOR IT and walk past --
+ * treating it as an index is an out-of-bounds read of the block table (MEASURED: exactly that,
+ * as a SIGSEGV in the stale-block probe's own lookup). */
+#define JIT_HASH_DEAD 0xFFFFu
+
+typedef struct jit_cpage {
+	uint8_t *base;     /* the page itself (page-aligned) */
+	uint8_t state;     /* JP_* */
+	uint16_t block;    /* block id + 1 while a live block owns this page */
+	uint16_t npages;   /* M2: the SPAN this page belongs to (the head's own length) */
+} jit_cpage_t;
+
+/* a compiled block, keyed the way a uop block is (jit_mem.h) */
+typedef struct jit_block {
+	uint32_t phys_start;
+	uint32_t virt_start;
+	uint32_t code_page;
+	uint32_t len;
+	uint32_t chain_off; /* JIT-6: offset of the chain ENTRY inside the code span (0 is a
+	                     * valid offset, so "can chain" is `live`, not `chain_off != 0`) */
+	uint8_t state;      /* guest state flags (the uop cache's third key field) */
+	uint8_t live;
+	uint16_t hash_slot; /* where this block sits in the hash (for the unlink) */
+	uint16_t next_page; /* the physical page registry's link: block id + 1, 0 = end */
+} jit_block_t;
+
+static jit_cpage_t *jit_pages;
+static jit_block_t *jit_blocks;
+static uint16_t *jit_hash;
+static uint16_t *jit_page_head; /* per GUEST physical page: block id + 1 */
+static uint32_t jit_page_count;
+
+static bool jit_ready;
+
+/* THE PLATFORM PROBE'S VERDICT (jit_platform_probe, called by jit_mem_init): reserve +
+ * publish + EXECUTE a canary page before the run trusts the W^X path.  Linux is VERIFIED
+ * (this host, the selftest); macOS (MAP_JIT / pthread_jit_write_protect_np is NOT used) and
+ * Windows (VirtualProtect via cosmocc is not the sequence Apple/Windows JIT guidance
+ * prescribes) are NOT verified here -- the probe is what makes those platforms HONEST: if
+ * the canary cannot be written, flipped and executed, the JIT is disabled for the run
+ * (jit_mem_init returns false; main.c leaves the machine on the uop cache) instead of
+ * silently trying.  The verdict is reported by jit_mem_caps.  V86C_JIT_PROBE_FAIL=1 forces
+ * the failure arm -- the diagnostic hook the gate uses to prove the failure path (JIT
+ * disabled, machine still correct) is a TESTED one. */
+static bool jit_probe_ok = true;
+
+/* the executing block, for the deferred recycle and the abort (jit_mem.h).  JIT-6: a chain
+ * link updates these to the TARGET block (jit_chain_target), so they name the block really
+ * executing at every uop boundary; a chain never leaves its entry page, so they stay
+ * page-equivalent to the run's entry block. */
+static uint32_t jit_cur_page = JIT_PAGE_NONE;
+static uint32_t jit_cur_block = JIT_PAGE_NONE;
+
+/* THE ABORT FLAG IS A GLOBAL AND NOT A `static` (jit_mem.h): the compiled block reads this
+ * byte at every uop boundary from an address baked into its own code, so it must be a symbol
+ * with an address the compiler can take. */
+uint8_t jit_abort_flag;
+
+const char *jit_mem_caps(void)
+{
+	if (!jit_probe_ok) {
+		return "jit: x86-64 W^X code pages: the PLATFORM PROBE FAILED (a canary page "
+		       "could not be reserved, published and executed here) -- JIT disabled for "
+		       "this run; the uop cache is the engine. Linux VERIFIED; macOS/Windows "
+		       "UNVERIFIED by design, which is why the probe exists.";
+	}
+	return "jit: x86-64 W^X code pages: mmap RW -> write -> mprotect RX (platform probe "
+	       "PASSED at init). "
+	       "Linux VERIFIED (this build); macOS MAP_JIT/Apple Silicon UNVERIFIED "
+	       "(pthread_jit_write_protect_np is NOT used); Windows UNVERIFIED. "
+	       "aarch64 has no backend: compiled out (V86C_JIT_X64=0).";
+}
+
+void jit_stats_print(void)
+{
+	fprintf(stderr,
+	        "jit: pages alloc %llu, blocks compiled %llu (live %llu), lookups %llu "
+	        "(hits %llu, misses %llu), execs %llu, invalidations %llu, deferred frees %llu, "
+	        "W^X flips %llu, pool exhausted %llu\n",
+	        (unsigned long long)jit_stats.pages_alloc,
+	        (unsigned long long)jit_stats.blocks_compiled,
+	        (unsigned long long)jit_stats.blocks_live,
+	        (unsigned long long)jit_stats.lookups,
+	        (unsigned long long)jit_stats.hits,
+	        (unsigned long long)jit_stats.misses,
+	        (unsigned long long)jit_stats.execs,
+	        (unsigned long long)jit_stats.invalidations,
+	        (unsigned long long)jit_stats.deferred_frees,
+	        (unsigned long long)jit_stats.wx_flips,
+	        (unsigned long long)jit_stats.lowmem_failures);
+}
+
+/* JIT-6: the platform probe, defined after jit_page_alloc_run/jit_page_recycle (it uses
+ * both); jit_mem_init calls it before the pool is handed out. */
+static void jit_platform_probe(void);
+
+bool jit_mem_init(void)
+{
+	/* JIT-6F: after a FAILED probe jit_ready stays true (it goes up before the probe so the
+	 * probe can use the pool's own entry points), so a second call must not answer "true"
+	 * for a JIT that this process disabled -- return the probe's verdict, not the init flag.
+	 * (No live caller re-inits: main.c gates on jit_enabled, which it clears on failure.) */
+	if (jit_ready) return jit_probe_ok;
+
+	/* the shared dirty-page bitmap and the invalidation entry point are the uop cache's
+	 * (jit_mem.h): without them this layer has no write hook at all, so initializing it is
+	 * a PRECONDITION and not an optimization.  CPU-the-cache-off case is refused here. */
+	if (!uop_cache_init()) {
+		fprintf(stderr, "jit: the uop cache could not be initialized; --jit needs it "
+		                "(it owns the shared dirty-page bitmap). JIT off.\n");
+		return false;
+	}
+	if (!uop_cache_enabled) {
+		fprintf(stderr, "jit: --jit needs the uop cache's invalidation hooks; "
+		                "--uop-cache off was also given. JIT off.\n");
+		return false;
+	}
+
+	jit_pages = (jit_cpage_t *)calloc(JIT_CODE_PAGES, sizeof(jit_cpage_t));
+	jit_blocks = (jit_block_t *)calloc(JIT_MAX_BLOCKS, sizeof(jit_block_t));
+	jit_hash = (uint16_t *)calloc(JIT_HASH_SLOTS, sizeof(uint16_t));
+	jit_page_count = mem8_alloc_size() >> 12;
+	if (jit_page_count == 0) jit_page_count = 1;
+	jit_page_head = (uint16_t *)calloc(jit_page_count, sizeof(uint16_t));
+	if (jit_pages == NULL || jit_blocks == NULL || jit_hash == NULL || jit_page_head == NULL) {
+		/* NO SILENT STUB: report, free, refuse. */
+		fprintf(stderr, "jit: out of memory: the executable-memory pool is not built\n");
+		free(jit_pages); free(jit_blocks); free(jit_hash); free(jit_page_head);
+		jit_pages = NULL; jit_blocks = NULL; jit_hash = NULL; jit_page_head = NULL;
+		return false;
+	}
+
+	/* ONE mmap for the whole pool, RW.  Allocating JIT_CODE_PAGES separate mappings would work
+	 * too and would cost that many VMAs; a single mapping keeps the transitions page-local. */
+	size_t total = (size_t)JIT_CODE_PAGES << 12;
+	uint8_t *pool = (uint8_t *)mmap(NULL, total, PROT_READ | PROT_WRITE,
+	                                MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if (pool == MAP_FAILED) {
+		fprintf(stderr, "jit: mmap(%zu, RW) failed: %s\n", total, strerror(errno));
+		free(jit_pages); free(jit_blocks); free(jit_hash); free(jit_page_head);
+		jit_pages = NULL; jit_blocks = NULL; jit_hash = NULL; jit_page_head = NULL;
+		return false;
+	}
+
+	for (uint32_t i = 0; i < JIT_CODE_PAGES; i++) {
+		jit_pages[i].base = pool + ((size_t)i << 12);
+		jit_pages[i].state = JP_FREE;
+		jit_pages[i].block = 0;
+		jit_pages[i].npages = 0;
+	}
+	jit_stats.pages_alloc = 0;
+
+	/* THE PLATFORM PROBE (the plan's ss7 step 8 first item).  The W^X sequence this whole
+	 * layer rests on -- mmap RW, write bytes, mprotect RX, CALL the result -- is verified on
+	 * Linux and NOT on macOS/Windows (see jit_mem.h's caveats): the probe runs it once,
+	 * HERE, before the run trusts it.  Any failure leaves jit_probe_ok false: jit_mem_init
+	 * returns false and the JIT is disabled for the run (main.c keeps the machine on the uop
+	 * cache) -- never a silent attempt at an untested path.  (The flag goes up FIRST: the
+	 * probe allocates and publishes through the pool's own entry points, which gate on it.) */
+	jit_ready = true;
+	jit_platform_probe();
+	/* JIT-6F: the probe reserved and recycled one page through jit_page_alloc_run, which
+	 * COUNTS the allocation while jit_page_recycle does not uncount it -- so a fresh run
+	 * reported "pages alloc 1" for a pool holding nothing.  Zero the counter here: it counts
+	 * the pages the RUN has taken, and after a successful probe the run has taken none.
+	 * (On the failure path it does not matter -- the JIT is off.) */
+	jit_stats.pages_alloc = 0;
+	if (!jit_probe_ok) return false;
+	return true;
+}
+
+void jit_mem_shutdown(void)
+{
+	if (!jit_ready) return;
+	/* the pool itself is left mapped: unmapping executable memory while a caller might hold
+	 * a pointer to it is a use-after-free waiting to happen, and the process is exiting. */
+	jit_ready = false;
+	jit_enabled = false;
+}
+
+/* M2: A CONTIGUOUS RUN of `npages` free pages -- contiguity is required because a published
+ * block is ONE function and the substrate's pool is ONE mapping, so consecutive page indices
+ * ARE consecutive addresses (jit_mem_init).  The scan is linear over the pool and runs once per
+ * COMPILED BLOCK (decode-time work, ~740 times for the benchmark), which is why it does not
+ * need a free list: the spike's stack could not answer "is there a run of N" anyway. */
+static uint32_t jit_page_alloc_run(uint32_t npages)
+{
+	if (!jit_ready || npages == 0) return JIT_PAGE_NONE;
+	for (uint32_t start = 0; start + npages <= JIT_CODE_PAGES; start++) {
+		uint32_t k = 0;
+		while (k < npages && jit_pages[start + k].state == JP_FREE) k++;
+		if (k < npages) {
+			start += k; /* the first non-free page cannot begin a run */
+			continue;
+		}
+		for (k = 0; k < npages; k++) {
+			jit_pages[start + k].state = JP_RW;
+			jit_pages[start + k].block = 0;
+			jit_pages[start + k].npages = 0;
+		}
+		jit_pages[start].npages = (uint16_t)npages;
+		jit_stats.pages_alloc += npages;
+		return start;
+	}
+	jit_stats.lowmem_failures++;
+	return JIT_PAGE_NONE;
+}
+
+uint8_t *jit_code_reserve(void)
+{
+	uint32_t idx = jit_page_alloc_run(1);
+	return idx == JIT_PAGE_NONE ? NULL : jit_pages[idx].base;
+}
+
+uint8_t *jit_code_reserve_span(uint32_t len)
+{
+	uint32_t npages = (len + JIT_CODE_PAGE_BYTES - 1u) / JIT_CODE_PAGE_BYTES;
+	uint32_t idx;
+	if (npages > JIT_CODE_PAGES) return NULL;
+	idx = jit_page_alloc_run(npages);
+	return idx == JIT_PAGE_NONE ? NULL : jit_pages[idx].base;
+}
+
+/* index of the page a pointer belongs to, or JIT_PAGE_NONE.  Pointer arithmetic on the pool's
+ * own mapping: no lookup table needed, and it is exact. */
+static uint32_t jit_page_of_ptr(const uint8_t *buf)
+{
+	if (!jit_ready || jit_pages[0].base == NULL) return JIT_PAGE_NONE;
+	uint8_t *base = jit_pages[0].base;
+	if (buf < base || buf >= base + ((size_t)JIT_CODE_PAGES << 12)) return JIT_PAGE_NONE;
+	size_t off = (size_t)(buf - base);
+	return (uint32_t)(off >> 12);
+}
+
+/* the span recycler, used by the failure paths BELOW it as well as by the drop paths above
+ * (JIT-FIX-1 should-fix 3: a refused reservation must go back to the pool) */
+static void jit_page_recycle(uint32_t idx);
+
+uint8_t *jit_code_publish(uint8_t *buf, uint32_t len)
+{
+	if (!jit_ready) return NULL;
+	uint32_t idx = jit_page_of_ptr(buf);
+	if (idx == JIT_PAGE_NONE) {
+		fprintf(stderr, "jit: publish: %p is not in the code pool\n", (void *)buf);
+		return NULL;
+	}
+	if (jit_pages[idx].state != JP_RW) {
+		fprintf(stderr, "jit: publish: code page %u is not writable\n", idx);
+		return NULL;
+	}
+	if (((uint32_t)(buf - jit_pages[idx].base) != 0) ||
+	    jit_pages[idx].npages != (len + JIT_CODE_PAGE_BYTES - 1u) / JIT_CODE_PAGE_BYTES) {
+		fprintf(stderr, "jit: publish: %u bytes do not match the span reserved at page %u\n",
+		        len, idx);
+		/* the reservation is RW and the caller gets NULL back, so nothing owns it: recycle
+		 * it here or it is unreachable (JIT-FIX-1 should-fix 3; see jit_cache_bind's block
+		 * comment for the ownership rule).  The caller's retry, if it makes one, gets a
+		 * clean "not writable" from the NEXT publish rather than writing into a page that
+		 * may have been handed to someone else. */
+		jit_page_recycle(idx);
+		return NULL;
+	}
+	if (mprotect(jit_pages[idx].base, (size_t)jit_pages[idx].npages * JIT_CODE_PAGE_BYTES,
+	             PROT_READ | PROT_EXEC) != 0) {
+		/* NO SILENT STUB: the caller is told it may not execute this span.  mprotect is
+		 * atomic per call, so the pages are STILL RW and unowned -- recycle them (same
+		 * rule) rather than leaving the span unusable forever. */
+		fprintf(stderr, "jit: mprotect(RX) on code page %u failed: %s\n", idx,
+		        strerror(errno));
+		jit_page_recycle(idx);
+		return NULL;
+	}
+	for (uint32_t k = 0; k < jit_pages[idx].npages; k++) {
+		jit_pages[idx + k].state = JP_RX;
+	}
+	jit_stats.wx_flips++;
+	return buf;
+}
+
+/* recycle a SPAN (its head page): RX -> RW (or DEFER when it is the executing span). */
+static void jit_page_recycle(uint32_t idx)
+{
+	uint32_t npages = jit_pages[idx].npages ? jit_pages[idx].npages : 1;
+	uint32_t k;
+
+	if (jit_pages[idx].state == JP_FREE) return;
+
+	if (idx == jit_cur_page) {
+		/* THE RUNNING PAGE.  Flipping it to RW while its own bytes are being executed is
+		 * undefined (the CPU may be midway through an instruction fetch there), so the
+		 * recycle is DEFERRED to jit_block_exit.  This is the substrate's answer to
+		 * upstream's jit_dirty_cache_small/smc-bail split. */
+		jit_pages[idx].state = JP_DEFER;
+		jit_stats.deferred_frees++;
+		return;
+	}
+	if (jit_pages[idx].state == JP_RX) {
+		if (mprotect(jit_pages[idx].base, (size_t)npages * JIT_CODE_PAGE_BYTES,
+		             PROT_READ | PROT_WRITE) != 0) {
+			fprintf(stderr, "jit: mprotect(RW) on code page %u failed: %s\n", idx,
+			        strerror(errno));
+			return; /* leak the span rather than hand out memory that may still be RX */
+		}
+		jit_stats.wx_flips++;
+	}
+	for (k = 0; k < npages; k++) {
+		jit_pages[idx + k].state = JP_FREE;
+		jit_pages[idx + k].block = 0;
+		jit_pages[idx + k].npages = 0;
+	}
+}
+
+/* the uop cache's own mixing function (src/cpu/uop_cache.c's uop_hash_pos) -- the key parity
+ * jit_mem.h claims is a fact, kept as one by construction */
+/* THE PLATFORM PROBE.  Reserve a page, write a canary (`mov eax, 0x2A5A; ret`), publish it
+ * (the W^X flip) and EXECUTE it -- the execute is the part no amount of mprotect success can
+ * prove, and it is exactly what an untested platform could get wrong.  The probe's page is
+ * recycled afterwards, so the pool the run sees is pristine.  V86C_JIT_PROBE_FAIL=1 forces
+ * the failure arm: the diagnostic hook the gate uses to prove the failure path (JIT
+ * disabled, machine still correct) is a TESTED one. */
+static void jit_platform_probe(void)
+{
+	jit_probe_ok = false;
+	if (getenv("V86C_JIT_PROBE_FAIL") != NULL) {
+		fprintf(stderr, "jit: platform probe: FORCED to fail (V86C_JIT_PROBE_FAIL) -- the "
+		                "failure path under test\n");
+		return;
+	}
+	uint32_t idx = jit_page_alloc_run(1);
+	if (idx == JIT_PAGE_NONE) {
+		fprintf(stderr, "jit: platform probe: no page could be reserved for the canary\n");
+		return;
+	}
+	uint8_t *canary = jit_pages[idx].base;
+	canary[0] = 0xB8; /* mov eax, imm32 */
+	canary[1] = 0x5A;
+	canary[2] = 0x2A;
+	canary[3] = 0x00;
+	canary[4] = 0x00;
+	canary[5] = 0xC3; /* ret */
+	if (jit_code_publish(canary, 6) == canary) {
+		int v = ((int (*)(void))(void *)canary)();
+		jit_probe_ok = (v == 0x2A5A);
+		if (!jit_probe_ok)
+			fprintf(stderr, "jit: platform probe: the canary ran but returned %#x, "
+			                "not 0x2a5a\n", v);
+	}
+	else {
+		fprintf(stderr, "jit: platform probe: mprotect(RX) would not publish the canary "
+		                "page\n");
+	}
+	jit_page_recycle(idx);
+}
+
+static inline uint32_t jit_hash_pos(uint32_t phys, uint32_t virt, uint8_t state)
+{
+	uint32_t h = phys * 0x9E3779B1u + virt * 0x85EBCA6Bu + ((uint32_t)state + 1u) * 0xC2B2AE35u;
+	h ^= h >> 15;
+	return h & (JIT_HASH_SLOTS - 1u);
+}
+
+/* JIT-6: the hash's TEST IDENTITY (jit_selftest's chain-key gate searches a colliding decoy
+ * slot with it).  An exported alias, not a copy: a copy would go silent if the mixing
+ * function ever changed and the gate would lose its tooth without anything noticing. */
+uint32_t jit_test_hash(uint32_t phys, uint32_t virt, uint8_t state)
+{
+	return jit_hash_pos(phys, virt, state);
+}
+
+bool jit_cache_bind(uint32_t phys_start, uint32_t virt_start, uint8_t state,
+                    uint8_t *code, uint32_t len)
+{
+	if (!jit_ready) return false;
+	uint32_t idx = jit_page_of_ptr(code);
+	if (idx == JIT_PAGE_NONE || jit_pages[idx].state != JP_RX) {
+		fprintf(stderr, "jit: bind: the code pointer is not a published page\n");
+		return false;
+	}
+
+	uint32_t id = 0;
+	for (; id < JIT_MAX_BLOCKS; id++) {
+		if (!jit_blocks[id].live) break;
+	}
+	/* WHO OWNS THE SPAN WHEN THIS FUNCTION FAILS (JIT-FIX-1 should-fix 3).  The states are
+	 * not interchangeable, so the answer is per-path rather than "always recycle":
+	 *
+	 *   a published span this call was going to own, with the bind refused
+	 *         -> RECYCLE.  jit_cache_bind is the ONLY writer of a page's block, of the hash
+	 *            and of the guest-page list, so an RX page with block == 0 is unreachable:
+	 *            nothing can look it up, invalidate it or ever hand it out again.  It is a
+	 *            leak, and a bounded one -- JIT_CODE_PAGES/2 of these (measured) drain the
+	 *            pool.  MEASURED on the 1.5 G boot: the block table reaches its 2048 blocks
+	 *            and every later decode that reaches bind leaked a span, until the pool was
+	 *            gone (the boot's stderr is the "table is full" line, ~1000 times).
+	 *   a page that ALREADY carries a live block
+	 *         -> DO NOT RECYCLE.  That page is owned, by that block.  Recycling it would free
+	 *            a page a live block is executing from -- the one failure shape here that is
+	 *            worse than a leak.  (Reachable only by binding one code page twice, which no
+	 *            caller does.)
+	 * The two early checks above are the same story: a pointer outside the pool, or a page
+	 * that is not RX, is a span the CALLER still holds (an unpublished RW reservation it may
+	 * still write to and publish), so this function must not take it away. */
+	if (id == JIT_MAX_BLOCKS) {
+		fprintf(stderr, "jit: bind: the block table is full (%u)\n", JIT_MAX_BLOCKS);
+		jit_page_recycle(idx);
+		return false;
+	}
+	if (jit_pages[idx].block != 0) {
+		fprintf(stderr, "jit: bind: code page %u already carries a live block\n", idx);
+		return false; /* owned by that block -- see the block comment above */
+	}
+	if (jit_pages[idx].npages != (len + JIT_CODE_PAGE_BYTES - 1u) / JIT_CODE_PAGE_BYTES) {
+		fprintf(stderr, "jit: bind: the span at page %u does not match the block\n", idx);
+		jit_page_recycle(idx);
+		return false;
+	}
+
+	jit_block_t *b = &jit_blocks[id];
+	b->phys_start = phys_start;
+	b->virt_start = virt_start;
+	b->state = state;
+	b->code_page = idx;
+	b->len = len;
+	b->live = 1;
+	/* EVERY page of the span carries the owner, so jit_page_of_ptr's answer for a pointer
+	 * into the middle of a block still names the block (jit_block_enter is given the head,
+	 * but the identification must not depend on that). */
+	for (uint32_t k = 0; k < jit_pages[idx].npages; k++) {
+		jit_pages[idx + k].block = (uint16_t)(id + 1u);
+	}
+
+	uint32_t slot = jit_hash_pos(phys_start, virt_start, state);
+	for (uint32_t n = 0; n < JIT_HASH_SLOTS; n++) {
+		if (jit_hash[slot] == 0) break;
+		slot = (slot + 1u) & (JIT_HASH_SLOTS - 1u);
+	}
+	b->hash_slot = (uint16_t)slot;
+	jit_hash[slot] = (uint16_t)(id + 1u);
+	jit_pages[idx].block = (uint16_t)(id + 1u);
+
+	/* THE GUEST-PAGE REGISTRY (the list a write walks) AND THE SHARED DIRTY-PAGE BIT (jit_mem.h
+	 * point 1): the page a compiled block covers is marked in the UOP CACHE's bitmap, so the
+	 * PERF-FIX-3 write sites' inlined test takes the slow arm for it.  These two are the whole
+	 * of "the JIT's pages are watched" -- an unlinked registry entry would leave the block
+	 * reachable from the hash and would NOT be dropped by a guest write. */
+	uint32_t gpage = phys_start >> 12;
+	if (gpage < jit_page_count) {
+		b->next_page = jit_page_head[gpage];
+		jit_page_head[gpage] = (uint16_t)(id + 1u);
+	}
+	else {
+		fprintf(stderr, "jit: bind: physical page %u is outside the guest's memory\n", gpage);
+		b->live = 0;
+		jit_hash[slot] = 0;
+		for (uint32_t k = 0; k < jit_pages[idx].npages; k++) jit_pages[idx + k].block = 0;
+		jit_page_recycle(idx); /* same rule: this call refused the span, so it keeps nothing */
+		return false;
+	}
+	if (gpage < uop_page_code_len) uop_page_code[gpage] = 1;
+
+	jit_stats.blocks_compiled++;
+	jit_stats.blocks_live++;
+	return true;
+}
+
+uint8_t *jit_cache_lookup(uint32_t phys_start, uint32_t virt_start, uint8_t state)
+{
+	if (!jit_ready) return NULL;
+	jit_stats.lookups++;
+	uint32_t slot = jit_hash_pos(phys_start, virt_start, state);
+	for (uint32_t n = 0; n < JIT_HASH_SLOTS; n++) {
+		uint16_t v = jit_hash[slot];
+		if (v == 0) break;                     /* only an EMPTY slot ends the probe */
+		if (v != JIT_HASH_DEAD) {
+			jit_block_t *b = &jit_blocks[v - 1];
+			if (b->live && b->phys_start == phys_start && b->virt_start == virt_start
+			    && b->state == state) {
+				jit_stats.hits++;
+				return jit_pages[b->code_page].base;
+			}
+		}
+		slot = (slot + 1u) & (JIT_HASH_SLOTS - 1u);
+	}
+	jit_stats.misses++;
+	return NULL;
+}
+
+/* JIT-6: BLOCK CHAINING.  See jit_mem.h for the contract; this is the run-path half.
+ *
+ * Called from a compiled block's chain stub (emitted by jit_codegen.c at the TAIL exit --
+ * the reference's loop tail: control flow left the block) with the guest registers and the
+ * pending count SPILLED by the caller and the new eip already in cpu->instruction_pointer.
+ * It finds the COMPILED block the tail target belongs to and, if there is one, does the two
+ * things the C dispatch would have done -- the executing-block bookkeeping and the key
+ * lookup -- and returns the target's chain ENTRY (its prologue-skipping second entry point).
+ * NULL means "no chain": the caller takes the normal TAIL exit and uop_run's C does
+ * everything, unchanged.
+ *
+ * WHY THE TRANSLATION IS THE CACHE READ, NOT A WALK.  uop_run's C tail calls get_phys_eip(),
+ * which on a same-page tail is a pure cache read of (last_virt_eip, eip_phys) and on a miss
+ * WALKS -- and a walk can fault, delivering #PF and discarding the batch.  The chain must
+ * reproduce exactly one of those two behaviours, never both (a fallback after a
+ * fault-delivering walk would run the walk twice and deliver the fault twice).  So the chain
+ * takes ONLY the cache-hit arm -- which is the hot arm, a same-page backward branch -- and
+ * bails to the C tail on a miss, where the walk-and-fault contract runs once, exactly as
+ * before.  A hit here returns by construction the same physical address get_phys_eip()
+ * would have returned. */
+uint8_t *jit_chain_target(void)
+{
+	if (!jit_ready) return NULL;
+
+	uint32_t virt = (uint32_t)cpu->instruction_pointer;
+	if ((virt & ~0xFFFu) != (uint32_t)cpu->last_virt_eip) return NULL;
+	uint32_t phys = (uint32_t)cpu->eip_phys ^ virt;
+	uint8_t state = (uint8_t)(cpu->state_flags & CACHED_MASK_ALL);
+
+	/* The same probe jit_cache_lookup does, inlined so the STATS match the dispatch it
+	 * replaces: uop_run's per-iteration lookup bumped uop_stats.lookups/hits, and those
+	 * counters are the staircase instrument -- a chain that silently stopped counting
+	 * lookups would be indistinguishable from a dispatch change.  jit_stats.lookups stays
+	 * untouched: it counts COMPILE-time lookups. */
+	uop_stats.lookups++;
+	uint32_t slot = jit_hash_pos(phys, virt, state);
+	for (uint32_t n = 0; n < JIT_HASH_SLOTS; n++) {
+		uint16_t v = jit_hash[slot];
+		if (v == 0) break;                 /* only an EMPTY slot ends the probe */
+		if (v != JIT_HASH_DEAD) {
+			jit_block_t *b = &jit_blocks[v - 1];
+			if (b->live && b->phys_start == phys && b->virt_start == virt
+			    && b->state == state) {
+				uop_stats.hits++;
+				/* THE ENTER DISCIPLINE, PER LINK (jit_mem.h): the deferred recycle and
+				 * the SMC abort both read jit_cur_page/jit_cur_block, so the block the
+				 * chain moves execution INTO must become the recorded executing block
+				 * here -- otherwise a write to ITS page mid-run would recycle it (or
+				 * miss the abort) while it is the one executing. */
+				jit_cur_page = b->code_page;
+				jit_cur_block = v - 1u;
+				jit_codegen_stats.chains++;
+				return jit_pages[b->code_page].base + b->chain_off;
+			}
+		}
+		slot = (slot + 1u) & (JIT_HASH_SLOTS - 1u);
+	}
+	return NULL;
+}
+
+/* JIT-6: publish the chain entry's offset for the block that was just bound.  Kept out of
+ * jit_cache_bind's signature so the substrate's public API (and its selftest's callers) do
+ * not move: the compiler calls this AFTER a successful bind, and the page's own back-pointer
+ * finds the block.  A refused compile has nothing bound and this is never called. */
+void jit_chain_bind(const uint8_t *code, uint32_t entry_off)
+{
+	if (!jit_ready) return;
+	uint32_t idx = jit_page_of_ptr(code);
+	if (idx == JIT_PAGE_NONE) return;
+	uint16_t owner = jit_pages[idx].block;
+	if (owner == 0) return; /* nothing bound at this page: nothing to publish onto */
+	jit_blocks[owner - 1].chain_off = entry_off;
+}
+
+/* drop one block: unlink it from the hash and give its code page back.
+ *
+ * THE GUEST-PAGE REGISTRY IS NOT TOUCHED HERE, and that is exact rather than lazy: this layer's
+ * only drop path is jit_code_invalidate_page below, which unlinks the page's WHOLE list and then
+ * drops each block, so a per-block unlink from the list is never the operation being performed.
+ * (A single-block eviction -- an LRU or a re-compile -- would need it; this substrate has no
+ * such path, and stating that is cheaper than a list walk with no caller.) */
+static void jit_block_drop(jit_block_t *b)
+{
+	if (b->hash_slot < JIT_HASH_SLOTS) jit_hash[b->hash_slot] = JIT_HASH_DEAD;
+	b->live = 0;
+	b->next_page = 0;
+	jit_stats.blocks_live--;
+	jit_page_recycle(b->code_page);
+}
+
+void jit_code_invalidate_page(uint32_t phys_addr)
+{
+	static int dbg;
+	if (!jit_ready) return;
+	if (dbg < 12 && getenv("JITDBG")) {
+		dbg++;
+		fprintf(stderr, "jitdbg: invalidate phys %08x page %u head %u cur_page %u\n", phys_addr,
+		        phys_addr >> 12, jit_page_head[phys_addr >> 12],
+		        (unsigned)(jit_cur_page == JIT_PAGE_NONE ? 9999 : jit_cur_page));
+	}
+
+	uint32_t gpage = phys_addr >> 12;
+	if (gpage >= jit_page_count) return;
+
+	uint16_t idp = jit_page_head[gpage];
+	if (idp == 0 && jit_cur_block == JIT_PAGE_NONE) return;
+
+	/* the abort first, and unconditionally: the write may be anywhere in the page the
+	 * executing block's code came from (over-aborting is correct, just less fast) */
+	if (jit_cur_block != JIT_PAGE_NONE && jit_blocks[jit_cur_block].phys_start >> 12 == gpage) {
+		jit_abort_flag = 1;
+	}
+
+	jit_page_head[gpage] = 0;
+	while (idp != 0) {
+		jit_block_t *b = &jit_blocks[idp - 1];
+		idp = b->next_page;
+		b->next_page = 0;
+		if (b->live) jit_block_drop(b);
+		jit_stats.invalidations++;
+	}
+	/* NOTE: the shared bitmap bit is NOT cleared here.  uop_cache.c owns that bitmap and
+	 * clears it on the same write, for both registries at once (its idp == 0 arm); a second
+	 * owner clearing it could unwatch a page that still holds a DECODED block, which is the
+	 * one way this layer could weaken the restored PERF-FIX-3 hooks. */
+}
+
+void jit_code_invalidate_range(uint32_t phys_addr, uint32_t length)
+{
+	if (!jit_ready || length == 0) return;
+	uint32_t first = phys_addr >> 12;
+	uint32_t last = (phys_addr + length - 1u) >> 12;
+	for (uint32_t p = first; p <= last; p++) {
+		if (p >= jit_page_count) break;
+		if (jit_page_head[p] != 0) jit_code_invalidate_page(p << 12);
+	}
+}
+
+/* DROP EVERY COMPILED BLOCK (jit_mem.h) -- the uop cache's clear calls this, because that
+ * clear zeroes the shared dirty-page bitmap the compiled blocks are watched through. */
+void jit_code_clear_all(void)
+{
+	if (!jit_ready) return;
+	for (uint32_t id = 0; id < JIT_MAX_BLOCKS; id++) {
+		if (jit_blocks[id].live) jit_block_drop(&jit_blocks[id]);
+	}
+	/* the guest-page registry and the hash go with them: every block was unlinked from the
+	 * hash and its page recycled, so a leftover per-page list would be dangling */
+	memset(jit_hash, 0, (size_t)JIT_HASH_SLOTS * sizeof jit_hash[0]);
+	memset(jit_page_head, 0, (size_t)jit_page_count * sizeof jit_page_head[0]);
+	jit_stats.blocks_live = 0;
+}
+
+void jit_block_enter(uint8_t *code)
+{
+	jit_stats.execs++;
+	uint32_t idx = jit_page_of_ptr(code);
+	if (idx == JIT_PAGE_NONE) {
+		fprintf(stderr, "jit: enter: %p is not in the code pool\n", (void *)code);
+		jit_cur_block = JIT_PAGE_NONE;
+		jit_cur_page = JIT_PAGE_NONE;
+		return;
+	}
+	jit_cur_page = idx;
+	/* THE CODE PAGE'S OWN BACK-POINTER (jit_cpage_t.block, maintained by bind and recycle).
+	 * The spike searched the block table linearly here, which was defensible at 256 blocks and
+	 * is not at 2048: this runs on EVERY compiled block execution. */
+	uint16_t owner = jit_pages[idx].block;
+	jit_cur_block = owner != 0 ? (uint32_t)(owner - 1) : JIT_PAGE_NONE;
+}
+
+bool jit_block_exit(void)
+{
+	uint32_t page = jit_cur_page;
+	jit_cur_page = JIT_PAGE_NONE;
+	jit_cur_block = JIT_PAGE_NONE;
+
+	if (page != JIT_PAGE_NONE && jit_pages[page].state == JP_DEFER) {
+		jit_pages[page].state = JP_RX; /* it was never flipped; recycle the span now */
+		jit_page_recycle(page);
+	}
+	bool abort = jit_abort_flag != 0;
+	jit_abort_flag = 0;
+	return abort;
+}
+
+bool jit_abort_pending(void)
+{
+	return jit_abort_flag != 0;
+}
+
+#else /* !V86C_JIT_X64 -- THE aarch64 / any-other-arch POSTURE (jit_mem.h) */
+
+/* the flag exists on every architecture (jit_mem.h): nothing reads it here, because nothing
+ * emits a block, but a symbol referenced from a guarded-out call site must still exist */
+uint8_t jit_abort_flag;
+
+
+const char *jit_mem_caps(void)
+{
+	return "jit: no x86-64 backend on this architecture (V86C_JIT_X64=0): the executable-"
+	       "memory substrate is compiled out and the uop cache is the engine.";
+}
+
+void jit_stats_print(void)
+{
+	fprintf(stderr, "jit: compiled out on this architecture (V86C_JIT_X64=0)\n");
+}
+
+bool jit_mem_init(void)
+{
+	fprintf(stderr, "jit: not supported on this architecture (x86-64 only); "
+	                "the uop cache remains the engine. JIT off.\n");
+	jit_enabled = false;
+	return false;
+}
+
+void jit_mem_shutdown(void) {}
+uint8_t *jit_code_reserve(void) { return NULL; }
+/* JIT-FIX-1: this stub was MISSING, and the header declares the function unconditionally
+ * (jit_mem.h:164), so the first caller -- jit_selftest.c's refused-bind gate -- failed to
+ * LINK on aarch64 while the x86-64 half of the fat binary built fine.  Found by the selftest,
+ * not by reading: `make jit-selftest` under cosmocc links BOTH architectures. */
+uint8_t *jit_code_reserve_span(uint32_t len) { (void)len; return NULL; }
+uint8_t *jit_code_publish(uint8_t *buf, uint32_t len) { (void)buf; (void)len; return NULL; }
+bool jit_cache_bind(uint32_t p, uint32_t v, uint8_t s, uint8_t *c, uint32_t l)
+{
+	(void)p; (void)v; (void)s; (void)c; (void)l;
+	return false;
+}
+uint8_t *jit_cache_lookup(uint32_t p, uint32_t v, uint8_t s)
+{
+	(void)p; (void)v; (void)s;
+	return NULL;
+}
+void jit_code_invalidate_page(uint32_t phys_addr) { (void)phys_addr; }
+void jit_code_invalidate_range(uint32_t phys_addr, uint32_t length)
+{
+	(void)phys_addr; (void)length;
+}
+/* nothing is ever compiled here, so there is nothing to drop (jit_mem.h) */
+void jit_code_clear_all(void) {}
+
+/* JIT-6: chaining needs no aarch64 half (nothing emits blocks, so no stub is ever called);
+ * the symbols exist because the guarded-out call sites must link (the jit_code_reserve_span
+ * lesson, above). */
+uint8_t *jit_chain_target(void) { return NULL; }
+void jit_chain_bind(const uint8_t *code, uint32_t entry_off)
+{
+	(void)code; (void)entry_off;
+}
+uint32_t jit_test_hash(uint32_t phys, uint32_t virt, uint8_t state)
+{
+	(void)phys; (void)virt; (void)state;
+	return 0;
+}
+
+void jit_block_enter(uint8_t *code) { (void)code; }
+bool jit_block_exit(void) { return false; }
+bool jit_abort_pending(void) { return false; }
+
+#endif /* V86C_JIT_X64 */

@@ -1,0 +1,37 @@
+# Tests the differential run does not compare, with the measured reason.
+# Format: NAME<2+ spaces>REASON   ('#' starts a comment; every entry is printed in
+# the gate's summary and in results/p0-oracle-scaffold.md).
+#
+# This is an ANNOTATION, not a hiding place: `make nasm` prints every entry with
+# its reason and counts it, and the unfiltered run (all 123 tests) is archived in
+# results/p0-nasm-refrun-raw.txt. Run unfiltered with:
+#     python3 tests/nasm_run.py --stage run --skip-list /dev/null
+#
+# Every entry below is a gap of the JS REFERENCE leg, never of the port:
+#   class A - the pinned npm package is the RELEASE build, and there
+#     cpu_exception_hook is DEBUG-gated (v86/src/rust/cpu/cpu.rs:2441, 2505, 3431,
+#     3444, 3457, 3469). The #DE/#UD the guest takes is therefore delivered
+#     straight into the (absent) IDT and the release wasm panics
+#     "Unimplemented: #GP handler" (cpu.rs:819): no state to compare at all.
+#     Upstream's own suite runs the DEBUG build (v86/tests/nasm/run.js:10-11);
+#     that build needs java/closure-compiler and a wasm32 rust target, neither of
+#     which this host has.
+#   class B - the reference never takes the fault the hardware takes, so it
+#     reports no exception (either it halts anyway, or it keeps executing) where
+#     the gdb fixture has a signal.
+# A leg that can check these is the C port (M1c owns the exception path): run it
+# with its own --skip-list, since these reasons do not apply to it.
+
+# --- class A: reference panics, no state produced (5) ---
+idiv8-overflow  reference panics "Unimplemented: #GP handler" (#DE -> empty IDT, hook DEBUG-gated)
+idiv16-overflow  reference panics "Unimplemented: #GP handler" (#DE -> empty IDT, hook DEBUG-gated)
+idiv32-overflow  reference panics "Unimplemented: #GP handler" (#DE -> empty IDT, hook DEBUG-gated)
+mov_sreg_ud1  reference panics "Unimplemented: #GP handler" (#UD -> empty IDT, hook DEBUG-gated)
+mov_sreg_ud2  reference panics "Unimplemented: #GP handler" (#UD -> empty IDT, hook DEBUG-gated)
+
+# --- class B: reference takes no fault (5) ---
+jump  reference reports no exception and never halts (MEASURED: keeps executing at eip 0x42b001, past the 2 MiB RAM; fixture: SIGSEGV at 0x2404c7)
+maskmovdqu  reference reports no exception and halts at 0x80078 (fixture: SIGSEGV at 0x80055)
+maskmovq  reference reports no exception and halts at 0x8006e (fixture: SIGSEGV at 0x8004f)
+pop_esp  reference reports no exception and halts at 0x8002f (fixture: SIGSEGV at 0x80023)
+pop_esp2  reference reports no exception and halts at 0x80026 (fixture: SIGSEGV at 0x80023)

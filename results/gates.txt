@@ -1,0 +1,56 @@
+=== G1: make oracle  (from scratch: no build/) ===
+python3 tests/model.py --out results/expected.json > /dev/null
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.txt
+python3 tests/check_transcript.py results/expected.json results/transcript.txt
+check_transcript: transcript matches tests/model.py (8 GPRs, EFLAGS, EIP, 561 instructions, 4096-byte window sha256)
+G1 RC=0
+
+=== G2: make determinism ===
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.run1.txt
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.run2.txt
+diff -u results/transcript.run1.txt results/transcript.run2.txt
+determinism: two consecutive oracle runs are byte-identical
+G2 RC=0
+
+=== G4: make (cosmocc APE, from scratch) ===
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -o build/v86c src/main.c
+G4 make RC=0
+-rwxr-xr-x. 1 jaye jaye 599140 Oct 11 21:31 build/v86c
+0000000   M   Z   q   F   p   D   =   '  \n  \n  \0 020  \0 370  \0  \0
+od: write error: Broken pipe
+v86c M0 -- v86-to-C port (scaffold; the CPU core is not implemented yet)
+scope: x86 PC emulator, interpreter only, 386-level instructions
+non-goals: JIT, wasm, multicore, 64-bit mode, sound, NE2K, floppy, modem, 9p
+usage: ./build/v86c <image> <instruction-limit>
+       (no arguments prints this banner)
+G4 run RC=0
+
+=== expected vs transcript (model) ===
+{
+  "cpu": {
+    "eflags": "0x00000046",
+    "eip": "0x00100119",
+    "gpr": {
+      "eax": "0x10203040",
+      "ebp": "0x00102000",
+      "ebx": "0x0f0f00f1",
+      "ecx": "0x00000010",
+      "edi": "0x00000010",
+      "edx": "0x00000000",
+      "esi": "0xc487eb71",
+      "esp": "0x00102000"
+    }
+  },
+  "instruction_count": 561,
+  "memory_window": {
+    "address": "0x00101000",
+    "bytes": 4096,
+    "sha256": "9b4639eca15ccfca5c91cb48bc6ae3fc1dd2826fc86c88ee290eaeb16fc4d6fb"
+  }
+}
+
+=== host tools ===
+v26.8.1
+cosmocc (GCC) 14.1.0
+Python 3.13.14
+GNU assembler (GNU Binutils; openSUSE Tumbleweed) 2.45.0.20251103-4

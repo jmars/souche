@@ -1,0 +1,280 @@
+===================================================================
+R4F GATES -- unit R4F (G0 repair + N1/N2/N3)
+every block below is raw output from this tree, with the command and its exit code
+===================================================================
+make   (bring ./build/v86c up to date with the tree before anything else runs)
+rc=0
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1891 implemented, 31 unimplemented, 1895 names defined (unchanged)
+===================================================================
+G3a  rm -rf /tmp/r4f-build; make BUILD=/tmp/r4f-build   (a from-scratch compile of every TU)
+rc=0
+--- diagnostics (compile lines removed; empty = clean under -Wall -Wextra -Werror):
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1891 implemented, 31 unimplemented, 1895 names defined (unchanged)
+--- the CPU objects built (count): 16
+===================================================================
+G3b  make selftest
+rc=0
+PASS instr: read-modify-write across a page boundary (virt_boundary), no write on a fault, the string slow path's partial effects
+PASS instr: the non-MMX/SSE 0F table -- cpuid, mov cr/dr, sldt/str, the 01 group and invlpg, setcc, cmovcc (incl. its fault), bt/bts/btr/btc, bsf/bsr, cmpxchg, xadd, bswap, shld/shrd, popcnt, movzx/movsx, imul, push/pop fs/gs, lss, the 0F AE group, cmpxchg8b, hadd/hsub, clts and the undefined encodings
+PASS instr: the MMX/SSE 0F groups -- the x87 aliasing transition, the mov/movmask/shuffle family, the integer group's wraps and saturations, the shift clamps, the comparisons, the conversions and the fault surface
+PASS fpu: the tag/status/control words, TOP, push/pop and both stack-fault paths
+PASS fpu: softfloat conversions -- f32/f64/i32/i64 round trips (the ABI claim), the F80 constants and the arithmetic operators
+PASS fpu: fstenv32/fldenv32, fsave32/frstor32 and FXSAVE/FXRSTOR round trips (incl. the #gp on an invalid mxcsr)
+PASS fpu: rounding modes, precision control, the result/exception status bits, the integer stores and fprem/fbstp/f2xm1/fsqrt
+cpu_selftest: 3522 checks, 0 failures
+===================================================================
+G3c  make nasm   (baseline before this unit: 118/118, 5 skipped -- no delta)
+rc=0
+[+] Passed 118/118 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+[~] Skipped 5 test(s) (tests/nasm_skip_c.txt):
+	jump: src/cpu/cpu.c:83: assert(!in_mapped_range(phys_addr)) failed -- the fixture's jump reaches a region v86's flat 2 MiB memory model maps differently (P0 class B, the same model gap as pop_esp); unchanged since M1a-4
+===================================================================
+G3c'  make nasm-js   (the REFERENCE leg, same repaired comparison: 113/113, 10 documented skips)
+rc=0
+[+] Passed 113/113 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 10 were skipped (/home/jaye/futaie/souche/tests/nasm_skip.txt).
+===================================================================
+G3d  make transcript-diff   (the M0 contract: the diff must be EMPTY)
+rc=0
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.js.txt
+diff -u results/transcript.js.txt results/transcript.c.txt
+milestone: the C transcript is byte-identical to the reference's
+===================================================================
+the emitter census (unchanged: 1922 call sites / 1891 implemented / 31 unimplemented)
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1891 implemented, 31 unimplemented, 1895 names defined (unchanged)
+rc=0
+===================================================================
+G0/G1/G2  sh results/r4f-g0.sh
+(the loaded reproduction: branch reachability over the real fixtures, then ONE MMX mutation)
+-------------------------------------------------------------------
+G2 -- WHICH BRANCH EACH CORPUS TEST TAKES (results/r4f-branch-count.py)
+   (the fixtures are the ones the gate reads: build/nasm/*.fixture)
+ucomiss                0xFFFF6AAA st       st      
+
+tests: 123
+tests taking the mm (MMX-register) branch, run.js:423 predicate : 0
+tests taking the mm (MMX-register) branch, repaired predicate   : 7
+tests whose branch CHANGED (unreachable -> reachable)            : 7
+   full table: build/r4f-probe/branch-count.txt
+-------------------------------------------------------------------
+G1 -- THE ASYMMETRY (one MMX mutation, applied alone, then restored)
+pristine src/cpu/instructions_0f.c sha256=f96c03b4ee64b7ada33a81987e3dc2809e68198629918618884cc82059d6d823
+MUTATION APPLIED (instr_0F60, the MMX punpcklbw body):
+  -  result.u8[2*i+0] = destination.u8[i];  result.u8[2*i+1] = src.u8[i];
+  +  result.u8[2*i+0] = src.u8[i];          result.u8[2*i+1] = destination.u8[i];
+
+MUTATED: make nasm (all other files pristine; the oracle is the repaired one)
+  rc=2
+[+] Passed 117/118 tests.
+[-] Failed 1 test(s).
+[-] punpcklbw.img:
+  the failing test's reported field(s) -- the mm branch is what can name them:
+    	mm0.int32[1]
+    	Actual:   0xffffff
+    	Expected: 0xffffff00
+    	mm1.int32[0]
+    	Actual:   0xff000000
+    	Expected: 0xff
+
+RESTORED (byte-identical?)
+  sha256=f96c03b4ee64b7ada33a81987e3dc2809e68198629918618884cc82059d6d823
+  byte-identical: YES
+
+RESTORED: make nasm
+  rc=0
+  [+] Passed 118/118 tests.
+
+raw: build/r4f-probe/{branch-count,m5-mutated,pristine}.txt
+rc=0
+===================================================================
+G2'  THE GATE ITSELF TAKING THE MM ARM -- an instrumented copy of tests/nasm_run.py
+the copy is /tmp/nasm_run_instr.py: the tree's runner with a print at the mm branch and
+HERE repointed at the tree.  Every line below is the repaired gate EVALUATING the mm
+comparison for a real corpus test.
+[mm-branch] cvtps2pi
+[mm-branch] packuswb
+[mm-branch] pcmpgtb
+[mm-branch] punpcklbw
+[mm-branch] punpckldq
+[mm-branch] punpcklwd
+[mm-branch] pxor
+[+] Passed 118/118 tests.
+===================================================================
+G4-N3  sh results/r4f-n3.sh   (the reviewed pre-fix fpu.c rebuilt as the BEFORE side)
+pre-fix fpu.c sha256 == the sha R4's review recorded: 5987fa5cf0c4323bc323d7b56d108145ee28d3d239bd813d9aba0b427042a096
+-------------------------------------------------------------------
+PROBE IMAGES
+  MODE=0      44 bytes  sha256=18531f5fb02c5e2b
+  MODE=1      52 bytes  sha256=dbe55b4558cdf653
+  MODE=2      52 bytes  sha256=0f3c75edbe9947da
+  MODE=3      52 bytes  sha256=1225d850d1ea94b4
+-------------------------------------------------------------------
+BINARIES
+  before (pre-fix fpu.c): 8adaadedb9cdc80a
+  after  (the tree):      f811e592ff21592c
+-------------------------------------------------------------------
+THE RUNS  (MODE=1/3 are the misaligned operands; MODE=2/0 are the controls)
+
+MODE=0
+  before : rc=0    stop=none
+  after  : rc=0    stop=none
+  reference: rc=0  C transcript vs reference: IDENTICAL
+  eip/instruction count  : C  eip=0x0010002c instructions=4
+                           ref eip=0x0010002c instructions=4
+  C leg rc=0
+
+MODE=1
+  before : rc=134  stop=build/r4f-probe/fpu.prefix.c:1152: [31;1massert((addr & 0xF) == 0) failed[0m (cosmoaddr2line /home/jay
+  after  : rc=0    stop=none
+  reference: rc=0  C transcript vs reference: IDENTICAL
+  eip/instruction count  : C  eip=0x00100034 instructions=6
+                           ref eip=0x00100034 instructions=6
+  C leg rc=0
+
+MODE=2
+  before : rc=0    stop=none
+  after  : rc=0    stop=none
+  reference: rc=0  C transcript vs reference: IDENTICAL
+  eip/instruction count  : C  eip=0x00100034 instructions=6
+                           ref eip=0x00100034 instructions=6
+  C leg rc=0
+
+MODE=3
+  before : rc=134  stop=build/r4f-probe/fpu.prefix.c:1186: [31;1massert((addr & 0xF) == 0) failed[0m (cosmoaddr2line /home/jay
+  after  : rc=0    stop=none
+  reference: rc=0  C transcript vs reference: IDENTICAL
+  eip/instruction count  : C  eip=0x00100034 instructions=6
+                           ref eip=0x00100034 instructions=6
+  C leg rc=0
+-------------------------------------------------------------------
+raw transcripts: build/r4f-probe/{c,js}.<mode>.txt
+rc=0
+===================================================================
+G4-N2  the header now names the ENGINE's own SmallFloat types (softfloat.c:566,601,665,666)
+v86/lib/softfloat/softfloat.c:397:typedef struct { uint32_t v; } float32_t;
+v86/lib/softfloat/softfloat.c:398:typedef struct { uint64_t v; } float64_t;
+src/cpu/softfloat.h:25: *     typedef struct { uint32_t v; } float32_t;
+src/cpu/softfloat.h:26: *     typedef struct { uint64_t v; } float64_t;
+src/cpu/softfloat.h:72:typedef struct { uint32_t v; } float32_t; /* softfloat.c:397 */
+src/cpu/softfloat.h:73:typedef struct { uint64_t v; } float64_t; /* softfloat.c:398 */
+src/cpu/softfloat.h:32: * why upstream's Rust FFI can declare `fn f32_to_extF80M(src: i32)` and
+src/cpu/softfloat.h:33: * `fn extF80M_to_f32(...) -> i32` and get away with it (softfloat.rs:24-27).  The C port
+src/cpu/softfloat.h:90:void f32_to_extF80M(float32_t src, f80_t *out); /* softfloat.c:566, :16183 */
+src/cpu/softfloat.h:91:void f64_to_extF80M(float64_t src, f80_t *out); /* softfloat.c:601, :18965 */
+src/cpu/softfloat.h:92:float32_t extF80M_to_f32(const f80_t *x);       /* softfloat.c:665, :24424 */
+src/cpu/softfloat.h:93:float64_t extF80M_to_f64(const f80_t *x);       /* softfloat.c:666, :24538 */
+
+===================================================================
+G4-N1  python3 results/r4f-cites.py   (the citation invariant, re-derived from ./v86)
+citations with a block beneath them: 177
+  start inside the block's upstream span        : 107
+  start in the 12-line preamble above it (helper): 70
+  MISPOINTED (>12 lines away)                   : 0
+  the largest preamble case: line 256, cited 282, block starts 291 (d=-9)
+rc=0
+===================================================================
+G4-N1'  the corrections as DATA re-derived from ./v86 (results/r4f-cites-fix.py)
+each entry names the upstream functions a citation heads; the range is DERIVED from
+v86/src/rust/cpu/instructions_0f.rs.  --list prints all 73:
+  287  derived 312-326      instr16_0F01_7_reg, instr32_0F01_7_reg, instr16_0F01_7_mem, instr32_0F01_7_mem
+  320  derived 417-431      instr_0F06, instr_0F07
+  332  derived 433-436      instr_0F08
+  335  derived 438-448      instr_0F09, instr_0F0A
+  347  derived 449-454      instr_0F0B, instr_0F0C
+  352  derived 456-463      instr_0F0D, instr_0F0E, instr_0F0F
+  431  derived 727-751      instr_0F20
+  458  derived 753-779      instr_0F21
+  479  derived 781-829      instr_0F22
+  525  derived 831-864      instr_0F23, instr_0F24, instr_0F25, instr_0F26 +1 more
+  560  derived 1359-1362    instr_0F33
+  564  derived 1425-1428    instr_0F37
+  577  derived 1446-1573    instr16_0F40_mem, instr16_0F40_reg, instr32_0F40_mem, instr32_0F40_reg +60 more
+  585  derived 1446-1573    instr16_0F40_mem, instr16_0F40_reg, instr32_0F40_mem, instr32_0F40_reg +60 more
+  850  derived 3004-3015    instr_0F78, instr_0F79, instr_0F7A, instr_0F7B +2 more
+  860  derived 3018-3094    instr_660F7C, instr_660F7C_reg, instr_660F7C_mem, instr_F20F7C +8 more
+  946  derived 3162-3193    instr16_0F80, instr32_0F80, instr16_0F81, instr32_0F81 +28 more
+ 1003  derived 3195-3226    instr_0F90_reg, instr_0F90_mem, instr_0F91_reg, instr_0F91_mem +28 more
+ 1063  derived 3228-3254    instr16_0FA0, instr32_0FA0, instr16_0FA1, instr32_0FA1
+ 1107  derived 3256-3419    instr_0FA2
+ 1260  derived 3420-3423    instr16_0FA3_reg, instr16_0FA3_mem, instr32_0FA3_reg, instr32_0FA3_mem
+ 1266  derived 3424-3453    instr16_0FA4_mem, instr16_0FA4_reg, instr32_0FA4_mem, instr32_0FA4_reg +4 more
+ 1302  derived 3455-3460    instr_0FA6, instr_0FA7
+ 1306  derived 3461-3487    instr16_0FA8, instr32_0FA8, instr16_0FA9, instr32_0FA9
+ 1342  derived 3489-3492    instr_0FAA
+ 1345  derived 3494-3504    instr16_0FAB_reg, instr16_0FAB_mem, instr32_0FAB_reg, instr32_0FAB_mem
+ 1357  derived 3505-3534    instr16_0FAC_mem, instr16_0FAC_reg, instr32_0FAC_mem, instr32_0FAC_reg +4 more
+ 1392  derived 3536-3599    instr_0FAE_0_reg, instr_0FAE_0_mem, instr_0FAE_1_reg, instr_0FAE_1_mem +12 more
+ 1412  derived 3544-3558    instr_0FAE_2_reg, instr_0FAE_2_mem
+ 1432  derived 3560-3599    instr_0FAE_3_reg, instr_0FAE_3_mem, instr_0FAE_4_reg, instr_0FAE_4_mem +6 more
+ 1490  derived 3600-3617    instr16_0FAF_mem, instr16_0FAF_reg, instr32_0FAF_mem, instr32_0FAF_reg
+ 1510  derived 3620-3626    instr_0FB0_reg, instr_0FB0_mem, instr16_0FB1_reg, instr16_0FB1_mem +2 more
+ 1519  derived 3629-3635    instr16_0FB2_reg, instr16_0FB2_mem, instr32_0FB2_reg, instr32_0FB2_mem
+ 1535  derived 3637-3647    instr16_0FB3_reg, instr16_0FB3_mem, instr32_0FB3_reg, instr32_0FB3_mem
+ 1621  derived 3697-3700    instr_0FB9
+ 1625  derived 3701-3740    instr16_0FBA_4_reg, instr16_0FBA_4_mem, instr16_0FBA_5_reg, instr16_0FBA_5_mem +12 more
+ 1648  derived 3742-3752    instr16_0FBB_reg, instr16_0FBB_mem, instr32_0FBB_reg, instr32_0FBB_mem
+ 1660  derived 3753-3788    instr16_0FBC_mem, instr16_0FBC_reg, instr32_0FBC_mem, instr32_0FBC_reg +4 more
+ 1691  derived 3806-3812    instr_0FC0_mem, instr_0FC0_reg, instr16_0FC1_mem, instr16_0FC1_reg +2 more
+ 1701  derived 3971-4018    instr16_0FC7_1_reg, instr32_0FC7_1_reg, instr16_0FC7_1_mem, instr32_0FC7_1_mem +2 more
+ 1754  derived 4021-4035    instr_0FC8, instr_0FC9, instr_0FCA, instr_0FCB +4 more
+ 1765  derived 5296-5300    instr_0FFF
+ 2006  derived 547-552      instr_660F12_reg, instr_660F12_mem
+ 2036  derived 568-580      instr_F30F12, instr_F30F12_reg, instr_F30F12_mem
+ 3306  derived 2258-2289    instr_0F61, instr_0F61_reg, instr_0F61_mem, instr_660F61 +2 more
+ 3346  derived 2291-2319    instr_0F62, instr_0F62_reg, instr_0F62_mem, instr_660F62 +2 more
+ 3377  derived 2321-2352    instr_0F63, instr_0F63_reg, instr_0F63_mem, instr_660F63 +2 more
+ 3417  derived 2354-2383    instr_0F64, instr_0F64_reg, instr_0F64_mem, instr_660F64 +2 more
+ 3455  derived 2385-2414    instr_0F65, instr_0F65_reg, instr_0F65_mem, instr_660F65 +2 more
+ 3493  derived 2416-2447    instr_0F66, instr_0F66_reg, instr_0F66_mem, instr_660F66 +2 more
+ 3530  derived 2449-2480    instr_0F67, instr_0F67_reg, instr_0F67_mem, instr_660F67 +2 more
+ 3570  derived 2482-2513    instr_0F68, instr_0F68_reg, instr_0F68_mem, instr_660F68 +2 more
+ 3610  derived 2515-2542    instr_0F69, instr_0F69_reg, instr_0F69_mem, instr_660F69 +2 more
+ 3649  derived 2544-2570    instr_0F6A, instr_0F6A_reg, instr_0F6A_mem, instr_660F6A +2 more
+ 3680  derived 2572-2603    instr_0F6B, instr_0F6B_reg, instr_0F6B_mem, instr_660F6B +2 more
+ 3820  derived 2676-2684    instr_660F6F, instr_660F6F_reg, instr_660F6F_mem
+ 3829  derived 2685-2692    instr_F30F6F, instr_F30F6F_reg, instr_F30F6F_mem
+ 4124  derived 2904-2933    instr_0F74, instr_0F74_reg, instr_0F74_mem, instr_660F74 +2 more
+ 4160  derived 2935-2965    instr_0F75, instr_0F75_reg, instr_0F75_mem, instr_660F75 +2 more
+ 4197  derived 2967-2996    instr_0F76, instr_0F76_reg, instr_0F76_mem, instr_660F76 +2 more
+ 4260  derived 3114-3117    instr_660F7E_reg, instr_660F7E_mem
+ 4272  derived 3118-3126    instr_F30F7E_mem, instr_F30F7E_reg
+ 4501  derived 4037-4665    instr_0FD0, instr_0FD1, instr_0FD1_reg, instr_0FD1_mem +138 more
+ 5537  derived 4895         instr_0FF0
+ 5558  derived 4916-4933    instr_0FF2, instr_0FF2_reg, instr_0FF2_mem, instr_660FF2 +2 more
+ 5576  derived 4935-4952    instr_0FF3, instr_0FF3_reg, instr_0FF3_mem, instr_660FF3 +2 more
+ 5594  derived 4954-4977    instr_0FF4, instr_0FF4_reg, instr_0FF4_mem, instr_660FF4 +2 more
+ 5624  derived 4979-5011    instr_0FF5, instr_0FF5_reg, instr_0FF5_mem, instr_660FF5 +2 more
+ 5670  derived 5013-5044    instr_0FF6, instr_0FF6_reg, instr_0FF6_mem, instr_660FF6 +2 more
+ 5842  derived 5147-5178    instr_0FFA, instr_0FFA_reg, instr_0FFA_mem, instr_660FFA +2 more
+ 5878  derived 5180-5201    instr_0FFB, instr_0FFB_reg, instr_0FFB_mem, instr_660FFB +2 more
+ 5906  derived 5203-5232    instr_0FFC, instr_0FFC_reg, instr_0FFC_mem, instr_660FFC +2 more
+ 5942  derived 5234-5263    instr_0FFD, instr_0FFD_reg, instr_0FFD_mem, instr_660FFD +2 more
+rc=0
+===================================================================
+G4-N1''  the ASYMMETRY: the table applied to the REVIEWED PRE-FIX artifact
+results/r4f-instructions_0f-prefix.c.gz is the file R4 reviewed (sha256
+154dea68bb7f114a1e0218b96ef06cedf3ab52b4971380fd98792b36489638fe == the sha this tree
+carried at the start of unit R4F); the table applied to it must reproduce the
+corrected file BYTE FOR BYTE:
+  stored pre-fix sha256: 154dea68bb7f114a1e0218b96ef06cedf3ab52b4971380fd98792b36489638fe
+applied to /tmp/tmph5a__5d1/instructions_0f.prefix.c: 73 citation(s) rewritten, 0 already correct
+result is BYTE-IDENTICAL to the corrected src/cpu/instructions_0f.c
+rc=0
+===================================================================
+the N1 edit changed COMMENT TEXT ONLY (the comment-stripped source is byte-identical)
+before/after line counts: 6013 6013
+comment-stripped differences: NONE
+===================================================================
+FILES TOUCHED BY THIS UNIT (sha256)
+c686938eff622b9e0fff17ee923bfe52aac0a0e12fd714fdd23efde5ee98ee5b  tests/nasm_run.py
+f96c03b4ee64b7ada33a81987e3dc2809e68198629918618884cc82059d6d823  src/cpu/instructions_0f.c
+28d9208bbe0a48ecd05537a3a535ef5484c586bc09b53ad28930a526920ac28d  src/cpu/softfloat.h
+f4b65eae57b48bb78e68190d9242337c2598839477d48a14f29bde9a6a89bd8b  src/cpu/softfloat.c
+1ce9bbe8696b737ed70e6f2e89ca6b99e36f6e280b8c2dc239f712c5856ad822  src/cpu/fpu.c
+48cf4cc5c53c1f477855e436d4e900581af7b475d4aaaa758cdc47ef509bb3ca  tests/nasm_skip_c.txt
+--- NOT touched (verified unchanged against the shas the earlier units/reviews recorded):
+  fpu.c BEFORE this unit: 5987fa5cf0c4323bc323d7b56d108145ee28d3d239bd813d9aba0b427042a096 (= R4's reviewed sha, stored as results/r4f-fpu-prefix.c.gz)
+  softfloat.h BEFORE:     4535bb390f29ab959f6560b693ad58fdff3afa850d2d27080935db0b4038b897 (= R4's reviewed sha)
+  tests/nasm_skip_c.txt:  48cf4cc5c53c1f477855e436d4e900581af7b475d4aaaa758cdc47ef509bb3ca (unchanged; no count moved)
+  v86/: READ-ONLY, never written

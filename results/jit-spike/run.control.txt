@@ -1,0 +1,8 @@
+  block: 15 bytes published and executed, sum(8) = 92
+  stale-block probe: block dropped on the guest write, the executor's re-compile ran the new immediate (0x22)
+  deferred recycle: page not flipped under the executing block, reused after exit
+jit: publish: 0x7ffd16902da0 is not in the code pool
+jit: publish: code page 3 is not writable
+  refusals: pool exhausted after 253 pages, reported 1 time(s)
+jit-selftest: 29 checks, 0 failures
+jit: pages alloc 258, blocks compiled 3 (live 1), lookups 3 (hits 1, misses 2), execs 3, invalidations 2, deferred frees 1, W^X flips 259, pool exhausted 1

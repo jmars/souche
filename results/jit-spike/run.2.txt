@@ -1,0 +1,2 @@
+  block: 15 bytes published and executed, sum(8) = 92
+FAIL src/cpu/jit_selftest.c:339: page2 == NULL

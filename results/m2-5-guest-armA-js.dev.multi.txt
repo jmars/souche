@@ -1,0 +1,19 @@
+      1 ata1.00: 131072 sectors, multi 0: LBA48 
+      1 ata1.00: ATA-0: v86 ATA HD, 1.00, max MWDMA2
+      1 ata1: PATA max MWDMA2 cmd 0x1f0 ctl 0x3f6 bmdma 0xb400 irq 14 lpm-pol 0
+      1 ata2.00: ATAPI: v86 ATAPI CD-ROM, 1.00, max MWDMA2
+      1 ata2: PATA max MWDMA2 cmd 0x170 ctl 0x376 bmdma 0xb408 irq 15 lpm-pol 0
+      1 EXT4-fs (sda): mounted filesystem <uuid> r/w without journal. Quota mode: disabled.
+      1 fx> fx-init: boot-ok v3
+      1 fx-init: boot start store /fx/store
+      1 fx-init: disk store mounted (current v3)
+      1 fx-init: pivoted to tmpfs root (magic 0x1021994)
+      1 fx-init: store from kernel command line fx.store=/fx/store
+      1 Run /fx/store/54ce1971a82e89d78a83e3f805893b4e1651d714c62e69fda2c711ff8d3f2b69-fx-init/fx-init as init process
+      1 scsi 0:0:0:0: Direct-Access ATA v86 ATA HD n/a PQ: 0 ANSI: 5
+      1 scsi 1:0:0:0: CD-ROM SONY CD-ROM CDU-1000 1.1a PQ: 0 ANSI: 1 CCS
+      1 sd 0:0:0:0: [sda] 131072 512-byte logical blocks: (67.1 MB/64.0 MiB)
+      1 sd 0:0:0:0: [sda] Attached SCSI disk
+      1 sd 0:0:0:0: [sda] Preferred minimum I/O size 512 bytes
+      1 sd 0:0:0:0: [sda] Write cache: disabled, read cache: enabled, doesn't support DPO or FUA
+      1 sd 0:0:0:0: [sda] Write Protect is off

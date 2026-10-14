@@ -1,0 +1,30 @@
+=== make nasm (cache ON) + transcript-diff ===
+=== snapshot ===
+602f887d1c6045ccca718af81162975fc8bebc1e687245612ac3a34ab8c4049c  src/cpu/uop_cache.c
+5ed5786fb9f2d211b6620c0d7d81efadc6bfb8846b6df56422647de65da28d76  src/cpu/memory.c
+0d6900dcac7d09d5c29b77082f0d9bf4ba9db8d95692361dcaaa99b05149d8b3  src/cpu/instructions.c
+ef5d937b804acca12a3aed7c6fc29499112964bc1d3a27d4334e464bc46c1a2d  src/cpu/uop_exec_selftest.c
+
+=== make transcript-diff ===
+./build/v86c tests/test.img 1000000 > results/transcript.c.txt
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.js.txt
+diff -u results/transcript.js.txt results/transcript.c.txt
+milestone: the C transcript is byte-identical to the reference's
+
+=== make nasm (cache ON, the default) ===
+Testing ret-imm.img
+Testing shufps-edgecase.img
+Testing ucomiss.img
+
+[+] Passed 118/118 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+[~] Skipped 5 test(s) (tests/nasm_skip_c.txt):
+	jump: src/cpu/cpu.c:83: assert(!in_mapped_range(phys_addr)) failed -- the fixture's jump reaches a region v86's flat 2 MiB memory model maps differently (P0 class B, the same model gap as pop_esp); unchanged since M1a-4
+	maskmovdqu: P0 class B: the native fixture expects a #GP at 0x80055 where the port writes below the stack, but address 0 is plain guest RAM in v86's flat model, so neither the reference nor the port faults. MEASURED: the JS reference leg gives the port's exact actual eip/exception (0x80078 / None)
+	maskmovq: P0 class B: same as maskmovdqu (fixture #GP at 0x8004f, port and JS reference both report eip 0x8006e / no exception)
+	pop_esp: the native fixture expects a #GP at 0x80023 from a store to address 0; address 0 is plain guest RAM in v86's flat 2 MiB memory model, so neither the reference nor the port takes a fault (P0 class B) and the C leg halts instead -- the same emulator-model gap, not a port defect
+	pop_esp2: same as pop_esp: the fixture's SIGSEGV comes from the host MMU writing to address 0, which the emulator does not model (P0 class B)
+
+=== make nasm, cache OFF ===
+[+] Passed 118/118 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).

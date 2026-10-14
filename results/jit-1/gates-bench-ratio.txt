@@ -1,0 +1,3 @@
+jit off  best 2.405  median 2.494 s
+jit on   best 2.402  median 2.516 s
+ratio (off/on, >1 means the JIT is faster): best 1.001  median 0.991

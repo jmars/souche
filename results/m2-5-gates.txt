@@ -1,0 +1,210 @@
+### PINS (the inputs this gate is a claim about)
+  PASS  tests/images/vmlinuz-i386-v86guest sha256 f0278a8f2893eb93a8c857f3f2d5a589a5b9aa6a45033171bc5411fc10f658cd
+  PASS  tests/images/vmlinuz-i386-lean-control sha256 25be0d5358d9445712f6d04e59a7be9133acbd3f69ad0720a69e43d5ba844b3d
+  PASS  tests/images/guest-initramfs-v86gate.img sha256 d3a9e3eca9547577f9f62f2ed67919dfe060047114b0a781ecd37d1b2ea9c900
+  PASS  tests/images/disk.img sha256 f83dba09f75d2c0b205aa7f24be1dec2fb9e32fe9d9d7725205408a8e3f0758f
+  PASS  patterned disk, md5 of first 64 sectors 87d5ec3151caf04d90236947e6f09874
+  PASS  build/v86c present
+  PASS  build/minibios-80m.bin present
+### GATE 1b: qemu-system-x86_64 + KVM -- the fast pre-check for the SAME lines
+$ qemu-system-x86_64 -machine pc -m 80 -enable-kvm -no-reboot -display none \
+      -kernel tests/images/vmlinuz-i386-v86guest -initrd tests/images/guest-initramfs-v86gate.img -append 'console=hvc0 console=ttyS0 tsc=unstable idle=poll' \
+      -drive file=tests/images/disk.img,format=raw,if=ide \
+      -device virtio-serial-pci -device virtconsole,chardev=vc0 \
+      -chardev file,id=vc0,path=results/m2-5-qemu-virtio.txt -serial file:results/m2-5-qemu-serial.txt
+qemu-system-x86_64: terminating on signal 15 from pid 726090 (timeout)
+qemu rc=124 (124 = the timeout stopped an idle, halted machine, which is the
+          expected end: the guest halts itself at 'GUEST-INIT: end')
+--- the kernel's own lines (serial)
+    Kernel command line: console=hvc0 console=ttyS0 tsc=unstable idle=poll
+    printk: legacy console [ttyS0] enabled
+    virtio-pci 0000:00:04.0: found PCI INT A -> IRQ 11
+    printk: legacy console [hvc0] enabled
+    ata1: PATA max MWDMA2 cmd 0x1f0 ctl 0x3f6 bmdma 0xc080 irq 14 lpm-pol 0
+    ata2: PATA max MWDMA2 cmd 0x170 ctl 0x376 bmdma 0xc088 irq 15 lpm-pol 0
+    ata1: found unknown device (class 0)
+    ata1.00: ATA-7: QEMU HARDDISK, 2.5+, max UDMA/100
+    ata1.00: 8192 sectors, multi 16: LBA48 
+    ata2: found unknown device (class 0)
+    scsi 0:0:0:0: Direct-Access     ATA      QEMU HARDDISK    2.5+ PQ: 0 ANSI: 5
+    sd 0:0:0:0: [sda] 8192 512-byte logical blocks: (4.19 MB/4.00 MiB)
+    sd 0:0:0:0: [sda] Write Protect is off
+    sd 0:0:0:0: [sda] Write cache: enabled, read cache: enabled, doesn't support DPO or FUA
+    sd 0:0:0:0: [sda] Preferred minimum I/O size 512 bytes
+    ata2.00: ATAPI: QEMU DVD-ROM, 2.5+, max UDMA/100
+    scsi 1:0:0:0: CD-ROM            QEMU     QEMU DVD-ROM     2.5+ PQ: 0 ANSI: 5
+     sda: sda1
+    sd 0:0:0:0: [sda] Attached SCSI disk
+    GUEST-INIT: start, uname = 6.12.19
+    GUEST-INIT: cmdline = console=hvc0 console=ttyS0 tsc=unstable idle=poll
+    GUEST-INIT: dmesg, the kernel's own ATA/PCI/SCSI lines:
+    libata version 3.00 loaded.
+    virtio-pci 0000:00:04.0: found PCI INT A -> IRQ 11
+    ata1: PATA max MWDMA2 cmd 0x1f0 ctl 0x3f6 bmdma 0xc080 irq 14 lpm-pol 0
+    ata2: PATA max MWDMA2 cmd 0x170 ctl 0x376 bmdma 0xc088 irq 15 lpm-pol 0
+    ata1: found unknown device (class 0)
+    ata1.00: ATA-7: QEMU HARDDISK, 2.5+, max UDMA/100
+    ata1.00: 8192 sectors, multi 16: LBA48 
+    ata2: found unknown device (class 0)
+    scsi 0:0:0:0: Direct-Access     ATA      QEMU HARDDISK    2.5+ PQ: 0 ANSI: 5
+    GUEST-INIT: /sys/block: sda 
+    GUEST-INIT: /dev/sda: present
+    GUEST-INIT: /dev/sda1: present
+    GUEST-INIT: md5 of /dev/sda's first 64 sectors: 87d5ec3151caf04d90236947e6f09874
+    GUEST-INIT: /proc/filesystems ext4 entries: 1
+    GUEST-INIT: waited 0 round(s) for /dev/hvc0
+    GUEST-INIT: /dev/hvc*: /dev/hvc0 /dev/hvc1 /dev/hvc2 /dev/hvc3 /dev/hvc4 /dev/hvc5 /dev/hvc6 /dev/hvc7 
+    GUEST-INIT: /sys/bus/virtio/devices: virtio0 
+    GUEST-INIT: /proc/interrupts:
+     11:         26    XT-PIC      virtio0
+    GUEST-INIT: /proc/devices hvc entries: 1
+    GUEST-INIT: dmesg, the kernel's own virtio/console lines:
+    Kernel command line: console=hvc0 console=ttyS0 tsc=unstable idle=poll
+    printk: legacy console [ttyS0] enabled
+    virtio-pci 0000:00:04.0: found PCI INT A -> IRQ 11
+    printk: legacy console [hvc0] enabled
+    GUEST-INIT: read back from /dev/hvc0: []
+    GUEST-INIT: end
+    sd 0:0:0:0: [sda] Synchronizing SCSI cache
+--- assertions (the serial transcript)
+  PASS  the kernel's SCSI disk attach (sda)
+  PASS  /dev/sda is a block device
+  PASS  /dev/sda1 (the MBR's partition)
+  PASS  the pinned disk md5
+  PASS  the kernel enables the hvc0 console
+  PASS  the virtio device is on an interrupt line
+  PASS  the guest init completed
+--- the same kernel's log ARRIVING THROUGH the virtio console (1696 bytes)
+  PASS  hvc0 enabled, seen on the virtio stream
+  PASS  the sda line came out of the virtio console
+  PASS  no kernel panic
+### GATE 1a, C LEG: build/v86c
+$ ./build/v86c --bzimage tests/images/vmlinuz-i386-v86guest 3000000000 --cmdline 'console=hvc0 console=ttyS0 tsc=unstable idle=poll' --hda tests/images/disk.img \
+      --initrd tests/images/guest-initramfs-v86gate.img --bios build/minibios-80m.bin --memory 80 \
+      --virtio-console results/m2-5-c-virtio.txt --virtio-console-in tests/v86gate-virtio-in.txt \
+      --serial results/m2-5-c-serial.txt
+port rc=0
+    v86c boot: reset cs=0xf000 eip=0xffff0
+    v86c boot: 579728752 instructions, in_hlt=1, exception=-1, unimplemented=0, eip=0xc101acb2 cs=0x60 cr0=0x80050033 cr3=0x1d3000
+    v86c boot: virtio console: 1394 bytes out, 15 bytes in, 1466 chain bytes read, 191 chain bytes written (inbound handshake fired)
+--- assertions (the C leg)
+  PASS  libata identified the disk (ata1.00)
+  PASS  the kernel's SCSI disk attach (sda)
+  PASS  /dev/sda is a block device
+  PASS  /dev/sda1 (the MBR's partition)
+  PASS  the pinned disk md5, read through ATA
+  PASS  ext4 is registered (the chain is =y)
+  PASS  the kernel enables the hvc0 console
+  PASS  virtio0 has an XT-PIC interrupt line
+  PASS  the host->guest read-back through /dev/hvc0
+  PASS  the guest init completed
+  PASS  the guest halted ITSELF (the deterministic end)
+  PASS  no kernel panic
+--- assertions (the C leg's virtio console stream)
+  PASS  hvc0 enabled, seen on the virtio stream
+  PASS  the sda line came out of the virtio console
+### GATE 1a, REFERENCE LEG: node oracle/run-boot.mjs (the pinned v86)
+$ node oracle/run-boot.mjs tests/images/vmlinuz-i386-v86guest build/minibios-80m.bin 3000000000 'console=hvc0 console=ttyS0 tsc=unstable idle=poll' --hda tests/images/disk.img \
+      --initrd tests/images/guest-initramfs-v86gate.img --memory 80 --virtio-console results/m2-5-js-virtio.txt \
+      --virtio-console-in tests/v86gate-virtio-in.txt > results/m2-5-js-serial.txt
+reference rc=0
+    reference: memory 80 MiB, hda 4194304 bytes sha256 f83dba09f75d2c0b205aa7f24be1dec2fb9e32fe9d9d7725205408a8e3f0758f, initrd 915741 bytes
+    reference: reset eip=0xffff0 cs=0xf000
+    reference: {"instructions":580515118,"limit":3000000000,"in_hlt":1,"eip":"0xc101acb2","cr0":"0x80050033","cr3":"0x36c000","cs":"0x60","exception":null,"serial_bytes":10474,"virtio_console_bytes":1394,"virtio_console_in_sent":true}
+--- assertions (the reference leg)
+  PASS  libata identified the disk (ata1.00)
+  PASS  the kernel's SCSI disk attach (sda)
+  PASS  /dev/sda1 (the MBR's partition)
+  PASS  the pinned disk md5, read through ATA
+  PASS  the kernel enables the hvc0 console
+  PASS  virtio0 has an XT-PIC interrupt line
+  PASS  the host->guest read-back through /dev/hvc0
+  PASS  the guest init completed
+  PASS  the guest halted ITSELF (the deterministic end)
+  PASS  no kernel panic
+--- THE TWO LEGS' DEVICE LINES (timestamps stripped, m2-2's normalization)
+the leg diff: 34 lines (m2-3 named the v86 VGA model and
+the clock as this gate's only expected divergences)
+    74,77d73
+    < pci 0000:00:12.0: [1234:1111] type 00 class 0x030000 conventional PCI endpoint
+    < pci 0000:00:12.0: BAR 0 [mem 0xe0000000-0xe07fffff pref]
+    < pci 0000:00:12.0: ROM [mem 0xfebe0000-0xfebeffff pref]
+    < pci 0000:00:12.0: Video device with shadowed ROM at [mem 0x000c0000-0x000dffff]
+    87,89d82
+    < pci 0000:00:12.0: vgaarb: setting as boot VGA device
+    < pci 0000:00:12.0: vgaarb: bridge control possible
+    < pci 0000:00:12.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
+    120d112
+    < sd 0:0:0:0: [sda] Attached SCSI disk
+    121a114
+    > sd 0:0:0:0: [sda] Attached SCSI disk
+    137,140d129
+    < pci 0000:00:12.0: [1234:1111] type 00 class 0x030000 conventional PCI endpoint
+    < pci 0000:00:12.0: BAR 0 [mem 0xe0000000-0xe07fffff pref]
+    < pci 0000:00:12.0: ROM [mem 0xfebe0000-0xfebeffff pref]
+    < pci 0000:00:12.0: Video device with shadowed ROM at [mem 0x000c0000-0x000dffff]
+    149,151d137
+    < pci 0000:00:12.0: vgaarb: setting as boot VGA device
+    < pci 0000:00:12.0: vgaarb: bridge control possible
+    < pci 0000:00:12.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
+    167d152
+    < sd 0:0:0:0: [sda] Attached SCSI disk
+    168a154
+    > sd 0:0:0:0: [sda] Attached SCSI disk
+    179c165
+    <   0:        578    XT-PIC      timer
+    ---
+    >   0:        875    XT-PIC      timer
+    181c167
+    <   4:        213    XT-PIC      ttyS0
+    ---
+    >   4:        183    XT-PIC      ttyS0
+### FAILURE ARM: THE SAME GATE WITH THE PINNED LEAN CONTROL KERNEL
+### (fx-demo's web/bzImage -- no PCI, no ATA, no virtio: it CANNOT print this gate's lines)
+$ ./build/v86c --bzimage tests/images/vmlinuz-i386-lean-control 3000000000 --cmdline 'console=hvc0 console=ttyS0 tsc=unstable idle=poll' --hda tests/images/disk.img \
+      --initrd tests/images/guest-initramfs-v86gate.img --bios build/minibios-80m.bin --memory 80 \
+      --virtio-console results/m2-5-leanc-virtio.txt --virtio-console-in tests/v86gate-virtio-in.txt \
+      --serial results/m2-5-leanc-serial.txt
+port rc=0
+--- the lean control's own lines
+    Kernel command line: console=hvc0 console=ttyS0 tsc=unstable idle=poll
+    printk: legacy console [ttyS0] enabled
+    GUEST-INIT: start, uname = 6.12.19
+    GUEST-INIT: cmdline = console=hvc0 console=ttyS0 tsc=unstable idle=poll
+    GUEST-INIT: dmesg, the kernel's own ATA/PCI/SCSI lines:
+    GUEST-INIT: /sys/block: 
+    GUEST-INIT: /dev/sda: absent
+    GUEST-INIT: /dev/sda1: absent
+    GUEST-INIT: /proc/filesystems ext4 entries: 0
+    GUEST-INIT: waited 5000 round(s) for /dev/hvc0
+    GUEST-INIT: /dev/hvc*: 
+    GUEST-INIT: /sys/bus/virtio/devices: 
+    GUEST-INIT: /proc/interrupts:
+    GUEST-INIT: /proc/devices hvc entries: 0
+    GUEST-INIT: dmesg, the kernel's own virtio/console lines:
+    Kernel command line: console=hvc0 console=ttyS0 tsc=unstable idle=poll
+    printk: legacy console [ttyS0] enabled
+    GUEST-INIT: end
+--- assertions: the SAME gate lines must be ABSENT (the fail-before)
+  PASS  no libata line
+  PASS  no SCSI disk
+  PASS  /dev/sda is NOT a block device
+  PASS  the patterned disk is never read
+  PASS  no hvc0 console
+  PASS  no virtio interrupt line
+  PASS  no read-back through hvc0
+--- and the SAME init ran (the negative is a measurement, not a silence)
+  PASS  the gate's own init reached the disk probe
+  PASS  the gate's own init found no hvc device
+  PASS  the gate's own init completed
+### FAILURE ARM, REFERENCE LEG
+$ node oracle/run-boot.mjs tests/images/vmlinuz-i386-lean-control build/minibios-80m.bin 3000000000 'console=hvc0 console=ttyS0 tsc=unstable idle=poll' --hda tests/images/disk.img --initrd tests/images/guest-initramfs-v86gate.img \
+      --memory 80 --virtio-console results/m2-5-leanjs-virtio.txt \
+      --virtio-console-in tests/v86gate-virtio-in.txt > results/m2-5-leanjs-serial.txt
+reference rc=0
+  PASS  no SCSI disk (reference leg)
+  PASS  the patterned disk is never read (reference leg)
+  PASS  no hvc0 console (reference leg)
+  PASS  the same init ran (reference leg)
+
+### m2-5 slice-1 gate: 0 FAILING assertion(s)

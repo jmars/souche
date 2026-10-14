@@ -1,0 +1,8 @@
+$ ./build/v86c tests/test.img 1000 --jit on --uop-cache-stats  (stderr)
+v86c: jit: x86-64 W^X code pages: mmap RW -> write -> mprotect RX. Linux VERIFIED (this build); macOS MAP_JIT/Apple Silicon UNVERIFIED (pthread_jit_write_protect_np is NOT used); Windows UNVERIFIED. aarch64 has no backend: compiled out (V86C_JIT_X64=0).
+uop-cache: lookups 130 (hits 126 = 96.92%, decodes 4, decode-fails 0)
+uop-cache: instructions 561 (uops 561, mid-batch fallback steps 0, interpreted_run instructions 0 -> fallback 0.000%)
+$ ./build/v86c tests/test.img 1000                                     (stderr, default)
+$ ./build/v86c tests/test.img 1000 --jit off                           (stderr)
+$ ./build/v86c tests/test.img 1000 --uop-cache off --jit on            (stderr)
+jit: --jit needs the uop cache's invalidation hooks; --uop-cache off was also given. JIT off.

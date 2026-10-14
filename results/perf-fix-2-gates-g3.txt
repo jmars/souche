@@ -1,0 +1,48 @@
+=== G3(i) a PERTURBED WORKLOAD (--limit 199000000, 1 run): the guest stops elsewhere ===
+== perf_bench: G3 perturbed workload
+bin=build/v86c limit=199000000 kernel=tests/images/vmlinuz-i386 runs=1
+cores=32 load-before=11.32 14.74 13.90
+kernel=7.1.8-1-default cflags-host=cc (SUSE Linux) 16.2.0
+asserting: instruction count 200095214
+asserting: terminal guest state "in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0"
+asserting: serial output sha256 fae4924b13b07d441b0ad8458047d2f1d8abf0d1ec59876f44b88ef67d2d0b2a
+perf_bench: run 1 executed 199034351 instructions, expected 200095214
+perf_bench: what CHANGED is the instruction count: it is the batch boundary
+perf_bench: nearest the 199000000-instruction limit, and the guest reads the
+perf_bench: host-clock RTC in its timing loops, so a change here means the
+perf_bench: guest's execution path (not its results) moved.  The same pin
+perf_bench: caught M2's sti batch-count bug (200,095,212).
+perf_bench: the workload was not the same -- refusing to report a number
+rc=1
+
+=== G3(ii) a PERTURBED STATE PIN (the assertion itself) ===
+== perf_bench: G3 perturbed state pin
+bin=build/v86c limit=200000000 kernel=tests/images/vmlinuz-i386 runs=1
+cores=32 load-before=11.13 14.64 13.87
+kernel=7.1.8-1-default cflags-host=cc (SUSE Linux) 16.2.0
+asserting: instruction count 200095214
+asserting: terminal guest state "in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0xdeadbeef cr3=0x0"
+asserting: serial output sha256 fae4924b13b07d441b0ad8458047d2f1d8abf0d1ec59876f44b88ef67d2d0b2a
+perf_bench: run 1 terminal guest state differs
+perf_bench:   got      "in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0"
+perf_bench:   expected "in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0xdeadbeef cr3=0x0"
+perf_bench: THE GUEST-VISIBLE RESULT CHANGED -- this is the assertion that
+perf_bench: must never pass silently (eip/cs/cr0/cr3/in_hlt/exception).
+rc=1
+
+=== G3(iii) a PERTURBED COUNT PIN ===
+== perf_bench: G3 perturbed count pin
+bin=build/v86c limit=200000000 kernel=tests/images/vmlinuz-i386 runs=1
+cores=32 load-before=11.13 14.64 13.87
+kernel=7.1.8-1-default cflags-host=cc (SUSE Linux) 16.2.0
+asserting: instruction count 999
+asserting: terminal guest state "in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0"
+asserting: serial output sha256 fae4924b13b07d441b0ad8458047d2f1d8abf0d1ec59876f44b88ef67d2d0b2a
+perf_bench: run 1 executed 200095214 instructions, expected 999
+perf_bench: what CHANGED is the instruction count: it is the batch boundary
+perf_bench: nearest the 200000000-instruction limit, and the guest reads the
+perf_bench: host-clock RTC in its timing loops, so a change here means the
+perf_bench: guest's execution path (not its results) moved.  The same pin
+perf_bench: caught M2's sti batch-count bug (200,095,212).
+perf_bench: the workload was not the same -- refusing to report a number
+rc=1

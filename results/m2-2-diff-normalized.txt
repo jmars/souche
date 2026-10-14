@@ -1,0 +1,44 @@
+71c71
+< Console: colour EGA 80x25
+---
+> Console: colour dummy device 80x25
+141c141
+< audit: type=2000 audit(1791823226.676:1): state=initialized audit_enabled=0 res=1
+---
+> audit: type=2000 audit(1791823184.883:1): state=initialized audit_enabled=0 res=1
+164,174d163
+< pci 0000:00:12.0: [1234:1111] type 00 class 0x030000
+< pci 0000:00:12.0: BAR 0 [mem 0xe0000000-0xe07fffff pref]
+< pci 0000:00:12.0: ROM [mem 0xfebe0000-0xfebeffff pref]
+< pci 0000:00:12.0: Video device with shadowed ROM at [mem 0x000c0000-0x000dffff]
+< pci 0000:00:1e.0: [8086:7010] type 00 class 0x010180
+< pci 0000:00:1e.0: BAR 2 [io  0x0170-0x0177]
+< pci 0000:00:1e.0: BAR 4 [io  0xb400-0xb40f]
+< pci 0000:00:1e.0: BAR 0 [io  0x01f0-0x01f7]: legacy IDE quirk
+< pci 0000:00:1e.0: BAR 1 [io  0x03f6]: legacy IDE quirk
+< pci 0000:00:1e.0: BAR 2 [io  0x0170-0x0177]: legacy IDE quirk
+< pci 0000:00:1e.0: BAR 3 [io  0x0376]: legacy IDE quirk
+176,178d164
+< pci 0000:00:12.0: vgaarb: setting as boot VGA device
+< pci 0000:00:12.0: vgaarb: bridge control possible
+< pci 0000:00:12.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
+180a167
+> hrtimer: interrupt took 15500002 ns
+198a186
+> pci 0000:00:00.0: quirk_passive_release+0x0/0x90 took 15958 usecs
+199a188
+> pci 0000:00:00.0: quirk_natoma+0x0/0x40 took 14838 usecs
+200a190
+> pci 0000:00:01.0: quirk_isa_dma_hangs+0x0/0x50 took 15074 usecs
+222a213
+> input: AT Raw Set 2 keyboard as /devices/platform/i8042/serio0/input/input0
+224c215
+< rtc_cmos rtc_cmos: setting system clock to 2026-10-12T16:40:30 UTC (1791823230)
+---
+> rtc_cmos rtc_cmos: setting system clock to 2026-10-12T16:39:48 UTC (1791823188)
+227d217
+< input: AT Raw Set 2 keyboard as /devices/platform/i8042/serio0/input/input1
+234c224
+< sched_clock: Marking stable (7748082444, 26410338)->(7779299371, -4806589)
+---
+> sched_clock: Marking stable (131299741476, 1103787000)->(324948949000, -192545420524)

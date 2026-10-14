@@ -1,0 +1,2 @@
+#!/bin/sh
+exec /home/jaye/futaie/souche/build/v86c "$@" --jit off

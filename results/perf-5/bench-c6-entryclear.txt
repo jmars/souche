@@ -1,0 +1,14 @@
+== perf-5-ab: c5 vs c6-noentryclear  pairs=4
+load-before=16.93 12.98 10.64
+a    real 2.947s  instr=ok state=ok serial=ok
+b    real 2.951s  instr=ok state=ok serial=ok
+b    real 2.922s  instr=ok state=ok serial=ok
+a    real 2.933s  instr=ok state=ok serial=ok
+a    real 2.911s  instr=ok state=ok serial=ok
+b    real 2.926s  instr=ok state=ok serial=ok
+b    real 2.951s  instr=ok state=ok serial=ok
+a    real 2.939s  instr=ok state=ok serial=ok
+load-after=15.36 12.91 10.67
+c5         n=4 best 2.911 median 2.936 worst 2.947
+c6-noentryclear n=4 best 2.922 median 2.939 worst 2.951
+ratio c5/c6-noentryclear: best 1.0038x  median 1.0009x  (>1 means c6-noentryclear is slower)

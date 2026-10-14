@@ -1,0 +1,53 @@
+pre-fix generator sha256 == the sha the review recorded for gen/unity_c.py:
+  52346016517cdeb296e0900aca6e95b0dd9cd4be2cbed9579f86987abcb5cdce
+-------------------------------------------------------------------
+1. IN-UNIT COLLISIONS, shipped compiler (cosmocc (GCC) 14.1.0)
+  static fn + static fn (same signature): rc=1 -- build/pf-guard/ib.c:1:12: error: redefinition of 'f'
+  static fn + global fn (same signature): rc=1 -- build/pf-guard/ib.c:1:5: error: redefinition of 'g'
+  static obj + global tentative obj: rc=1 -- build/pf-guard/ib.c:1:5: error: non-static declaration of 'o' follows static declaration
+  static obj + global obj with initializer: rc=1 -- build/pf-guard/ib.c:1:12: error: static declaration of 'p' follows non-static declaration
+-------------------------------------------------------------------
+2. THE SILENT CLASS (the review's synthetic; per-TU works, unity silently rebinds)
+  unity TU (cpua.c + cpub.c): rc=0, NO diagnostic from the compiler
+  per-TU link (cpua.o cpub.o hwdef.o): ca=2 cb=1001   <- binds to the OUTSIDE global
+  unity   link (unitysynth.o hwdef.o): ca=2 cb=2   <- silently bound to the static
+-------------------------------------------------------------------
+3. THE OLD GUARD (the pre-fix generator, no --watch) ON THAT UNIT
+  rc=0 EMITTED  <- unity_c.py: 2 sources -> build/pf-guard/old.c
+-------------------------------------------------------------------
+4. THE REVIEW'S CHECK AS FORMULATED (defined-global parity only, --parity-only)
+unity_symbols.py: PARITY ONLY (PERF-1R's formulation): 2 per-TU / 2 unity defined globals, identical sets
+  rc=0 EMITTED  <- the parity alone does NOT see the rebind
+  (each side's defined-global set is exactly {ca, cb}: the shadowing lives on the
+   UNDEFINED side -- per-TU cpub.o references 'rebind', the unity TU does not)
+-------------------------------------------------------------------
+5. THE DELIVERED CHECK (parity + outside-reference preservation) ON THE SAME UNIT
+unity_symbols.py: 1 reference(s) the per-TU unit resolves from OUTSIDE the unit are gone from the unity TU: the unity TU bound them to something it defines itself -- the silent shadowing class (a unit `static` whose name is an outside global).
+  outside-provided but not referenced by unity.o: rebind
+unity_symbols.py: rename the shadowing definition, or drop it from the unity source list.
+  rc=1 REFUSED
+  ASYMMETRY: the old guard and the review's parity check both pass it; the
+             delivered check fails it.
+-------------------------------------------------------------------
+6a. THE REAL TREE (make unity-symbols: the shipped gate)
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+unity-symbols: per-TU and unity defined-global symbol sets identical, outside references preserved
+  rc=0 GREEN
+
+6b. A DELIBERATE CROSS-SET SHADOWING INJECTED INTO THE REAL UNITY SOURCE LIST
+    (a unit static named after src/hw/io.c's GLOBAL io_port_read8 -- the exact class,
+     in the exact shape the tree would take if a CPU file grew such a static)
+  old generator on the injected list: rc=0 EMITTED
+  NEW generator with --watch:        rc=1 REFUSED  <- the heuristic gate refuses it
+    unity_c.py:   io_port_read8 (static) build/pf-guard/shadow.c:1
+    unity_c.py:   io_port_read8 (outside) src/hw/io.c:523
+  the injected unity TU COMPILES SILENTLY under the shipped flags (-Werror)
+  the delivered check on it:
+unity_symbols.py: 1 reference(s) the per-TU unit resolves from OUTSIDE the unit are gone from the unity TU: the unity TU bound them to something it defines itself -- the silent shadowing class (a unit `static` whose name is an outside global).
+  outside-provided but not referenced by unity.o: io_port_read8
+unity_symbols.py: rename the shadowing definition, or drop it from the unity source list.
+unity_symbols.py: warning: 1 reference(s) not provided by the watched outside objects also vanished (a toolchain-call elimination is possible; investigate if unexpected): roundf
+  rc=1 REFUSED
+-------------------------------------------------------------------
+result: all guard asymmetries reproduced

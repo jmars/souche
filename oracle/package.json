@@ -1,0 +1,10 @@
+{
+  "name": "v86c-oracle",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Reference oracle for the v86-to-C port: boots a flat test image under the published v86 package and dumps a canonical machine-state transcript.",
+  "dependencies": {
+    "v86": "0.5.471"
+  }
+}

@@ -1,0 +1,194 @@
+=== M1a-3 gates: raw evidence =================================================
+
+--- G1: make selftest (src/cpu/cpu_selftest.c + all 9 CPU TUs) -----------------
+$ make selftest
+make selftest RC=0
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -o build/cpu_selftest src/cpu/cpu_selftest.c src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/paging.c src/cpu/arith.c src/cpu/modrm.c src/cpu/misc_instr.c src/cpu/string.c src/cpu/instructions.c
+./build/cpu_selftest
+PASS reset/init values, state_flags, register accessors
+CASE  0 op=0 size= 8 a=0000000f b=00000001 cf_in=0 -> flags=0x010 table=0x010
+CASE  1 op=0 size= 8 a=000000ff b=00000001 cf_in=0 -> flags=0x055 table=0x055
+CASE  2 op=0 size=32 a=7fffffff b=00000001 cf_in=0 -> flags=0x894 table=0x894
+CASE  3 op=0 size=32 a=ffffffff b=00000001 cf_in=0 -> flags=0x055 table=0x055
+CASE  4 op=0 size=16 a=00007fff b=00000001 cf_in=0 -> flags=0x894 table=0x894
+CASE  5 op=0 size=16 a=0000ffff b=00000001 cf_in=0 -> flags=0x055 table=0x055
+CASE  6 op=2 size=32 a=00000000 b=00000001 cf_in=0 -> flags=0x095 table=0x095
+CASE  7 op=2 size=32 a=00000005 b=00000005 cf_in=0 -> flags=0x044 table=0x044
+CASE  8 op=2 size= 8 a=00000080 b=00000001 cf_in=0 -> flags=0x810 table=0x810
+CASE  9 op=2 size=16 a=00008000 b=00000001 cf_in=0 -> flags=0x814 table=0x814
+CASE 10 op=3 size=32 a=12345678 b=12345678 cf_in=0 -> flags=0x044 table=0x044
+CASE 11 op=3 size=32 a=00000001 b=00000002 cf_in=0 -> flags=0x095 table=0x095
+CASE 12 op=1 size= 8 a=0000007f b=00000000 cf_in=1 -> flags=0x890 table=0x890
+CASE 13 op=1 size=32 a=ffffffff b=00000000 cf_in=1 -> flags=0x055 table=0x055
+CASE 14 op=4 size=32 a=00000000 b=00000000 cf_in=1 -> flags=0x095 table=0x095
+CASE 15 op=4 size=32 a=00000100 b=00000001 cf_in=0 -> flags=0x014 table=0x014
+CASE 16 op=5 size=32 a=7fffffff b=00000000 cf_in=1 -> flags=0x895 table=0x895
+CASE 17 op=5 size= 8 a=0000007f b=00000000 cf_in=0 -> flags=0x890 table=0x890
+CASE 18 op=5 size=32 a=ffffffff b=00000000 cf_in=0 -> flags=0x054 table=0x054
+CASE 19 op=6 size= 8 a=00000080 b=00000000 cf_in=1 -> flags=0x811 table=0x811
+CASE 20 op=6 size=32 a=00000001 b=00000000 cf_in=1 -> flags=0x045 table=0x045
+CASE 21 op=7 size=32 a=00000001 b=00000000 cf_in=0 -> flags=0x095 table=0x095
+CASE 22 op=7 size=32 a=80000000 b=00000000 cf_in=0 -> flags=0x885 table=0x885
+CASE 23 op=7 size= 8 a=00000000 b=00000000 cf_in=0 -> flags=0x044 table=0x044
+PASS lazy flags: 24 (op,a,b,cf_in) cases + get_eflags/update_eflags
+PASS memory: router, slack at memory_size, device hook table, mmio windows
+PASS paging: 4 KiB translation, A/D bits, TLB read-only entry
+PASS paging: faults (absent, read-only/WP, user vs supervisor) + cr2/eip/delivery/error codes
+PASS paging: 4 MiB PSE page (translation, A/D, page boundary)
+PASS paging: page-crossing reads/writes (16/32/64/128-bit) + straddle fault
+PASS TLB: insert, invlpg, clear_tlb/global, set_cr3/set_cr0 flushes
+PASS arith: 170 shift/rotate/shld/shrd cases (host-CPU-derived) + count==0
+PASS arith: 46 mul/imul + 44 div/idiv cases (host-CPU-derived) + xadd/cmpxchg
+PASS arith: 180 BCD cases (32-bit host probe) + aam 0 -> #de
+PASS arith: bt/bsf/bsr/popcnt, logic flag clears, saturating helpers
+PASS modrm: 32- and 16-bit addressing, SIB, segment defaults and overrides
+PASS modrm: read_imm8/16/32s fetch, cross-page imm, moffs, faults, get_seg #gp
+PASS misc: push/pop/pusha/enter/lss, stack-pointer helpers, fault paths
+PASS misc: jmp/jcc/loop/jcxz, setcc/cmov, xchg/bswap, condition predicates
+PASS misc: task_switch_test/-_mmx (CR0.EM/TS -> #ud/#nm), set_mxcsr
+PASS string: rep movsb fast path, the per-page iteration limit + rewind, DF=1, the 16-bit slow path
+PASS string: rep cmps/scas termination, the surviving comparison's flags, no-rep forms
+PASS string: rep/no-rep stos and lods (page-bounded stosd, last-unit capture)
+PASS string: rep ins/outs through the port-I/O seat, the IOPL abort, IN/OUT instructions
+PASS instr: ALU memory forms, the immediate groups, not/neg/mul/div, shift groups, inc/dec CF
+PASS instr: xchg both directions, mov r/m<->reg, mov sreg both ways, lea's offset-only address, pop r/m16
+PASS instr: call/jmp/ret/retf, the FF group, int3/int/into with no error code, iret, the 0F escape
+PASS instr: fwait/#NM, pushf/popf (and its #gp), sahf/lahf, the flag ops, cli/sti (+ the shadow re-dispatch), hlt, aam/aad/salc/xlat, cbw/cwd, jcc/loop
+PASS instr: the moffs forms, the A4-AF string wrappers (incl. a segment override), arpl, the 66/67/F0/F2/F3 prefixes and the segment prefixes
+PASS instr: read-modify-write across a page boundary (virt_boundary), no write on a fault, the string slow path's partial effects
+cpu_selftest: 2968 checks, 0 failures
+--- G2: mutation asymmetry ----------------------------------------------------
+
+Each mutation was applied ALONE to the file named, `make selftest` was run, and the source
+was restored and re-verified green -- 11 of 11.  A probe counts only if the TEST fails: two
+candidate mutations were rejected by -Werror before the test ever ran and are reported as
+such (M3 below), not counted.  Run against the final source (2968 checks).
+
+--- M1 (string.c): the 16-bit address-size mask is ignored
+    selftest RC = 2
+    failures: 1; first three:
+      FAIL src/cpu/cpu_selftest.c:2799: read8(0x5B00) == 0xC1 (got 0x0, want 0xc1)
+    cpu_selftest: 2968 checks, 1 failures
+    restored -> RC = 0, cpu_selftest: 2968 checks, 0 failures
+
+--- M2 (string.c): the destination segment is DS instead of ES
+    selftest RC = 2
+    failures: 127; first three:
+      FAIL src/cpu/cpu_selftest.c:2710: read8(0x5000 + i) == 0xA0 + i (got 0x0, want 0xa0)
+      FAIL src/cpu/cpu_selftest.c:2710: read8(0x5000 + i) == 0xA0 + i (got 0x0, want 0xa1)
+      FAIL src/cpu/cpu_selftest.c:2710: read8(0x5000 + i) == 0xA0 + i (got 0x0, want 0xa2)
+    cpu_selftest: 2968 checks, 127 failures
+    restored -> RC = 0, cpu_selftest: 2968 checks, 0 failures
+
+--- M3 (string.c): the rewind after a page-bounded rep is dropped
+    three attempts, because the first two never reached the test:
+      (a) `count_until_page_end = count < (a<b?a:b) ? count : (a<b? a:b)` -> `= count`:
+          BUILD FAILURE (a -Werror mutation is not asymmetry evidence) --
+            src/cpu/string.c:192:22: error: unused variable 'b' [-Werror=unused-variable]
+            src/cpu/string.c:191:22: error: unused variable 'a' [-Werror=unused-variable]
+      (b) `if (!rep_cmp_finished && count != 0)` -> `if (false)`: BUILD FAILURE --
+            src/cpu/string.c:236:14: error: variable 'rep_cmp_finished' set but not used
+            [-Werror=unused-but-set-variable]
+      (c) `if (!rep_cmp_finished && count != 0)` -> `if (rep_cmp_finished && count != 0)`
+          (the same rule, still compiling): selftest RC = 2
+      FAIL src/cpu/cpu_selftest.c:2730: cpu->instruction_pointer == 0x1234 (got 0xdead, want 0x1234)
+      FAIL src/cpu/cpu_selftest.c:2818: cpu->instruction_pointer == 0xBEEF (got 0xdead, want 0xbeef)
+      FAIL src/cpu/cpu_selftest.c:2953: cpu->instruction_pointer == 0xFEED (got 0xdead, want 0xfeed)
+      FAIL src/cpu/cpu_selftest.c:4084: cpu->instruction_pointer == 0xBEEF (got 0xdead, want 0xbeef)
+    cpu_selftest: 2968 checks, 4 failures
+    restored -> RC = 0, cpu_selftest: 2968 checks, 0 failures
+
+--- M4 (paging.h): the 16-bit page-boundary test is off by one
+    selftest RC = 2
+    failures: 7; first three:
+      FAIL src/cpu/cpu_selftest.c:4003: read8(0x5000) == 0x00 (got 0xff, want 0x0)
+      FAIL src/cpu/cpu_selftest.c:4004: getzf()
+      FAIL src/cpu/cpu_selftest.c:4005: getcf()
+    cpu_selftest: 2968 checks, 7 failures
+    restored -> RC = 0, cpu_selftest: 2968 checks, 0 failures
+
+--- M5 (instructions.c): the F6 /2 complement is dropped
+    selftest RC = 2
+    failures: 1; first three:
+      FAIL src/cpu/cpu_selftest.c:3131: read8(0x2034) == 0xF0 (got 0xf, want 0xf0)
+    cpu_selftest: 2968 checks, 1 failures
+    restored -> RC = 0, cpu_selftest: 2968 checks, 0 failures
+
+--- M10 (instructions.c): arpl's RPL is not written back
+    selftest RC = 2
+    failures: 2; first three:
+      FAIL src/cpu/cpu_selftest.c:3936: read_reg16(CX) == 0x0007 (got 0x4, want 0x7)
+      FAIL src/cpu/cpu_selftest.c:3948: read16(0x2260) == 0x0006 (got 0x4, want 0x6)
+    cpu_selftest: 2968 checks, 2 failures
+    restored -> RC = 0, cpu_selftest: 2968 checks, 0 failures
+
+--- M11 (instructions.c): arpl ignores protected mode (no #ud in real mode)
+    selftest RC = 2
+    failures: 2; first three:
+      FAIL src/cpu/cpu_selftest.c:3955: exc_vector == CPU_EXCEPTION_UD (got 0xffffffffffffffff, want 0x6)
+      FAIL src/cpu/cpu_selftest.c:3956: read16(0x2264) == 0x0004 (got 0x6, want 0x4)
+    cpu_selftest: 2968 checks, 2 failures
+    restored -> RC = 0, cpu_selftest: 2968 checks, 0 failures
+
+--- M6 (instructions.c): lea does not set SEG_PREFIX_ZERO
+    selftest RC = 2
+    failures: 1; first three:
+      FAIL src/cpu/cpu_selftest.c:3314: read_reg32(EAX) == 0x2100 (got 0x12100, want 0x2100)
+    cpu_selftest: 2968 checks, 1 failures
+    restored -> RC = 0, cpu_selftest: 2968 checks, 0 failures
+
+--- M7 (instructions.c): sti does not clear the prefixes before re-dispatching
+    selftest RC = 2
+    failures: 2; first three:
+      FAIL src/cpu/cpu_selftest.c:3632: dispatch_last_opcode == 0x190 (got 0x90, want 0x190)
+      FAIL src/cpu/cpu_selftest.c:3633: dispatch_last_prefixes == 0 (got 0x20, want 0x0)
+    cpu_selftest: 2968 checks, 2 failures
+    restored -> RC = 0, cpu_selftest: 2968 checks, 0 failures
+
+--- M8 (instructions.c): INT n claims to carry an error code
+    selftest RC = 2
+    failures: 1; first three:
+      FAIL src/cpu/cpu_selftest.c:3474: !delivered_has_error_code
+    cpu_selftest: 2968 checks, 1 failures
+    restored -> RC = 0, cpu_selftest: 2968 checks, 0 failures
+
+--- M9 (instructions.c): cbw does not sign-extend
+    selftest RC = 2
+    failures: 1; first three:
+      FAIL src/cpu/cpu_selftest.c:3719: read_reg16(AX) == 0xFF80 (got 0x80, want 0xff80)
+    cpu_selftest: 2968 checks, 1 failures
+    restored -> RC = 0, cpu_selftest: 2968 checks, 0 failures
+
+
+
+--- G3: make (all 9 CPU TUs under -Wall -Wextra -Werror) ----------------------
+$ make clean && make
+make RC=0
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o build/cpu/string.o src/cpu/string.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o build/cpu/instructions.o src/cpu/instructions.c
+
+--- G4: make oracle / make nasm -----------------------------------------------
+$ make oracle
+make oracle RC=0
+check_transcript: transcript matches tests/model.py (8 GPRs, EFLAGS, EIP, 561 instructions, 4096-byte window sha256)
+$ make nasm
+make nasm RC=0
+[+] Passed 113/113 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 10 were skipped (tests/nasm_skip.txt).
+  (the 10 skips are pre-existing and reference-side -- see the report section 8.3)
+--- G5: the bulk cross-check of the single-line transcriptions ------------------
+$ python3 results/m1a3-bulkcheck.py
+single-line functions compared: 493  mismatches: 18
+  (every mismatch printed is a known, stated divergence: SEX8/SEX16 for Rust's
+   `x << n >> n`, the uint32_t cast on mul/div, C's ~ for Rust's bitwise !, the
+   (void) casts for unused parameters -- or a normaliser artifact.  0 unexplained.)
+
+--- the three check scripts are kept for re-running ----------------------------
+  results/m1a3-namecheck.mjs   (the emitter's make_instruction_name over the real table)
+  results/m1a3-argcheck.mjs    (the generator's argument count vs instructions.h)
+  results/m1a3-bulkcheck.py    (493 single-line functions vs instructions.rs)
+$ node results/m1a3-namecheck.mjs   (summary)
+base encodings: 431 0F encodings: 442
+distinct base-table C symbols the emitter will call: 981
+$ node results/m1a3-argcheck.mjs
+base-table calls checked: 981 | arity mismatches: 0 | declared in the header: 821 | not declared (the D8..DF group deferred to M1b): 160

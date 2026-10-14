@@ -1,0 +1,24 @@
+== perf_bench: JIT-FIX-1 --jit off
+bin=/home/jaye/futaie/souche/results/jit-fix-1/v86c-jitoff limit=200000000 kernel=tests/images/vmlinuz-i386 runs=7
+cores=32 load-before=1.28 1.69 2.27
+kernel=7.1.8-1-default cflags-host=cc (SUSE Linux) 16.2.0
+asserting: instruction count 200095214
+asserting: terminal guest state "in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0"
+asserting: serial output sha256 fae4924b13b07d441b0ad8458047d2f1d8abf0d1ec59876f44b88ef67d2d0b2a
+run  1: real 2.868s user 2.826s sys 0.042s  instr=200095214  state=ok serial=ok
+run  2: real 2.762s user 2.718s sys 0.044s  instr=200095214  state=ok serial=ok
+run  3: real 2.747s user 2.709s sys 0.038s  instr=200095214  state=ok serial=ok
+run  4: real 2.885s user 2.846s sys 0.039s  instr=200095214  state=ok serial=ok
+run  5: real 2.888s user 2.845s sys 0.043s  instr=200095214  state=ok serial=ok
+run  6: real 2.826s user 2.787s sys 0.038s  instr=200095214  state=ok serial=ok
+run  7: real 2.944s user 2.895s sys 0.048s  instr=200095214  state=ok serial=ok
+load-after=1.20 1.65 2.24
+n=7
+real: best 2.747  median 2.868  worst 2.944
+user: best 2.709  median 2.826  worst 2.895
+cpu (user+sys): best 2.747  median 2.868
+MIPS at best real: 72.84   at median real: 69.77
+verified (every run): 200095214 instructions, the terminal guest state clause
+                      above, and the guest's serial output sha256 -- every number in
+                      this output times THAT workload; none of them asserts it.
+raw samples appended to results/jit-fix-1/bench-jitoff.samples

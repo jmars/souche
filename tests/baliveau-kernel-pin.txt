@@ -1,0 +1,66 @@
+# tests/baliveau-kernel-pin.txt -- SLICE 1's kernel pin (HANDOFF=v86guest).
+#
+# The same KEY SET fx-init/scripts/kernel-pin.txt uses (url / tar_sha256 / tar_size /
+# kernel_version / vmlinuz_path / vmlinuz_sha256 / config_path), so a consumer of this
+# kernel is pinned the way the x86_64 tiny kernel is: by the bytes of a tarball that
+# carries the vmlinuz AND its own config.
+#
+# PROVENANCE (MEASURED, 2026-10-12): linux-6.12.19 LTS from kernel.org, built in a
+# podman debian:stable container (gcc 14.2.0-19, GNU ld 2.44) by
+# fx-demo/kbuild/build-v86guest.sh: `make ARCH=i386 tinyconfig` + fx-demo's lean
+# fragment VERBATIM (build-lean.sh's own ./scripts/config invocation) + a second
+# invocation carrying the delta (BLOCK/BLK_DEV, PCI, SCSI, ATA/ATA_PIIX/ATA_GENERIC,
+# BLK_DEV_SD, VIRTIO/VIRTIO_MENU/VIRTIO_PCI/VIRTIO_CONSOLE, EXT4_FS+JBD2+FS_MBCACHE+
+# CRC16 and the CRYPTO chain).  ZERO MODULES: 0 '=m' lines in the resolved config
+# (494 =y, 2047 lines) -- no /lib/modules, no insmod.
+#
+# DETERMINISM: MEASURED, not claimed.  TWO COLD container builds (separate source
+# trees, separate containers, run concurrently) with KBUILD_BUILD_TIMESTAMP,
+# KBUILD_BUILD_USER and KBUILD_BUILD_HOST pinned produced a BYTE-IDENTICAL bzImage
+# (cmp clean; both sha256 below) and a byte-identical tarball (the deterministic
+# repack: tar --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0, gzip -n).
+# The pin-and-fetch fallback the plan allows for is NOT needed, and this file does not
+# claim both.
+#
+# THE ONE GAP, stated rather than papered over: the tarball has NOT been published as an
+# fx-demo release asset, so `url` is not yet a value -- publishing needs repo write
+# access the implementer does not have.  The tarball itself exists and its hash is
+# recorded here; the gate does not consume it (it consumes the vmlinuz below, whose
+# hash is also recorded).  Publishing + replacing this `url` line is the orchestrator's
+# step.
+
+url PENDING-NOT-YET-PUBLISHED
+tar_sha256 59719941c73993ed4931cc48c9b9a3218bf38e2b42c3051c5fd4d69a79d853ef
+tar_size 1253908
+tar_path_staged tests/images/fixpoint-kernel-6.12.19-v86guest.tar.gz
+kernel_version 6.12.19-v86guest
+vmlinuz_path vmlinuz
+vmlinuz_sha256 f0278a8f2893eb93a8c857f3f2d5a589a5b9aa6a45033171bc5411fc10f658cd
+config_path config
+
+# the kernel.org source tarball the recipe fetches and verifies (the same tarball
+# sha256 fx-init/scripts/kernel-pin.txt documents)
+source_url https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.12.19.tar.xz
+source_tar_sha256 d73bf057bec04434b169d1b61641936f7d0c97ceb923a281f32e35dd4dcc6531
+
+# the recipe and the resolved config, in fx-demo (in-tree-recipe precedent)
+recipe fx-demo/kbuild/build-v86guest.sh
+resolved_config fx-demo/kbuild/config-i386-v86guest.txt
+
+# THE GATE'S OWN INPUTS (tests/gate-m2-5.sh re-verifies each of these before it runs)
+vmlinuz_path_gate tests/images/vmlinuz-i386-v86guest
+vmlinuz_sha256_gate f0278a8f2893eb93a8c857f3f2d5a589a5b9aa6a45033171bc5411fc10f658cd
+lean_control_url https://github.com/fixpoint-linux/fx-demo/blob/main/web/bzImage
+lean_control_tests_path tests/images/vmlinuz-i386-lean-control
+lean_control_sha256 25be0d5358d9445712f6d04e59a7be9133acbd3f69ad0720a69e43d5ba844b3d
+initramfs_path tests/images/guest-initramfs-v86gate.img
+initramfs_sha256 d3a9e3eca9547577f9f62f2ed67919dfe060047114b0a781ecd37d1b2ea9c900
+initramfs_builder tests/mkinitramfs-v86gate.py
+initramfs_init tests/init-v86gate.sh
+initramfs_provenance Alpine netboot i386 userspace (busybox + musl) from ALPINE_ROOT=/tmp/irf -- the tree the M2-3/M2-4 units used; ZERO kernel modules
+disk_path tests/images/disk.img
+disk_sha256 f83dba09f75d2c0b205aa7f24be1dec2fb9e32fe9d9d7725205408a8e3f0758f
+disk_md5_first64 87d5ec3151caf04d90236947e6f09874
+disk_builder tests/mkdisk.py
+virtio_in_path tests/v86gate-virtio-in.txt
+virtio_in_sha256 0d78f5b47be456de344345652a8c519af785f2271eaf25575b045d07b37f81c9

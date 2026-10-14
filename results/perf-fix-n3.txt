@@ -1,0 +1,80 @@
+pre-fix instructions.c sha256 == the reviewed artifact: bcab21bad3aeb943880bcbde247a694cf8a7b49f8e3b22bed9fa15601636324a
+unity sources: 20 files, flags: -std=gnu11 -O2 -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -Werror
+before.c/after.c differ in exactly: 2 line(s)
+-------------------------------------------------------------------
+SOURCE SNAPSHOT (sha256 over the unity sources, before -> after the two compiles)
+  ea8cb5aef009b8e4d0b902ef7e999890e92257e11d2383694085dd6681dea726
+  ea8cb5aef009b8e4d0b902ef7e999890e92257e11d2383694085dd6681dea726
+BINARIES
+  before (pre-fix instructions.c): 195da80cc7a97659  2438474 bytes
+  after  (the tree):               b8dc54143ef4ce67  2437460 bytes
+-------------------------------------------------------------------
+PROBE IMAGES
+  MODE=0     544 bytes  sha256=6bdda3e4c061e9ae
+  MODE=1     544 bytes  sha256=02f206db4dea4faa
+  MODE=2      49 bytes  sha256=2f3531921485ebbe
+  MODE=3     544 bytes  sha256=2509093d06481894
+  MODE=4     558 bytes  sha256=f9a8a6864c2dc33e
+  MODE=5      51 bytes  sha256=03c78d1c596c6f01
+-------------------------------------------------------------------
+THE RUNS  (MODE=1 is the brief's bytes; MODE=3/2/0 are the controls; MODE=4 is the
+           controlled in-image landing; MODE=5 is a 32-bit-mode huge-eip transfer)
+
+MODE=0
+  before : rc=0    stop=none
+  after  : rc=0    stop=none
+  reference: rc=0  C transcript vs reference: IDENTICAL
+  eip/instruction count  : C   eip=0x00100044 instructions=9
+                           ref eip=0x00100044 instructions=9
+  C leg rc=0
+
+MODE=1
+  before : rc=134  stop=/home/jaye/futaie/souche/build/pf-n3/instructions.prefix.c:1802: [31;1massert(cpu->is_32 || get_real_eip() < 
+  after  : rc=134  stop=./src/cpu/cpu.c:100: [31;1massert(!in_mapped_range(phys_addr)) failed[0m (cosmoaddr2line /home/jaye/futaie/s
+  reference: rc=1  NEITHER leg produced a transcript (both stopped)
+    ref stop: wasm://wasm/v86.wasm-007a84ce:1   
+  eip/instruction count  : C   no transcript (the leg produced no state)
+                           ref no transcript (the leg produced no state)
+  C leg rc=134
+
+MODE=2
+  before : rc=0    stop=none
+  after  : rc=0    stop=none
+  reference: rc=0  C transcript vs reference: IDENTICAL
+  eip/instruction count  : C   eip=0x00100031 instructions=5
+                           ref eip=0x00100031 instructions=5
+  C leg rc=0
+
+MODE=3
+  before : rc=0    stop=none
+  after  : rc=0    stop=none
+  reference: rc=0  C transcript vs reference: IDENTICAL
+  eip/instruction count  : C   eip=0x0010004a instructions=10
+                           ref eip=0x0010004a instructions=10
+  C leg rc=0
+
+MODE=4
+  before : rc=134  stop=/home/jaye/futaie/souche/build/pf-n3/instructions.prefix.c:2279: [31;1massert(cpu->is_32 || data < 0x10000) f
+  after  : rc=0    stop=none
+  reference: rc=0  C transcript vs reference: IDENTICAL
+  eip/instruction count  : C   eip=0x0010022e instructions=27
+                           ref eip=0x0010022e instructions=27
+  C leg rc=0
+
+MODE=5
+  before : rc=134  stop=./src/cpu/cpu.c:100: [31;1massert(!in_mapped_range(phys_addr)) failed[0m (cosmoaddr2line /home/jaye/futaie/s
+  after  : rc=134  stop=./src/cpu/cpu.c:100: [31;1massert(!in_mapped_range(phys_addr)) failed[0m (cosmoaddr2line /home/jaye/futaie/s
+  reference: rc=1  NEITHER leg produced a transcript (both stopped)
+    ref stop: wasm://wasm/v86.wasm-007a84ce:1   
+  eip/instruction count  : C   no transcript (the leg produced no state)
+                           ref no transcript (the leg produced no state)
+  C leg rc=134
+-------------------------------------------------------------------
+raw transcripts: build/pf-n3/{c,js}.<mode>.txt
+MODE=1 is the brief's bytes: the AFTER leg continues past the dropped assert and the
+NEXT fetch (linear 0x3557785A, outside guest RAM) diverges from the reference in a
+PRE-EXISTING, unrelated way -- see results/perf-fix.md ITEM 2 (the cpu.c:100 finding).
+
+note: any 'Aborted (core dumped)' line this script's SHELL prints on STDERR (kept in
+      results/perf-fix-n3.err) is the shell reporting an intentional rc=134 leg above;
+      a leg's stop message is the one printed in the 'stop=' field on STDOUT.

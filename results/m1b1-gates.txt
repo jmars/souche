@@ -1,0 +1,152 @@
+=== M1b-1 GATE EVIDENCE (raw; every command + exit code) ===
+date: 2026-10-12T12:38:07+00:00
+
+--- files + sha256 ---
+3dfa5fc16526136146192c690d559911b394bb08020afc757c062d9f5eee7722  src/cpu/instructions_0f.c
+7bdeba51ed98d40138269157ba19f9f910e5d91cc7e8d5080a8410c9399795bf  src/cpu/instructions_0f.h
+66e124167ffc0adb6187b92bb902ad14aef56c7e69ec37b4175d0c0084957412  src/cpu/cpu_selftest.c
+eb8d71056230247b8bf3ff8cddb754f9b04c40d73a0a7f004d50f7c17dc08ae7  tests/nasm_skip_c.txt
+6e73fe60cc96e6bddf30f5781e8ec1b004147a72c08a2576454e409c978c4b23  Makefile
+c01a320897b87eafdb84a2c31b6d28312e1af5b1a512a21564d55492050f9a08  gen/interpreter_c.js
+
+--- make (G4): from-scratch build into /tmp/m1b1-final ---
+exit=0
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -Werror -c -o /tmp/m1b1-final/cpu/interpreter_gen.o src/cpu/interpreter_gen.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -DSOFTFLOAT_FAST_INT64 -DINLINE_LEVEL=5 -DSOFTFLOAT_FAST_DIV32TO16 -DSOFTFLOAT_FAST_DIV64TO32 -ffunction-sections -fdata-sections -c -o /tmp/m1b1-final/sf/softfloat.o v86/lib/softfloat/softfloat.c
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -I src -Wl,--gc-sections -o /tmp/m1b1-final/v86c src/main.c /tmp/m1b1-final/cpu/cpu_state.o /tmp/m1b1-final/cpu/flags.o /tmp/m1b1-final/cpu/memory.o /tmp/m1b1-final/cpu/paging.o /tmp/m1b1-final/cpu/arith.o /tmp/m1b1-final/cpu/modrm.o /tmp/m1b1-final/cpu/misc_instr.o /tmp/m1b1-final/cpu/string.o /tmp/m1b1-final/cpu/instructions.o /tmp/m1b1-final/cpu/instructions_0f.o /tmp/m1b1-final/cpu/softfloat.o /tmp/m1b1-final/cpu/fpu.o /tmp/m1b1-final/cpu/cpu.o /tmp/m1b1-final/cpu/exec_boundary.o /tmp/m1b1-final/cpu/interpreter_gen.o /tmp/m1b1-final/sf/softfloat.o
+
+--- emitter census ---
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1358 implemented, 564 unimplemented, 1362 names defined (unchanged)
+exit=0
+
+--- make transcript-diff (G4) ---
+exit=0
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1358 implemented, 564 unimplemented, 1362 names defined (unchanged)
+./build/v86c tests/test.img 1000000 > results/transcript.c.txt
+node oracle/run.mjs tests/test.img 1000000 > results/transcript.js.txt
+diff -u results/transcript.js.txt results/transcript.c.txt
+milestone: the C transcript is byte-identical to the reference's
+
+--- make selftest (G2) ---
+exit=0
+PASS fpu: rounding modes, precision control, the result/exception status bits, the integer stores and fprem/fbstp/f2xm1/fsqrt
+cpu_selftest: 3349 checks, 0 failures
+
+--- make nasm (G1) ---
+exit=0
+[+] Passed 60/60 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 63 were skipped (tests/nasm_skip_c.txt).
+[~] Skipped 63 test(s) (tests/nasm_skip_c.txt):
+
+--- G3 ASYMMETRY (scratch tree, sh rig.sh) ---
+
+=== G3 ASYMMETRY RIG, raw output (/tmp/m1b1-mut/rig.out) ===
+# scratch tree: cp src gen tests from the repo; each arm is ONE single-line edit to
+# src/cpu/instructions_0f.c; restored byte-identical and re-verified at the end.
+=== ARM 0: baseline (no mutation) ===
+----- baseline selftest -----
+make selftest -> rc=0
+cpu_selftest: 3349 checks, 0 failures
+----- baseline nasm -----
+make nasm -> rc=0
+[+] Passed 60/60 tests.
+
+=== M1: 0F 96 setbe -> setb (test_be() -> test_b()) ===
+----- M1 (mutated) -----
+make nasm -> rc=2
+[+] Passed 59/60 tests.
+[-] Failed 1 test(s).
+[-] cmpxchg-setbe.img:
+----- M1 (restored) -----
+make nasm -> rc=0
+[+] Passed 60/60 tests.
+
+=== M2: 0F B3's 16-bit memory form loses the sign extension ===
+1540:void instr16_0FB3_mem(int32_t addr, int32_t r) { btr_mem(addr, read_reg16(r)); }
+----- M2 (mutated) -----
+make selftest -> rc=2
+FAIL src/cpu/cpu_selftest.c:4452: getcf()
+FAIL src/cpu/cpu_selftest.c:4453: read8(0x2000) == 0x00 (got 0x1, want 0x0)
+FAIL src/cpu/cpu_selftest.c:4458: !getcf()
+FAIL src/cpu/cpu_selftest.c:4459: read8(0x2000) == 0x01 (got 0x0, want 0x1)
+cpu_selftest: 3349 checks, 4 failures
+----- M2 (restored) -----
+make selftest -> rc=0
+cpu_selftest: 3349 checks, 0 failures
+
+=== M3: cmovne's memory form loses its page-fault guard ===
+680:	if (0 && cpu->pagefault) return;
+----- M3 (mutated) -----
+make selftest -> rc=2
+FAIL src/cpu/cpu_selftest.c:4377: read_reg32(EDX) == (int32_t)0xAABBCCDD (got 0x0, want 0xffffffffaabbccdd)
+cpu_selftest: 3349 checks, 1 failures
+----- M3 (restored) -----
+make selftest -> rc=0
+cpu_selftest: 3349 checks, 0 failures
+
+=== M4: haddps writes the SOURCE pair first (the order is not commutative) ===
+----- M4 (mutated) -----
+make selftest -> rc=2
+FAIL src/cpu/cpu_selftest.c:4795: read_xmm128s(2).f32[0] == 30.0f (got 0x3, want 0x1e)
+FAIL src/cpu/cpu_selftest.c:4813: read_xmm128s(2).f32[0] == 30.0f (got 0x3, want 0x1e)
+cpu_selftest: 3349 checks, 2 failures
+----- M4 (restored) -----
+make selftest -> rc=0
+cpu_selftest: 3349 checks, 0 failures
+
+=== ARM F: restored? ===
+src/cpu/instructions_0f.c restored byte-identical
+----- final selftest -----
+make selftest -> rc=0
+cpu_selftest: 3349 checks, 0 failures
+
+=== FINAL CONFIRMATION SWEEP (2026-10-12T12:40:11+00:00) ===
+--- sha256 of every file the evidence depends on ---
+6e73fe60cc96e6bddf30f5781e8ec1b004147a72c08a2576454e409c978c4b23  Makefile
+c01a320897b87eafdb84a2c31b6d28312e1af5b1a512a21564d55492050f9a08  gen/interpreter_c.js
+2ecc7ce171c439cb3bcebb82e572573db30ebb6eb567bad374aefcefb4ffeba9  src/cpu/arith.c
+b4bd2dde9ad6467eb0da22793080c34a00028693d88df6841ac717f33c59c501  src/cpu/cpu.c
+66e124167ffc0adb6187b92bb902ad14aef56c7e69ec37b4175d0c0084957412  src/cpu/cpu_selftest.c
+5b46e29f219882b9827edf28062f7672388c8393c21628ce1f6029b0e30be845  src/cpu/cpu_state.c
+d7231b4e69c6bddc6b637e0b2855773e76d0807e715546c972c0a5646012b0da  src/cpu/exec_boundary.c
+9ee0eb51d3e6e30ba9cd89b98471b4c395f8f4ec1ba38d9a520bdf2013b8db34  src/cpu/flags.c
+5987fa5cf0c4323bc323d7b56d108145ee28d3d239bd813d9aba0b427042a096  src/cpu/fpu.c
+3dfa5fc16526136146192c690d559911b394bb08020afc757c062d9f5eee7722  src/cpu/instructions_0f.c
+bcab21bad3aeb943880bcbde247a694cf8a7b49f8e3b22bed9fa15601636324a  src/cpu/instructions.c
+ab0affb4aa5334d1b1ead12ed2e855f8f4f20caf9b943464dd529cde1c8aff9c  src/cpu/interpreter_gen.c
+3d4a22e2a2b8ed69c1eb397fd03f08e0a52929176c448513153c29d4ef084b1a  src/cpu/memory.c
+61551ca6924a91170719f3ecd9d9e58065bbb92900b4c4439f717396bc6b1af3  src/cpu/misc_instr.c
+48c5e9bd2163e33efa1fb7d2a3184181f6eb520dd83c8997d9ae3672c5b33237  src/cpu/modrm.c
+949942c6b762556b33f6b192e966526575a3f4ab2c691c76c7d79426d4215349  src/cpu/paging.c
+b96aea1b44216ad1f88db5e01e8995ef8c4518dacf345c9f919f0c3a09a1dfb6  src/cpu/softfloat.c
+70f7f84193add5c6d92294f452d8dc652f8cc3c3871f0a8a8c189ee3f731fc44  src/cpu/string.c
+da075ddc8cfbf3d7abdca4d3ffc1ef6a69bb7a1c442903ea2e2f8e0ccceba4d9  src/cpu/arith.h
+c58b00835a25b65b494120e2725682d786e3d03d81b2d0849cc020e61a43f157  src/cpu/cpu.h
+e99ad08995b4d0def72284bb0644edd738ad8dc9419c15da5db01d1427a9310e  src/cpu/cpu_state.h
+263455d703264db7982deb6c359c2d2381ac769a8e79f7fb318925f3771609d3  src/cpu/exec_boundary.h
+3b1a865f14b83de2475fb16a428e03e553bc5b334c3dcb589f0cecad61176c25  src/cpu/flags.h
+476f08f2146b741722b8ecc8b8845f3415fcf8e506fb8480f5d5c9643635664f  src/cpu/fpu.h
+7bdeba51ed98d40138269157ba19f9f910e5d91cc7e8d5080a8410c9399795bf  src/cpu/instructions_0f.h
+4bd37f2f1148dc550fcfcffc890280bedded8bc02d9f2aaa8427ee040f56a6b7  src/cpu/instructions.h
+88c6178b5a7f613b6b50e6dd263bda4a1d220e0e5a1f9ee5c51621682d8e4614  src/cpu/memory.h
+851ee0ab98913cbc004ab9a05b97b0f3fd7003f7b697789b586192dd1b7545d0  src/cpu/misc_instr.h
+351b15f2a4dcce1df93c889cd672a867ba59533edd53e10ffd2a9bff4b8c9861  src/cpu/modrm.h
+08e27bb7c884cb08e1c7c1de824eb4248af386707696217cf753819db4cc0a97  src/cpu/paging.h
+4535bb390f29ab959f6560b693ad58fdff3afa850d2d27080935db0b4038b897  src/cpu/softfloat.h
+61c0065becbaaa11de0cd03ef8fb6b5b217b4687745fe393a821a741f8c79633  src/cpu/string.h
+eb8d71056230247b8bf3ff8cddb754f9b04c40d73a0a7f004d50f7c17dc08ae7  tests/nasm_skip_c.txt
+
+--- make selftest ---
+exit=0
+cpu_selftest: 3349 checks, 0 failures
+--- make transcript-diff ---
+exit=0
+milestone: the C transcript is byte-identical to the reference's
+--- make nasm ---
+exit=0
+[+] Passed 60/60 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 63 were skipped (tests/nasm_skip_c.txt).
+--- make (from scratch, /tmp/m1b1-final2) ---
+exit=0
+17
