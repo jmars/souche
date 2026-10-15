@@ -19,6 +19,9 @@
 
 #include "apic.h"
 
+#include <stdio.h>
+#include <stdlib.h>        /* getenv -- the V86C_TRACE_ACPI diagnostic (the per-TU selftest
+                            * link needs this explicitly; the unity TU was masking it) */
 #include <string.h>
 
 #include "cpu_state.h"     /* cpu->acpi_enabled */
@@ -26,6 +29,18 @@
 #include "ioapic.h"        /* IOAPIC_CONFIG_* and remote_eoi (apic.rs:3) */
 
 static apic_state_t apic_instance;
+
+/* ACPI-3 DIAGNOSTIC (the lapic half of V86C_TRACE_ACPI): deliveries, drops, successful
+ * acks and EOIs, to stderr.  Decides nothing a guest can see. */
+static bool apic_trace_enabled(void)
+{
+    static int enabled = -1;
+    if (enabled < 0) {
+        const char *v = getenv("V86C_TRACE_ACPI");
+        enabled = v != NULL && v[0] != '\0' && v[0] != '0';
+    }
+    return enabled != 0;
+}
 
 /* apic.rs:547-579.  Used by the write path and the timer before its definition. */
 static void apic_deliver(apic_state_t *apic, uint8_t vector, uint8_t mode, bool is_level);
@@ -223,10 +238,18 @@ static void apic_write32_internal(apic_state_t *apic, uint32_t addr, uint32_t va
 
         case 0x80:
             apic->tpr = value & 0xFF;
+            if (apic_trace_enabled()) {
+                fprintf(stderr, "trace: lapic TPR <- %02x\n", (unsigned)(value & 0xFF));
+            }
             break;
 
         case 0xB0: {
             int32_t highest_isr = register_get_highest_bit(apic->isr);
+            if (apic_trace_enabled() && highest_isr >= 0) {
+                fprintf(stderr, "trace: lapic EOI (isr top %02x, tmr %s)\n",
+                        (unsigned)highest_isr,
+                        register_get_bit(apic->tmr, (uint8_t)highest_isr) ? "level" : "edge");
+            }
             if (highest_isr >= 0) {
                 register_clear_bit(apic->isr, (uint8_t)highest_isr);
                 if (register_get_bit(apic->tmr, (uint8_t)highest_isr)) {
@@ -448,8 +471,17 @@ static void apic_deliver(apic_state_t *apic, uint8_t vector, uint8_t mode, bool 
      * bit; bit >> 5 stays in [0, 7] for every u8). */
 
     if (register_get_bit(apic->irr, vector)) {
+        if (apic_trace_enabled()) {
+            fprintf(stderr, "trace: lapic deliver vec %02x mode %u %s -> DROPPED (irr set)\n",
+                    (unsigned)vector, (unsigned)mode, is_level ? "level" : "edge");
+        }
         /* upstream: dbg_log!("Not delivered: irr already set, vector={:02x}", vector) */
         return;
+    }
+
+    if (apic_trace_enabled()) {
+        fprintf(stderr, "trace: lapic deliver vec %02x mode %u %s -> irr set\n", (unsigned)vector,
+                (unsigned)mode, is_level ? "level" : "edge");
     }
 
     register_set_bit(apic->irr, vector);
@@ -484,6 +516,11 @@ static int32_t acknowledge_irq_internal(apic_state_t *apic)
 
     register_clear_bit(apic->irr, (uint8_t)highest_irr_value);
     register_set_bit(apic->isr, (uint8_t)highest_irr_value);
+
+    if (apic_trace_enabled()) {
+        fprintf(stderr, "trace: lapic ACK -> vec %02x moved to isr\n",
+                (unsigned)highest_irr_value);
+    }
 
     /* upstream (apic.rs:634): dbg_assert!(acknowledge_irq_internal(apic).is_none());
      * the recursive call sits INSIDE the dbg_assert, so upstream's RELEASE build does

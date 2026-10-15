@@ -492,6 +492,17 @@ void mmap_write32(uint32_t addr, int32_t value)
     }
     else if (addr >= IOAPIC_MEM_ADDRESS && addr < IOAPIC_MEM_ADDRESS + IOAPIC_MEM_SIZE) {
         ioapic_write32(addr - IOAPIC_MEM_ADDRESS, (uint32_t)value);
+        {
+            static int enabled = -1;
+            if (enabled < 0) {
+                const char *v = getenv("V86C_TRACE_ACPI");
+                enabled = v != NULL && v[0] != '\0' && v[0] != '0';
+            }
+            if (enabled) {
+                fprintf(stderr, "trace: mmio ioapic write32 addr %08x <- %08x\n",
+                        (unsigned)addr, (unsigned)value);
+            }
+        }
         handle_irqs();
     }
     else {

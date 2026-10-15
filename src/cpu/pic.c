@@ -34,6 +34,21 @@
 #include "string.h"       /* the in/out instructions' side of the bridge (declarations only) */
 #include <string.h>       /* pic_reset's memset (REBOOT-1); the quoted string.h above is
                            * the port's own header, not libc's */
+#include <stdlib.h>       /* getenv -- the ACPI-3 diagnostic below */
+
+/* ACPI-3 DIAGNOSTIC (the pic half of V86C_TRACE_ACPI): the eight programming-port
+ * accesses, to stderr.  Decides nothing a guest can see. */
+static void pic_trace_port(const char *op, uint32_t v)
+{
+    static int enabled = -1;
+    if (enabled < 0) {
+        const char *e = getenv("V86C_TRACE_ACPI");
+        enabled = e != NULL && e[0] != '\0' && e[0] != '0';
+    }
+    if (enabled) {
+        fprintf(stderr, "trace: pic %s %02x\n", op, (unsigned)v);
+    }
+}
 
 typedef struct pic0 {
     uint8_t irq_mask;
@@ -349,16 +364,52 @@ void clear_irq(uint8_t i)
     pic_clear_irq(&pic, i);
 }
 
-uint32_t port20_read(void) { return pic0_port0_read(&pic.master); }
-uint32_t port21_read(void) { return pic0_port1_read(&pic.master); }
-uint32_t portA0_read(void) { return pic0_port0_read(&pic.slave); }
-uint32_t portA1_read(void) { return pic0_port1_read(&pic.slave); }
+uint32_t port20_read(void)
+{
+    uint32_t v = pic0_port0_read(&pic.master);
+    pic_trace_port("rd20", v);
+    return v;
+}
+uint32_t port21_read(void)
+{
+    uint32_t v = pic0_port1_read(&pic.master);
+    pic_trace_port("rd21", v);
+    return v;
+}
+uint32_t portA0_read(void)
+{
+    uint32_t v = pic0_port0_read(&pic.slave);
+    pic_trace_port("rdA0", v);
+    return v;
+}
+uint32_t portA1_read(void)
+{
+    uint32_t v = pic0_port1_read(&pic.slave);
+    pic_trace_port("rdA1", v);
+    return v;
+}
 
-void port20_write(uint8_t v) { pic_port0_write(&pic, 0, v); }
-void port21_write(uint8_t v) { pic_port1_write(&pic, 0, v); }
+void port20_write(uint8_t v)
+{
+    pic_trace_port("wr20", v);
+    pic_port0_write(&pic, 0, v);
+}
+void port21_write(uint8_t v)
+{
+    pic_trace_port("wr21", v);
+    pic_port1_write(&pic, 0, v);
+}
 
-void portA0_write(uint8_t v) { pic_port0_write(&pic, 1, v); }
-void portA1_write(uint8_t v) { pic_port1_write(&pic, 1, v); }
+void portA0_write(uint8_t v)
+{
+    pic_trace_port("wrA0", v);
+    pic_port0_write(&pic, 1, v);
+}
+void portA1_write(uint8_t v)
+{
+    pic_trace_port("wrA1", v);
+    pic_port1_write(&pic, 1, v);
+}
 
 uint32_t port4D0_read(void) { return pic.master.elcr; }
 uint32_t port4D1_read(void) { return pic.slave.elcr; }

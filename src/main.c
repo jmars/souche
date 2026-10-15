@@ -52,6 +52,7 @@
 #include "cpu/uop_cache.h" /* PERF-4/M2: the --uop-cache switch and the counters */
 #include "cpu/jit_codegen.h" /* JIT-PLAN: the block compiler's coverage counters (--jit-stats) */
 #include "cpu/jit_mem.h"   /* JIT-SPIKE: the --jit switch and the executable-memory pool */
+#include "hw/acpi_tables.h" /* ACPI-2: the firmware tables (--acpi) */
 #include "hw/bus.h"    /* M2-2: the host end of the serial seam */
 #include "hw/kernel.h" /* M2-2: the bzImage loader */
 #include "hw/machine.h" /* M2-1: the device layer (the machine) */
@@ -1111,6 +1112,15 @@ static int boot_main(int argc, char *argv[])
 	 * (cpu.js:1706-1709), and the reset vector 0xFFFF0 is inside it */
 	memcpy(mem8 + BOOT_FIRMWARE_ADDRESS, firmware, firmware_length);
 
+	/* ACPI-2: the firmware tables, in the free window 0xE0000-0xEFFFF (see
+	 * acpi_tables.h), published ONLY when the machine has the APIC: the tables
+	 * describe the LAPIC/IOAPIC, so a boot without --acpi must not carry them --
+	 * that is the default-off identity property, by construction and not just by
+	 * gate.  Same bytes every boot: a pure function of the configuration. */
+	if (acpi) {
+		acpi_tables_publish(mem8);
+	}
+
 	fprintf(stderr, "v86c boot: kernel %u bytes sha256 %s\n", (unsigned)kernel_length,
 	        kernel_sha256);
 	fprintf(stderr, "v86c boot: firmware %u bytes at 0x%x, option ROM %u bytes at 0x%x,"
@@ -1156,6 +1166,10 @@ static int boot_main(int argc, char *argv[])
 		}
 		memcpy(mem8 + BOOT_OPTION_ROM_ADDRESS, loaded.option_rom, loaded.option_rom_length);
 		memcpy(mem8 + BOOT_FIRMWARE_ADDRESS, firmware, firmware_length);
+		if (acpi) {
+			acpi_tables_publish(mem8); /* the firmware tables are firmware: boot 2
+			                            * carries them exactly as boot 1 did */
+		}
 	}
 
 	if (boot_serial_sink != stdout) fclose(boot_serial_sink);

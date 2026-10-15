@@ -51,6 +51,35 @@ Each of these is *absent by decision*, not by omission, and each currently **sto
 rather than producing a wrong value — so the cost of deferring is discovery, not risk.
 
 ### 1.1 APIC / IOAPIC — deferred; NOT needed by any guest we run today
+*(Unit APIC-1 has since shipped the LAPIC/IOAPIC behind `--acpi`, and ACPI-2 the firmware
+tables; this historical section records why the seams existed before either landed.)*
+
+- **CROSS-LANE RECOMMENDATION (ACPI-2, MEASURED):** the baliveau v86guest kernel
+  (`tests/images/vmlinuz-i386-v86guest`, 6.12.19) can never route through the I/O APIC — its
+  config (in the pinned tarball, hash-tied to the bzImage) has `# CONFIG_ACPI is not set`,
+  no `CONFIG_X86_MPPARSE`, no `CONFIG_X86_IO_APIC` (nor `CONFIG_SMP`/`CONFIG_X86_UP_APIC`):
+  `NR_IRQS: 16`, every `/proc/interrupts` line is `XT-PIC`, with or without firmware tables.
+  If that lane ever wants IO-APIC routing, its config needs `CONFIG_ACPI=y` (or
+  `CONFIG_X86_MPPARSE=y`) **and** `CONFIG_X86_IO_APIC=y`; the consumer to copy the gate from is
+  `results/acpi-2.md`, which proves the route end-to-end on the tree's OTHER kernel,
+  `tests/images/vmlinuz-i386` (Alpine 6.6, ACPI+MPPARSE+IO_APIC in). Evidence:
+  `results/acpi-1.md` §1 (the three-source capability answer), `results/acpi-2.md` (the route).
+- **WHAT `--acpi` STILL NEEDS — THE OPEN WORK (ACPI-3, unfinished):**
+  * **F1 — userspace console writes never reach the UART under `--acpi`.** The kernel's own
+    POLLED printk on the same port works for the whole boot; the IRQ-driven tty write does not,
+    and a *write-free* init runs cleanly — so userspace and syscalls are alive and the freeze is
+    specific to the tty write path. Localised to the UART's PIC-shaped raise/lower
+    (`device_raise_irq(4)`/`device_lower_irq(4)` in `src/hw/uart.c`) meeting the IOAPIC entry the
+    MADT declares (irq 4 -> pin 4). Signature, discrimination and the ranked suspects are in
+    `results/acpi-2.md` §9, with the captures under `results/acpi-2-f1-*`.
+  * **F2 — ACPI-aware PCI enumeration finds ZERO devices**: the minimal DSDT declares no PCI root
+    bridge (`_HID` PNP0A03), so virtio and IDE vanish from the machine under `--acpi`.
+  * **F3 — the reboot arm soft-locks at `finit_module` under `--acpi`** (captured in
+    `results/acpi-2-reboot-acpi-serial.txt`); re-test after F1/F2 rather than guessing.
+  **THE ENGINEER RUNG WAS DISPATCHED FOR THESE AND DIED TWICE ON A PROVIDER FAULT** (the harness's
+  `reasoning_content` error, which has now killed four sessions), leaving getenv-gated diagnostics
+  (`V86C_TRACE_ACPI`) in `apic.c`/`ioapic.c`/`uart.c` — instrumentation, not a fix. Everything
+  needed to continue is in `results/acpi-2.md` §5 and the tree; the next session resumes from there.
 - **Size.** READ from the reference: `v86/src/rust/cpu/apic.rs` 658 lines + `ioapic.rs` 316 = 974
   lines of Rust → roughly **1000–1200 lines of C plus wiring** — one solid unit, the same shape as
   the PIC (402 Rust → 491 C) or the PIT (359 JS → ~250 C). Contents: the LAPIC's 4 KiB register

@@ -16,6 +16,19 @@
 #include "io.h"
 #include "machine.h" /* device_raise_irq / device_lower_irq */
 
+/* ACPI-3 DIAGNOSTIC (the uart half of V86C_TRACE_ACPI): the interrupt-enable and
+ * identification port traffic plus the raise/lower decision, to stderr.  Decides
+ * nothing a guest can see. */
+static bool uart_trace_enabled(void)
+{
+    static int enabled = -1;
+    if (enabled < 0) {
+        const char *v = getenv("V86C_TRACE_ACPI");
+        enabled = v != NULL && v[0] != '\0' && v[0] != '0';
+    }
+    return enabled != 0;
+}
+
 /* uart.js:16-47 -- the register bit and constant names, kept verbatim so the transcription
  * can be read against the original. */
 #define DLAB 0x80
@@ -215,8 +228,16 @@ static void port1_write8(void *device, int32_t port, int32_t value)
     }
     else {
         if ((uart->ier & UART_IIR_THRI) == 0 && (value & UART_IIR_THRI)) {
+            if (uart_trace_enabled()) {
+                fprintf(stderr, "trace: uart%d IER write %02x: THRI 0->1, re-throw\n",
+                        (int)uart->com, (unsigned)(value & 0xF));
+            }
             /* re-throw THRI if it was masked */
             uart_raise_interrupt(uart, UART_IIR_THRI);
+        }
+        else if (uart_trace_enabled()) {
+            fprintf(stderr, "trace: uart%d IER write %02x (was %02x)\n", (int)uart->com,
+                    (unsigned)(value & 0xF), (unsigned)(uart->ier & 0xF));
         }
 
         uart->ier = value & 0xF;
@@ -279,6 +300,10 @@ static int32_t port2_read8(void *device, int32_t port)
     /* uart.js:221 dbg_log("read interrupt identification: ...") -- no channel. */
 
     if (uart->iir == UART_IIR_THRI) {
+        if (uart_trace_enabled()) {
+            fprintf(stderr, "trace: uart%d IIR read -> %02x, THRI cleared\n", (int)uart->com,
+                    (unsigned)(ret | (uart->fifo_control & 1 ? 0xC0 : 0)));
+        }
         uart_clear_interrupt(uart, UART_IIR_THRI);
     }
 
@@ -387,24 +412,45 @@ static void port7_write8(void *device, int32_t port, int32_t value)
  * ------------------------------------------------------------------ */
 static void uart_check_interrupt(uart_state_t *uart)
 {
+    /* the last decision this uart logged (0 none yet, 1 raise, 2 lower) -- the trace
+     * prints CHANGES, not every call */
+    static int last_arm[4] = { 0, 0, 0, 0 };
+    int arm;
+
     if ((uart->ints & 1 << UART_IIR_CTI) && (uart->ier & UART_IER_RDI)) {
         uart->iir = UART_IIR_CTI;
-        device_raise_irq((uint8_t)uart->irq);
+        arm = 1;
     }
     else if ((uart->ints & 1 << UART_IIR_RDI) && (uart->ier & UART_IER_RDI)) {
         uart->iir = UART_IIR_RDI;
-        device_raise_irq((uint8_t)uart->irq);
+        arm = 1;
     }
     else if ((uart->ints & 1 << UART_IIR_THRI) && (uart->ier & UART_IER_THRI)) {
         uart->iir = UART_IIR_THRI;
-        device_raise_irq((uint8_t)uart->irq);
+        arm = 1;
     }
     else if ((uart->ints & 1 << UART_IIR_MSI) && (uart->ier & UART_IER_MSI)) {
         uart->iir = UART_IIR_MSI;
-        device_raise_irq((uint8_t)uart->irq);
+        arm = 1;
     }
     else {
         uart->iir = UART_IIR_NO_INT;
+        arm = 2;
+    }
+
+    if (arm != last_arm[uart->com]) {
+        if (uart_trace_enabled()) {
+            fprintf(stderr, "trace: uart%d %s (iir=%02x ier=%02x ints=%02x)\n",
+                    (int)uart->com, arm == 1 ? "RAISE irq" : "lower irq",
+                    (unsigned)uart->iir, (unsigned)(uart->ier & 0xF), (unsigned)uart->ints);
+        }
+        last_arm[uart->com] = arm;
+    }
+
+    if (arm == 1) {
+        device_raise_irq((uint8_t)uart->irq);
+    }
+    else {
         device_lower_irq((uint8_t)uart->irq);
     }
 }

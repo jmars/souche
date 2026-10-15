@@ -118,11 +118,11 @@ CPU_CFLAGS := $(CFLAGS) $(PERF_CFLAGS) -Werror
 # replaces exec_boundary.c's M1c stub) and cpu.rs:4596-4610's device_raise_irq /
 # device_lower_irq.  See src/hw/machine.h.
 HW_SRC := src/hw/io.c src/hw/bus.c src/hw/pit.c src/hw/rtc.c src/hw/dma.c \
-          src/hw/ps2.c src/hw/acpi.c src/hw/pci.c src/hw/machine.c \
+          src/hw/ps2.c src/hw/acpi.c src/hw/acpi_tables.c src/hw/pci.c src/hw/machine.c \
           src/hw/uart.c src/hw/kernel.c src/hw/ide.c \
           src/hw/virtio.c src/hw/virtio_console.c
 HW_HDR := src/hw/io.h src/hw/bus.h src/hw/pit.h src/hw/rtc.h src/hw/dma.h \
-          src/hw/ps2.h src/hw/acpi.h src/hw/pci.h src/hw/machine.h \
+          src/hw/ps2.h src/hw/acpi.h src/hw/acpi_tables.h src/hw/pci.h src/hw/machine.h \
           src/hw/uart.h src/hw/kernel.h src/hw/ide.h \
           src/hw/virtio.h src/hw/virtio_console.h
 HW_OBJ := $(patsubst src/hw/%.c,$(BUILD)/hw/%.o,$(HW_SRC))

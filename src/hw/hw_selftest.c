@@ -55,6 +55,7 @@
 #include "../cpu/pic.h"
 #include "../cpu/string.h" /* io_port_read8/16/32, io_port_write8/16/32 (the bridge) */
 #include "acpi.h"
+#include "acpi_tables.h"
 #include "bus.h"
 #include "dma.h"
 #include "ide.h"
@@ -1324,6 +1325,203 @@ static void test_apic(void)
 }
 
 /* ================================================================== *
+ * 7c. the FIRMWARE TABLES -- unit ACPI-2 (HANDOFF=v86c-acpi)
+ *
+ * The builder's own oracle (acpi_tables_verify) over the blob, the PLACEMENT checked the
+ * way the kernel checks it -- ACPICA's scan: every 16-byte step of the free window,
+ * signature + both RSDP checksums -- and the MADT's fields against the LIVE registers
+ * the APIC/IOAPIC answer through (the "machine's ACTUAL device configuration").  Then
+ * the able-to-fail half: a corrupted checksum, a mis-aligned RSDP and a wrong GSI base
+ * must each be CAUGHT, so each is applied to a copy and the check that must see it is
+ * run over the copy.  The delivery-side mirror is here too: the MADT says the PIT's line
+ * is IOAPIC pin 2, and device_raise_irq must feed pin 2 -- and pin 0 must stay silent
+ * even with its entry unmasked.
+ * ================================================================== */
+static uint8_t acpi_test_sum8(const uint8_t *p, uint32_t len)
+{
+    uint8_t sum = 0;
+    for (uint32_t i = 0; i < len; i++) sum = (uint8_t)(sum + p[i]);
+    return sum;
+}
+
+/* ACPICA's early predicate (acpi_tb_validate_rsdp), over exactly the region the kernel
+ * scans: 16-byte steps, "RSD PTR ", the v1 checksum over 20 bytes, and -- revision 2 --
+ * the length and the extended checksum over 36. */
+static const uint8_t *acpi_scan_rsdp(const uint8_t *mem, uint32_t len)
+{
+    for (uint32_t off = 0; off + 36 <= len; off += 16) {
+        const uint8_t *p = mem + off;
+        if (memcmp(p, "RSD PTR ", 8) != 0) continue;
+        if (acpi_test_sum8(p, 20) != 0) continue;
+        if (p[15] != 2 || p[20] != 36) continue;
+        if (acpi_test_sum8(p, 36) != 0) continue;
+        return p;
+    }
+    return NULL;
+}
+
+static void test_acpi_tables(void)
+{
+    uint8_t blob[ACPI_TABLES_LENGTH];
+    acpi_tables_build(blob);
+
+    /* ---- placement: the constants' own contract (checked before anything reads them) ---- */
+    CHECK(ACPI_OFF_RSDP % 16 == 0 && ACPI_OFF_RSDT % 16 == 0 && ACPI_OFF_XSDT % 16 == 0 &&
+          ACPI_OFF_FADT % 16 == 0 && ACPI_OFF_FACS % 16 == 0 && ACPI_OFF_DSDT % 16 == 0 &&
+          ACPI_OFF_MADT % 16 == 0);
+    CHECK(ACPI_OFF_RSDP < ACPI_OFF_RSDT && ACPI_OFF_RSDT < ACPI_OFF_XSDT &&
+          ACPI_OFF_XSDT < ACPI_OFF_FADT && ACPI_OFF_FADT < ACPI_OFF_FACS &&
+          ACPI_OFF_FACS < ACPI_OFF_DSDT && ACPI_OFF_DSDT < ACPI_OFF_MADT);
+    /* the free window: wholly inside 0xE0000-0xEFFFF, which nothing else claims (the
+     * firmware fills 0xF0000+, the option ROM 0xC0000, the boot params 0x80000) */
+    CHECK(ACPI_TABLES_ADDRESS + ACPI_TABLES_LENGTH <= 0xF0000u);
+    CHECK(ACPI_TABLES_ADDRESS >= 0xE0000u);
+
+    /* ---- the builder's oracle over its own blob ---- */
+    CHECK(acpi_tables_verify(blob));
+    /* the FADT's SCI is the line the PIIX4 device actually raises (acpi.c's irq 9) */
+    CHECK_EQ(blob[ACPI_OFF_FADT + 46], 9);
+
+    /* ---- the DEFAULT-OFF predicate at the firmware level: a window with no tables
+     * published must NOT pass the kernel's own scan ---- */
+    machine_reset();
+    CHECK(!cpu->acpi_enabled);
+    CHECK(acpi_scan_rsdp(mem8 + ACPI_TABLES_ADDRESS, 0xF0000u - ACPI_TABLES_ADDRESS) == NULL);
+    CHECK(!acpi_tables_verify(mem8 + ACPI_TABLES_ADDRESS)); /* zeros are not a table set */
+
+    /* ---- PUBLISH, then the kernel's own walk over guest RAM ---- */
+    acpi_tables_publish(mem8);
+    CHECK(cpu->acpi_enabled == false); /* publish does not flip the machine knob */
+    const uint8_t *found = acpi_scan_rsdp(mem8 + ACPI_TABLES_ADDRESS,
+                                          0xF0000u - ACPI_TABLES_ADDRESS);
+    CHECK(found == mem8 + ACPI_TABLES_ADDRESS); /* the FIRST candidate: nothing before it */
+    CHECK(acpi_tables_verify(mem8 + ACPI_TABLES_ADDRESS)); /* the published copy verifies */
+    /* RSDP -> RSDT/XSDT -> the FADT and the MADT, read back out of guest memory the way
+     * ACPICA walks it: each pointer lands on a signature, and each table's checksum is 0 */
+    uint32_t rsdt = (uint32_t)mem8[ACPI_TABLES_ADDRESS + 16] |
+                    (uint32_t)mem8[ACPI_TABLES_ADDRESS + 17] << 8 |
+                    (uint32_t)mem8[ACPI_TABLES_ADDRESS + 18] << 16 |
+                    (uint32_t)mem8[ACPI_TABLES_ADDRESS + 19] << 24;
+    uint64_t xsdt = 0;
+    for (int i = 0; i < 8; i++)
+        xsdt |= (uint64_t)mem8[ACPI_TABLES_ADDRESS + 24 + i] << (8 * i);
+    CHECK_EQ(rsdt, ACPI_TABLES_ADDRESS + ACPI_OFF_RSDT);
+    CHECK_EQ((uint32_t)xsdt, ACPI_TABLES_ADDRESS + ACPI_OFF_XSDT);
+    CHECK(memcmp(mem8 + rsdt, "RSDT", 4) == 0 && acpi_test_sum8(mem8 + rsdt, 44) == 0);
+    CHECK(memcmp(mem8 + (uint32_t)xsdt, "XSDT", 4) == 0 && acpi_test_sum8(mem8 + (uint32_t)xsdt, 52) == 0);
+    uint32_t fadt_at = (uint32_t)mem8[rsdt + 36] | (uint32_t)mem8[rsdt + 37] << 8 |
+                       (uint32_t)mem8[rsdt + 38] << 16 | (uint32_t)mem8[rsdt + 39] << 24;
+    uint32_t madt_at = (uint32_t)mem8[rsdt + 40] | (uint32_t)mem8[rsdt + 41] << 8 |
+                       (uint32_t)mem8[rsdt + 42] << 16 | (uint32_t)mem8[rsdt + 43] << 24;
+    CHECK_EQ(fadt_at, ACPI_TABLES_ADDRESS + ACPI_OFF_FADT);
+    CHECK_EQ(madt_at, ACPI_TABLES_ADDRESS + ACPI_OFF_MADT);
+    CHECK(memcmp(mem8 + fadt_at, "FACP", 4) == 0 && acpi_test_sum8(mem8 + fadt_at, 268) == 0);
+    CHECK(memcmp(mem8 + madt_at, "APIC", 4) == 0 && acpi_test_sum8(mem8 + madt_at, 76) == 0);
+    /* the FACS the FADT names (no checksum exists for it -- the spec gives it none) */
+    CHECK(memcmp(mem8 + ACPI_TABLES_ADDRESS + ACPI_OFF_FACS, "FACS", 4) == 0);
+
+    /* ---- the MADT's fields against the LIVE device registers ---- */
+    cpu->acpi_enabled = true;
+    const uint32_t madt_base = ACPI_TABLES_ADDRESS + ACPI_OFF_MADT;
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x20) >> 24, mem8[madt_base + 47]); /* apic id */
+    CHECK_EQ(read32s(IOAPIC_MEM_ADDRESS) >> 24, mem8[madt_base + 54]);      /* ioapic id */
+
+    /* ---- THE DELIVERY MIRROR: the PIT's line lands on IOAPIC pin 2, the pin the MADT
+     * publishes, and NEVER on pin 0 -- even with pin 0's entry unmasked ---- */
+    machine_reset();
+    cpu->acpi_enabled = true;
+    apic_arm_idt_vectors();
+    pic_mask_legacy();
+    /* entry 2: vector 0x30, edge, unmasked, destination apic 0 -- the kernel's own
+     * arrangement for the timer interrupt after the override.  IOREGSEL is
+     * 0x10 + 2*pin (0x14 for pin 2), the IOWIN write is the config half. */
+    write32(IOAPIC_MEM_ADDRESS + 0, 0x14);
+    write32(IOAPIC_MEM_ADDRESS + 0x10, 0x30);
+    apic_reset_cpu_side();
+    device_raise_irq(0); /* the REAL raise path: pic line + ioapic line + poll */
+    CHECK_EQ(cpu->sreg[CS], SEL_CODE2); /* delivered on the entry's vector */
+    CHECK_EQ(cpu->instruction_pointer, HANDLER_EIP);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x100 + 0x10), 0x10000); /* in service, vector 0x30 */
+    write32(APIC_MEM_ADDRESS + 0xB0, 0); /* edge EOI */
+    device_lower_irq(0); /* the edge line drops, through the same map (pin 2) */
+    /* the negative arm: pin 2 masked again (reg 0x14), pin 0 unmasked (vector 0x31), and
+     * isa irq 0 STILL never reaches pin 0 -- the redirect is where the line lands, not an
+     * extra delivery; the masked pin 2 swallows its own */
+    write32(IOAPIC_MEM_ADDRESS + 0, 0x14);
+    write32(IOAPIC_MEM_ADDRESS + 0x10, (int32_t)(IOAPIC_CONFIG_MASKED | 0x30));
+    write32(IOAPIC_MEM_ADDRESS + 0, 0x10); /* pin 0's config half */
+    write32(IOAPIC_MEM_ADDRESS + 0x10, 0x31);
+    apic_reset_cpu_side();
+    device_raise_irq(0);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x200 + 0x10), 0); /* irr bit 0x31: never set */
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x100 + 0x10), 0);
+    CHECK_EQ(cpu->sreg[CS], SEL_CODE); /* nothing delivered: still the guest's CS */
+    device_lower_irq(0);
+    /* identity for every other line: the uart's irq 4 lands on pin 4 (reg 0x18) */
+    write32(IOAPIC_MEM_ADDRESS + 0, 0x18);
+    write32(IOAPIC_MEM_ADDRESS + 0x10, 0x31);
+    apic_reset_cpu_side();
+    device_raise_irq(4);
+    CHECK_EQ(cpu->sreg[CS], SEL_CODE2);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x100 + 0x10), 0x20000); /* in service, vector 0x31 */
+    write32(APIC_MEM_ADDRESS + 0xB0, 0);
+    device_lower_irq(4);
+
+    /* ---- ABLE TO FAIL: each corruption applied to a COPY, the check that must catch
+     * it run over the copy ---- */
+    uint8_t copy[ACPI_TABLES_LENGTH];
+
+    /* repair a copy's MADT checksum: the checksum byte is ZEROED first (it covers
+     * itself), then the complement lands in it -- so a refusal below is the FIELD
+     * check working, not the broken checksum */
+    uint8_t *madt_copy = copy + ACPI_OFF_MADT;
+
+    /* 1. a corrupted checksum: one body byte flipped, no checksum survives it */
+    memcpy(copy, blob, sizeof(copy));
+    copy[ACPI_OFF_FADT + 46] ^= 0x40;
+    CHECK(!acpi_tables_verify(copy));
+
+    /* 2. a wrong GSI base, WITH the checksum repaired afterwards -- so the field check
+     * itself is what catches it, not the broken checksum */
+    memcpy(copy, blob, sizeof(copy));
+    copy[ACPI_OFF_MADT + 60] = 1; /* gsi_base 0 -> 1 */
+    madt_copy[9] = 0;
+    madt_copy[9] = (uint8_t)(0u - acpi_test_sum8(madt_copy, 76));
+    CHECK(acpi_test_sum8(madt_copy, 76) == 0); /* the checksum is now GOOD */
+    CHECK(!acpi_tables_verify(copy)); /* ...and the verify still refuses */
+
+    /* 3. a wrong LAPIC address, checksum repaired the same way */
+    memcpy(copy, blob, sizeof(copy));
+    copy[ACPI_OFF_MADT + 39] = 0x10; /* 0xFEE00000 -> 0xFEE01000 */
+    madt_copy[9] = 0;
+    madt_copy[9] = (uint8_t)(0u - acpi_test_sum8(madt_copy, 76));
+    CHECK(acpi_test_sum8(madt_copy, 76) == 0);
+    CHECK(!acpi_tables_verify(copy));
+
+    /* 4. a corrupted RSDP signature: the kernel's scan finds NOTHING */
+    memcpy(copy, blob, sizeof(copy));
+    copy[ACPI_OFF_RSDP + 2] ^= 0xFF; /* "SD" -> "xD" */
+    machine_reset();
+    memcpy(mem8 + ACPI_TABLES_ADDRESS, copy, sizeof(copy));
+    CHECK(acpi_scan_rsdp(mem8 + ACPI_TABLES_ADDRESS, 0xF0000u - ACPI_TABLES_ADDRESS) == NULL);
+
+    /* 5. a MIS-ALIGNED RSDP (the whole set shifted 8 bytes): the 16-byte scan stride
+     * misses it, AND the kernel's next step breaks -- the RSDT pointer still names the
+     * unshifted address, where the shifted bytes are not a table.  (verify() is an
+     * internals oracle by design and cannot see displacement; these two are the
+     * placement's own checks.) */
+    machine_reset();
+    memcpy(mem8 + ACPI_TABLES_ADDRESS + 8, blob, sizeof(blob));
+    CHECK(acpi_scan_rsdp(mem8 + ACPI_TABLES_ADDRESS, 0xF0000u - ACPI_TABLES_ADDRESS) == NULL);
+    {
+        uint32_t rsdp_at = ACPI_TABLES_ADDRESS + 8;
+        uint32_t rsdt_ptr = (uint32_t)mem8[rsdp_at + 16] | (uint32_t)mem8[rsdp_at + 17] << 8 |
+                            (uint32_t)mem8[rsdp_at + 18] << 16 | (uint32_t)mem8[rsdp_at + 19] << 24;
+        CHECK(memcmp(mem8 + rsdt_ptr, "RSDT", 4) != 0);
+    }
+}
+
+/* ================================================================== *
  * 8. the timer seat end to end: the REAL run loop wakes a halted guest
  *
  * This is the strongest form of "M1c left the timer seat, M2-1 wired it": main_loop itself
@@ -2575,6 +2773,7 @@ int main(void)
     RUN(test_pci, "pci: config space, an absent device, the I/O bar move, the stops");
     RUN(test_acpi, "acpi: PM1, the GPE registers, the PM timer, IRQ9");
     RUN(test_apic, "apic: the LAPIC register block, the timer at virtual time, the IOAPIC redirections, EOI/remote-EOI, the bounds");
+    RUN(test_acpi_tables, "acpi tables: the RSDP->RSDT/XSDT->FADT/MADT set, the kernel's own scan over guest RAM, the pin-2 wiring, and every corruption caught");
     RUN(test_timer_wakes_the_guest, "timer seat: main_loop wakes a halted guest on IRQ0");
     RUN(test_handover, "G4: the CPU's own in/out -- the PIT, and the port-0x80 probe (D-F1)");
     RUN(test_uart, "uart: a byte out of the sink, the line status, the divisor, the seam");

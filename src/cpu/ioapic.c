@@ -12,10 +12,25 @@
 
 #include "ioapic.h"
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "apic.h"
 #include "cpu_state.h" /* cpu->acpi_enabled */
+
+/* ACPI-3 DIAGNOSTIC (the ioapic half of V86C_TRACE_ACPI, styled on io.c's
+ * V86C_LOG_PORTS): the redirection writes, the line transitions and the delivery
+ * decisions, to stderr.  Decides nothing a guest can see. */
+static bool trace_enabled(void)
+{
+    static int enabled = -1;
+    if (enabled < 0) {
+        const char *v = getenv("V86C_TRACE_ACPI");
+        enabled = v != NULL && v[0] != '\0' && v[0] != '0';
+    }
+    return enabled != 0;
+}
 
 /* ioapic.rs:8-9 */
 #define IOREGSEL 0u
@@ -67,6 +82,12 @@ static void check_irq(ioapic_state_t *ioapic, apic_state_t *apic, uint8_t irq)
             ioapic->ioredtbl_config[irq] |= IOAPIC_CONFIG_REMOTE_IRR;
 
             if ((config & IOAPIC_CONFIG_REMOTE_IRR) != 0) {
+                if (trace_enabled() && irq != 2) {
+                    fprintf(stderr,
+                            "trace: ioapic check pin %u: LEVEL but remote_irr still set -> NO "
+                            "route (vec %02x)\n",
+                            (unsigned)irq, (unsigned)vector);
+                }
                 /* upstream: dbg_log!("No route: level interrupt and remote IRR still set")
                  * -- the config was just OR'd above, so this arm fires whenever the entry
                  * ALREADY had remote IRR set.  Upstream's log is debug-only; the return
@@ -77,14 +98,29 @@ static void check_irq(ioapic_state_t *ioapic, apic_state_t *apic, uint8_t irq)
 
         if (delivery_mode == 0 /* IOAPIC_DELIVERY_FIXED */ ||
             delivery_mode == 1 /* IOAPIC_DELIVERY_LOWEST_PRIORITY */) {
+            if (trace_enabled() && irq != 2) {
+                fprintf(stderr, "trace: ioapic check pin %u: route vec %02x (%s, dm %u)\n",
+                        (unsigned)irq, (unsigned)vector, is_level ? "level" : "edge",
+                        (unsigned)delivery_mode);
+            }
             apic_route(apic, vector, delivery_mode, is_level, destination, destination_mode);
         }
         else {
+            if (trace_enabled() && irq != 2) {
+                fprintf(stderr,
+                        "trace: ioapic check pin %u: delivery mode %u -> dropped (upstream "
+                        "TODO)\n",
+                        (unsigned)irq, (unsigned)delivery_mode);
+            }
             /* upstream: dbg_assert!(false, "TODO") -- dropped; the release delivers
              * nothing for the other modes (no route, no fault). */
         }
 
         ioapic->ioredtbl_config[irq] &= ~IOAPIC_CONFIG_DELIVS;
+    }
+    else if (trace_enabled() && irq != 2) {
+        fprintf(stderr, "trace: ioapic check pin %u: entry MASKED, pending irr not delivered\n",
+                (unsigned)irq);
     }
 }
 
@@ -95,6 +131,10 @@ void ioapic_remote_eoi(apic_state_t *apic, uint8_t vector)
 
         if ((uint8_t)(config & 0xFF) == vector &&
             (config & IOAPIC_CONFIG_REMOTE_IRR) != 0) {
+            if (trace_enabled() && i != 2) {
+                fprintf(stderr, "trace: ioapic remote_eoi vec %02x -> pin %u remote_irr cleared\n",
+                        (unsigned)vector, (unsigned)i);
+            }
             ioapic_instance.ioredtbl_config[i] &= ~IOAPIC_CONFIG_REMOTE_IRR;
             check_irq(&ioapic_instance, apic, i);
         }
@@ -116,15 +156,29 @@ void ioapic_set_irq(uint8_t i)
         ioapic_instance.irq_value |= mask;
 
         uint32_t config = ioapic_instance.ioredtbl_config[i];
+        if (trace_enabled() && i != 2) {
+            fprintf(stderr,
+                    "trace: ioapic SET pin %u (line 0->1; entry %s, %s, vec %02x)\n", (unsigned)i,
+                    (config & IOAPIC_CONFIG_MASKED) ? "masked" : "unmasked",
+                    (config & IOAPIC_CONFIG_TRIGGER_MODE_LEVEL) ? "level" : "edge",
+                    (unsigned)(config & 0xFF));
+        }
         if ((config & (IOAPIC_CONFIG_TRIGGER_MODE_LEVEL | IOAPIC_CONFIG_MASKED)) ==
             IOAPIC_CONFIG_MASKED) {
             /* edge triggered and masked */
+            if (trace_enabled() && i != 2) {
+                fprintf(stderr, "trace: ioapic SET pin %u: edge+masked -> EDGE LOST\n",
+                        (unsigned)i);
+            }
             return;
         }
 
         ioapic_instance.irr |= mask;
 
         check_irq(&ioapic_instance, apic, i);
+    }
+    else if (trace_enabled() && i != 2) {
+        fprintf(stderr, "trace: ioapic SET pin %u: line ALREADY HIGH, no edge\n", (unsigned)i);
     }
 }
 
@@ -139,6 +193,9 @@ void ioapic_clear_irq(uint8_t i)
 
     if ((ioapic_instance.irq_value & mask) == mask) {
         ioapic_instance.irq_value &= ~mask;
+        if (trace_enabled() && i != 2) {
+            fprintf(stderr, "trace: ioapic CLR pin %u (line 1->0)\n", (unsigned)i);
+        }
 
         uint32_t config = ioapic_instance.ioredtbl_config[i];
         if ((config & IOAPIC_CONFIG_TRIGGER_MODE_LEVEL) != 0) {
@@ -242,6 +299,23 @@ static void ioapic_write32_internal(ioapic_state_t *ioapic, apic_state_t *apic, 
                             ioapic->ioredtbl_config[irq] =
                                 (value & ~IOAPIC_CONFIG_READONLY_MASK) |
                                 (old_value & IOAPIC_CONFIG_READONLY_MASK);
+
+                            if (trace_enabled()) {
+                                fprintf(stderr,
+                                        "trace: ioapic redir[%u] <- %08x (vec %02x, %s, %s, "
+                                        "dm %u) [was %08x]\n",
+                                        (unsigned)irq, (unsigned)ioapic->ioredtbl_config[irq],
+                                        (unsigned)(ioapic->ioredtbl_config[irq] & 0xFF),
+                                        (ioapic->ioredtbl_config[irq] &
+                                         IOAPIC_CONFIG_TRIGGER_MODE_LEVEL)
+                                            ? "level"
+                                            : "edge",
+                                        (ioapic->ioredtbl_config[irq] & IOAPIC_CONFIG_MASKED)
+                                            ? "masked"
+                                            : "unmasked",
+                                        (unsigned)((ioapic->ioredtbl_config[irq] >> 8) & 7),
+                                        (unsigned)old_value);
+                            }
 
                             check_irq(ioapic, apic, irq);
                         }

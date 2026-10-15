@@ -253,12 +253,26 @@ double run_hardware_timers(bool acpi_enabled, double t)
     return fmin(fmin(pit_time, rtc_time), fmin(acpi_time, apic_time));
 }
 
-/* cpu.rs:4596-4610 */
+/* cpu.rs:4596-4610, with one board-wiring fact the upstream line cannot carry: the PIT's
+ * output line reaches the IOAPIC's INPUT PIN 2, not pin 0 -- the classic ISA IRQ0 -> GSI 2
+ * steering a real southbridge does, and the very override acpi_tables.c's MADT publishes.
+ * Upstream raises ioapic::set_irq(i) identity (cpu.rs:4599) because no upstream guest ever
+ * reads a MADT (there is no firmware builder); the moment ours does, a kernel that took the
+ * override would unmask pin 2 for its timer and pin 0 would go silent.  The PIN numbers in
+ * the IOAPIC are unchanged (the redirection table, the masks, the bounds) -- only which pin
+ * an ISA line lands on.  The PIC half stays identity: the 8259's IRQ0 line IS line 0. */
+#define IOAPIC_PIN_PIT 2u
+
+static uint8_t ioapic_pin_of_isa_irq(uint8_t i)
+{
+    return i == 0 ? IOAPIC_PIN_PIT : i;
+}
+
 void device_raise_irq(uint8_t i)
 {
     set_irq(i);
     if (cpu->acpi_enabled) {
-        ioapic_set_irq(i);
+        ioapic_set_irq(ioapic_pin_of_isa_irq(i));
     }
     handle_irqs();
 }
@@ -267,7 +281,7 @@ void device_lower_irq(uint8_t i)
 {
     clear_irq(i);
     if (cpu->acpi_enabled) {
-        ioapic_clear_irq(i);
+        ioapic_clear_irq(ioapic_pin_of_isa_irq(i));
     }
     handle_irqs();
 }
