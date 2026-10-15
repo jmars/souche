@@ -170,23 +170,31 @@ void acpi_tables_build(uint8_t out[ACPI_TABLES_LENGTH])
 	 * NameOp 08, the EISAID pack, BufferOp 11, the Word Address Space descriptor 88
 	 * with its flag bytes, PackageOp 12, EndTag 79) -- no compiler on the host, so
 	 * every byte below is written against the spec tables and checked by verify() +
-	 * the guest's ACPICA.  The EISAID trap, for the next hand-encoder: the packed PNP
+	 * the guest's ACPICA.  The PkgLength convention (the acpi-6r review's SF1): a
+	 * PkgLength counts from its FIRST byte -- the encoding INCLUDED, the opcode
+	 * EXCLUDED -- so pkg_end = first_pkglen_byte + PkgLength (iasl output and
+	 * ACPICA psargs.c's AcpiPsGetNextPackageEnd agree); an earlier builder encoded
+	 * the CONTENT length here and every package declared an extent one or two
+	 * bytes short.  The EISAID trap, for the next hand-encoder: the packed PNP
 	 * id's LETTER bits sit in the LOW half of the dword (ACPICA renders a numeric
 	 * _HID by byte-swapping it first -- exutils.c acpi_ex_eisa_id_to_string), so
 	 * PNP0A03 is 0x030AD041, and the mirror-image 0x41D00A03 boots looking like
 	 * "@XJD041" (MEASURED, §3).  Revision 2 = AML 2.0. */
 	static const uint8_t pci0_aml[] = {
-	    0x10, 0x4B, 0x06,          /* ScopeOp, PkgLength(107): the 2-byte form, low
-	                           * nibble in 0x4B bits[3:0], high bits in the follow byte */
+	    0x10, 0x4D, 0x06,          /* ScopeOp, PkgLength(109 = 107 content + these
+	                           * 2 encoding bytes): the 2-byte form, low nibble in
+	                           * 0x4D bits[3:0], high bits in the follow byte */
 	    0x5F, 0x53, 0x42, 0x5F,    /* "_SB_" */
-	    0x5B, 0x82, 0x43, 0x06,    /* DeviceOp, PkgLength(99), "PCI0": 2-byte form */
+	    0x5B, 0x82, 0x45, 0x06,    /* DeviceOp, PkgLength(101 = 99 content + these
+	                            * 2 encoding bytes), "PCI0": 2-byte form */
 	    0x50, 0x43, 0x49, 0x30,    /* "PCI0" */
 	    0x08, 0x5F, 0x48, 0x49, 0x44, /* NameOp "_HID" */
 	    0x0C, 0x41, 0xD0, 0x0A, 0x03, /* DWordPrefix, 0x030AD041 = EISAID PNP0A03 */
 	    0x08, 0x5F, 0x42, 0x42, 0x4E, /* NameOp "_BBN" */
 	    0x00,                      /* ZeroOp */
 	    0x08, 0x5F, 0x43, 0x52, 0x53, /* NameOp "_CRS" */
-	    0x11, 0x34,                /* BufferOp, PkgLength(52 = the size operand + 50 data) */
+	    0x11, 0x35,                /* BufferOp, PkgLength(53) = 52 content (the size
+                           * operand + 50 data) + this encoding byte */
 	    0x0A, 0x32,                /* the buffer's size operand is a PREFIXED AML INTEGER
 	                           * (psargs.c reads an operand: BytePrefix, then 50) -- a
 	                           * raw word here reads as length 0 and the kernel rejects
@@ -217,8 +225,10 @@ void acpi_tables_build(uint8_t out[ACPI_TABLES_LENGTH])
 	    0x79, 0x00,                /* EndTag (the checksum byte is ignored for _CRS) */
 	    /* _PRT: the one route the machine declares (see the comment above) */
 	    0x08, 0x5F, 0x50, 0x52, 0x54, /* NameOp "_PRT" */
-	    0x12, 0x0D, 0x01,          /* PackageOp, PkgLength(13), 1 entry */
-	    0x12, 0x0A, 0x04,          /* PackageOp, PkgLength(10), 4 elements */
+	    0x12, 0x0E, 0x01,          /* PackageOp, PkgLength(14 = 13 content + this
+	                           * byte), 1 entry */
+	    0x12, 0x0B, 0x04,          /* PackageOp, PkgLength(11 = 10 content + this
+	                           * byte), 4 elements */
 	    0x0C, 0xFF, 0xFF, 0x0C, 0x00, /* DWordPrefix, address 0x000CFFFF: device 12,
 	                           * all functions (pci.c's routing is function-agnostic) */
 	    0x00,                      /* pin Zero = INTA */
@@ -440,10 +450,32 @@ bool acpi_tables_verify(const uint8_t *blob)
 	const uint8_t *aml = dsdt + 36;
 	const uint32_t aml_len = 146u - 36u;
 	if (aml_len != 110) return false;
+
+	/* --- the PkgLength rule, pinned STRUCTURALLY (the acpi-6r review's SF1) ---
+	 * A PkgLength counts from its FIRST byte, its own encoding included, the
+	 * opcode excluded (iasl output and ACPICA psargs.c's
+	 * AcpiPsGetNextPackageEnd agree).  Each of the five chained packages must
+	 * therefore decode to exactly the distance from its length field to its
+	 * true end -- every top-level object lands exactly on the next opcode, the
+	 * reviewer's own seabios.bin DSDT walk.  This is the seat that catches the
+	 * CLASS: the builder originally encoded content lengths and all five
+	 * packages declared extents one or two bytes short, which no byte-value
+	 * pin alone would have noticed.  Pairs: {first PkgLength byte, true end}
+	 * for the Scope / Device / Buffer / _PRT outer / _PRT inner (the buffer's
+	 * end is the _PRT NameOp at 90; the rest run to aml_len). */
+	static const uint32_t pkg_len_at[5] = { 1, 9, 37, 96, 99 };
+	static const uint32_t pkg_end[5] = { 110, 110, 90, 110, 110 };
+	for (int i = 0; i < 5; i++) {
+		uint32_t extra = (uint32_t)aml[pkg_len_at[i]] >> 6;
+		uint32_t len = (uint32_t)aml[pkg_len_at[i]] & (extra ? 0x0Fu : 0x3Fu);
+		for (uint32_t k = 1; k <= extra; k++)
+			len |= (uint32_t)aml[pkg_len_at[i] + k] << (4 * k);
+		if (pkg_len_at[i] + len != pkg_end[i]) return false;
+	}
 	static const uint8_t scope_dev[] = {
-	    0x10, 0x4B, 0x06,          /* ScopeOp, PkgLength(107) */
+	    0x10, 0x4D, 0x06,          /* ScopeOp, PkgLength(109) */
 	    '_', 'S', 'B', '_',
-	    0x5B, 0x82, 0x43, 0x06,    /* DeviceOp, PkgLength(99) */
+	    0x5B, 0x82, 0x45, 0x06,    /* DeviceOp, PkgLength(101) */
 	    'P', 'C', 'I', '0',
 	    0x08, '_', 'H', 'I', 'D',  /* NameOp _HID */
 	    0x0C, 0x41, 0xD0, 0x0A, 0x03, /* EISAID PNP0A03 = 0x030AD041 */
@@ -452,7 +484,7 @@ bool acpi_tables_verify(const uint8_t *blob)
 	if (aml[25] != 0x08 || memcmp(aml + 26, "_BBN", 4) != 0 || aml[30] != 0x00)
 		return false; /* _BBN = Zero: bus 0 */
 	if (aml[31] != 0x08 || memcmp(aml + 32, "_CRS", 4) != 0) return false;
-	if (aml[36] != 0x11 || aml[37] != 0x34) return false; /* BufferOp, PkgLength(52) */
+	if (aml[36] != 0x11 || aml[37] != 0x35) return false; /* BufferOp, PkgLength(53) */
 	if (aml[38] != 0x0A || aml[39] != 50) return false; /* the size operand: 50 */
 	/* the three Word Address Space descriptors (tag 0x88, length 13, Min+Max fixed
 	 * positive decode, full range) and the EndTag, at their fixed offsets */
@@ -490,8 +522,8 @@ bool acpi_tables_verify(const uint8_t *blob)
 	 * 0x60-0x62 (the bytes the firmware deliberately leaves 0) or a GSI that is
 	 * not what the firmware writes is a false declaration and refuses here. */
 	if (aml[90] != 0x08 || memcmp(aml + 91, "_PRT", 4) != 0) return false;
-	if (aml[95] != 0x12 || aml[96] != 0x0D || aml[97] != 0x01) return false;
-	if (aml[98] != 0x12 || aml[99] != 0x0A || aml[100] != 0x04) return false;
+	if (aml[95] != 0x12 || aml[96] != 0x0E || aml[97] != 0x01) return false;
+	if (aml[98] != 0x12 || aml[99] != 0x0B || aml[100] != 0x04) return false;
 	if (aml[101] != 0x0C) return false; /* DWordPrefix (the address) */
 	uint32_t prt_addr = (uint32_t)aml[102] | (uint32_t)aml[103] << 8 |
 	                    (uint32_t)aml[104] << 16 | (uint32_t)aml[105] << 24;

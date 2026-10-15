@@ -1597,7 +1597,9 @@ static void test_acpi_tables(void)
     /* 13. the _PRT's address moved to device 13, checksum repaired -- the entry
      * must be the (device, pin) whose parent_pin arithmetic lands on the byte the
      * firmware programs: (0 + 13 - 1) & 3 = 0 is PIRQA (0x60), deliberately 0.
-     * The verify's COMPUTED parent_pin check is what must catch it. */
+     * The verify's prt_addr equality (0x000CFFFF) is what catches it FIRST; the
+     * computed parent_pin check is the second catcher (the acpi-6r review's N2:
+     * this comment previously attributed the wrong catcher). */
     memcpy(copy, blob, sizeof(copy));
     copy[ACPI_OFF_DSDT + 36 + 104] = 0x0D; /* the address's device half: 12 -> 13 */
     dsdt_copy[9] = 0;
@@ -1619,6 +1621,32 @@ static void test_acpi_tables(void)
      * config mechanism's 8-bit bus field can decode */
     memcpy(copy, blob, sizeof(copy));
     copy[ACPI_OFF_DSDT + 36 + 82] = 0x7F;
+    dsdt_copy[9] = 0;
+    dsdt_copy[9] = (uint8_t)(0u - acpi_test_sum8(dsdt_copy, 146));
+    CHECK(acpi_test_sum8(dsdt_copy, 146) == 0);
+    CHECK(!acpi_tables_verify(copy));
+
+    /* 16. the Scope's PkgLength restored to the old content-length encoding
+     * (109 -> 107), checksum repaired -- the acpi-6r SF1 regression probe: a
+     * PkgLength counts from its FIRST byte, encoding included, so 107 would
+     * land the scope's end at 108, inside the Device's tail, instead of
+     * exactly on nothing at 110.  The verify's STRUCTURAL walk (the decoded
+     * length vs the true ends) is what must catch it, before any byte-value
+     * pin gets a vote. */
+    memcpy(copy, blob, sizeof(copy));
+    copy[ACPI_OFF_DSDT + 36 + 1] = 0x4B; /* the Scope's PkgLength lead byte */
+    dsdt_copy[9] = 0;
+    dsdt_copy[9] = (uint8_t)(0u - acpi_test_sum8(dsdt_copy, 146));
+    CHECK(acpi_test_sum8(dsdt_copy, 146) == 0);
+    CHECK(!acpi_tables_verify(copy));
+
+    /* 17. the _PRT's source field flipped (ZeroOp -> OneOp: static -> link),
+     * checksum repaired -- the acpi-6r review's N1: source is the
+     * static-vs-link discriminator the design decision rests on, and a link
+     * source would send the guest hunting for a link object this table does
+     * not contain.  The verify's aml[107] pin is what must catch it. */
+    memcpy(copy, blob, sizeof(copy));
+    copy[ACPI_OFF_DSDT + 36 + 107] = 0x01; /* source Zero -> OneOp */
     dsdt_copy[9] = 0;
     dsdt_copy[9] = (uint8_t)(0u - acpi_test_sum8(dsdt_copy, 146));
     CHECK(acpi_test_sum8(dsdt_copy, 146) == 0);
