@@ -1,0 +1,5 @@
+APIC-1 boot-2 soak -- the reboot gate's kernel arm workload WITH --acpi and lapic:
+$ ./build/v86c --bzimage tests/images/vmlinuz-i386 4000000000 --cmdline 'console=ttyS0 lapic' --hda tests/images/disk.img --initrd tests/images/guest-initramfs-reboot.img --memory 80 --bios build/minibios-80m.bin --acpi --serial s-N.log
+10 runs, current plain-make tree (binary sha ab9c410c5ebb07f3*): every run rc=0, every boot 2 printed 'DISK PERSIST OK' (the marker written in boot 1 read back from /dev/sda sector 8 after the PS/2-controller reboot).
+
+Session total for this workload: 21 clean passes on post-B1 builds (15 on the exact current binary), 1 SIGBUS on the first binary (B1, 23:23) -- see results/apic-1.md ss6.

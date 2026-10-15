@@ -28,6 +28,7 @@
 
 #include "cpu.h" /* the M1c/M2 stop (no longer used here; io.c owns it) */
 #include "cpu_state.h"
+#include "apic.h"         /* apic_acknowledge_irq -- handle_irqs' second arm */
 #include "instructions.h" /* handle_irqs' declaration */
 #include "paging.h"       /* call_interrupt_vector's declaration */
 #include "string.h"       /* the in/out instructions' side of the bridge (declarations only) */
@@ -390,9 +391,14 @@ void handle_irqs(void)
             pic_call_irq((uint8_t)irq);
         }
         else if (cpu->acpi_enabled) {
-            /* apic.rs (M2): acknowledge_irq.  acpi_enabled is false for every machine
-             * this unit can run -- the loader never sets it -- so the arm is unreachable
-             * until M2 lands the APIC. */
+            /* cpu.rs:4578-4582: the PIC had nothing; the local APIC is asked next.
+             * Upstream's `else if *acpi_enabled` is the same gate device_raise_irq's
+             * IOAPIC half uses -- the machine knob (cpu->acpi_enabled), not the
+             * guest's WRMSR flag (cpu->apic_enabled). */
+            int32_t apic_irq = apic_acknowledge_irq();
+            if (apic_irq >= 0) {
+                pic_call_irq((uint8_t)apic_irq);
+            }
         }
     }
 }

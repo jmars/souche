@@ -1013,6 +1013,15 @@ void cpu_event_halt(void) { cpu_event_halt_calls++; }
 static int32_t handle_irqs_calls = 0;
 void handle_irqs(void) { handle_irqs_calls++; }
 
+/* APIC-1: the four mmio entry points memory.c routes to.  The real bodies live in
+ * apic.c/ioapic.c, which this binary does NOT link (the same arrangement as the
+ * io_port_* bridge above); these return the acpi-off answers the mmio-window cases
+ * here assert (0 on a read, a discarded write). */
+int32_t apic_read32(uint32_t addr) { (void)addr; return 0; }
+void apic_write32(uint32_t addr, uint32_t value) { (void)addr; (void)value; }
+int32_t ioapic_read32(uint32_t addr) { (void)addr; return 0; }
+void ioapic_write32(uint32_t addr, uint32_t value) { (void)addr; (void)value; }
+
 /* M1c's far control transfers and iret (cpu.rs:507-508, 1128, 1507) */
 static int32_t far_jump_calls = 0;
 static int32_t far_jump_last_eip = -1, far_jump_last_selector = -1;

@@ -94,6 +94,7 @@ CPU_SRC := src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/paging.c
            src/cpu/sse_instr.c \
            src/cpu/softfloat.c src/cpu/fpu.c \
            src/cpu/exceptions.c src/cpu/pic.c \
+           src/cpu/apic.c src/cpu/ioapic.c \
            src/cpu/cpu.c src/cpu/exec_boundary.c \
            src/cpu/uop_cache.c \
            src/cpu/jit_mem.c \
@@ -105,6 +106,7 @@ CPU_HDR := src/cpu/cpu_state.h src/cpu/flags.h src/cpu/memory.h src/cpu/paging.h
            src/cpu/sse_instr.h \
            src/cpu/softfloat.h src/cpu/fpu.h \
            src/cpu/exceptions.h src/cpu/pic.h \
+           src/cpu/apic.h src/cpu/ioapic.h \
            src/cpu/cpu.h src/cpu/exec_boundary.h \
            src/cpu/jit_mem.h src/cpu/jit_x64.h src/cpu/jit_codegen.h
 CPU_CFLAGS := $(CFLAGS) $(PERF_CFLAGS) -Werror

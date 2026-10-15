@@ -42,11 +42,13 @@
 #include <string.h>
 #include <time.h>
 
+#include "../cpu/apic.h"
 #include "../cpu/cpu.h"
 #include "../cpu/cpu_state.h"
 #include "../cpu/exceptions.h"
 #include "../cpu/flags.h"
 #include "../cpu/instructions.h"
+#include "../cpu/ioapic.h"
 #include "../cpu/memory.h"
 #include "../cpu/misc_instr.h"
 #include "../cpu/paging.h"
@@ -1047,6 +1049,278 @@ static void test_acpi(void)
     clear_stop();
     CHECK_EQ(io_port_read8(0xB000), 0xFF);
     CHECK(!interpreted_unimplemented);
+}
+
+/* ================================================================== *
+ * 7b. the LOCAL APIC and the IOAPIC -- unit APIC-1 (HANDOFF=v86c-apic)
+ *
+ * The five observables the brief's G3 names: the register blocks round-trip, the timer
+ * fires at the right VIRTUAL time (D-F2: the tick is the guest instruction, so the
+ * fire-at boundaries below are instruction counts derived from the divider table), an
+ * IOAPIC redirection entry delivers, EOI clears the ISR bit (and, level-triggered, sends
+ * the remote EOI the IOAPIC's entry carries), and every guest-controlled bound refuses
+ * rather than corrupting.  Everything runs through the CPU's own mmio routing
+ * (read32s/write32 at APIC_MEM_ADDRESS / IOAPIC_MEM_ADDRESS), which is the guest's path.
+ * ================================================================== */
+static void apic_arm_idt_vectors(void)
+{
+    /* the file's build_idt covers only the PIC vectors; the APIC delivers on the
+     * vectors the GUEST programs, so the two used here get their own entries */
+    wr64(IDT_BASE + 0x30 * 8, make_idt_entry(HANDLER_EIP, SEL_CODE2, INTR_GATE_INTERRUPT, 0, true));
+    wr64(IDT_BASE + 0x31 * 8, make_idt_entry(HANDLER_EIP, SEL_CODE2, INTR_GATE_INTERRUPT, 0, true));
+}
+
+/* both 8259s masked -- the arrangement a guest that runs on the APIC puts the legacy
+ * controllers in (linux's "mask 8259A" initial step); it makes the poll's priority
+ * order observable: the PIC is asked first and answers -1, so the APIC arm runs */
+static void pic_mask_legacy(void)
+{
+    program_pic();
+    io_port_write8(0x21, 0xFF);
+    io_port_write8(0xA1, 0xFF);
+}
+
+static void apic_reset_cpu_side(void)
+{
+    cpu->sreg[CS] = SEL_CODE;
+    cpu->instruction_pointer = STACK_TOP;
+    cpu->previous_ip = STACK_TOP;
+    cpu->flags |= FLAG_INTERRUPT;
+}
+
+static void test_apic(void)
+{
+    /* ---- the machine knob OFF: upstream's early return (apic.rs:112, 279) ---- */
+    machine_reset();
+    CHECK(!cpu->acpi_enabled);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x20), 0);
+    write32(APIC_MEM_ADDRESS + 0xF0, 0x1234);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x20), 0);
+    CHECK_EQ(read32s(IOAPIC_MEM_ADDRESS + 0x10), 0);
+
+    /* ---- the register block: identity/version/defaults, and the round-trips with
+     * upstream's own write masks ---- */
+    cpu->acpi_enabled = true;
+    apic_arm_idt_vectors();
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x20), 0);  /* apic_id starts 0 */
+    write32(APIC_MEM_ADDRESS + 0x20, (int32_t)0x01000000);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x20), (int32_t)0x01000000);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x30), 0x50014); /* version */
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0xF0), 0xFE);    /* spurious vector */
+    write32(APIC_MEM_ADDRESS + 0xF0, 0x1FF);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0xF0), 0x1FF);   /* stored verbatim */
+    write32(APIC_MEM_ADDRESS + 0xE0, (int32_t)0xF0000000u);
+    CHECK_EQ((uint32_t)read32s(APIC_MEM_ADDRESS + 0xE0), 0xF0000000u | 0xFFFFFFu);
+    write32(APIC_MEM_ADDRESS + 0xD0, 0x01020304);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0xD0), (int32_t)0x01000000u);
+    write32(APIC_MEM_ADDRESS + 0x80, 0xA5A5);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x80), 0xA5);
+    CHECK_EQ((uint32_t)read32s(APIC_MEM_ADDRESS + 0x320), APIC_CONFIG_MASKED);
+    write32(APIC_MEM_ADDRESS + 0x320, 0x20030);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x320), 0x20030);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x100), 0); /* isr */
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x180), 0); /* tmr */
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x200), 0); /* irr */
+    write32(APIC_MEM_ADDRESS + 0x310, 0x02000000);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x310), 0x02000000);
+    /* the B0 read is write-only upstream: 0 */
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0xB0), 0);
+    /* EOI with nothing in service: the release's no-op (upstream logs "Bad eoi") */
+    write32(APIC_MEM_ADDRESS + 0xB0, 0);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x100), 0);
+
+    /* ---- the IPI path: icr0's self shorthand delivers (apic.rs:374-377) ---- */
+    machine_reset();
+    cpu->acpi_enabled = true;
+    apic_arm_idt_vectors();
+    write32(APIC_MEM_ADDRESS + 0x310, 0);
+    write32(APIC_MEM_ADDRESS + 0x300, 0x31 | (1 << 18)); /* vector 0x31, self */
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x200 + 0x10), 0x20000); /* irr bit 0x31 */
+    CHECK_EQ((uint32_t)read32s(APIC_MEM_ADDRESS + 0x300) & (1u << 12), 0); /* deliv status */
+    apic_reset_cpu_side();
+    handle_irqs();
+    CHECK_EQ(cpu->sreg[CS], SEL_CODE2);
+    CHECK_EQ(cpu->instruction_pointer, HANDLER_EIP);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x100 + 0x10), 0x20000); /* moved to isr */
+    write32(APIC_MEM_ADDRESS + 0xB0, 0);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x100 + 0x10), 0);
+
+    /* ---- the timer, one-shot, divider /1: 1000 ticks per guest instruction
+     * (APIC_TIMER_FREQ 1e6/ms over D-F2's 1 instruction = 1 us -- the TSC's own rate,
+     * m2-1f measured "1000 counts per instruction") ---- */
+    machine_reset();
+    cpu->acpi_enabled = true;
+    apic_arm_idt_vectors();
+    uint32_t ic0 = cpu->instruction_counter;
+    write32(APIC_MEM_ADDRESS + 0x3E0, 0x0B); /* (0xB&3)|((0xB&8)>>1) = 0b111 -> shift 0 */
+    CHECK_EQ(apic_get_apic()->timer_divider_shift, 0);
+    write32(APIC_MEM_ADDRESS + 0x380, 2000); /* 2000 ticks = 2 instructions */
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x380), 2000);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x390), 2000); /* current count mirrors it */
+    CHECK_EQ(round_to_u32(apic_get_apic()->timer_last_tick * 1000.0), ic0);
+    write32(APIC_MEM_ADDRESS + 0x320, 0x30); /* vector 0x30, unmasked, one-shot */
+
+    cpu->instruction_counter = ic0 + 1;
+    /* the current-count read is ITS OWN decrementing view (apic.rs:231-268) */
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x390), 1000);
+    CHECK_EQ(round_to_u32(apic_timer(microtick()) * 1000.0), 1); /* one tick to go */
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x200 + 0x10), 0);
+    cpu->instruction_counter = ic0 + 2;
+    CHECK_EQ(round_to_u32(apic_timer(microtick()) * 1000.0), 0);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x390), 0); /* the one-shot emptied it */
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x200 + 0x10), 0x10000); /* irr bit 0x30 */
+    /* and the fan-out reaches it through the REAL poll: the PIC has nothing, so
+     * handle_irqs falls through to the APIC arm */
+    apic_reset_cpu_side();
+    handle_irqs();
+    CHECK_EQ(cpu->sreg[CS], SEL_CODE2);
+    CHECK_EQ(cpu->instruction_pointer, HANDLER_EIP);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x200 + 0x10), 0); /* acked */
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x100 + 0x10), 0x10000); /* in service */
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x180 + 0x10), 0); /* edge: tmr clear */
+    /* THE EOI: clears the isr bit (the brief's named observable) */
+    write32(APIC_MEM_ADDRESS + 0xB0, 0);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x100 + 0x10), 0);
+
+    /* ---- the timer, periodic, divider /16: the divider table is 16x ---- */
+    machine_reset();
+    cpu->acpi_enabled = true;
+    apic_arm_idt_vectors();
+    ic0 = cpu->instruction_counter;
+    write32(APIC_MEM_ADDRESS + 0x3E0, 0x03); /* (3&3)|((3&8)>>1) = 3 -> shift 4 */
+    CHECK_EQ(apic_get_apic()->timer_divider_shift, 4);
+    write32(APIC_MEM_ADDRESS + 0x320, (int32_t)APIC_TIMER_MODE_PERIODIC | 0x30);
+    write32(APIC_MEM_ADDRESS + 0x380, 2000); /* 2000 counts * 16 = 32000 ticks = 32 instr */
+    cpu->instruction_counter = ic0 + 31;
+    apic_timer(microtick());
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x200 + 0x10), 0);
+    cpu->instruction_counter = ic0 + 32;
+    apic_timer(microtick());
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x200 + 0x10), 0x10000);
+    /* a period later it refires -- and with /16 the elapsed ticks (32000) are already
+     * past 2x the COUNT (4000), so upstream's resynchronise arm takes last_tick to now */
+    cpu->instruction_counter = ic0 + 64;
+    apic_timer(microtick());
+    CHECK_EQ(round_to_u32(apic_get_apic()->timer_last_tick * 1000.0), ic0 + 64);
+    /* the /1 periodic arm, where consecutive periods stay below 2x the count: the
+     * non-skip path (apic.rs:508, last_tick += time_per_interrupt) */
+    machine_reset();
+    cpu->acpi_enabled = true;
+    ic0 = cpu->instruction_counter;
+    write32(APIC_MEM_ADDRESS + 0x3E0, 0x0B);
+    write32(APIC_MEM_ADDRESS + 0x320, (int32_t)APIC_TIMER_MODE_PERIODIC | 0x30);
+    write32(APIC_MEM_ADDRESS + 0x380, 2000); /* one period = 2 instructions */
+    cpu->instruction_counter = ic0 + 2;
+    apic_timer(microtick());
+    CHECK_EQ(round_to_u32(apic_get_apic()->timer_last_tick * 1000.0), ic0 + 2);
+
+    /* ---- the machine knob gates the fan-out, not the timer's own state ---- */
+    machine_reset();
+    cpu->acpi_enabled = true;
+    write32(APIC_MEM_ADDRESS + 0x3E0, 0x0B);
+    write32(APIC_MEM_ADDRESS + 0x320, 0x30);
+    write32(APIC_MEM_ADDRESS + 0x380, 2000);
+    cpu->acpi_enabled = false; /* the knob flips AFTER the timer was armed */
+    cpu->instruction_counter += 3;
+    run_hardware_timers(false, microtick());
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x200), 0); /* never consulted */
+    cpu->acpi_enabled = true;
+    run_hardware_timers(true, microtick());
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x200 + 0x10), 0x10000); /* now it is */
+
+    /* ---- the IOAPIC: the indirect block, a redirection entry delivering ---- */
+    machine_reset();
+    cpu->acpi_enabled = true;
+    apic_arm_idt_vectors();
+    pic_mask_legacy();
+    write32(IOAPIC_MEM_ADDRESS + 0, 1); /* IOREGSEL: register 1 */
+    CHECK_EQ(read32s(IOAPIC_MEM_ADDRESS + 0x10), 0x170011); /* version | 23 entries */
+    write32(IOAPIC_MEM_ADDRESS + 0, 0);
+    CHECK_EQ(read32s(IOAPIC_MEM_ADDRESS + 0x10), 0); /* the id */
+    write32(IOAPIC_MEM_ADDRESS + 0, 2);
+    CHECK_EQ(read32s(IOAPIC_MEM_ADDRESS + 0x10), 0); /* arbitration id */
+    /* entry 4: vector 0x30, edge, unmasked, destination 1 */
+    write32(IOAPIC_MEM_ADDRESS + 0, 0x18);
+    CHECK_EQ(read32s(IOAPIC_MEM_ADDRESS + 0x10), (int32_t)IOAPIC_CONFIG_MASKED); /* boot state */
+    write32(IOAPIC_MEM_ADDRESS + 0x10, 0x30);
+    CHECK_EQ(read32s(IOAPIC_MEM_ADDRESS + 0x10), 0x30);
+    write32(IOAPIC_MEM_ADDRESS + 0, 0x19);
+    write32(IOAPIC_MEM_ADDRESS + 0x10, (int32_t)0x01000000);
+    CHECK_EQ(read32s(IOAPIC_MEM_ADDRESS + 0x10), (int32_t)0x01000000);
+    /* THE DELIVERY, through device_raise_irq's real body (pic line + ioapic line +
+     * poll); the 8259 is masked, so the vector comes from the redirection entry */
+    apic_reset_cpu_side();
+    device_raise_irq(4);
+    CHECK_EQ(cpu->sreg[CS], SEL_CODE2);
+    CHECK_EQ(cpu->instruction_pointer, HANDLER_EIP);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x100 + 0x10), 0x10000); /* in service */
+    CHECK_EQ(apic_acknowledge_irq(), -1); /* the ack rule: isr >= any irr -> none */
+    write32(APIC_MEM_ADDRESS + 0xB0, 0);  /* edge-triggered EOI: no remote eoi */
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x100 + 0x10), 0);
+    /* a masked entry swallows the line */
+    write32(IOAPIC_MEM_ADDRESS + 0, 0x1A);
+    write32(IOAPIC_MEM_ADDRESS + 0x10, (int32_t)(IOAPIC_CONFIG_MASKED | 0x30));
+    device_raise_irq(5);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x200 + 0x10), 0);
+    /* level-triggered: the entry takes the remote IRR, the vector is TMR-marked, and
+     * the APIC's EOI sends the IOAPIC the remote EOI -- which re-delivers while the
+     * line is still up (ioapic.rs:81-91) */
+    write32(IOAPIC_MEM_ADDRESS + 0, 0x1C);
+    write32(IOAPIC_MEM_ADDRESS + 0x10, (int32_t)(IOAPIC_CONFIG_TRIGGER_MODE_LEVEL | 0x30));
+    device_raise_irq(6);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x180 + 0x10), 0x10000); /* tmr bit 0x30 */
+    CHECK_EQ(read32s(IOAPIC_MEM_ADDRESS + 0x10),
+             (int32_t)(IOAPIC_CONFIG_TRIGGER_MODE_LEVEL | IOAPIC_CONFIG_REMOTE_IRR | 0x30));
+    write32(IOAPIC_MEM_ADDRESS + 0, 0x19);
+    write32(IOAPIC_MEM_ADDRESS + 0x10, (int32_t)0x01000000); /* destination half */
+    CHECK_EQ(apic_acknowledge_irq(), 0x30); /* the vector the entry programmed */
+    write32(APIC_MEM_ADDRESS + 0xB0, 0);    /* the guest's EOI */
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x100 + 0x10), 0);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x200 + 0x10), 0x10000); /* re-delivered: line up */
+    CHECK_EQ(apic_acknowledge_irq(), 0x30);
+    /* the device lowers the line; the NEXT eoi re-delivers nothing */
+    device_lower_irq(6);
+    write32(APIC_MEM_ADDRESS + 0xB0, 0);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x200 + 0x10), 0);
+
+    /* ---- THE BOUNDS: each refuses rather than corrupting ---- */
+    /* ioregsel is a full 32-bit guest write; past the table the read answers 0 and the
+     * write discards, and no entry changes.  Entry 0's destination half is programmed
+     * FIRST on purpose: ioredtbl_config[24] (one past the table) IS
+     * ioredtbl_destination[0] in the struct, so a relaxed bound would read THAT value
+     * back -- the check below sees a neighbour's data, not a coincidental zero. */
+    write32(IOAPIC_MEM_ADDRESS + 0, 0x11);
+    write32(IOAPIC_MEM_ADDRESS + 0x10, (int32_t)0x55000000);
+    write32(IOAPIC_MEM_ADDRESS + 0, 0x3E); /* entry 23, config half: the last valid */
+    int32_t entry23 = read32s(IOAPIC_MEM_ADDRESS + 0x10);
+    CHECK_EQ(entry23, (int32_t)IOAPIC_CONFIG_MASKED);
+    write32(IOAPIC_MEM_ADDRESS + 0, 0x40); /* one past */
+    CHECK_EQ(read32s(IOAPIC_MEM_ADDRESS + 0x10), 0);
+    write32(IOAPIC_MEM_ADDRESS + 0x10, 0x12345678);
+    write32(IOAPIC_MEM_ADDRESS + 0, 0x3E);
+    CHECK_EQ(read32s(IOAPIC_MEM_ADDRESS + 0x10), entry23);
+    write32(IOAPIC_MEM_ADDRESS + 0, (int32_t)0xFFFFFFFFu); /* echoed verbatim */
+    CHECK_EQ((uint32_t)read32s(IOAPIC_MEM_ADDRESS + 0), 0xFFFFFFFFu);
+    /* window offsets other than IOREGSEL/IOWIN */
+    CHECK_EQ(read32s(IOAPIC_MEM_ADDRESS + 4), 0);
+    write32(IOAPIC_MEM_ADDRESS + 8, 0x99);
+    CHECK_EQ(read32s(IOAPIC_MEM_ADDRESS + 4), 0);
+    /* the raise/lower bound: out of range returns before any store */
+    ioapic_set_irq(24);
+    ioapic_set_irq(200);
+    ioapic_clear_irq(24);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x200 + 0x10), 0);
+    /* the APIC's own dispatch: an unimplemented register answers 0 / discards, the
+     * read-only current-count register ignores writes */
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x3D0), 0);
+    write32(APIC_MEM_ADDRESS + 0x3D0, 0x1234);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x3D0), 0);
+    write32(APIC_MEM_ADDRESS + 0x390, 0x1234);
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x390), 0);
+    /* and the knob gates the mmio windows again */
+    cpu->acpi_enabled = false;
+    CHECK_EQ(read32s(APIC_MEM_ADDRESS + 0x20), 0);
+    CHECK_EQ(read32s(IOAPIC_MEM_ADDRESS + 0x10), 0);
 }
 
 /* ================================================================== *
@@ -2300,6 +2574,7 @@ int main(void)
     RUN(test_ps2, "ps2: a scancode, the identify replies, a mouse packet, IntelliMouse id");
     RUN(test_pci, "pci: config space, an absent device, the I/O bar move, the stops");
     RUN(test_acpi, "acpi: PM1, the GPE registers, the PM timer, IRQ9");
+    RUN(test_apic, "apic: the LAPIC register block, the timer at virtual time, the IOAPIC redirections, EOI/remote-EOI, the bounds");
     RUN(test_timer_wakes_the_guest, "timer seat: main_loop wakes a halted guest on IRQ0");
     RUN(test_handover, "G4: the CPU's own in/out -- the PIT, and the port-0x80 probe (D-F1)");
     RUN(test_uart, "uart: a byte out of the sink, the line status, the divisor, the seam");

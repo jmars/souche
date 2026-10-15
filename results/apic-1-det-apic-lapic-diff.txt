@@ -1,0 +1,3 @@
+$ ./build/v86c --bzimage tests/images/vmlinuz-i386 2000000000 --cmdline 'console=ttyS0 lapic' --hda <disk.img copy> --memory 80 --bios build/minibios-80m.bin --acpi --serial s-N.txt   (x2, fresh disk copies)
+run1 rc=0; run2 rc=0
+cmp s-1.txt s-2.txt -> BYTE-IDENTICAL (no normalization; the kernel here never prints the host-epoch audit lines the initramfs boot does)

@@ -32,7 +32,9 @@
 
 #include "../cpu/cpu.h"      /* unimplemented_instruction */
 #include "../cpu/cpu_state.h"
+#include "../cpu/apic.h"     /* apic_timer -- the timer fan-out's fourth value */
 #include "../cpu/instructions.h" /* handle_irqs */
+#include "../cpu/ioapic.h"   /* ioapic_set_irq/clear_irq -- the raise/lower path */
 #include "../cpu/jit_mem.h"  /* REBOOT-1: jit_enabled / jit_abort_flag */
 #include "../cpu/pic.h"      /* set_irq / clear_irq, pic_reset */
 #include "acpi.h"
@@ -72,6 +74,16 @@ bool machine_is_ready(void) { return machine_ready; }
 
 void machine_init(void)
 {
+    /* APIC-1: the LOCAL APIC and the IOAPIC are module-level state upstream (apic.rs:80's
+     * static Mutex, ioapic.rs:63's static Mutex -- created with the wasm module, not by
+     * the device block).  This port gives them an explicit init at the one place a
+     * machine is brought up, which for the shipped binary is once per process -- the
+     * same freshness.  machine_reboot deliberately does NOT call this (the reboot
+     * section below), so APIC/IOAPIC state survives a guest reboot exactly as the
+     * reference's statics survive its reboot_internal. */
+    apic_init();
+    ioapic_init();
+
     io_init();
 
     bus_reset();
@@ -171,8 +183,17 @@ void machine_init(void)
  *   - pci   the config space persists (the firmware's IDE-enable writes re-run
  *           idempotently); the 0xCF9 trigger's own byte is NOT stored, exactly as
  *           upstream's handler returns before `pci_addr[1] = out_byte`.
- *   - acpi  the device is not constructed in this port's boots (cpu->acpi_enabled is
- *           false and no CLI flag sets it), so it has no state to reset.
+ *   - acpi  NOT reset.  The device (and, with it, the APIC/IOAPIC state -- all three are
+ *           gated by cpu->acpi_enabled, APIC-1) is constructed only under `--acpi`;
+ *           upstream's reboot_internal names none of them either, so a `--acpi` guest
+ *           rebooting itself carries its LAPIC/IOAPIC state into boot 2 exactly as the
+ *           reference's statics do.  Two boot-2 consequences, both upstream's own
+ *           behaviour, named because they are visible: (a) the clock REWINDS (reset_cpu
+ *           zeroes the instruction counter microtick derives from), and both timers'
+ *           future-timestamp arms handle it -- apic.c's `timer_last_tick > now` reset and
+ *           acpi.c's dropped-overshot-assert arm; (b) an LVT/IOAPIC entry boot 1 left
+ *           unmasked keeps delivering into boot 2 until the guest re-masks it -- which a
+ *           re-booting kernel's LAPIC re-init does (upstream ships the same semantics).
  *   - the CMOS RTC's time fields persist through rtc_init's re-run only as far as
  *         the fixed-epoch virtual clock makes them identical anyway; nothing else
  *         in the RTC is observable across the reboot.
@@ -216,14 +237,20 @@ double run_hardware_timers(bool acpi_enabled, double t)
     double pit_time = pit_timer(t, false);
     double rtc_time = rtc_timer(t, false);
 
+    /* cpu.js's own composition (cpu.js:1931-1935): both the ACPI timer and the APIC
+     * timer fold in under the ONE acpi_enabled arm.  The APIC timer reads no device
+     * object (upstream asks this.apic_timer, the CPU's own method over the static
+     * APIC state), so unlike the ACPI half it needs no existence check. */
     double acpi_time = 100;
-    if (acpi_enabled && acpi != NULL) {
-        acpi_time = acpi_timer(t);
+    double apic_time = 100;
+    if (acpi_enabled) {
+        if (acpi != NULL) {
+            acpi_time = acpi_timer(t);
+        }
+        apic_time = apic_timer(t);
     }
 
-    /* upstream also takes this.apic_timer(now)'s value when acpi_enabled; apic.rs is
-     * deferred, so there is no APIC timer to ask. */
-    return fmin(fmin(pit_time, rtc_time), acpi_time);
+    return fmin(fmin(pit_time, rtc_time), fmin(acpi_time, apic_time));
 }
 
 /* cpu.rs:4596-4610 */
@@ -231,10 +258,7 @@ void device_raise_irq(uint8_t i)
 {
     set_irq(i);
     if (cpu->acpi_enabled) {
-        /* upstream: ioapic::set_irq(i).  ioapic.rs is deferred, so a machine with
-         * acpi_enabled STOPS here rather than raising an IRQ the IOAPIC half never gets. */
-        unimplemented_instruction("device_raise_irq: ioapic::set_irq (ioapic.rs is M2)");
-        return;
+        ioapic_set_irq(i);
     }
     handle_irqs();
 }
@@ -243,8 +267,7 @@ void device_lower_irq(uint8_t i)
 {
     clear_irq(i);
     if (cpu->acpi_enabled) {
-        unimplemented_instruction("device_lower_irq: ioapic::clear_irq (ioapic.rs is M2)");
-        return;
+        ioapic_clear_irq(i);
     }
     handle_irqs();
 }

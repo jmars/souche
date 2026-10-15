@@ -1,0 +1,75 @@
+=== APIC-1 gate capture 2026-10-14T23:23:52Z ===
+
+$ make
+/home/jaye/.local/cosmo/bin/cosmocc -std=gnu11 -O2 -Wall -Wextra -foptimize-sibling-calls -finline-functions-called-once -fpatchable-function-entry=0 -I src -Wl,--gc-sections -o build/v86c src/main.c build/minibios_embed.c build/unity.o build/hw/io.o build/hw/bus.o build/hw/pit.o build/hw/rtc.o build/hw/dma.o build/hw/ps2.o build/hw/acpi.o build/hw/pci.o build/hw/machine.o build/hw/uart.o build/hw/kernel.o build/hw/ide.o build/hw/virtio.o build/hw/virtio_console.o build/sf/softfloat.o
+make rc=0
+
+$ make selftest
+uop-unity: the decoder and its tables compile inside the shipped unity TU
+cpu_selftest: 3522 checks, 0 failures
+cpu_m1c_selftest: 228 checks, 0 failures
+hw_selftest: 631 checks, 0 failures, 0 skipped
+uop_cache_selftest: 7934349 checks, 0 failures
+uop_exec_selftest: 102 checks, 0 failures
+jit-selftest: 68 checks, 0 failures
+jit_codegen_selftest: 3525 checks, 0 failures
+selftest: all suites green
+selftest rc=0
+
+$ make nasm
+	--skip-list tests/nasm_skip_c.txt
+[+] Passed 118/118 tests.
+[!] 0 of 123 selected test(s) produced no state from the actual leg, 5 were skipped (tests/nasm_skip_c.txt).
+[~] Skipped 5 test(s) (tests/nasm_skip_c.txt):
+nasm rc=0
+
+$ make transcript-diff
+milestone: the C transcript is byte-identical to the reference's
+transcript-diff rc=0
+
+$ make determinism
+determinism: two consecutive oracle runs are byte-identical
+determinism rc=0
+
+== FINAL-TREE re-verification (after the SIGBUS investigation's build churn; binary sha ab9c410c5ebb07f3) ==
+$ make
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 a
+make rc=0
+
+$ make transcript-diff
+milestone: the C transcript is byte-identical to the reference's
+rc=0
+
+$ make nasm
+[+] Passed 118/118 tests.
+rc=0
+
+$ make selftest
+cpu_selftest: 3522 checks, 0 failures
+cpu_m1c_selftest: 228 checks, 0 failures
+hw_selftest: 631 checks, 0 failures, 0 skipped
+uop_cache_selftest: 7934349 checks, 0 failures
+uop_exec_selftest: 102 checks, 0 failures
+jit-selftest: 68 checks, 0 failures
+jit_codegen_selftest: 3525 checks, 0 failures
+selftest: all suites green
+rc=0
+
+$ sh tests/gate-reboot-1.sh
+gate-reboot-1: 39 passed, 0 failed
+rc=0
+
+$ make determinism
+determinism: two consecutive oracle runs are byte-identical
+rc=0
+
+== APIC-1 MUTATION RIG (G5) ==
+CASE M1 deliver skips the irr set: PASS (mutated -> hw_selftest FAILS, 17 failing assertion(s))
+CASE M2 timer fires one tick late: PASS (mutated -> hw_selftest FAILS, 7 failing assertion(s))
+CASE M3 divider shift table wrong: PASS (mutated -> hw_selftest FAILS, 3 failing assertion(s))
+CASE M4 eoi leaves isr set: PASS (mutated -> hw_selftest FAILS, 9 failing assertion(s))
+CASE M5 ioregsel range relaxed by one: PASS (mutated -> hw_selftest FAILS, 2 failing assertion(s))
+CASE M6 remote_eoi keeps the remote irr: PASS (mutated -> hw_selftest FAILS, 3 failing assertion(s))
+CASE M7 ack leaves the irr bit set: PASS (mutated -> hw_selftest FAILS, 6 failing assertion(s))
+apic-1-mut-rig: all mutations visible, every restore green
+rig rc=0

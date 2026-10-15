@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "memory.h"
+#include "instructions.h" /* handle_irqs -- the APIC/IOAPIC write arms (memory.rs:284-289) */
 #include "uop_cache.h" /* PERF-4/M2: the write-path invalidation hook (plan ss4.1) */
 
 uint8_t *mem8 = NULL;
@@ -111,7 +112,9 @@ void write_blob(const uint8_t *data, uint32_t length, uint32_t offset)
 }
 
 /* ------------------------------------------------------------------ *
- * VGA / APIC / IOAPIC stubs (plan ss3: deferred)
+ * VGA / APIC / IOAPIC (plan ss3: the VGA is still deferred; the APIC and the
+ * IOAPIC are unit APIC-1's -- apic.c / ioapic.c define the four functions this
+ * file's routing arms call, with the same signatures memory.h declares)
  * ------------------------------------------------------------------ */
 
 uint8_t *vga_mem8 = NULL;
@@ -125,29 +128,6 @@ bool in_svga_lfb(uint32_t addr)
 }
 
 void vga_mark_dirty(uint32_t addr) { (void)addr; } /* vga::mark_dirty -- M2 */
-
-int32_t apic_read32(uint32_t addr)
-{
-    (void)addr;
-    return 0;
-}
-void apic_write32(uint32_t addr, uint32_t value)
-{
-    /* memory.rs:284-287 also calls handle_irqs() after an APIC write; with a stubbed
-     * APIC no IRQ can be latched, and handle_irqs is M1c's -- see the unit report. */
-    (void)addr;
-    (void)value;
-}
-int32_t ioapic_read32(uint32_t addr)
-{
-    (void)addr;
-    return 0;
-}
-void ioapic_write32(uint32_t addr, uint32_t value)
-{
-    (void)addr;
-    (void)value;
-}
 
 /* ------------------------------------------------------------------ *
  * device hooks -- the C replacement for the mmap_* JS imports
@@ -508,11 +488,11 @@ void mmap_write32(uint32_t addr, int32_t value)
     }
     else if (addr >= APIC_MEM_ADDRESS && addr < APIC_MEM_ADDRESS + APIC_MEM_SIZE) {
         apic_write32(addr - APIC_MEM_ADDRESS, (uint32_t)value);
-        /* upstream: handle_irqs() -- M1c, no-op with a stubbed APIC */
+        handle_irqs();
     }
     else if (addr >= IOAPIC_MEM_ADDRESS && addr < IOAPIC_MEM_ADDRESS + IOAPIC_MEM_SIZE) {
         ioapic_write32(addr - IOAPIC_MEM_ADDRESS, (uint32_t)value);
-        /* upstream: handle_irqs() -- M1c, no-op with a stubbed IOAPIC */
+        handle_irqs();
     }
     else {
         memory_devices.write32(addr, value);

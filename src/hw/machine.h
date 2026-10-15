@@ -96,16 +96,15 @@ void machine_reboot(void);
  * reports that state to its caller rather than inventing a timer. */
 bool machine_is_ready(void);
 
-/* cpu.js:1924-1941.  Drives the PIT and the RTC (and the ACPI timer when the machine has
- * one and acpi_enabled is set) and returns the smallest of their next-interrupt times.
- * The APIC's own timer is NOT here: apic.rs is deferred, and upstream's `apic_time` arm
- * therefore has no counterpart. */
+/* cpu.js:1924-1941.  Drives the PIT and the RTC, and -- when acpi_enabled is set --
+ * the ACPI timer AND the APIC timer (cpu.js:1931-1935's single arm over both), then
+ * returns the smallest of their next-interrupt times. */
 double run_hardware_timers(bool acpi_enabled, double t);
 
-/* cpu.rs:4596-4610.  The devices' only way to interrupt: raise/lower the IRQ line, then
- * run the poll (handle_irqs).  The `acpi_enabled` arm of upstream's body also drives the
- * IOAPIC (ioapic::set_irq), which is deferred -- a machine with acpi_enabled set STOPS
- * rather than silently dropping the IOAPIC half. */
+/* cpu.rs:4596-4610.  The devices' only way to interrupt: raise/lower the IRQ line, run
+ * the IOAPIC's half of the same line when acpi_enabled is set, then run the poll
+ * (handle_irqs -- which, with nothing pending at the PIC, asks the local APIC next,
+ * cpu.rs:4578-4582). */
 void device_raise_irq(uint8_t i);
 void device_lower_irq(uint8_t i);
 

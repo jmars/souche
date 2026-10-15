@@ -933,6 +933,7 @@ static int boot_main(int argc, char *argv[])
 	const char *virtio_console_path = NULL;
 	const char *virtio_console_in_path = NULL;
 	bool uart1 = false;
+	bool acpi = false;
 	uint32_t memory_size = BOOT_MEMORY_SIZE;
 
 	uop_cache_enabled = true; /* PERF-4/M2: see main()'s note -- the shipped default */
@@ -956,6 +957,7 @@ static int boot_main(int argc, char *argv[])
 			memory_size = mib << 20;
 		}
 		else if (strcmp(argv[i], "--uart1") == 0) uart1 = true;
+		else if (strcmp(argv[i], "--acpi") == 0) acpi = true;
 		else if (strcmp(argv[i], "--uop-cache") == 0 || strcmp(argv[i], "--uop-cache-stats") == 0)
 			i = parse_uop_cache_flag(argc, argv, i);
 		else if (strcmp(argv[i], "--jit") == 0 || strcmp(argv[i], "--jit-stats") == 0)
@@ -972,7 +974,8 @@ static int boot_main(int argc, char *argv[])
 		fprintf(stderr, "usage: %s --bzimage <kernel> <instruction-limit> [--cmdline TEXT]"
 		                " [--initrd FILE] [--bios FILE] [--serial FILE] [--hda FILE]"
 		                " [--memory MIB] [--virtio-console FILE] [--virtio-console-in FILE]"
-		                " [--uart1] [--uop-cache on|off] [--uop-cache-stats] [--jit on|off]\n", argv[0]);
+		                " [--uart1] [--acpi] [--uop-cache on|off] [--uop-cache-stats]"
+		                " [--jit on|off]\n", argv[0]);
 		return 2;
 	}
 	if (uop_cache_stats || jit_stats_flag) atexit(v86c_stats_print);
@@ -1012,6 +1015,18 @@ static int boot_main(int argc, char *argv[])
 	if (!allocate_memory(memory_size)) die("cannot allocate guest memory");
 	cpu->memory_size = memory_size;
 	zero_memory(0, memory_size);
+
+	/* APIC-1: `--acpi` is the machine's one writer for cpu->acpi_enabled, mirroring
+	 * upstream's `this.acpi_enabled[0] = +settings.acpi` (cpu.js:1014): it is set once,
+	 * BEFORE the machine is assembled, and never reset (reset_cpu does not touch it --
+	 * upstream's byte at state offset 552 is not in its reset either).  It is the
+	 * reference's own composition: the same flag creates the PIIX4 ACPI device
+	 * (machine.c), gates the APIC/IOAPIC mmio windows, the delivery paths, the APIC
+	 * timer and the CPUID APIC bit.  DEFAULT OFF: every existing gate's guest runs the
+	 * 8259 machine, and that must stay byte-identical. */
+	if (acpi) {
+		cpu->acpi_enabled = true;
+	}
 
 	/* cpu.js:1221-1224: `if(settings.hda) ide_config[0][0] = { buffer: settings.hda }`.
 	 * The disk is attached BEFORE the machine is assembled, so the controller is built with
