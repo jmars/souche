@@ -1547,10 +1547,10 @@ static void test_acpi_tables(void)
      * guest roots no PCI bus and enumerates nothing */
     uint8_t *dsdt_copy = copy + ACPI_OFF_DSDT;
     memcpy(copy, blob, sizeof(copy));
-    copy[ACPI_OFF_DSDT + 36 + 23] = 0x04; /* the EISAID low nibble */
+    copy[ACPI_OFF_DSDT + 36 + 24] = 0x04; /* the EISAID low nibble */
     dsdt_copy[9] = 0;
-    dsdt_copy[9] = (uint8_t)(0u - acpi_test_sum8(dsdt_copy, 109));
-    CHECK(acpi_test_sum8(dsdt_copy, 109) == 0);
+    dsdt_copy[9] = (uint8_t)(0u - acpi_test_sum8(dsdt_copy, 146));
+    CHECK(acpi_test_sum8(dsdt_copy, 146) == 0);
     CHECK(!acpi_tables_verify(copy));
 
     /* 9. IAPC_BOOT_ARCH with NO_VGA cleared again (0x0007 -> 0x0003), checksum
@@ -1581,6 +1581,47 @@ static void test_acpi_tables(void)
     fadt_copy[9] = 0;
     fadt_copy[9] = (uint8_t)(0u - acpi_test_sum8(fadt_copy, 268));
     CHECK(acpi_test_sum8(fadt_copy, 268) == 0);
+    CHECK(!acpi_tables_verify(copy));
+
+    /* 12. the _PRT's static GSI corrupted (11 -> 10), checksum repaired -- the
+     * ACPI-6 regression probe: the entry's GSI must be the value the firmware
+     * programs into the PIIX router byte 0x63 (VIRTIO_IRQ), and any other line
+     * is a false declaration of exactly the class this lane shipped four of */
+    memcpy(copy, blob, sizeof(copy));
+    copy[ACPI_OFF_DSDT + 36 + 109] = 0x0A; /* the GSI byte: 11 -> 10 */
+    dsdt_copy[9] = 0;
+    dsdt_copy[9] = (uint8_t)(0u - acpi_test_sum8(dsdt_copy, 146));
+    CHECK(acpi_test_sum8(dsdt_copy, 146) == 0);
+    CHECK(!acpi_tables_verify(copy));
+
+    /* 13. the _PRT's address moved to device 13, checksum repaired -- the entry
+     * must be the (device, pin) whose parent_pin arithmetic lands on the byte the
+     * firmware programs: (0 + 13 - 1) & 3 = 0 is PIRQA (0x60), deliberately 0.
+     * The verify's COMPUTED parent_pin check is what must catch it. */
+    memcpy(copy, blob, sizeof(copy));
+    copy[ACPI_OFF_DSDT + 36 + 104] = 0x0D; /* the address's device half: 12 -> 13 */
+    dsdt_copy[9] = 0;
+    dsdt_copy[9] = (uint8_t)(0u - acpi_test_sum8(dsdt_copy, 146));
+    CHECK(acpi_test_sum8(dsdt_copy, 146) == 0);
+    CHECK(!acpi_tables_verify(copy));
+
+    /* 14. the _PRT's pin moved to INTB, checksum repaired -- (1 + 11) & 3 = 0
+     * again points at PIRQA (0x60), not the programmed PIRQD (0x63) */
+    memcpy(copy, blob, sizeof(copy));
+    copy[ACPI_OFF_DSDT + 36 + 106] = 1; /* pin Zero (INTA) -> 1 (INTB) */
+    dsdt_copy[9] = 0;
+    dsdt_copy[9] = (uint8_t)(0u - acpi_test_sum8(dsdt_copy, 146));
+    CHECK(acpi_test_sum8(dsdt_copy, 146) == 0);
+    CHECK(!acpi_tables_verify(copy));
+
+    /* 15. the bus-number window's end corrupted (0x00FF -> 0x007F), checksum
+     * repaired -- the G5 fix's own pin: the bridge must name every bus the
+     * config mechanism's 8-bit bus field can decode */
+    memcpy(copy, blob, sizeof(copy));
+    copy[ACPI_OFF_DSDT + 36 + 82] = 0x7F;
+    dsdt_copy[9] = 0;
+    dsdt_copy[9] = (uint8_t)(0u - acpi_test_sum8(dsdt_copy, 146));
+    CHECK(acpi_test_sum8(dsdt_copy, 146) == 0);
     CHECK(!acpi_tables_verify(copy));
 }
 

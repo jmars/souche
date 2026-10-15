@@ -93,7 +93,7 @@ void acpi_tables_build(uint8_t out[ACPI_TABLES_LENGTH])
 	wr32le(facs + 4, 64);
 	facs[32] = 1; /* version */
 
-	/* ---------------- DSDT: the PCI host bridge ----------------
+	/* ---------------- DSDT: the PCI host bridge, its windows, its routing ----------------
 	 * ACPI-2 shipped this table header-only ("an empty namespace"), which an ACPI-aware
 	 * guest reads as: this platform has no PCI -- the kernel printed "Using host bridge
 	 * windows from ACPI" and enumerated ZERO devices, so the IDE and every other PCI
@@ -113,9 +113,52 @@ void acpi_tables_build(uint8_t out[ACPI_TABLES_LENGTH])
 	 *                          0x0000, 0x0000, 0x0CF7, 0x0000, 0x0CF8)
 	 *                 WordIO (ResourceProducer, MinFixed, MaxFixed, PosDecode, 16,
 	 *                          0x0000, 0x0D00, 0xFFFF, 0x0000, 0xF300)
+	 *                 WordBusNumber (ResourceProducer, MinFixed, MaxFixed, PosDecode,
+	 *                          0x0000, 0x0000, 0x00FF, 0x0000, 0x0100)
+	 *             })
+	 *             Name (_PRT, Package (One)
+	 *             {
+	 *                 Package (0x04) { 0x000CFFFF, Zero, Zero, 0x0B }
 	 *             })
 	 *         } }
 	 *     }
+	 *
+	 * THE _PRT (ACPI-6, results/acpi-6.md): the routing this machine ACTUALLY has.
+	 * src/hw/pci.c's pci_raise_irq computes parent_pin = (pin + device - 1) & 3 and
+	 * reads the PIIX3 ISA bridge's router byte 0x60 + parent_pin at interrupt time;
+	 * tests/minibios.asm's pci_irq_route programs exactly ONE of the four bytes:
+	 * the virtio console at PCI 00:0c.0 raises INTA, so parent_pin = (0 + 11) & 3 = 3
+	 * -> PIRQD = config byte 0x63 = IRQ 11 (VIRTIO_IRQ, the same value written to the
+	 * device's interrupt-line byte).  0x60-0x62 are DELIBERATELY left 0: the IDE keeps
+	 * the routing M2-3 measured (it raises on the legacy lines 14/15 directly and
+	 * never consults a PIRQ byte).  The entry declares exactly that one route:
+	 * address 0x000CFFFF (device 12, all functions -- pci.c routes by device, its
+	 * `device = pci_id >> 3` drops the function), pin Zero (INTA), source Zero (the
+	 * STATIC form: source_index IS the GSI), source_index 11.
+	 *
+	 * WHY STATIC and not the conventional LNKA-D link devices: a link-device table
+	 * hands the guest an object whose _SRS writes 0x60+n -- it invites the kernel's
+	 * link allocator (and acpi_irq_balance) to program the three bytes whose ZERO
+	 * state is a measured property of this lane, and its allocation choices would
+	 * have to be re-measured on every gate.  A static entry names the line the
+	 * firmware itself programs, so ACPI and the hardware agree because both quote
+	 * the same firmware constant.  THE HONEST CAVEAT, stated instead of hidden: 11
+	 * is true while minibios's programming stands (it writes 0x63 only when a virtio
+	 * console is seated at 00:0c.0, and the entry is consulted only when such a
+	 * device exists to look it up); the verify() pin recomputes the parent_pin
+	 * arithmetic from the entry's own fields and pins the GSI to VIRTIO_IRQ.
+	 * Linux 6.6's consumer (drivers/acpi/pci_irq.c) reads a static entry as
+	 * gsi = source_index and registers it LEVEL/LOW -- safe here: the virtio line is
+	 * lowered when the driver reads the ISR register (virtio.c isr_status_read ->
+	 * pci_lower_irq), so a level entry cannot storm.
+	 *
+	 * The WordBusNumber window (ACPI-6 G5): the kernel's one remaining [Firmware Bug]
+	 * line ("no secondary bus range in _CRS") is this bridge declining to name the
+	 * bus numbers it decodes.  It decodes ALL of them: the config mechanism's bus
+	 * field is 8 bits (0x0CF8's bits 23:16) and every value is a legal root -- the
+	 * window names 0x00-0xFF, QEMU's own build_crs shape (hw/acpi/aml-build.c
+	 * aml_word_bus_number, type byte 0x02, the same fixed/decode flags as the IO
+	 * windows, type-specific flags 0 = reserved for bus numbers).
 	 *
 	 * What is DELIBERATELY LEFT OUT, and what each omission costs:
 	 *   - a memory window: no device on this machine has an MMIO BAR (the host bridge
@@ -123,37 +166,29 @@ void acpi_tables_build(uint8_t out[ACPI_TABLES_LENGTH])
 	 *     window whose base must sit above RAM would depend on --memory, which the
 	 *     tables' determinism rule forbids (build() takes no machine state).  A future
 	 *     MMIO device would print "no compatible bridge window" and need this added.
-	 *   - _PRT: the routing table would be unbacked content.  [COMMENT CORRECTED after
-	 *     the acpi-1r review's N2: this entry used to claim no device here uses a PCI
-	 *     INTx -- false since the virtio console landed, which raises INTA
-	 *     (virtio.c -> pci.c's PIIX3 PIRQ routing); the review MEASURED IRQ 11 routing
-	 *     to it IDENTICALLY in both arms, because a kernel that finds no _PRT falls
-	 *     back to the PIRQ-programmed line.  The no-_PRT conclusion survives, but its
-	 *     reason is the fallback, not an absence of INTx devices; a future INTx device
-	 *     keeps working only while the PIIX PIRQ registers are programmed.]
 	 * The encoding is the specification's own (ACPI 6.x: ScopeOp 10, DeviceOp 5B 82,
 	 * NameOp 08, the EISAID pack, BufferOp 11, the Word Address Space descriptor 88
-	 * with its flag bytes, EndTag 79) -- no compiler on the host, so every byte below
-	 * is written against the spec tables and checked by verify() + the guest's ACPICA.
-	 * The EISAID trap, for the next hand-encoder: the packed PNP id's LETTER bits sit
-	 * in the LOW half of the dword (ACPICA renders a numeric _HID by byte-swapping
-	 * it first -- exutils.c acpi_ex_eisa_id_to_string), so PNP0A03 is 0x030AD041, and
-	 * the mirror-image 0x41D00A03 boots looking like "@XJD041" (MEASURED, §3).
-	 * Revision 2 = AML 2.0. */
+	 * with its flag bytes, PackageOp 12, EndTag 79) -- no compiler on the host, so
+	 * every byte below is written against the spec tables and checked by verify() +
+	 * the guest's ACPICA.  The EISAID trap, for the next hand-encoder: the packed PNP
+	 * id's LETTER bits sit in the LOW half of the dword (ACPICA renders a numeric
+	 * _HID by byte-swapping it first -- exutils.c acpi_ex_eisa_id_to_string), so
+	 * PNP0A03 is 0x030AD041, and the mirror-image 0x41D00A03 boots looking like
+	 * "@XJD041" (MEASURED, §3).  Revision 2 = AML 2.0. */
 	static const uint8_t pci0_aml[] = {
-	    0x10, 0x46, 0x04,          /* ScopeOp, PkgLength(70): the 2-byte form, low
-	                           * nibble in 0x46 bits[3:0], high bits in the follow byte */
+	    0x10, 0x4B, 0x06,          /* ScopeOp, PkgLength(107): the 2-byte form, low
+	                           * nibble in 0x4B bits[3:0], high bits in the follow byte */
 	    0x5F, 0x53, 0x42, 0x5F,    /* "_SB_" */
-	    0x5B, 0x82, 0x3F,          /* DeviceOp, PkgLength(63), "PCI0": 1-byte form, the value itself */
+	    0x5B, 0x82, 0x43, 0x06,    /* DeviceOp, PkgLength(99), "PCI0": 2-byte form */
 	    0x50, 0x43, 0x49, 0x30,    /* "PCI0" */
 	    0x08, 0x5F, 0x48, 0x49, 0x44, /* NameOp "_HID" */
 	    0x0C, 0x41, 0xD0, 0x0A, 0x03, /* DWordPrefix, 0x030AD041 = EISAID PNP0A03 */
 	    0x08, 0x5F, 0x42, 0x42, 0x4E, /* NameOp "_BBN" */
 	    0x00,                      /* ZeroOp */
 	    0x08, 0x5F, 0x43, 0x52, 0x53, /* NameOp "_CRS" */
-	    0x11, 0x24,                /* BufferOp, PkgLength(36 = the size operand + 34 data) */
-	    0x0A, 0x22,                /* the buffer's size operand is a PREFIXED AML INTEGER
-	                           * (psargs.c reads an operand: BytePrefix, then 34) -- a
+	    0x11, 0x34,                /* BufferOp, PkgLength(52 = the size operand + 50 data) */
+	    0x0A, 0x32,                /* the buffer's size operand is a PREFIXED AML INTEGER
+	                           * (psargs.c reads an operand: BytePrefix, then 50) -- a
 	                           * raw word here reads as length 0 and the kernel rejects
 	                           * _CRS with -EIO (MEASURED, §3) */
 	    /* WordIO: 0x0000-0x0CF7 -- the legacy ISA ports below the config mechanism */
@@ -171,7 +206,25 @@ void acpi_tables_build(uint8_t out[ACPI_TABLES_LENGTH])
 	    0xFF, 0xFF,                /* maximum 0xFFFF */
 	    0x00, 0x00,                /* translation offset */
 	    0x00, 0xF3,                /* length 0xF300 */
+	    /* WordBusNumber: 0x00-0xFF -- every bus the config mechanism can name (G5) */
+	    0x88, 0x0D, 0x00, 0x02, 0x0C, 0x00, /* type bus number; Min+Max fixed, positive
+	                           * decode; type-specific flags 0 (reserved for this type) */
+	    0x00, 0x00,                /* granularity */
+	    0x00, 0x00,                /* minimum 0x00 */
+	    0xFF, 0x00,                /* maximum 0xFF */
+	    0x00, 0x00,                /* translation offset */
+	    0x00, 0x01,                /* length 0x100 */
 	    0x79, 0x00,                /* EndTag (the checksum byte is ignored for _CRS) */
+	    /* _PRT: the one route the machine declares (see the comment above) */
+	    0x08, 0x5F, 0x50, 0x52, 0x54, /* NameOp "_PRT" */
+	    0x12, 0x0D, 0x01,          /* PackageOp, PkgLength(13), 1 entry */
+	    0x12, 0x0A, 0x04,          /* PackageOp, PkgLength(10), 4 elements */
+	    0x0C, 0xFF, 0xFF, 0x0C, 0x00, /* DWordPrefix, address 0x000CFFFF: device 12,
+	                           * all functions (pci.c's routing is function-agnostic) */
+	    0x00,                      /* pin Zero = INTA */
+	    0x00,                      /* source Zero = STATIC entry: source_index is the GSI */
+	    0x0A, 0x0B,                /* BytePrefix, source_index = GSI 11 = VIRTIO_IRQ,
+	                           * the value minibios writes to router byte 0x63 */
 	};
 	uint8_t *dsdt = out + ACPI_OFF_DSDT;
 	put_sdt_header(dsdt, "DSDT", 36 + (uint32_t)sizeof(pci0_aml), 2);
@@ -377,43 +430,79 @@ bool acpi_tables_verify(const uint8_t *blob)
 	const uint8_t *facs = blob + ACPI_OFF_FACS;
 	const uint8_t *dsdt = blob + ACPI_OFF_DSDT;
 	if (memcmp(facs, "FACS", 4) != 0 || facs[4] != 64) return false;
-	if (!sdt_ok(dsdt, "DSDT", 109, 2)) return false;
+	if (!sdt_ok(dsdt, "DSDT", 146, 2)) return false;
 
-	/* --- the DSDT's AML: the PCI host bridge (results/acpi-4.md F2) ---
+	/* --- the DSDT's AML: the PCI host bridge, its windows, its _PRT ---
 	 * The byte layout is the builder's pci0_aml[]; the checks walk it structurally --
-	 * Scope(\_SB), Device(PCI0), the _HID EISAID, and the two WordIO windows -- so a
-	 * corrupted or mis-encoded bridge is refused here, before any guest has to. */
+	 * Scope(\_SB), Device(PCI0), the _HID EISAID, the two WordIO windows, the
+	 * WordBusNumber window, and the one static _PRT entry -- so a corrupted or
+	 * mis-encoded bridge or route is refused here, before any guest has to. */
 	const uint8_t *aml = dsdt + 36;
-	const uint32_t aml_len = 109u - 36u;
-	if (aml_len != 73) return false;
+	const uint32_t aml_len = 146u - 36u;
+	if (aml_len != 110) return false;
 	static const uint8_t scope_dev[] = {
-	    0x10, 0x46, 0x04,          /* ScopeOp, PkgLength(70) */
+	    0x10, 0x4B, 0x06,          /* ScopeOp, PkgLength(107) */
 	    '_', 'S', 'B', '_',
-	    0x5B, 0x82, 0x3F,          /* DeviceOp, PkgLength(63) */
+	    0x5B, 0x82, 0x43, 0x06,    /* DeviceOp, PkgLength(99) */
 	    'P', 'C', 'I', '0',
 	    0x08, '_', 'H', 'I', 'D',  /* NameOp _HID */
 	    0x0C, 0x41, 0xD0, 0x0A, 0x03, /* EISAID PNP0A03 = 0x030AD041 */
 	};
 	if (memcmp(aml, scope_dev, sizeof(scope_dev)) != 0) return false;
-	if (aml[24] != 0x08 || memcmp(aml + 25, "_BBN", 4) != 0 || aml[29] != 0x00)
+	if (aml[25] != 0x08 || memcmp(aml + 26, "_BBN", 4) != 0 || aml[30] != 0x00)
 		return false; /* _BBN = Zero: bus 0 */
-	if (aml[30] != 0x08 || memcmp(aml + 31, "_CRS", 4) != 0) return false;
-	if (aml[35] != 0x11 || aml[36] != 0x24) return false; /* BufferOp, PkgLength(36) */
-	if (aml[37] != 0x0A || aml[38] != 34) return false; /* the size operand: 34 */
-	/* the two Word Address Space descriptors (tag 0x88, length 13, type IO, Min+Max
-	 * fixed positive decode, full range) and the EndTag, at their fixed offsets */
+	if (aml[31] != 0x08 || memcmp(aml + 32, "_CRS", 4) != 0) return false;
+	if (aml[36] != 0x11 || aml[37] != 0x34) return false; /* BufferOp, PkgLength(52) */
+	if (aml[38] != 0x0A || aml[39] != 50) return false; /* the size operand: 50 */
+	/* the three Word Address Space descriptors (tag 0x88, length 13, Min+Max fixed
+	 * positive decode, full range) and the EndTag, at their fixed offsets */
 	static const uint8_t wordio_header[] = { 0x88, 0x0D, 0x00, 0x01, 0x0C, 0x03 };
-	if (memcmp(aml + 39, wordio_header, 6) != 0) return false;
-	uint32_t min1 = (uint32_t)aml[47] | (uint32_t)aml[48] << 8;
-	uint32_t max1 = (uint32_t)aml[49] | (uint32_t)aml[50] << 8;
-	uint32_t len1 = (uint32_t)aml[53] | (uint32_t)aml[54] << 8;
+	if (memcmp(aml + 40, wordio_header, 6) != 0) return false;
+	uint32_t min1 = (uint32_t)aml[48] | (uint32_t)aml[49] << 8;
+	uint32_t max1 = (uint32_t)aml[50] | (uint32_t)aml[51] << 8;
+	uint32_t len1 = (uint32_t)aml[54] | (uint32_t)aml[55] << 8;
 	if (min1 != 0x0000 || max1 != 0x0CF7 || len1 != 0x0CF8) return false;
-	if (memcmp(aml + 55, wordio_header, 6) != 0) return false;
-	uint32_t min2 = (uint32_t)aml[63] | (uint32_t)aml[64] << 8;
-	uint32_t max2 = (uint32_t)aml[65] | (uint32_t)aml[66] << 8;
-	uint32_t len2 = (uint32_t)aml[69] | (uint32_t)aml[70] << 8;
+	if (memcmp(aml + 56, wordio_header, 6) != 0) return false;
+	uint32_t min2 = (uint32_t)aml[64] | (uint32_t)aml[65] << 8;
+	uint32_t max2 = (uint32_t)aml[66] | (uint32_t)aml[67] << 8;
+	uint32_t len2 = (uint32_t)aml[70] | (uint32_t)aml[71] << 8;
 	if (min2 != 0x0D00 || max2 != 0xFFFF || len2 != 0xF300) return false;
-	if (aml[71] != 0x79) return false; /* EndTag */
+	/* the bus-number window: type byte 0x02, the type-specific flags the spec
+	 * reserves (zero), base 0 through 0xFF -- the whole bus field the config
+	 * mechanism decodes (the G5 fix: without it the kernel prints
+	 * "[Firmware Bug]: no secondary bus range in _CRS") */
+	static const uint8_t bus_header[] = { 0x88, 0x0D, 0x00, 0x02, 0x0C, 0x00 };
+	if (memcmp(aml + 72, bus_header, 6) != 0) return false;
+	uint32_t bus_min = (uint32_t)aml[80] | (uint32_t)aml[81] << 8;
+	uint32_t bus_max = (uint32_t)aml[82] | (uint32_t)aml[83] << 8;
+	uint32_t bus_len = (uint32_t)aml[86] | (uint32_t)aml[87] << 8;
+	if (bus_min != 0x0000 || bus_max != 0x00FF || bus_len != 0x0100) return false;
+	if (aml[88] != 0x79) return false; /* EndTag */
+
+	/* --- the _PRT: the one route, against the machine's OWN arithmetic ---
+	 * The entry's fields are decoded and then checked the way the machine routes:
+	 * src/hw/pci.c's pci_raise_irq computes parent_pin = (pin + device - 1) & 3
+	 * (device = pci_id >> 3, the function dropped -- hence the 0xFFFF function
+	 * field) and reads the router byte 0x60 + parent_pin.  The entry must be the
+	 * (device, pin) whose parent_pin is 3 -- PIRQD, config byte 0x63, the byte
+	 * tests/minibios.asm's pci_irq_route programs -- and its GSI must be that
+	 * byte's value, VIRTIO_IRQ = 11.  A routing entry whose parent_pin lands on
+	 * 0x60-0x62 (the bytes the firmware deliberately leaves 0) or a GSI that is
+	 * not what the firmware writes is a false declaration and refuses here. */
+	if (aml[90] != 0x08 || memcmp(aml + 91, "_PRT", 4) != 0) return false;
+	if (aml[95] != 0x12 || aml[96] != 0x0D || aml[97] != 0x01) return false;
+	if (aml[98] != 0x12 || aml[99] != 0x0A || aml[100] != 0x04) return false;
+	if (aml[101] != 0x0C) return false; /* DWordPrefix (the address) */
+	uint32_t prt_addr = (uint32_t)aml[102] | (uint32_t)aml[103] << 8 |
+	                    (uint32_t)aml[104] << 16 | (uint32_t)aml[105] << 24;
+	if (prt_addr != 0x000CFFFFu) return false; /* device 12, all functions */
+	if (aml[106] != 0x00) return false; /* pin Zero = INTA */
+	if (aml[107] != 0x00) return false; /* source Zero = STATIC entry */
+	if (aml[108] != 0x0A) return false; /* BytePrefix (the GSI) */
+	uint32_t prt_device = (prt_addr >> 16) & 0xFFFF;
+	uint32_t parent_pin = (aml[106] + prt_device - 1) & 3;
+	if (parent_pin != 3) return false;  /* -> PIRQD: the programmed byte 0x63 */
+	if (aml[109] != 11) return false;   /* GSI 11 = VIRTIO_IRQ (minibios's write) */
 
 	/* --- the FADT: the honest NON-reduced shape, pointing at the FACS/DSDT --- */
 	const uint8_t *fadt = blob + ACPI_OFF_FADT;

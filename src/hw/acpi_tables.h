@@ -60,9 +60,14 @@
 #define ACPI_OFF_XSDT 0x080u /* 52 bytes: the same two, 64-bit entries */
 #define ACPI_OFF_FADT 0x0C0u /* 268 bytes: revision 5, NON-reduced (see above) */
 #define ACPI_OFF_FACS 0x1D0u /* 64 bytes: no checksum (the spec gives it none) */
-#define ACPI_OFF_DSDT 0x210u /* 109 bytes: the PCI host bridge -- see the builder */
-#define ACPI_OFF_MADT 0x280u /* 76 bytes: LAPIC + IOAPIC + the IRQ0->GSI2 override */
-#define ACPI_TABLES_LENGTH 0x2CCu
+#define ACPI_OFF_DSDT 0x210u /* 146 bytes: the PCI host bridge + _PRT -- see the builder */
+#define ACPI_OFF_MADT 0x2C0u /* 76 bytes: LAPIC + IOAPIC + the IRQ0->GSI2 override.
+                              * Moved from 0x280 when the DSDT grew past it (the _PRT
+                              * and the _CRS bus window, ACPI-6): each structure keeps
+                              * its 16-byte stride, and every consumer reads the
+                              * placement THROUGH these macros or the RSDT/XSDT
+                              * pointers, so the move is invisible outside. */
+#define ACPI_TABLES_LENGTH 0x30Cu
 
 /* Fill `out` (ACPI_TABLES_LENGTH bytes) with the whole set.  Idempotent; does not read
  * or write machine state. */

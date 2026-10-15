@@ -101,6 +101,13 @@ tables; this historical section records why the seams existed before either land
     measured: the ON arm alone prints `can't derive routing for PCI INT A` / `PCI INT A: no
     GSI` (no _PRT, the acpi_tables.c comment's documented omission) — delivery works anyway
     via the PIIX PIRQ-programmed line, exactly the fallback that review measured.
+    **[SUPERSEDED, ACPI-6]** the omission is now closed: the DSDT declares a static `_PRT`
+    (the one route the firmware programs: 00:0c.0 INTA -> GSI 11, results/acpi-6.md); the
+    two warn lines are GONE and the kernel registers the route itself (`11: 26 IO-APIC
+    11-fasteoi virtio0` — level/low via acpi_register_gsi, the signature of the _PRT being
+    USED; captures results/acpi-6-virtio-on-*.txt). The same unit fixed the pre-existing
+    `[Firmware Bug]: no secondary bus range in _CRS` (a WordBusNumber window in PCI0's
+    _CRS, now parsed: `root bus resource [bus 00-ff]`).
   * Note the session that fixed F1 (ACPI-4) **stalled after writing its findings** — the provider
     fault (`reasoning_content`) that has killed five sessions — so the orchestrator verified its
     fix against its own captures, ran the battery and committed it. Its report is
