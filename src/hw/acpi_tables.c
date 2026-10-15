@@ -123,9 +123,14 @@ void acpi_tables_build(uint8_t out[ACPI_TABLES_LENGTH])
 	 *     window whose base must sit above RAM would depend on --memory, which the
 	 *     tables' determinism rule forbids (build() takes no machine state).  A future
 	 *     MMIO device would print "no compatible bridge window" and need this added.
-	 *   - _PRT: no device here uses a PCI INTx (the IDE's interrupts are the ISA 14/15,
-	 *     routed by the MADT's ISA default), so the routing table would be unbacked
-	 *     content; a future INTx device would get "can't find routing information".
+	 *   - _PRT: the routing table would be unbacked content.  [COMMENT CORRECTED after
+	 *     the acpi-1r review's N2: this entry used to claim no device here uses a PCI
+	 *     INTx -- false since the virtio console landed, which raises INTA
+	 *     (virtio.c -> pci.c's PIIX3 PIRQ routing); the review MEASURED IRQ 11 routing
+	 *     to it IDENTICALLY in both arms, because a kernel that finds no _PRT falls
+	 *     back to the PIRQ-programmed line.  The no-_PRT conclusion survives, but its
+	 *     reason is the fallback, not an absence of INTx devices; a future INTx device
+	 *     keeps working only while the PIIX PIRQ registers are programmed.]
 	 * The encoding is the specification's own (ACPI 6.x: ScopeOp 10, DeviceOp 5B 82,
 	 * NameOp 08, the EISAID pack, BufferOp 11, the Word Address Space descriptor 88
 	 * with its flag bytes, EndTag 79) -- no compiler on the host, so every byte below
@@ -181,8 +186,9 @@ void acpi_tables_build(uint8_t out[ACPI_TABLES_LENGTH])
 	 * every device edge is lost (results/acpi-4.md, the F1 root cause; the old arm's
 	 * "preallocated irqs: 0" is in results/acpi-2-f1-console-freeze-serial.txt:76).
 	 * The fix is the honest declaration: this machine HAS the 8259 pair, the ISA lines
-	 * and the PIIX4 PM registers, so the FADT now says so -- WBINVD only, plus the real
-	 * PM blocks below (the fixed events ACPICA initializes once hw-reduced is clear). */
+	 * and the PIIX4 PM registers, so the FADT now says so -- WBINVD | PROC_C1, plus the
+	 * real PM blocks below (the fixed events ACPICA initializes once hw-reduced is
+	 * clear). */
 	uint8_t *fadt = out + ACPI_OFF_FADT;
 	put_sdt_header(fadt, "FACP", 268, 5);
 	wr32le(fadt + 36, facs_addr);  /* FIRMWARE_CTRL */
@@ -195,11 +201,25 @@ void acpi_tables_build(uint8_t out[ACPI_TABLES_LENGTH])
 	fadt[97] = 0xFF;
 	fadt[98] = 0xFF;               /* p_lvl3_lat */
 	fadt[99] = 0xFF;
-	wr16le(fadt + 109, 0x0003);    /* IAPC_BOOT_ARCH: legacy devices (bit 0) and the
-	                                * 8042 (bit 1) -- both true of this machine */
-	wr32le(fadt + 112, (1u << 0)); /* WBINVD -- and NOT hardware-reduced (see above) */
+	fadt[108] = 0x32;              /* CENTURY: the century register IS in CMOS at 0x32 --
+	                                * rtc.c implements it (CMOS_CENTURY, answered from the
+	                                * fixed-epoch clock), and Linux's rtc-cmos takes its
+	                                * century index FROM this field, so 0 here declares the
+	                                * register absent (the review's SF3: a false declaration
+	                                * of the exact class F1 was) */
+	wr16le(fadt + 109, 0x0007);    /* IAPC_BOOT_ARCH: legacy devices (bit 0), the 8042
+	                                * (bit 1) -- both true of this machine -- and NO_VGA
+	                                * (bit 2): the VGA is absent (machine.c's own header),
+	                                * and a clear bit would declare one present (SF1) */
+	wr32le(fadt + 112, (1u << 0) | (1u << 2)); /* WBINVD | PROC_C1: the CPU does execute
+	                                * HLT (every idle guest parks in in_hlt = 1); honesty,
+	                                * not function -- the kernel's default idle is HLT too.
+	                                * NOT hardware-reduced (see above).  The button flags
+	                                * stay clear: no buttons exist. */
 	put_gas_none(fadt + 116);      /* reset register: RESET_REG_SUPPORTED clear */
-	fadt[131] = 1;                 /* FADT minor version: 5.1 */
+	fadt[131] = 0;                 /* FADT minor version: 5.0 -- 268 bytes IS the 5.0
+	                                * length (ACPICA's ACPI_FADT_V5_SIZE); a "5.1" table
+	                                * of 268 bytes misstates its own format (SF2) */
 	wr64le(fadt + 132, facs_addr); /* X_FIRMWARE_CTRL */
 	wr64le(fadt + 140, dsdt_addr); /* X_DSDT */
 
@@ -403,11 +423,27 @@ bool acpi_tables_verify(const uint8_t *blob)
 	/* NOT hardware-reduced: the machine HAS the full PC-AT layer (PIC, PIT, ISA UART),
 	 * and a modern guest takes the reduced bit as a platform declaration -- it bypasses
 	 * the legacy PIC, wires zero IOAPIC redirection entries, and every device edge is
-	 * lost (results/acpi-4.md, the F1 root cause).  WBINVD is the one flag set. */
+	 * lost (results/acpi-4.md, the F1 root cause).  WBINVD (memory is coherent) and
+	 * PROC_C1 (this CPU halts -- every idle guest parks in in_hlt = 1) are the set
+	 * flags; the button flags stay clear because no buttons exist. */
 	if ((flags & (1u << 20)) != 0) return false; /* HARDWARE-REDUCED must be CLEAR */
 	if ((flags & (1u << 0)) == 0) return false;  /* WBINVD */
+	if ((flags & (1u << 2)) == 0) return false;  /* PROC_C1 */
 	if (fadt[48] != 0 || fadt[49] != 0 || fadt[50] != 0 || fadt[51] != 0)
 		return false; /* SMI_CMD = 0 */
+	/* the FALSE-DECLARATION pins (the acpi-1r review's SF1-SF3, the class F1 shipped
+	 * as: a field the table declares about this machine that is not true of it, left
+	 * unverified):
+	 *   CENTURY: rtc.c implements the century register at CMOS 0x32 and Linux's
+	 *   rtc-cmos takes its century index FROM this field -- 0 declares it absent.
+	 *   IAPC_BOOT_ARCH: legacy devices + 8042 (both true) and NO_VGA -- the VGA is
+	 *   ABSENT (machine.c's header), so a clear bit 2 declares hardware that is not
+	 *   there.  0x0007, exactly.
+	 *   minor version: 268 bytes is ACPICA's ACPI_FADT_V5_SIZE = revision 5.0; a 5.1
+	 *   minor version on this length is a malformed revision declaration. */
+	if (fadt[108] != 0x32) return false;
+	if (fadt[109] != 0x07 || fadt[110] != 0x00) return false;
+	if (fadt[131] != 0) return false;
 	/* the PM blocks: the addresses the PIIX4 device answers at (src/hw/acpi.c's
 	 * io_register_* calls) with their real widths -- naming a block the device does
 	 * not implement would be the same lie the reduced flag was */

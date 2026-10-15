@@ -1552,6 +1552,36 @@ static void test_acpi_tables(void)
     dsdt_copy[9] = (uint8_t)(0u - acpi_test_sum8(dsdt_copy, 109));
     CHECK(acpi_test_sum8(dsdt_copy, 109) == 0);
     CHECK(!acpi_tables_verify(copy));
+
+    /* 9. IAPC_BOOT_ARCH with NO_VGA cleared again (0x0007 -> 0x0003), checksum
+     * repaired -- the acpi-1r review's SF1 regression probe: a clear bit 2 declares a
+     * VGA this machine does not have (machine.c's header names it absent) */
+    memcpy(copy, blob, sizeof(copy));
+    copy[ACPI_OFF_FADT + 109] = 0x03;
+    fadt_copy[9] = 0;
+    fadt_copy[9] = (uint8_t)(0u - acpi_test_sum8(fadt_copy, 268));
+    CHECK(acpi_test_sum8(fadt_copy, 268) == 0);
+    CHECK(!acpi_tables_verify(copy));
+
+    /* 10. CENTURY zeroed again (0x32 -> 0), checksum repaired -- the review's SF3
+     * regression probe: 0 declares "no century register in CMOS", false -- rtc.c
+     * answers CMOS 0x32 from the fixed-epoch clock */
+    memcpy(copy, blob, sizeof(copy));
+    copy[ACPI_OFF_FADT + 108] = 0;
+    fadt_copy[9] = 0;
+    fadt_copy[9] = (uint8_t)(0u - acpi_test_sum8(fadt_copy, 268));
+    CHECK(acpi_test_sum8(fadt_copy, 268) == 0);
+    CHECK(!acpi_tables_verify(copy));
+
+    /* 11. the minor version back at 5.1-on-a-5.0-length (fadt[131] = 1), checksum
+     * repaired -- the review's SF2 regression probe: 268 bytes is the revision-5.0
+     * size, so a 5.1 declaration is a malformed revision statement */
+    memcpy(copy, blob, sizeof(copy));
+    copy[ACPI_OFF_FADT + 131] = 1;
+    fadt_copy[9] = 0;
+    fadt_copy[9] = (uint8_t)(0u - acpi_test_sum8(fadt_copy, 268));
+    CHECK(acpi_test_sum8(fadt_copy, 268) == 0);
+    CHECK(!acpi_tables_verify(copy));
 }
 
 /* ================================================================== *

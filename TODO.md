@@ -91,7 +91,16 @@ tables; this historical section records why the seams existed before either land
     too: VERIFIED BY THE ORCHESTRATOR, `--acpi` + `lapic`, boot 1 writes the disk marker, reboots
     through the PS/2 controller, and `BOOT2: marker read back from /dev/sda sector 8: DISK PERSIST
     OK`.** So the `--acpi` lane is END TO END: tables -> IO-APIC routing -> console -> PCI ->
-    a real guest rebooting itself with persistence.
+    a real guest rebooting itself with persistence. **AND the virtio console too (ACPI-5,
+    results/acpi-5.md): the review's N3 gap — every virtio capture to date was image-limited,
+    the committed initramfses carrying no virtio modules — is CLOSED with the tree's OWN
+    capable image (tests/images/guest-initramfs-virtio.img, the M2-4 gate's): under `--acpi`
+    the driver binds (`virtio0 1af4:0003`, hvc0 enabled), INTA delivers through the IO-APIC
+    (`11: 26 IO-APIC 11-edge virtio0`), and 2595 bytes of the kernel's own log flow through
+    hvc0 (OFF control 2391; captures results/acpi-5-virtio-{on,off}-*.txt). The honest cost,
+    measured: the ON arm alone prints `can't derive routing for PCI INT A` / `PCI INT A: no
+    GSI` (no _PRT, the acpi_tables.c comment's documented omission) — delivery works anyway
+    via the PIIX PIRQ-programmed line, exactly the fallback that review measured.
   * Note the session that fixed F1 (ACPI-4) **stalled after writing its findings** — the provider
     fault (`reasoning_content`) that has killed five sessions — so the orchestrator verified its
     fix against its own captures, ran the battery and committed it. Its report is

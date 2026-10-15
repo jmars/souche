@@ -1,0 +1,45 @@
+GUEST-INIT: waited 14 round(s) for /dev/hvc0
+GUEST-INIT: /dev/hvc*:
+GUEST-INIT: /sys/bus/virtio/devices:
+GUEST-INIT: virtio0's ids and its driver:
+  virtio0/vendor = 0x1af4
+  virtio0/device = 0x0003
+  virtio0 (ls): device driver features modalias power status subsystem uevent vendor virtio-ports 
+  /sys/bus/virtio/drivers: virtio_console virtio_rproc_serial 
+GUEST-INIT: /proc/modules (virtio):
+GUEST-INIT: /proc/interrupts:
+GUEST-INIT: /proc/devices (hvc/virtio):
+GUEST-INIT: dmesg (virtio/hvc/console), the KERNEL's own lines:
+GUEST-INIT: written to /dev/hvc0 by the guest (userspace write through the device)
+[    9.237940] Kernel command line: console=hvc0 console=ttyS0
+[   56.959745] Console: colour dummy device 80x25
+[   56.968647] printk: console [ttyS0] enabled
+[   64.743284] pci 0000:00:00.0: [8086:1237] type 00 class 0x060000
+[   64.746617] pci 0000:00:01.0: [8086:7000] type 00 class 0x060100
+[   64.779950] pci 0000:00:07.0: [8086:7113] type 00 class 0x068000
+[   64.783284] pci 0000:00:0c.0: [1af4:1043] type 00 class 0x000200
+[   64.783284] pci 0000:00:0c.0: BAR 0 [io  0xb800-0xb83f]
+[   64.786617] pci 0000:00:0c.0: BAR 1 [io  0xb900-0xb90f]
+[   64.786617] pci 0000:00:0c.0: BAR 2 [io  0xb700-0xb70f]
+[   64.786617] pci 0000:00:0c.0: BAR 3 [io  0xb600-0xb60f]
+[   64.789950] pci 0000:00:1e.0: [8086:7010] type 00 class 0x010180
+[   64.793284] pci 0000:00:1e.0: BAR 2 [io  0x0170-0x0177]
+[   64.793284] pci 0000:00:1e.0: BAR 4 [io  0xb400-0xb40f]
+[   64.793284] pci 0000:00:1e.0: BAR 0 [io  0x01f0-0x01f7]: legacy IDE quirk
+[   64.793284] pci 0000:00:1e.0: BAR 1 [io  0x03f6]: legacy IDE quirk
+[   64.793284] pci 0000:00:1e.0: BAR 2 [io  0x0170-0x0177]: legacy IDE quirk
+[   64.796617] pci 0000:00:1e.0: BAR 3 [io  0x0376]: legacy IDE quirk
+[   89.504305] pci 0000:00:01.0: PIIX3: Enabling Passive Release
+[   89.504305] pci 0000:00:00.0: quirk_passive_release+0x0/0x90 took 16316 usecs
+[   89.504305] pci 0000:00:00.0: Limiting direct PCI/PCI transfers
+[   89.504305] pci 0000:00:00.0: quirk_natoma+0x0/0x40 took 14832 usecs
+[   89.609223] pci 0000:00:01.0: Activating ISA DMA hang workarounds
+[   89.609223] pci 0000:00:01.0: quirk_isa_dma_hangs+0x0/0x50 took 15074 usecs
+[  503.117841] virtio-pci 0000:00:0c.0: can't derive routing for PCI INT A
+[  503.129284] virtio-pci 0000:00:0c.0: PCI INT A: no GSI
+[  507.924506] printk: console [hvc0] enabled
+GUEST-INIT: waiting for host inputVIRTIO-INPUT16
+
+GUEST-INIT: read back from /dev/hvc0: [VIRTIO-INPUT16]
+GUEST-INIT: read back from /dev/hvc0: [VIRTIO-INPUT16]
+GUEST-INIT: end

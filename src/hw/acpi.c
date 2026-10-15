@@ -175,23 +175,23 @@ int32_t acpi_get_timer(double now)
     }
     else {
         /* acpi.js:196: dbg_assert!(t > this.timer_last_value) -- AUDIT-1R SF2 (the S1
-         * re-sweep).  LATENT, and latent for a load-bearing reason: this device is
-         * constructed ONLY when cpu->acpi_enabled (machine.c:82), a flag with NO writer
-         * in this port (upstream sets it from settings.acpi, cpu.js:1014; there is no
-         * CLI flag), so no boot today ever registers 0xB008 and this function is host-
-         * selftest-only (hw_selftest.c:991 says exactly this).  The moment the device
-         * IS constructed, the assert below was GUEST-REACHABLE through the port's own
-         * reboot path: D-F2's microtick() derives from instruction_counter, which
-         * reset_cpu zeroes, while ACPI state persists (machine_reboot deliberately
-         * resets only pic/pit/rtc/ps2/virtio_console, mirroring the reference) -- so
-         * the first PM-timer read after a guest-initiated reboot (0xCF9 or 0xFE) has
+         * re-sweep).  [PREMISE CORRECTED after the acpi-1r review's N2: this comment
+         * called the rewind path "LATENT -- the device is constructed only when
+         * cpu->acpi_enabled is set, a flag with NO writer in this port, so no boot
+         * ever registers 0xB008".  That flag writer EXISTS now: the `--acpi` CLI flag
+         * (src/main.c) sets it, machine.c constructs the device under it, and every
+         * --acpi boot registers 0xB008 -- the path below is LIVE, not latent.]  The
+         * assert-drop reasoning is unchanged and GUEST-REACHABLE under --acpi: D-F2's
+         * microtick() derives from instruction_counter, which reset_cpu zeroes, while
+         * ACPI state persists (machine_reboot deliberately resets only
+         * pic/pit/rtc/ps2/virtio_console, mirroring the reference) -- so the first
+         * PM-timer read after a guest-initiated reboot (0xCF9 or 0xFE) has
          * t < timer_last_value and the assert aborted the machine.  The release
          * reference compiles the assert out even in DEBUG (its clock is the monotonic
          * wall clock and it cannot reach the rewind at all); the graceful overshoot
          * arm below -- the same anticipation the PIT carries for exactly this
          * clock-goes-backward case (pit.c's `diff < 0` arm) -- is the behaviour, so
-         * the assert is dropped and the arm stands.  Fixed latent, like S3's ATAPI
-         * clamp: the first acpi flag would have made it live. */
+         * the assert is dropped and the arm stands. */
         int32_t previous_timer = acpi->timer_last_value + acpi->timer_imprecision_offset;
 
         /* don't go back in time */
