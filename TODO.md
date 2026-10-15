@@ -8,8 +8,10 @@ INTERPRETATION, as the rest of the tree is.
 
 **Gates at the time of writing** (orchestrator-verified, clean build): `make` rc 0 · `make nasm`
 118/118 in both cache and JIT modes · the M0 transcript byte-identical to the pinned JS reference
-(`8bb8eca5…`) · `make selftest` green (~8M checks across six suites) · `make bench` ~1.68 s /
-~119 MIPS on the 200M-instruction kernel boot.
+(`8bb8eca5…`) · `make selftest` green (`hw_selftest` 694 checks / 0 failures plus the CPU, m1c, uop,
+uop-exec, JIT and JIT-codegen suites) · `make bench` **~0.83 s / ~240 MIPS** on the 200M-instruction
+kernel boot · `sh tests/gate-reboot-1.sh` 39/39 · `sh tests/gate-m2-5-determinism.sh all` rc 0 at the
+pinned 4,000,024,062 instructions.
 
 ---
 
@@ -41,6 +43,36 @@ fixes: results/reboot-fix-1.md.
   honestly NOT-CAUGHT);
 - the JIT bind-table-full stderr noise (~1.6M lines per double 4G boot) is pre-existing.
 
+### The ACPI lane — DONE (ACPI-1 … ACPI-7)
+
+Shipped, all behind `--acpi` (default OFF, and the flag-off machine is byte-identical throughout —
+`make transcript-diff` is the first gate of every unit in the lane): the LAPIC + I/O APIC
+(`src/cpu/apic.c`, `src/cpu/ioapic.c`), the firmware table set — **RSDP, RSDT, XSDT, FADT, FACS,
+DSDT, MADT** at `0xE0000` (`src/hw/acpi_tables.c`, hand-encoded AML; v86 has no analogue) — and the
+PCI routing declaration. End to end on the Alpine kernel: PCI enumeration reaches
+`PCI root bridge [PCI0]`, the console's IRQ-driven writes land through the IO-APIC, the virtio
+console binds and delivers (`11: 26 IO-APIC 11-fasteoi virtio0`), and the `--acpi` reboot arm writes
+its disk marker, reboots through the PS/2 controller and reads it back.
+
+The lane's own record, because each cost a wrong claim first:
+- **A wrong DECLARATION in firmware is indistinguishable, from the guest side, from a broken device**
+  (ACPI-4): the FADT's *hardware-reduced* flag told the kernel this platform had no legacy 8259, so
+  the guest dropped its legacy IRQ paths — its console went silent while polled `printk` kept working,
+  which read exactly like a UART bug. `preallocated irqs: 0` was the tell.
+- **A length field that counts from the wrong byte is invisible to value pins** (ACPI-7): every
+  PkgLength in the DSDT counted content instead of *from its own first byte*, so all five packages
+  declared extents one or two bytes short. `acpi_tables_verify()` now decodes each one and asserts it
+  lands on the true end, **before** any byte-value pin gets a vote.
+- **`iasl`/`acpiexec`/`acpidump` do not exist on this host** — the well-formedness claim rests on that
+  structural walk, a python re-derivation of the committed bytes, and the reviewer's seabios.bin
+  reference walk, not on an external compiler.
+
+**Accepted residual (stated, not hidden):** the DSDT declares no `_PRT` entry for the IDE, whose
+interrupt line this machine genuinely does not route through a PIRQ byte — the reboot arm's
+`can't derive routing for PCI INT A` for the IDE is that omission working as designed.
+**Cross-lane note:** the baliveau v86guest kernel cannot use any of this — its config has no
+`CONFIG_ACPI`, no `CONFIG_X86_MPPARSE` and no `CONFIG_X86_IO_APIC` (see §1.1).
+
 ---
 
 ---
@@ -50,9 +82,10 @@ fixes: results/reboot-fix-1.md.
 Each of these is *absent by decision*, not by omission, and each currently **stops loudly by name**
 rather than producing a wrong value — so the cost of deferring is discovery, not risk.
 
-### 1.1 APIC / IOAPIC — deferred; NOT needed by any guest we run today
-*(Unit APIC-1 has since shipped the LAPIC/IOAPIC behind `--acpi`, and ACPI-2 the firmware
-tables; this historical section records why the seams existed before either landed.)*
+### 1.1 APIC / IOAPIC — SHIPPED behind `--acpi` (kept as history; the lane's own entry is in §0)
+*(Unit APIC-1 shipped the LAPIC/IOAPIC behind `--acpi`, ACPI-2 the firmware tables, and ACPI-4 … 7
+closed F1/F2/F3 and the `_PRT` — this historical section records why the seams existed before any of
+that landed, and the guest-compatibility fact below still stands.)*
 
 - **CROSS-LANE RECOMMENDATION (ACPI-2, MEASURED):** the baliveau v86guest kernel
   (`tests/images/vmlinuz-i386-v86guest`, 6.12.19) can never route through the I/O APIC — its
@@ -192,6 +225,15 @@ site; widening the chain across pages would silently break both engines.
   dry-run-verified to exist and the non-goals table fixed (it had listed the JIT as out of scope,
   which stopped being true when the native JIT landed). The rest of the README (the ORACLE
   CONTRACT, the boot path, the transcript) had stayed accurate throughout.
+- **The docs had drifted behind the ACPI lane, and did not say so** (found by the orchestrator's
+  2026-10-15 inventory, then fixed): `docs/architecture.md` §5 listed only `acpi.c` even though
+  `acpi_tables.c`, `src/cpu/apic.c` and `src/cpu/ioapic.c` had all shipped — the ACPI lane now has
+  its own subsection there (the tables, the LAPIC/IOAPIC, the declaration-is-part-of-the-machine
+  lesson, and the IDE `_PRT` omission). `README.md`'s device row and Layout now name the tables and
+  the APIC behind `--acpi`, and this file's own gates header had still quoted the pre-ACPI-7
+  `make bench` number (1.68 s / 119 MIPS) against the shipped **0.83 s / 240 MIPS**.
+  The lesson is the general one: a lane that lands behind a default-OFF flag does not look like a
+  doc change, so nothing prompts the update.
 
 ## 6. On the baliveau side (the consumer) — for reference, not this repo's work
 

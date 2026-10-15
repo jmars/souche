@@ -14,8 +14,8 @@ make                 # build the APE (x86-64 + aarch64) with cosmocc
 make oracle          # the M0 contract: build the test image, run both legs, compare, exit 0
 make transcript-diff # the same comparison, side by side
 make determinism     # two consecutive oracle runs must be byte-identical
-make selftest        # six suites (~8M checks): the foundation, M1c, the devices, the uop cache,
-                     # the executors, and the JIT codegen
+make selftest        # seven suites (~7.9M checks): the foundation, M1c, the devices, the uop cache,
+                     # the executors, the JIT, and the JIT codegen
 make nasm            # the 118-image differential corpus, C leg vs native fixtures
 make bench           # the 200M-instruction kernel-boot benchmark, with its pins
 ```
@@ -32,6 +32,16 @@ sh tests/gate-reboot-1.sh           # the reboot path, both trigger sites, the p
 
 **A gate is its exit code, never the tail of its stdout.** Several gates print intentionally
 error-looking fixture lines; only the status decides.
+
+**The ACPI lane has no gate script of its own, and that is a fact to know before looking for one:**
+its gates ARE the guest gates above, run twice — once with `--acpi` and once without — plus the
+flag-off `make transcript-diff` (the proof a new device is *additive*, and the first gate of every
+unit in the lane) and `acpi_tables_verify()` inside the `hw_selftest` suite, which re-derives the
+DSDT's structure instead of trusting byte values. The exact commands, the expected kernel lines and
+the pinned instruction count are in `results/acpi-7.md` §8. `tests/mk-initramfs-acpi.sh` builds the
+smallest probe initramfs (`tests/images/guest-initramfs-acpi.img` — an init that prints
+`/proc/interrupts` and the kernel's ACPI lines, and prints nothing host-derived); the later virtio
+and reboot arms reuse the tree's `guest-initramfs-virtio.img` and `guest-initramfs-reboot.img`.
 
 ## 2. The instruments
 

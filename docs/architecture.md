@@ -92,8 +92,8 @@ loop aborted the machine (`results/r5-review.md` B1); the fix and its reason are
 
 `src/hw/` — one C file per upstream JS file, so the mapping stays auditable in both directions:
 `io.c` (the port map, the mmap dispatch and the device hooks), `bus.c`, `pit.c`, `rtc.c`, `dma.c`,
-`ps2.c`, `acpi.c`, `pci.c`, `uart.c`, `ide.c`, `virtio.c`, `virtio_console.c`, and `machine.c` (the
-device set in the reference's own creation order, plus the timer fan-out).
+`ps2.c`, `acpi.c`, `acpi_tables.c`, `pci.c`, `uart.c`, `ide.c`, `virtio.c`, `virtio_console.c`, and
+`machine.c` (the device set in the reference's own creation order, plus the timer fan-out).
 
 Two structural notes worth knowing before reading a device:
 
@@ -104,6 +104,36 @@ Two structural notes worth knowing before reading a device:
   are discarded, matching `v86/src/io.js`. The port's development stop on an unclaimed port was
   removed for exactly that reason — it would have killed the first boot at `outb $0x80`
   (`results/m2-1f-policy.md`).
+
+### The ACPI lane (`--acpi`, default OFF)
+
+Everything in this subsection is gated on one flag, and the first gate for any change to it is that
+the flag-off machine is **byte-identical** to the one before it (`make transcript-diff`), so a device
+described here can only be read as additive.
+
+- **`acpi.c`** is the upstream port: the PM1 status/enable/control registers, the GPE block, the PM
+  timer, and the IRQ9 fan-out.
+- **`acpi_tables.c`** is NOT an upstream port — v86 has no firmware-table builder, so this is the
+  port's own hand-encoder for **RSDP, RSDT, XSDT, FADT, FACS, DSDT and MADT**, placed at `0xE0000`.
+  The DSDT's AML is written byte-by-byte against the ACPI spec tables (there is no compiler on the
+  build host), and `acpi_tables_verify()` re-derives its structure rather than trusting byte pins —
+  including a PkgLength walk, the seat that catches the class of defect the first builder shipped.
+- **`src/cpu/apic.c` and `src/cpu/ioapic.c`** supply the LAPIC register block, the LAPIC timer (a
+  third tick source) and the I/O APIC's indirect register block + redirection table. They live under
+  `src/cpu/` because upstream's Rust does (`v86/src/rust/cpu/`), not with the device files.
+  Single-CPU, so `machine.c`'s `device_raise_irq`/`device_lower_irq` are their only callers — the
+  routing table's consumer is the PIT/RTC/ACPI fan-out, not a second processor.
+- **The firmware tables are part of the emulated machine, and a wrong declaration in them is
+  indistinguishable from a broken device** — the lesson `results/acpi-4.md` paid for: the FADT's
+  hardware-reduced flag told the kernel this platform had no legacy 8259, and the guest behaved
+  exactly as told (its IRQ-driven console writes never landed while polled `printk` kept working,
+  which read like a UART bug). Table CONTENT needs the same scepticism as a device register.
+- **One deliberate omission, stated in the table itself:** the DSDT declares a route for the virtio
+  console and **not** for the IDE, whose interrupt line this machine genuinely does not route through
+  a PIRQ byte — so the reboot arm still prints the kernel's `can't derive routing for PCI INT A` for
+  the IDE, by design (`src/hw/acpi_tables.c` carries the argument).
+
+Reports: `results/acpi-{1,2,4,5,6,7}.md` and the reviews beside them.
 
 ## 6. The boot paths
 

@@ -37,7 +37,7 @@ and why. In one screen:
 |---|---|
 | **CPU core** | the whole reference CPU: the 386-level base table, the 0F table, MMX/SSE, the x87 FPU on a vendored softfloat, the segment/GDT/LDT/TSS machinery, exceptions, interrupts, paging (PSE), the PIC. The instruction dispatch is **generated from the reference's own `v86/gen/x86_table.js`** — never hand-written — so an opcode's semantics cannot be re-decided by mistake. Census: **0 unimplemented call sites** |
 | **Execution** | three engines over the same generated dispatch: an interpreter, a **uop cache** (decoded, physically-keyed blocks) and an **x86-64 JIT**, each gated against the others. The JIT is ON by default, ~1.7× over the uop cache, at **97.67% dynamic inlined coverage**; `--uop-cache off` and `--jit off` each reproduce the pre-existing machine exactly |
-| **Devices** | port I/O and the mmap device hooks, bus, PIC, PIT, RTC, DMA, 8042 PS/2, ACPI, PCI, 8250 UART, IDE/ATA, virtio + virtio-console |
+| **Devices** | port I/O and the mmap device hooks, bus, PIC, PIT, RTC, DMA, 8042 PS/2, ACPI, PCI, 8250 UART, IDE/ATA, virtio + virtio-console; behind `--acpi` (default OFF) a **LAPIC + I/O APIC** and a **generated ACPI firmware table set** — RSDP/RSDT/XSDT/FADT/FACS/DSDT/MADT at `0xE0000`, hand-encoded AML included |
 | **Boot** | a Linux `bzImage` + initrd + cmdline; a raw multiboot/ELF path (the oracle's); and an embedded 64 KiB purpose-built firmware (`tests/minibios.asm`), needed because the reference cannot boot a bzImage without a BIOS |
 | **Proved by** | a real Alpine i386 kernel booting to its own panic on both machines, the guest's own `libata` reading our ATA (its md5 of the disk equals the host's), its `virtio_console` driver attaching `hvc0`, **and the baliveau guest reaching `fx-init: boot-ok v3`** |
 
@@ -84,8 +84,9 @@ src/cpu/     the CPU: state, flags, memory/TLB/paging, modrm, arith, string, the
              tables, MMX/SSE, softfloat + x87, exceptions, pic, the run loop, the uop cache and
              the JIT (jit_mem, jit_x64, jit_codegen).  interpreter_gen.c and uop_gen.c are
              GENERATED — do not edit them
-src/hw/      the machine: io (port map + device hooks), bus, pit, rtc, dma, ps2, acpi, pci, uart,
-             ide, virtio, virtio_console, machine (the device set + the timer fan-out)
+src/hw/      the machine: io (port map + device hooks), bus, pit, rtc, dma, ps2, acpi, acpi_tables
+             (the RSDP/RSDT/XSDT/FADT/FACS/DSDT/MADT builder and its AML), pci, uart, ide, virtio,
+             virtio_console, machine (the device set + the timer fan-out)
 src/main.c   the CLI, the loaders (multiboot/ELF and bzImage), and the two output documents
 gen/         the emitters: interpreter_c.js and interpreter_uop.js read v86/gen/x86_table.js and
              emit the two dispatch tables; unity_c.py builds the shipped translation unit
