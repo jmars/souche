@@ -101,6 +101,9 @@ INITRD="${INITRD:-tests/images/guest-initrd-shellfree.xz}"
 FROZEN_INITRD="${FROZEN_INITRD:-tests/images/guest-initrd-fxdisk.xz}"
 BUSYBOX="${BUSYBOX:-tests/images/busybox-i386-v86guest}"
 DISK_FMT="${DISK_FMT:-tests/images/disk-fmt-64m.img}"
+# the 64 MiB disk is not tracked (its xz is): materialise the default path on
+# first use -- see tests/disk-fmt.sh
+. tests/disk-fmt.sh
 FW="${FW:-build/minibios-80m.bin}"
 V86C="${V86C:-build/v86c}"
 WORK="${WORK:-/tmp/gate-m2-5-guest}"

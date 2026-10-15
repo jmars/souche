@@ -35,6 +35,9 @@ cd "$(dirname "$0")/.."
 KERNEL="${KERNEL:-tests/images/vmlinuz-i386-v86guest}"
 INITRD="${INITRD:-tests/images/guest-initrd-fxdisk.xz}"
 DISK_FMT="${DISK_FMT:-tests/images/disk-fmt-64m.img}"
+# the 64 MiB disk is not tracked (its xz is): materialise the default path on
+# first use -- see tests/disk-fmt.sh
+. tests/disk-fmt.sh
 FW="${FW:-build/minibios-80m.bin}"
 V86C="${V86C:-build/v86c}"
 WORK="${WORK:-/tmp/gate-m2-5-det}"

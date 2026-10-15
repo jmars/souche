@@ -243,3 +243,22 @@ is `/dev/sda`) in fx-init ✓, harness wiring with an in-place reboot proof ✓,
 now runs on this port's own virtual clock at a fixed epoch — post-fix boots are byte-identical in
 serial, virtio **and instruction count** across 8 boots, where 6 pre-fix boots produced 6 different
 counts).
+
+## 7. Repository weight — the 64 MiB test disk, MATERIALISED not tracked
+
+`tests/images/disk-fmt-64m.img` (67,108,864 bytes) was tracked in git and had crossed GitHub's 50 MB
+blob warning. Git now tracks its `xz -9` instead — `tests/images/disk-fmt-64m.img.xz`, **10,240
+bytes**, MEASURED — and `tests/disk-fmt.sh` materialises the raw image on first gate use, verifying
+the decompressed bytes against the pin `a2f0f6da…0460c` *before* anything is put in place (temp file,
+sha256 check, atomic rename), so a bad or truncated archive fails the gate loudly and leaves no
+half-written image. `make disk-fmt` does it by hand; it is deliberately **not** a prerequisite of
+`make`/`make all`, and `make -n all` proves the default build never references the disk.
+
+Both consumers — `tests/gate-m2-5-determinism.sh` and `tests/gate-m2-5-guest.sh` — source the helper
+three lines after their `DISK_FMT` default, so a fresh clone runs them unchanged, and the
+`DISK_FMT=` override is still honoured (a caller's path is never materialised into).
+
+**STATED GAP, not hidden:** the 67 MB blob is still reachable in git history, so the GitHub warning
+is not fully retired by this change — retiring it needs a history rewrite and a force-push, which is
+the repository owner's call, not a unit's. What this change fixes is the *tip*: no new clone, fetch
+or pack in normal use has to carry it.

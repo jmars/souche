@@ -517,6 +517,20 @@ $(IMAGE): tests/test.asm tests/test.ld
 	$(LD) $(LDFLAGS) -o $(BUILD)/test.elf $(BUILD)/test.o
 	$(OBJCOPY) -O binary $(BUILD)/test.elf $@
 
+# HANDOFF=v86c-repo-weight: the 64 MiB guest-gate disk, materialised from the
+# committed xz (the raw image is not tracked; the helper's contract -- default
+# path only, never clobber, sha256-verified before it is put in place -- is in
+# tests/disk-fmt.sh).  Deliberately NOT a prerequisite of `all`: a 64 MB
+# decompress must not become part of the default build; the gates that need the
+# disk run the helper themselves.
+DISK_FMT_IMG := tests/images/disk-fmt-64m.img
+
+.PHONY: disk-fmt
+disk-fmt: $(DISK_FMT_IMG)
+
+$(DISK_FMT_IMG): tests/images/disk-fmt-64m.img.xz tests/disk-fmt.sh
+	. tests/disk-fmt.sh
+
 # --- REBOOT-1: the TWO-BOOT reboot gate image (results/reboot-1.md, G1) ---------
 # One source, two trigger variants: the PCI dance (0x02 then 0x06 to 0xCF9) and
 # the PS/2 command (0xFE to 0x64).  The guest writes a memory marker in boot 1,

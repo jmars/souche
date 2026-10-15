@@ -28,3 +28,13 @@ results/**/v86c-base
 results/**/v86c-chain
 results/**/v86c-final
 results/**/*.elf
+
+# --- the 64 MiB test disk, MATERIALISED not tracked --------------------------------
+# tests/images/disk-fmt-64m.img (67,108,864 bytes) crossed GitHub's 50 MB blob
+# warning, so git tracks its xz -9 instead (tests/images/disk-fmt-64m.img.xz,
+# 10,240 bytes) and tests/disk-fmt.sh materialises the raw file from it on first
+# gate use, sha256-verified before it is put in place.  The raw image stays out of
+# git from here on; the old 67 MB blob itself remains reachable in HISTORY (this
+# change does not rewrite it).
+tests/images/disk-fmt-64m.img
+tests/images/disk-fmt-64m.img.tmp.*
