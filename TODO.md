@@ -76,11 +76,22 @@ tables; this historical section records why the seams existed before either land
     declaration in firmware is indistinguishable, from the guest side, from a broken device — the
     kernel behaves correctly for the machine it was TOLD it is, so table CONTENT is part of the
     emulated machine and needs the same scepticism as a device register.**
-  * **F2 — ACPI-aware PCI enumeration finds ZERO devices: STILL OPEN.** The minimal DSDT declares no
-    PCI root bridge (`_HID` PNP0A03 + the resource descriptors a kernel reads), so virtio and IDE
-    vanish under `--acpi` — and it is also what blocks the reboot arm (F3 below). This is the one
-    remaining item.
-  * **F3 — the reboot arm: RE-TESTED AND BENIGN in both arms** (ACPI-4); its real blocker is F2.
+  * ~~**F2 — ACPI-aware PCI enumeration finds ZERO devices.**~~ **FIXED (ACPI-4, commit 7bf6bd2 —
+    implemented alongside F1 and reported only now, because the session that did both stalled after
+    writing its F1 section).** The DSDT now carries one PNP0A03 root bridge under `\_SB` with
+    `_BBN=0` and a `_CRS` covering the bus and the I/O and memory apertures. VERIFIED BY THE
+    ORCHESTRATOR: under `--acpi` the Alpine kernel prints `PCI host bridge to bus 0000:00` and
+    enumerates `00:00.0 [8086:1237]`, `00:01.0 [8086:7000]`, `00:07.0 [8086:7113]`, `00:1e.0
+    [8086:7010]` — and the device set is the OFF arm's **plus** `00:07.0`, the PIIX4 ACPI function
+    the machine only exposes when ACPI is on, which is exactly right.
+  * ~~**F3 — the reboot arm soft-locks.**~~ **BENIGN (ACPI-4): not a machine bug.** The soft lockup
+    is the module signature check's sha256 being instruction-slow on this interpreter (>22 guest
+    seconds in one kernel loop); the OFF arm shows the IDENTICAL lockup at the SAME EIP in both its
+    boots and still completes. Its real blocker was F2 — and with F2 fixed the ON arm now completes
+    too: VERIFIED BY THE ORCHESTRATOR, `--acpi` + `lapic`, boot 1 writes the disk marker, reboots
+    through the PS/2 controller, and `BOOT2: marker read back from /dev/sda sector 8: DISK PERSIST
+    OK`.** So the `--acpi` lane is END TO END: tables -> IO-APIC routing -> console -> PCI ->
+    a real guest rebooting itself with persistence.
   * Note the session that fixed F1 (ACPI-4) **stalled after writing its findings** — the provider
     fault (`reasoning_content`) that has killed five sessions — so the orchestrator verified its
     fix against its own captures, ran the battery and committed it. Its report is
