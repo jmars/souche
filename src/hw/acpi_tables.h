@@ -10,10 +10,16 @@
  * it needs the FADT (usable ACPI at all), the DSDT the FADT points at, and the MADT
  * (the LAPIC, the IOAPIC, and the ISA overrides).  What is DELIBERATELY LEFT OUT, and
  * what each omission costs:
- *   - every PM block (PM1a/b, PM2, PM_TMR, GPE0/1) and the SMI command port: the
- *     hardware-reduced FADT flag (FLAGS bit 20) tells ACPICA there is no fixed hardware
- *     to manage -- sleep, the SCI mode entry and the ACPI-mode transition are the parts
- *     that would break if a guest wanted them, and boot-time MADT use is independent.
+ *   - the SMI command port (SMI_CMD=0: "already in ACPI mode" -- no SMI transition
+ *     exists to enter one), PM1b, PM2_CNT and GPE1 (the device implements no such
+ *     registers), sleep states (the FADT's S-state fields stay 0: S0 only), and the
+ *     reset register (no ACPI reset -- the machine's reboot is the 0xCF9 port).  What
+ *     the FADT DOES name is every fixed-hardware block the PIIX4 device really
+ *     implements (PM1a_EVT 0xB000, PM1a_CNT 0xB004, PM_TMR 0xB008, GPE0 0xAFE0),
+ *     and it declares the machine NON-reduced: hardware-reduced is a PLATFORM
+ *     declaration a modern guest acts on (it bypasses the legacy PIC and wires zero
+ *     IOAPIC redirection entries -- every ISA device edge is then lost), and this
+ *     machine has the full PC-AT layer (results/acpi-4.md, the F1 root cause).
  *   - an HPET, an MCFG, an SRAT, a second LAPIC, an NMI entry: there is no such device
  *     in this machine (the RTC lives on the 8259 path, PCI has no ECAM, the machine has
  *     one CPU), and a table describing absent hardware is a lie ACPICA would act on.
@@ -52,11 +58,11 @@
 #define ACPI_OFF_RSDP 0x000u /* 36 bytes: both checksums, RSDT + XSDT pointers */
 #define ACPI_OFF_RSDT 0x040u /* 44 bytes: the FADT + MADT, 32-bit entries */
 #define ACPI_OFF_XSDT 0x080u /* 52 bytes: the same two, 64-bit entries */
-#define ACPI_OFF_FADT 0x0C0u /* 268 bytes: revision 5, hardware-reduced */
+#define ACPI_OFF_FADT 0x0C0u /* 268 bytes: revision 5, NON-reduced (see above) */
 #define ACPI_OFF_FACS 0x1D0u /* 64 bytes: no checksum (the spec gives it none) */
-#define ACPI_OFF_DSDT 0x210u /* 36 bytes: header only -- an empty namespace */
-#define ACPI_OFF_MADT 0x240u /* 76 bytes: LAPIC + IOAPIC + the IRQ0->GSI2 override */
-#define ACPI_TABLES_LENGTH 0x28Cu
+#define ACPI_OFF_DSDT 0x210u /* 109 bytes: the PCI host bridge -- see the builder */
+#define ACPI_OFF_MADT 0x280u /* 76 bytes: LAPIC + IOAPIC + the IRQ0->GSI2 override */
+#define ACPI_TABLES_LENGTH 0x2CCu
 
 /* Fill `out` (ACPI_TABLES_LENGTH bytes) with the whole set.  Idempotent; does not read
  * or write machine state. */

@@ -30,19 +30,30 @@ export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 mount -t proc none /proc 2>/dev/null
 mount -t sysfs none /sys 2>/dev/null
 mount -t devtmpfs none /dev 2>/dev/null
-# The evidence goes to hvc0 FIRST: under --acpi the serial TTY write path freezes the
-# kernel (results/acpi-2.md, finding F1) and a write to ttyS0 is therefore attempted
-# only AFTER everything hvc0 carries is out.
+# The evidence goes to hvc0 FIRST if a virtio console exists: the serial TTY write
+# path used to freeze under --acpi (results/acpi-2.md F1, fixed in results/acpi-4.md)
+# and the ttyS0 write is still attempted last, after everything else is out.
 if [ -c /dev/hvc0 ]; then
     exec >/dev/hvc0 2>&1
 fi
 echo "ACPI-INIT: begin"
 echo "ACPI-INIT: /proc/interrupts:"
 cat /proc/interrupts
-echo "ACPI-INIT: dmesg, the acpi and apic lines:"
+echo "ACPI-INIT: /proc/bus/pci/devices:"
+cat /proc/bus/pci/devices
+echo "ACPI-INIT: /sys/bus/acpi/devices:"
+ls /sys/bus/acpi/devices/ 2>&1
+echo "ACPI-INIT: PNP0A03 resources:"
+cat /sys/bus/acpi/devices/PNP0A03:00/resources 2>&1
+echo "ACPI-INIT: /proc/ioports (head):"
+head -20 /proc/ioports
+echo "ACPI-INIT: dmesg, the acpi apic and pci lines:"
 dmesg | grep -Ei 'ACPI|APIC|IO-?APIC|PIC|MADT|NR_IRQS'
+dmesg | grep -Ei 'pci|8086|ide[0-9]?\.'
 echo "ACPI-INIT: end"
-echo "ACPI-INIT: ttyS0 probe begins (may freeze, finding F1)"
+echo "ACPI-INIT: ttyS0 probe begins"
+echo "(the F1 freeze signature -- this line and everything after it absent --"
+echo " is what the results/acpi-4.md gate watches for)"
 echo "ACPI-INIT: ttyS0 probe line" > /dev/ttyS0
 exec sleep 3600
 EOF

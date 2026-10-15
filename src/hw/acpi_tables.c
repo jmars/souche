@@ -93,44 +93,140 @@ void acpi_tables_build(uint8_t out[ACPI_TABLES_LENGTH])
 	wr32le(facs + 4, 64);
 	facs[32] = 1; /* version */
 
-	/* ---------------- DSDT: an empty namespace ----------------
-	 * header only, zero AML body: the parser ends the stream at once, and the
-	 * namespace stays empty.  Nothing in this machine needs an AML object for boot
-	 * (the MADT is a structured table, not AML), and an object we cannot back with
-	 * device behaviour (_PRT, _Sx, _Pxx) would be the lie the header comment rules
-	 * out.  Revision 2 = AML 2.0. */
+	/* ---------------- DSDT: the PCI host bridge ----------------
+	 * ACPI-2 shipped this table header-only ("an empty namespace"), which an ACPI-aware
+	 * guest reads as: this platform has no PCI -- the kernel printed "Using host bridge
+	 * windows from ACPI" and enumerated ZERO devices, so the IDE and every other PCI
+	 * function vanished under --acpi (results/acpi-4.md F2).  The minimum that roots
+	 * the bus is one PNP0A03 device under \_SB with _BBN=0 and a _CRS, which is
+	 * exactly what this AML is:
+	 *
+	 *     DefinitionBlock ("", "DSDT", 2, "V86CVM", "V86CFW  ", 2)
+	 *     {
+	 *         Scope (\_SB) { Device (PCI0)
+	 *         {
+	 *             Name (_HID, EISAID ("PNP0A03"))
+	 *             Name (_BBN, Zero)
+	 *             Name (_CRS, ResourceTemplate ()
+	 *             {
+	 *                 WordIO (ResourceProducer, MinFixed, MaxFixed, PosDecode, 16,
+	 *                          0x0000, 0x0000, 0x0CF7, 0x0000, 0x0CF8)
+	 *                 WordIO (ResourceProducer, MinFixed, MaxFixed, PosDecode, 16,
+	 *                          0x0000, 0x0D00, 0xFFFF, 0x0000, 0xF300)
+	 *             })
+	 *         } }
+	 *     }
+	 *
+	 * What is DELIBERATELY LEFT OUT, and what each omission costs:
+	 *   - a memory window: no device on this machine has an MMIO BAR (the host bridge
+	 *     and the PIIX pair are BAR-less; the IDE's bus-master window is IO), and a
+	 *     window whose base must sit above RAM would depend on --memory, which the
+	 *     tables' determinism rule forbids (build() takes no machine state).  A future
+	 *     MMIO device would print "no compatible bridge window" and need this added.
+	 *   - _PRT: no device here uses a PCI INTx (the IDE's interrupts are the ISA 14/15,
+	 *     routed by the MADT's ISA default), so the routing table would be unbacked
+	 *     content; a future INTx device would get "can't find routing information".
+	 * The encoding is the specification's own (ACPI 6.x: ScopeOp 10, DeviceOp 5B 82,
+	 * NameOp 08, the EISAID pack, BufferOp 11, the Word Address Space descriptor 88
+	 * with its flag bytes, EndTag 79) -- no compiler on the host, so every byte below
+	 * is written against the spec tables and checked by verify() + the guest's ACPICA.
+	 * The EISAID trap, for the next hand-encoder: the packed PNP id's LETTER bits sit
+	 * in the LOW half of the dword (ACPICA renders a numeric _HID by byte-swapping
+	 * it first -- exutils.c acpi_ex_eisa_id_to_string), so PNP0A03 is 0x030AD041, and
+	 * the mirror-image 0x41D00A03 boots looking like "@XJD041" (MEASURED, §3).
+	 * Revision 2 = AML 2.0. */
+	static const uint8_t pci0_aml[] = {
+	    0x10, 0x46, 0x04,          /* ScopeOp, PkgLength(70): the 2-byte form, low
+	                           * nibble in 0x46 bits[3:0], high bits in the follow byte */
+	    0x5F, 0x53, 0x42, 0x5F,    /* "_SB_" */
+	    0x5B, 0x82, 0x3F,          /* DeviceOp, PkgLength(63), "PCI0": 1-byte form, the value itself */
+	    0x50, 0x43, 0x49, 0x30,    /* "PCI0" */
+	    0x08, 0x5F, 0x48, 0x49, 0x44, /* NameOp "_HID" */
+	    0x0C, 0x41, 0xD0, 0x0A, 0x03, /* DWordPrefix, 0x030AD041 = EISAID PNP0A03 */
+	    0x08, 0x5F, 0x42, 0x42, 0x4E, /* NameOp "_BBN" */
+	    0x00,                      /* ZeroOp */
+	    0x08, 0x5F, 0x43, 0x52, 0x53, /* NameOp "_CRS" */
+	    0x11, 0x24,                /* BufferOp, PkgLength(36 = the size operand + 34 data) */
+	    0x0A, 0x22,                /* the buffer's size operand is a PREFIXED AML INTEGER
+	                           * (psargs.c reads an operand: BytePrefix, then 34) -- a
+	                           * raw word here reads as length 0 and the kernel rejects
+	                           * _CRS with -EIO (MEASURED, §3) */
+	    /* WordIO: 0x0000-0x0CF7 -- the legacy ISA ports below the config mechanism */
+	    0x88, 0x0D, 0x00,          /* Word Address Space descriptor, length 13 */
+	    0x01, 0x0C, 0x03,          /* type IO; Min+Max fixed, positive decode; full range */
+	    0x00, 0x00,                /* granularity */
+	    0x00, 0x00,                /* minimum 0x0000 */
+	    0xF7, 0x0C,                /* maximum 0x0CF7 */
+	    0x00, 0x00,                /* translation offset */
+	    0xF8, 0x0C,                /* length 0x0CF8 */
+	    /* WordIO: 0x0D00-0xFFFF -- the window the kernel assigns PCI IO BARs from */
+	    0x88, 0x0D, 0x00, 0x01, 0x0C, 0x03,
+	    0x00, 0x00,                /* granularity */
+	    0x00, 0x0D,                /* minimum 0x0D00 */
+	    0xFF, 0xFF,                /* maximum 0xFFFF */
+	    0x00, 0x00,                /* translation offset */
+	    0x00, 0xF3,                /* length 0xF300 */
+	    0x79, 0x00,                /* EndTag (the checksum byte is ignored for _CRS) */
+	};
 	uint8_t *dsdt = out + ACPI_OFF_DSDT;
-	put_sdt_header(dsdt, "DSDT", 36, 2);
-	put_checksum(dsdt, 36);
+	put_sdt_header(dsdt, "DSDT", 36 + (uint32_t)sizeof(pci0_aml), 2);
+	memcpy(dsdt + 36, pci0_aml, sizeof(pci0_aml));
+	put_checksum(dsdt, 36 + (uint32_t)sizeof(pci0_aml));
 
-	/* ---------------- FADT, revision 5, HARDWARE-REDUCED ----------------
-	 * Fixed-hardware fields are zero except where a comment names a value: the
-	 * reduced-hardware flag is what makes ACPICA skip the SCI/ACPI-mode machinery
-	 * there is no device behind, and the two pointer pairs name the FACS and DSDT
-	 * above (both widths -- a rev >= 3 FADT's 32-bit facs/dsdt fields are legacy
-	 * copies, and ACPICA reads the X_ pair). */
+	/* ---------------- FADT, revision 5, NON-reduced ----------------
+	 * ACPI-2 shipped this table hardware-reduced (FADT flags bit 20).  ACPI-4 measured
+	 * what that declaration does to a modern guest: it takes the platform at its word
+	 * that there is no PC-AT legacy layer -- nr_legacy_irqs() becomes 0 (the boot's own
+	 * "preallocated irqs: 0"), the kernel wires ZERO IOAPIC redirection entries, and
+	 * every device edge is lost (results/acpi-4.md, the F1 root cause; the old arm's
+	 * "preallocated irqs: 0" is in results/acpi-2-f1-console-freeze-serial.txt:76).
+	 * The fix is the honest declaration: this machine HAS the 8259 pair, the ISA lines
+	 * and the PIIX4 PM registers, so the FADT now says so -- WBINVD only, plus the real
+	 * PM blocks below (the fixed events ACPICA initializes once hw-reduced is clear). */
 	uint8_t *fadt = out + ACPI_OFF_FADT;
 	put_sdt_header(fadt, "FACP", 268, 5);
 	wr32le(fadt + 36, facs_addr);  /* FIRMWARE_CTRL */
 	wr32le(fadt + 40, dsdt_addr);  /* DSDT */
 	fadt[45] = 0;                  /* preferred PM profile: unspecified */
-	wr16le(fadt + 46, 9);          /* SCI_INT: the PIIX4 device's line, though the
-	                                * reduced-hardware mode never raises it */
-	wr32le(fadt + 48, 0);          /* SMI_CMD = 0: no SMI, no ACPI-mode entry */
+	wr16le(fadt + 46, 9);          /* SCI_INT: the PIIX4 device's line */
+	wr32le(fadt + 48, 0);          /* SMI_CMD = 0: no SMI transition exists -- ACPICA
+	                                * reads "already in ACPI mode" */
 	fadt[96] = 0xFF;               /* p_lvl2_lat: 0xFFFF = not supported */
 	fadt[97] = 0xFF;
 	fadt[98] = 0xFF;               /* p_lvl3_lat */
 	fadt[99] = 0xFF;
 	wr16le(fadt + 109, 0x0003);    /* IAPC_BOOT_ARCH: legacy devices (bit 0) and the
 	                                * 8042 (bit 1) -- both true of this machine */
-	wr32le(fadt + 112, (1u << 0) | /* WBINVD */
-	                  (1u << 20)); /* HARDWARE-REDUCED: the load-bearing flag */
+	wr32le(fadt + 112, (1u << 0)); /* WBINVD -- and NOT hardware-reduced (see above) */
 	put_gas_none(fadt + 116);      /* reset register: RESET_REG_SUPPORTED clear */
 	fadt[131] = 1;                 /* FADT minor version: 5.1 */
 	wr64le(fadt + 132, facs_addr); /* X_FIRMWARE_CTRL */
 	wr64le(fadt + 140, dsdt_addr); /* X_DSDT */
-	/* +148..+267: the X_ GAS copies of the PM blocks and the sleep control/status --
-	 * all zeroed above, which under the reduced-hardware flag is "absent" */
+
+	/* the PM blocks -- the PIIX4 device's own registers (src/hw/acpi.c acpi_init):
+	 * PM1a_EVT at 0xB000 (status 16-bit + enable 16-bit at +2), PM1a_CNT at 0xB004
+	 * (16-bit), PM_TMR at 0xB008 (32-bit, 24-bit counter, 3.579545 MHz), GPE0 at
+	 * 0xAFE0 (four 8-bit registers).  These are the addresses the device already
+	 * answers at; the FADT names them and ACPICA initializes its fixed events on
+	 * them instead of failing with AE_BAD_ADDRESS (the 36-byte header-only FADT
+	 * of ACPI-2 named nothing).  The X_ GAS copies (+148..+267) stay zero: a zero
+	 * extended field defers to these V1 fields, which is the pair ACPICA reads. */
+	wr32le(fadt + 56, 0xB000);     /* PM1a_EVT_BLK */
+	wr32le(fadt + 60, 0);          /* PM1b_EVT_BLK: absent */
+	wr32le(fadt + 64, 0xB004);     /* PM1a_CNT_BLK */
+	wr32le(fadt + 68, 0);          /* PM1b_CNT_BLK: absent */
+	wr32le(fadt + 72, 0);          /* PM2_CNT_BLK: absent */
+	wr32le(fadt + 76, 0xB008);     /* PM_TMR_BLK */
+	wr32le(fadt + 80, 0xAFE0);     /* GPE0_BLK */
+	wr32le(fadt + 84, 0);          /* GPE1_BLK: absent */
+	fadt[88] = 4;                  /* PM1_EVT_LEN: 2-byte status + 2-byte enable */
+	fadt[89] = 2;                  /* PM1_CNT_LEN: the 16-bit control register */
+	fadt[90] = 0;                  /* PM2_CNT_LEN: absent */
+	fadt[91] = 4;                  /* PM_TMR_LEN: 32-bit port, 24-bit counter */
+	fadt[92] = 4;                  /* GPE0_BLK_LEN: the four 8-bit registers */
+	fadt[93] = 0;                  /* GPE1_BLK_LEN: absent */
+	fadt[94] = 0;                  /* GPE1_BASE: absent */
+	fadt[95] = 0;                  /* CST_CNT: no C-states */
 	put_checksum(fadt, 268);
 
 	/* ---------------- MADT ("APIC") ----------------
@@ -206,8 +302,9 @@ void acpi_tables_publish(uint8_t *mem8)
 /* ------------------------------------------------------------------ *
  * the verifier: every claim the builder makes, checked the way ACPICA's early walk
  * would check it (signature, length, checksum, pointer) plus the fields this machine's
- * actual configuration pins down (the MMIO addresses, the GSI base, the reduced-
- * hardware shape).  Written over ANY candidate blob so the selftest can corrupt one
+ * actual configuration pins down (the MMIO addresses, the GSI base, the honest
+ * non-reduced FADT shape and the PM blocks the PIIX4 device really answers at).
+ * Written over ANY candidate blob so the selftest can corrupt one
  * and watch the check that must catch it fail.
  * ------------------------------------------------------------------ */
 static bool sdt_ok(const uint8_t *p, const char *signature, uint32_t length, uint8_t revision)
@@ -260,16 +357,76 @@ bool acpi_tables_verify(const uint8_t *blob)
 	const uint8_t *facs = blob + ACPI_OFF_FACS;
 	const uint8_t *dsdt = blob + ACPI_OFF_DSDT;
 	if (memcmp(facs, "FACS", 4) != 0 || facs[4] != 64) return false;
-	if (!sdt_ok(dsdt, "DSDT", 36, 2)) return false;
+	if (!sdt_ok(dsdt, "DSDT", 109, 2)) return false;
 
-	/* --- the FADT: the reduced-hardware shape, pointing at the FACS/DSDT --- */
+	/* --- the DSDT's AML: the PCI host bridge (results/acpi-4.md F2) ---
+	 * The byte layout is the builder's pci0_aml[]; the checks walk it structurally --
+	 * Scope(\_SB), Device(PCI0), the _HID EISAID, and the two WordIO windows -- so a
+	 * corrupted or mis-encoded bridge is refused here, before any guest has to. */
+	const uint8_t *aml = dsdt + 36;
+	const uint32_t aml_len = 109u - 36u;
+	if (aml_len != 73) return false;
+	static const uint8_t scope_dev[] = {
+	    0x10, 0x46, 0x04,          /* ScopeOp, PkgLength(70) */
+	    '_', 'S', 'B', '_',
+	    0x5B, 0x82, 0x3F,          /* DeviceOp, PkgLength(63) */
+	    'P', 'C', 'I', '0',
+	    0x08, '_', 'H', 'I', 'D',  /* NameOp _HID */
+	    0x0C, 0x41, 0xD0, 0x0A, 0x03, /* EISAID PNP0A03 = 0x030AD041 */
+	};
+	if (memcmp(aml, scope_dev, sizeof(scope_dev)) != 0) return false;
+	if (aml[24] != 0x08 || memcmp(aml + 25, "_BBN", 4) != 0 || aml[29] != 0x00)
+		return false; /* _BBN = Zero: bus 0 */
+	if (aml[30] != 0x08 || memcmp(aml + 31, "_CRS", 4) != 0) return false;
+	if (aml[35] != 0x11 || aml[36] != 0x24) return false; /* BufferOp, PkgLength(36) */
+	if (aml[37] != 0x0A || aml[38] != 34) return false; /* the size operand: 34 */
+	/* the two Word Address Space descriptors (tag 0x88, length 13, type IO, Min+Max
+	 * fixed positive decode, full range) and the EndTag, at their fixed offsets */
+	static const uint8_t wordio_header[] = { 0x88, 0x0D, 0x00, 0x01, 0x0C, 0x03 };
+	if (memcmp(aml + 39, wordio_header, 6) != 0) return false;
+	uint32_t min1 = (uint32_t)aml[47] | (uint32_t)aml[48] << 8;
+	uint32_t max1 = (uint32_t)aml[49] | (uint32_t)aml[50] << 8;
+	uint32_t len1 = (uint32_t)aml[53] | (uint32_t)aml[54] << 8;
+	if (min1 != 0x0000 || max1 != 0x0CF7 || len1 != 0x0CF8) return false;
+	if (memcmp(aml + 55, wordio_header, 6) != 0) return false;
+	uint32_t min2 = (uint32_t)aml[63] | (uint32_t)aml[64] << 8;
+	uint32_t max2 = (uint32_t)aml[65] | (uint32_t)aml[66] << 8;
+	uint32_t len2 = (uint32_t)aml[69] | (uint32_t)aml[70] << 8;
+	if (min2 != 0x0D00 || max2 != 0xFFFF || len2 != 0xF300) return false;
+	if (aml[71] != 0x79) return false; /* EndTag */
+
+	/* --- the FADT: the honest NON-reduced shape, pointing at the FACS/DSDT --- */
 	const uint8_t *fadt = blob + ACPI_OFF_FADT;
 	if (!sdt_ok(fadt, "FACP", 268, 5)) return false;
 	uint32_t flags = (uint32_t)fadt[112] | (uint32_t)fadt[113] << 8 |
 	                 (uint32_t)fadt[114] << 16 | (uint32_t)fadt[115] << 24;
-	if ((flags & (1u << 20)) == 0) return false; /* HARDWARE-REDUCED */
+	/* NOT hardware-reduced: the machine HAS the full PC-AT layer (PIC, PIT, ISA UART),
+	 * and a modern guest takes the reduced bit as a platform declaration -- it bypasses
+	 * the legacy PIC, wires zero IOAPIC redirection entries, and every device edge is
+	 * lost (results/acpi-4.md, the F1 root cause).  WBINVD is the one flag set. */
+	if ((flags & (1u << 20)) != 0) return false; /* HARDWARE-REDUCED must be CLEAR */
+	if ((flags & (1u << 0)) == 0) return false;  /* WBINVD */
 	if (fadt[48] != 0 || fadt[49] != 0 || fadt[50] != 0 || fadt[51] != 0)
 		return false; /* SMI_CMD = 0 */
+	/* the PM blocks: the addresses the PIIX4 device answers at (src/hw/acpi.c's
+	 * io_register_* calls) with their real widths -- naming a block the device does
+	 * not implement would be the same lie the reduced flag was */
+	uint32_t pm1a_evt = (uint32_t)fadt[56] | (uint32_t)fadt[57] << 8 |
+	                    (uint32_t)fadt[58] << 16 | (uint32_t)fadt[59] << 24;
+	uint32_t pm1a_cnt = (uint32_t)fadt[64] | (uint32_t)fadt[65] << 8 |
+	                    (uint32_t)fadt[66] << 16 | (uint32_t)fadt[67] << 24;
+	uint32_t pm_tmr = (uint32_t)fadt[76] | (uint32_t)fadt[77] << 8 |
+	                  (uint32_t)fadt[78] << 16 | (uint32_t)fadt[79] << 24;
+	uint32_t gpe0 = (uint32_t)fadt[80] | (uint32_t)fadt[81] << 8 |
+	                (uint32_t)fadt[82] << 16 | (uint32_t)fadt[83] << 24;
+	if (pm1a_evt != 0xB000) return false;
+	if (pm1a_cnt != 0xB004) return false;
+	if (pm_tmr != 0xB008) return false;
+	if (gpe0 != 0xAFE0) return false;
+	if (fadt[88] != 4) return false; /* PM1_EVT_LEN: 16-bit status + 16-bit enable */
+	if (fadt[89] != 2) return false; /* PM1_CNT_LEN: the 16-bit control register */
+	if (fadt[91] != 4) return false; /* PM_TMR_LEN: the 32-bit timer port */
+	if (fadt[92] != 4) return false; /* GPE0_BLK_LEN: the four 8-bit registers */
 	uint64_t x_facs = 0, x_dsdt = 0;
 	for (int i = 0; i < 8; i++) {
 		x_facs |= (uint64_t)fadt[132 + i] << (8 * i);

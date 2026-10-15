@@ -1519,6 +1519,39 @@ static void test_acpi_tables(void)
                             (uint32_t)mem8[rsdp_at + 18] << 16 | (uint32_t)mem8[rsdp_at + 19] << 24;
         CHECK(memcmp(mem8 + rsdt_ptr, "RSDT", 4) != 0);
     }
+
+    /* 6. the FADT's hardware-reduced flag SET again, checksum repaired -- the F1
+     * regression probe (results/acpi-4.md: with the flag set, a modern guest wires
+     * zero IOAPIC redirection entries and every ISA device edge is lost; the verify's
+     * flag check is what must catch a future edit restoring it) */
+    uint8_t *fadt_copy = copy + ACPI_OFF_FADT;
+    memcpy(copy, blob, sizeof(copy));
+    copy[ACPI_OFF_FADT + 114] |= 0x10; /* FLAGS bit 20 (byte 114, bit 4) */
+    fadt_copy[9] = 0;
+    fadt_copy[9] = (uint8_t)(0u - acpi_test_sum8(fadt_copy, 268));
+    CHECK(acpi_test_sum8(fadt_copy, 268) == 0);
+    CHECK(!acpi_tables_verify(copy));
+
+    /* 7. a PM block naming an address the PIIX4 device does not answer at (PM_TMR
+     * 0xB008 -> 0xB009), checksum repaired -- the fixed-hardware fields are claims
+     * about src/hw/acpi.c's registered ports, and the verify pins them */
+    memcpy(copy, blob, sizeof(copy));
+    copy[ACPI_OFF_FADT + 76] = 0x09; /* PM_TMR_BLK low byte */
+    fadt_copy[9] = 0;
+    fadt_copy[9] = (uint8_t)(0u - acpi_test_sum8(fadt_copy, 268));
+    CHECK(acpi_test_sum8(fadt_copy, 268) == 0);
+    CHECK(!acpi_tables_verify(copy));
+
+    /* 8. the DSDT's bridge _HID corrupted (PNP0A03 -> PNP0A04), checksum repaired --
+     * the F2 regression probe (results/acpi-4.md): without a PNP0A03 host bridge a
+     * guest roots no PCI bus and enumerates nothing */
+    uint8_t *dsdt_copy = copy + ACPI_OFF_DSDT;
+    memcpy(copy, blob, sizeof(copy));
+    copy[ACPI_OFF_DSDT + 36 + 23] = 0x04; /* the EISAID low nibble */
+    dsdt_copy[9] = 0;
+    dsdt_copy[9] = (uint8_t)(0u - acpi_test_sum8(dsdt_copy, 109));
+    CHECK(acpi_test_sum8(dsdt_copy, 109) == 0);
+    CHECK(!acpi_tables_verify(copy));
 }
 
 /* ================================================================== *
