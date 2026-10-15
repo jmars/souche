@@ -64,22 +64,27 @@ tables; this historical section records why the seams existed before either land
   `results/acpi-2.md`, which proves the route end-to-end on the tree's OTHER kernel,
   `tests/images/vmlinuz-i386` (Alpine 6.6, ACPI+MPPARSE+IO_APIC in). Evidence:
   `results/acpi-1.md` §1 (the three-source capability answer), `results/acpi-2.md` (the route).
-- **WHAT `--acpi` STILL NEEDS — THE OPEN WORK (ACPI-3, unfinished):**
-  * **F1 — userspace console writes never reach the UART under `--acpi`.** The kernel's own
-    POLLED printk on the same port works for the whole boot; the IRQ-driven tty write does not,
-    and a *write-free* init runs cleanly — so userspace and syscalls are alive and the freeze is
-    specific to the tty write path. Localised to the UART's PIC-shaped raise/lower
-    (`device_raise_irq(4)`/`device_lower_irq(4)` in `src/hw/uart.c`) meeting the IOAPIC entry the
-    MADT declares (irq 4 -> pin 4). Signature, discrimination and the ranked suspects are in
-    `results/acpi-2.md` §9, with the captures under `results/acpi-2-f1-*`.
-  * **F2 — ACPI-aware PCI enumeration finds ZERO devices**: the minimal DSDT declares no PCI root
-    bridge (`_HID` PNP0A03), so virtio and IDE vanish from the machine under `--acpi`.
-  * **F3 — the reboot arm soft-locks at `finit_module` under `--acpi`** (captured in
-    `results/acpi-2-reboot-acpi-serial.txt`); re-test after F1/F2 rather than guessing.
-  **THE ENGINEER RUNG WAS DISPATCHED FOR THESE AND DIED TWICE ON A PROVIDER FAULT** (the harness's
-  `reasoning_content` error, which has now killed four sessions), leaving getenv-gated diagnostics
-  (`V86C_TRACE_ACPI`) in `apic.c`/`ioapic.c`/`uart.c` — instrumentation, not a fix. Everything
-  needed to continue is in `results/acpi-2.md` §5 and the tree; the next session resumes from there.
+- **WHAT `--acpi` STILL NEEDS:**
+  * ~~**F1 — userspace console writes never reach the UART under `--acpi`.**~~ **FIXED
+    (ACPI-4, commit 7bf6bd2).** It was NOT the UART: ACPI-2 had shipped the **FADT with its
+    hardware-reduced flag set**, which tells the kernel the platform has no legacy 8259/PIC — false
+    for this machine, so the kernel dropped the legacy IRQ paths and the IRQ-driven tty write never
+    landed (the polled printk kept working, which is why it looked like a device bug;
+    `preallocated irqs: 0` was the tell). The fix is one FADT flags word, and the machine now takes
+    the IO-APIC route end to end: the init's full output is identical in the ON and OFF arms, and
+    the guest's own `/proc/interrupts` shows `4: 10 IO-APIC 4-edge ttyS0`. **The lesson: a wrong
+    declaration in firmware is indistinguishable, from the guest side, from a broken device — the
+    kernel behaves correctly for the machine it was TOLD it is, so table CONTENT is part of the
+    emulated machine and needs the same scepticism as a device register.**
+  * **F2 — ACPI-aware PCI enumeration finds ZERO devices: STILL OPEN.** The minimal DSDT declares no
+    PCI root bridge (`_HID` PNP0A03 + the resource descriptors a kernel reads), so virtio and IDE
+    vanish under `--acpi` — and it is also what blocks the reboot arm (F3 below). This is the one
+    remaining item.
+  * **F3 — the reboot arm: RE-TESTED AND BENIGN in both arms** (ACPI-4); its real blocker is F2.
+  * Note the session that fixed F1 (ACPI-4) **stalled after writing its findings** — the provider
+    fault (`reasoning_content`) that has killed five sessions — so the orchestrator verified its
+    fix against its own captures, ran the battery and committed it. Its report is
+    `results/acpi-4.md` as it stood at the stall point.
 - **Size.** READ from the reference: `v86/src/rust/cpu/apic.rs` 658 lines + `ioapic.rs` 316 = 974
   lines of Rust → roughly **1000–1200 lines of C plus wiring** — one solid unit, the same shape as
   the PIC (402 Rust → 491 C) or the PIT (359 JS → ~250 C). Contents: the LAPIC's 4 KiB register
