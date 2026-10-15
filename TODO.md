@@ -211,12 +211,38 @@ site; widening the chain across pages would silently break both engines.
 
 ## 4. Instruments — known blind spots
 
-- `tests/perf_bench.sh` is **blind to swapping two non-inlined jcc recipe slots** (MEASURED by
-  JIT-FIX-2); the inlined slots and the *suite* differ, so the class is partly covered.
+- **`tests/perf_bench.sh` was blind to a recipe-table change; that blind spot is now CLOSED, and the
+  claim that recorded it was wrong in both directions.** The jcc array-slot swaps are the instrument:
+  `jitcg_jcc8_fns`/`jitcg_jcc32_fns` are indexed by the condition nibble, so swapping two entries
+  substitutes one condition's recipe for another with no other trace. MEASURED on this tree
+  (2026-10-15, `jit_codegen.c` `fec58189…`, every variant installed alone and re-restored by `cmp`):
+
+  | variant | `jit_codegen_selftest` | `perf_bench.sh` 200 M |
+  | --- | --- | --- |
+  | `jb↔jbe` rel8 | 16 failures, rc 1 | **rc 1** — 280,921 instructions at the limit |
+  | `jae↔ja` rel8 | 24 failures, rc 1 | **rc 1** — 200,097,867 |
+  | `jb↔jbe` rel32 | 16 failures, rc 1 | **rc 1** — 530,745 |
+  | `jae↔ja` rel32 | 16 failures, rc 1 | **rc 1** — 542,688 |
+  | `jo↔jb` (cross-class) | 3 failures, rc 1 | **rc 0 — BLIND** |
+  | `js↔jbe` (cross-class) | 2 failures, rc 1 | **rc 0 — BLIND** |
+  | none (baseline) | rc 0, 3525 checks / 0 failures | rc 0, 200,095,214 |
+
+  So the previous claim here — "blind to swapping two non-inlined jcc recipe slots; the inlined slots
+  and the *suite* differ, so the class is partly covered" — inverted its own measurement: the bench
+  **catches all four** of those swaps (rc 1, on the instruction count alone; results/jit-fix-2's
+  counts reproduced exactly here), and what it is blind to is the class that crosses the **inline
+  boundary** (an inlined condition's slot against an unsupported one's), where the guest's count,
+  terminal state *and* serial sha all stay at their pins.
+  **Closed** by pinning the JIT's own inlining line, the one thing that moves for that class:
+  `195429258 / 4665955 / 8330 / 3719` (inlined / called / with-a-recipe / without) becomes
+  `195416212 / 4679001 / 8310 / 3739` under `jo↔jb`. The pin is asymmetric — the mutant fails with it
+  and was blind without it — and a `--jit off` leg pins `0/0/0/0` instead, so the instrument also
+  asserts that the JIT really did nothing (`--expect-jit-stats`).
 - The lesson the JIT lane paid for, kept here so it is not relearned: **the JIT's high-byte blocker
   shipped through every gate green** (118/118, byte-identical transcript, kernel boot, whole
   selftest suite). A second execution path needs instruments of its own, not just the ones the
-  first path earned.
+  first path earned. **The corollary this unit adds:** a *performance* pin sees what the
+  guest-visible pins cannot, and vice versa — which is why the bench now carries one of each.
 
 ## 5. Documentation
 

@@ -1,0 +1,14 @@
+== perf_bench: jcc8-swap-bbe
+bin=build/v86c limit=200000000 kernel=tests/images/vmlinuz-i386 runs=1
+cores=32 load-before=16.39 14.85 10.69
+kernel=7.1.8-1-default cflags-host=cc (SUSE Linux) 16.2.0
+asserting: instruction count 200095214
+asserting: terminal guest state "in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0"
+asserting: serial output sha256 fae4924b13b07d441b0ad8458047d2f1d8abf0d1ec59876f44b88ef67d2d0b2a
+perf_bench: run 1 executed 280921 instructions, expected 200095214
+perf_bench: what CHANGED is the instruction count: it is the batch boundary
+perf_bench: nearest the 200000000-instruction limit, and the guest reads the
+perf_bench: host-clock RTC in its timing loops, so a change here means the
+perf_bench: guest's execution path (not its results) moved.  The same pin
+perf_bench: caught M2's sti batch-count bug (200,095,212).
+perf_bench: the workload was not the same -- refusing to report a number

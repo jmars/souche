@@ -1,0 +1,16 @@
+== perf_bench: off-default-pin
+bin=/tmp/v86c-jitoff limit=200000000 kernel=tests/images/vmlinuz-i386 runs=1
+cores=32 load-before=6.31 9.54 9.77
+kernel=7.1.8-1-default cflags-host=cc (SUSE Linux) 16.2.0
+asserting: instruction count 200095214
+asserting: terminal guest state "in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0"
+asserting: serial output sha256 fae4924b13b07d441b0ad8458047d2f1d8abf0d1ec59876f44b88ef67d2d0b2a
+perf_bench: run 1 JIT inlining counts differ
+perf_bench:   got      "0 0 0 0"
+perf_bench:   expected "195429258 4665955 8330 3719"
+perf_bench:   (inlined / called / with-a-recipe / without)
+perf_bench: THE MACHINE INLINES DIFFERENTLY -- which recipe serves which
+perf_bench: condition changed.  The guest's own results did NOT change, so
+perf_bench: every guest-visible pin above is blind to this by construction;
+perf_bench: this row is the one that sees it.  A --jit off leg pins
+perf_bench: 0/0/0/0 via --expect-jit-stats instead.

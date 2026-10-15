@@ -1,0 +1,30 @@
+node gen/interpreter_c.js
+[+] src/cpu/interpreter_gen.c: 1922 call sites, 1922 implemented, 0 unimplemented, 1926 names defined (unchanged)
+node gen/interpreter_uop.js
+[+] src/cpu/uop_gen.c: 1182 descriptors, 1182 entries, 924 arms, 1922 forms (0 unimplemented), 1 forced block ends (unchanged)
+tests/perf_bench.sh --runs 7 --bin build/v86c --label "make bench"
+== perf_bench: make bench
+bin=build/v86c limit=200000000 kernel=tests/images/vmlinuz-i386 runs=7
+cores=32 load-before=6.57 8.97 9.56
+kernel=7.1.8-1-default cflags-host=cc (SUSE Linux) 16.2.0
+asserting: instruction count 200095214
+asserting: terminal guest state "in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0"
+asserting: serial output sha256 fae4924b13b07d441b0ad8458047d2f1d8abf0d1ec59876f44b88ef67d2d0b2a
+run  1: real 0.956s user 0.900s sys 0.054s  instr=200095214  state=ok serial=ok jit-inline=ok
+run  2: real 0.988s user 0.937s sys 0.050s  instr=200095214  state=ok serial=ok jit-inline=ok
+run  3: real 0.960s user 0.913s sys 0.046s  instr=200095214  state=ok serial=ok jit-inline=ok
+run  4: real 0.941s user 0.896s sys 0.044s  instr=200095214  state=ok serial=ok jit-inline=ok
+run  5: real 0.934s user 0.885s sys 0.047s  instr=200095214  state=ok serial=ok jit-inline=ok
+run  6: real 0.947s user 0.898s sys 0.049s  instr=200095214  state=ok serial=ok jit-inline=ok
+run  7: real 1.037s user 0.987s sys 0.049s  instr=200095214  state=ok serial=ok jit-inline=ok
+load-after=6.29 8.87 9.52
+n=7
+real: best 0.934  median 0.956  worst 1.037
+user: best 0.885  median 0.900  worst 0.987
+cpu (user+sys): best 0.932  median 0.954
+MIPS at best real: 214.23   at median real: 209.30
+verified (every run): 200095214 instructions, the terminal guest state clause
+                      above, the guest's serial output sha256, and the JIT inlining
+                      counts 195429258/4665955/8330/3719
+                      -- every number in this output times THAT workload; none of
+                      them asserts it.

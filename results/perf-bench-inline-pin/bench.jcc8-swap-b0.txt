@@ -1,0 +1,17 @@
+== perf_bench: jcc8-swap-b0
+bin=build/v86c limit=200000000 kernel=tests/images/vmlinuz-i386 runs=1
+cores=32 load-before=10.12 13.35 10.49
+kernel=7.1.8-1-default cflags-host=cc (SUSE Linux) 16.2.0
+asserting: instruction count 200095214
+asserting: terminal guest state "in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0"
+asserting: serial output sha256 fae4924b13b07d441b0ad8458047d2f1d8abf0d1ec59876f44b88ef67d2d0b2a
+run  1: real 0.953s user 0.897s sys 0.055s  instr=200095214  state=ok serial=ok
+load-after=10.12 13.35 10.49
+n=1
+real: best 0.953  median 0.953  worst 0.953
+user: best 0.897  median 0.897  worst 0.897
+cpu (user+sys): best 0.952  median 0.952
+MIPS at best real: 209.96   at median real: 209.96
+verified (every run): 200095214 instructions, the terminal guest state clause
+                      above, and the guest's serial output sha256 -- every number in
+                      this output times THAT workload; none of them asserts it.

@@ -1,0 +1,19 @@
+== perf_bench: off-zero-pin
+bin=/tmp/v86c-jitoff limit=200000000 kernel=tests/images/vmlinuz-i386 runs=1
+cores=32 load-before=6.21 9.46 9.75
+kernel=7.1.8-1-default cflags-host=cc (SUSE Linux) 16.2.0
+asserting: instruction count 200095214
+asserting: terminal guest state "in_hlt=0, exception=-1, unimplemented=0, eip=0x21972c1 cs=0x10 cr0=0x60000011 cr3=0x0"
+asserting: serial output sha256 fae4924b13b07d441b0ad8458047d2f1d8abf0d1ec59876f44b88ef67d2d0b2a
+run  1: real 3.140s user 3.094s sys 0.041s  instr=200095214  state=ok serial=ok jit-inline=ok
+load-after=6.21 9.46 9.75
+n=1
+real: best 3.140  median 3.140  worst 3.140
+user: best 3.094  median 3.094  worst 3.094
+cpu (user+sys): best 3.135  median 3.135
+MIPS at best real: 63.72   at median real: 63.72
+verified (every run): 200095214 instructions, the terminal guest state clause
+                      above, the guest's serial output sha256, and the JIT inlining
+                      counts 0/0/0/0
+                      -- every number in this output times THAT workload; none of
+                      them asserts it.

@@ -303,7 +303,13 @@ for m in off on; do
     printf '#!/bin/sh\nexec ./build/v86c "$@" --jit %s\n' "$m" > "$OUT/v86c-jit$m"
     chmod +x "$OUT/v86c-jit$m"
 done
+# 2026-10-15: perf_bench.sh gained a FOURTH pin -- the JIT's own inlining counts, the
+# row that sees a recipe-table change the three guest-visible pins are blind to by
+# construction (TODO.md §4's blind spot, now closed).  The `--jit off` leg pins the
+# all-zero line instead, which asserts the JIT really did nothing; the `--jit on` leg
+# keeps the default pin.
 tests/perf_bench.sh --runs 7 --bin "$PWD/$OUT/v86c-jitoff" --label "JIT-FIX-1 --jit off" \
+    --expect-jit-stats 0/0/0/0 \
     --samples "$OUT/bench-jitoff.samples" > "$OUT/gates-bench-jitoff.txt" 2>&1
 note "bench --jit off" $?
 tests/perf_bench.sh --runs 7 --bin "$PWD/$OUT/v86c-jiton" --label "JIT-FIX-1 --jit on" \
