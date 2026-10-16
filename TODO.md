@@ -189,8 +189,10 @@ that landed, and the guest-compatibility fact below still stands.)*
   active` (the PAE-only setup.c string) plus PG set and a non-zero cr3.  The earlier "hang" was a
   too-low instruction limit: the XZ decompression alone is ~2.34G instructions, so the 2G limit
   stopped the run mid-decompress.  Reaching userspace (/init, `/proc/cpuinfo` `pae`) needs ~6.45G
-  (past the port's u32 instruction-counter ceiling and a ~64 s `async_synchronize_full` wait); the
-  reference measured it; a u64 counter would let the gate assert it directly.
+  (past a ~64 s `async_synchronize_full` wait).  The u32 instruction-counter ceiling that once
+  blocked that run is GONE (results/u64-jit.md): the counter is now a u64, and the gate's `full`
+  arm (`sh tests/gate-pae-l3.sh full`) runs both legs past 4 G and asserts the initramfs's own
+  `PAE-INIT` lines directly.
 
 ## 2. JIT headroom (the plan's step 8) — CLOSED by JIT-6
 
@@ -223,15 +225,14 @@ site; widening the chain across pages would silently break both engines.
 
 ## 4. Instruments — known blind spots
 
-- **JIT-lane follow-up found by PAE-L3 (recorded, NOT fixed):** a full 6.1 kernel boot fills the
-  JIT's 2048-entry block table, and every later bind prints
-  `jit: bind: the block table is full (2048)` — MEASURED at 107,412 lines / 4.5 MB of stderr in one
-  3 G run (`results/pae-l3.md`, which is why that gate's stderr is gitignored). The Alpine 6.6 boot
-  does not fill the table (its m2-5 stderr is 659 B). The JIT degrades gracefully (the fallback is
-  interpretation), so nothing depends on it, but the refusal is printed per bind rather than once,
-  and `jit_mem.h:11`'s comment claiming the JIT is off unless `--jit on` is STALE — it has been on
-  by default (`jit_mem.c:42`) since the JIT landed. Worth a JIT-lane look: grow the table, or print
-  the refusal once.
+- **JIT-lane follow-up found by PAE-L3 — now FIXED (results/u64-jit.md).** A full 6.1 kernel boot
+  fills the JIT's 2048-entry block table; the refusal is now printed ONCE, counted in
+  `jit_stats.block_table_full` (reported in the stats line), and the stale "JIT off unless
+  `--jit on`" comments in `jit_mem.h` are corrected.  The table-size half was MEASURED and recorded
+  as a measured negative: growing the table (2048 -> 4096 blocks, 4096 -> 8192 hash slots) is ~7%
+  faster on the 3 G PAE boot but just moves the wall to the code-page pool (40,064 `pool exhausted`
+  refusals), and growing the pool too is SLOWER (the marginal compiled blocks are cold).  The
+  graceful "refuse + interpret" policy sits near the measured optimum.
 - **`tests/perf_bench.sh` was blind to a recipe-table change; that blind spot is now CLOSED, and the
   claim that recorded it was wrong in both directions.** The jcc array-slot swaps are the instrument:
   `jitcg_jcc8_fns`/`jitcg_jcc32_fns` are indexed by the condition nibble, so swapping two entries

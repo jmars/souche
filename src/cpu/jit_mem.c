@@ -99,6 +99,11 @@ static bool jit_ready;
  * disabled, machine still correct) is a TESTED one. */
 static bool jit_probe_ok = true;
 
+/* the block-table-full refusal is printed ONCE, not per bind (it fired 100k+ times on one
+ * full 6.1 PAE boot -- results/u64-jit.md).  The running total is jit_stats.block_table_full,
+ * which the stats line reports; this flag is what keeps the spam down to one line. */
+static bool block_table_full_reported;
+
 /* the executing block, for the deferred recycle and the abort (jit_mem.h).  JIT-6: a chain
  * link updates these to the TARGET block (jit_chain_target), so they name the block really
  * executing at every uop boundary; a chain never leaves its entry page, so they stay
@@ -131,7 +136,7 @@ void jit_stats_print(void)
 	fprintf(stderr,
 	        "jit: pages alloc %llu, blocks compiled %llu (live %llu), lookups %llu "
 	        "(hits %llu, misses %llu), execs %llu, invalidations %llu, deferred frees %llu, "
-	        "W^X flips %llu, pool exhausted %llu, hash full %llu\n",
+	        "W^X flips %llu, pool exhausted %llu, hash full %llu, block table full %llu\n",
 	        (unsigned long long)jit_stats.pages_alloc,
 	        (unsigned long long)jit_stats.blocks_compiled,
 	        (unsigned long long)jit_stats.blocks_live,
@@ -143,7 +148,8 @@ void jit_stats_print(void)
 	        (unsigned long long)jit_stats.deferred_frees,
 	        (unsigned long long)jit_stats.wx_flips,
 	        (unsigned long long)jit_stats.lowmem_failures,
-	        (unsigned long long)jit_stats.hash_full);
+	        (unsigned long long)jit_stats.hash_full,
+	        (unsigned long long)jit_stats.block_table_full);
 }
 
 /* JIT-6: the platform probe, defined after jit_page_alloc_run/jit_page_recycle (it uses
@@ -457,7 +463,12 @@ bool jit_cache_bind(uint32_t phys_start, uint32_t virt_start, uint8_t state,
 	 * that is not RX, is a span the CALLER still holds (an unpublished RW reservation it may
 	 * still write to and publish), so this function must not take it away. */
 	if (id == JIT_MAX_BLOCKS) {
-		fprintf(stderr, "jit: bind: the block table is full (%u)\n", JIT_MAX_BLOCKS);
+		jit_stats.block_table_full++;
+		if (!block_table_full_reported) {
+			block_table_full_reported = true;
+			fprintf(stderr, "jit: bind: the block table is full (%u); later refusals "
+			                "are counted in the stats line\n", JIT_MAX_BLOCKS);
+		}
 		jit_page_recycle(idx);
 		return false;
 	}

@@ -8,8 +8,9 @@
  * ss3) is imported or depended on here; a caller reserves a page, writes bytes into it,
  * publishes it, and binds it under a key.
  *
- * WHO CALLS IT.  Nothing on the shipped path: `jit_enabled` is false unless `--jit on` is
- * given (src/main.c), and every entry point below is a no-op while it is false.  The gate is
+ * WHO CALLS IT.  The shipped path itself: `jit_enabled` is TRUE by default (jit_mem.c:42,
+ * since JIT-FIX-2 -- the plan's ship rule was met at 1.72x).  `--jit off` returns the machine
+ * to the pre-JIT path, and while it is off every entry point below is a no-op.  The gate is
  * src/cpu/jit_selftest.c (`make jit-selftest`).
  *
  * KEYING, AND WHY IT IS THE UOP CACHE'S KEY.  A compiled block is keyed by the SAME triple
@@ -76,8 +77,9 @@
 #define V86C_JIT_X64 0
 #endif
 
-/* `--jit on|off`.  FALSE unless the flag says otherwise: the shipped default, and the reason
- * every existing gate can stay byte-identical. */
+/* `--jit on|off`.  TRUE by default (jit_mem.c:42, since JIT-FIX-2): `--jit off` is what
+ * returns the machine to the pre-JIT path byte-identically, which is why every pre-JIT gate
+ * can stay as it was under `--jit off`. */
 extern bool jit_enabled;
 
 /* THE SMC ABORT CHANNEL, AS A BYTE THE COMPILED BLOCK READS DIRECTLY (jit_codegen.c).
@@ -137,6 +139,11 @@ typedef struct jit_stats {
 	uint64_t hash_full;        /* bind() refused: the block hash had neither an EMPTY nor a
 	                            * DEAD slot (audit-2 A2-SF; unreachable with live blocks
 	                            * capped below JIT_HASH_SLOTS, kept as a named refusal) */
+	uint64_t block_table_full; /* bind() refused: all JIT_MAX_BLOCKS entries were live.
+	                            * REACHABLE and routine on a full 6.1 PAE boot (MEASURED,
+	                            * results/u64-jit.md); the refused block is interpreted, so
+	                            * this is a slowdown, not a wrong answer.  Reported once on
+	                            * stderr, counted here. */
 } jit_stats_t;
 
 extern jit_stats_t jit_stats;

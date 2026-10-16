@@ -276,7 +276,12 @@ typedef struct cpu_state {
     int32_t sysenter_esp; /* 640 */
     int32_t sysenter_eip; /* 644 */
     uint8_t prefixes;     /* 648 */
-    uint32_t instruction_counter; /* 664 */
+    /* upstream is a u32 at wasm offset 664 (global_pointers.rs:39) and WRAPS at
+     * 4,294,967,296; the port widens it to u64 so the virtual clock (microtick, TSC, PIT,
+     * PM timer) and the instruction limit do not jump backwards mid-run.  The `664` in the
+     * trailing comment is upstream's offset, kept for parity -- the C struct has no wasm
+     * peer. */
+    uint64_t instruction_counter; /* 664 */
 
     uint16_t sreg[8]; /* 668 -- selector registers ES..GS, TR, LDTR */
     int32_t dreg[8];  /* 684 */

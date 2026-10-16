@@ -1218,10 +1218,18 @@ uint32_t uop_pending;
  * after a reference batch end (cpu.c:178).  See cpu.h's note on cpu_cycle_budget_end -- a
  * cache run ends several batches inside one cycle_internal, so without this the LOOP_COUNTER
  * window would overshoot and main_loop would run the hardware timers at a different
- * instruction count (which the guest can see). */
+ * instruction count (which the guest can see).
+ *
+ * U64-COUNTER: the wrapped-signed-difference test below is the reference's u32
+ * `wrapping_sub` semantics (cpu.rs:3419), and it is correct ONLY when both operands are in
+ * the same 32-bit domain -- the counter's LOW 32 BITS minus the (u32) window end, both
+ * wrapping.  The `(uint32_t)` cast is therefore LOAD-BEARING: widening the counter without
+ * it would subtract a u64 from a u32 and truncate the WRONG bits to int32, and the budget
+ * window would never close past 2^32.  The low 32 bits wrap exactly as the old u32 counter
+ * did, so the staircase is unchanged for any counter value. */
 static inline bool uop_budget_reached(void)
 {
-	return (int32_t)(cpu->instruction_counter - cpu_cycle_budget_end) >= 0;
+	return (int32_t)((uint32_t)cpu->instruction_counter - cpu_cycle_budget_end) >= 0;
 }
 
 /* the reference's `*instruction_counter += i` (cpu.c:148) */
@@ -1264,13 +1272,13 @@ void uop_run(uint32_t phys_addr)
 			if (uop_pending == 0) {
 				/* a reference batch starts here, so the reference's own loop is exactly
 				 * the right thing -- verbatim, not a re-implementation */
-				uint32_t before = cpu->instruction_counter;
+				uint64_t before = cpu->instruction_counter;
 				uop_stats.fallback_runs++;
 				interpreted_run(phys);
 				/* REBOOT-FIX-1/N1: a reboot inside the fallback zeroed the counter
-				 * mid-run, so the unsigned difference would wrap to ~4e9.  The
-				 * rebooted batch's count is not added: the baseline it would be
-				 * measured against no longer exists. */
+				 * mid-run, so the unsigned difference would wrap (to ~4e9 pre-u64, to
+				 * ~2^64 now).  The rebooted batch's count is not added: the baseline
+				 * it would be measured against no longer exists. */
 				if (!cpu->reboot_requested)
 					uop_stats.fallback_instr += cpu->instruction_counter - before;
 				return;

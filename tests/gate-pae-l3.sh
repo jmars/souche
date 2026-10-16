@@ -15,12 +15,13 @@
 #   3. the final machine state has PG set (cr0 bit 31) and a non-zero cr3 -- the
 #      3-level walk is in use at the end of the run, not just advertised.
 #
-# WHAT THIS GATE DOES NOT ASSERT (results/pae-l3.md, the honest seat): reaching
+# WHAT THIS GATE DOES NOT ASSERT at 3G (results/pae-l3.md, the honest seat): reaching
 # userspace.  The kernel stalls ~64s of guest time in async_synchronize_full() after
-# "evm: HMAC attrs" (both legs, MEASURED), so a run to /init needs either a KASLR
-# relocation that lands the kernel elsewhere (the reference reached userspace once,
-# "PAE-INIT: end", at 2.15G) or a limit beyond this port's 4 GiB ceiling.  The PAE
-# evidence above is printed BEFORE that stall and is what this gate pins.
+# "evm: HMAC attrs" (both legs, MEASURED), so a run to /init needs a limit past the
+# port's 4 GiB instruction-counter ceiling.  That is what the FULL arm below adds:
+# it runs past 4G and asserts the initramfs's own userspace evidence -- the PAE-INIT
+# lines, the guest's /proc/cpuinfo flags -- which is the seat the u64 counter opened
+# (results/u64-jit.md).  The 3G arm pins the PAE evidence printed BEFORE the stall.
 #
 # THE LIMIT.  3,000,000,000 instructions: the kernel is XZ-compressed and its
 # decompression alone is ~2.34G instructions (MEASURED, results/pae-l3.md), so the
@@ -28,11 +29,14 @@
 # "hang" -- it was the limit, not the machine.  3G leaves ~0.6G of headroom past the
 # first kernel lines, which is where "NX protection: active" is printed.
 #
-# usage: sh tests/gate-pae-l3.sh [pin|c|js|all]
-#   pin   the sha256 pins of every input (fast, no boot)
-#   c     the C leg only (build/v86c, ~35 s)
-#   js    the reference leg only (node oracle/run-boot.mjs, ~90 s)
-#   all   pin + both legs (default)
+# usage: sh tests/gate-pae-l3.sh [pin|c|js|all|full-c|full-js|full]
+#   pin     the sha256 pins of every input (fast, no boot)
+#   c       the C leg only (build/v86c, ~25 s)
+#   js      the reference leg only (node oracle/run-boot.mjs, ~90 s)
+#   all     pin + both legs at 3G (default; the fast arm)
+#   full-c  the C leg past 4G, asserting the PAE-INIT lines (~1 min)
+#   full-js the reference leg past 4G, asserting the PAE-INIT lines (~4 min)
+#   full    pin + both full legs
 set -u
 cd "$(dirname "$0")/.."
 
@@ -40,6 +44,11 @@ KERNEL=tests/images/vmlinuz-6.1.0-50-686-pae
 INITRD=tests/images/guest-initramfs-pae.img
 V86C=build/v86c
 LIMIT=3000000000
+# the FULL arm runs PAST the port's old u32 instruction-counter ceiling (2^32 =
+# 4,294,967,296): the initramfs's userspace evidence (the PAE-INIT lines) is reached at
+# ~6.45G instructions (results/u64-jit.md), so 7G leaves headroom while the init's own
+# poweroff (or the guest's idle halt) ends the run before the limit anyway.
+FULL_LIMIT=7000000000
 MEM=80
 FW=build/minibios-80m.bin
 CMD="console=ttyS0"
@@ -89,6 +98,26 @@ assert_leg() { # assert_leg <name> <serial> <stderr>
     if [ -n "$cr3" ] && [ "$((0x$cr3))" -ne 0 ]; then pass "cr3 is non-zero (0x$cr3) -- the 3-level walk is in use"; else fail "cr3 is zero (${cr3:-missing})"; fi
 }
 
+# ITEM A's acceptance: the initramfs's OWN userspace evidence (tests/mk-initramfs-pae.sh's
+# init).  These lines are printed only after /init runs -- i.e. only past ~6.45G
+# instructions, which the port's old u32 counter could not express -- and they carry the
+# guest's /proc/cpuinfo flags, so `pae`/`nx` here are the guest's own words, not the port's.
+assert_pae_init() { # assert_pae_init <serial>
+    serial="$1"
+    want "$serial" 'PAE-INIT: begin' \
+        "the initramfs's init ran -- userspace was reached"
+    want "$serial" 'PAE-INIT: cpuinfo advertises pae' \
+        "the guest's /proc/cpuinfo advertises pae"
+    want "$serial" 'PAE-INIT: cpuinfo advertises nx' \
+        "the guest's /proc/cpuinfo advertises nx"
+    want "$serial" 'PAE-INIT: end' \
+        "the init finished its evidence"
+    want_not "$serial" 'PAE-INIT: cpuinfo does NOT advertise pae' \
+        "the inverse pae line is absent"
+    want_not "$serial" 'PAE-INIT: cpuinfo does NOT advertise nx' \
+        "the inverse nx line is absent"
+}
+
 gate_c() {
     echo "### C LEG: build/v86c"
     echo "\$ ./$V86C --bzimage $KERNEL $LIMIT --cmdline '$CMD' --initrd $INITRD \\"
@@ -112,12 +141,53 @@ gate_js() {
     assert_leg "reference leg" "$R/pae-l3-js-serial.txt" "$R/pae-l3-js-stderr.txt"
 }
 
+# THE FULL ARMS (item A): run PAST the u32 counter's 4 GiB ceiling and assert the
+# initramfs's userspace evidence.  The two legs' instruction counts are deliberately NOT
+# compared across the boundary -- the reference's counter is a u32 and WRAPS, so it prints
+# ~2.15G for a ~6.45G run while the C port prints the true count.  The serial evidence is
+# what is compared.
+gate_c_full() {
+    echo "### C LEG (FULL, past 4G): build/v86c"
+    echo "\$ ./$V86C --bzimage $KERNEL $FULL_LIMIT --cmdline '$CMD' --initrd $INITRD \\"
+    echo "      --bios $FW --memory $MEM --serial $R/pae-l3-full-c-serial.txt"
+    timeout 1800 ./$V86C --bzimage "$KERNEL" "$FULL_LIMIT" --cmdline "$CMD" --initrd "$INITRD" \
+        --bios "$FW" --memory "$MEM" --serial "$R/pae-l3-full-c-serial.txt" \
+        2> "$R/pae-l3-full-c-stderr.txt"
+    echo "port rc=$?"
+    tail -1 "$R/pae-l3-full-c-stderr.txt" | sed 's/^/    /'
+    assert_leg "C leg (full)" "$R/pae-l3-full-c-serial.txt" "$R/pae-l3-full-c-stderr.txt"
+    assert_pae_init "$R/pae-l3-full-c-serial.txt"
+    # the u64 counter's own proof: the TRUE count (not the wrapped low 32 bits) is printed,
+    # so it must exceed 2^32.  A wrapped u32 counter would print ~2.3G here.
+    count=$(sed -n 's/^v86c boot: \([0-9]*\) instructions.*/\1/p' "$R/pae-l3-full-c-stderr.txt")
+    if [ -n "$count" ] && [ "$count" -gt 4294967296 ]; then
+        pass "the C port printed the TRUE count ($count) -- past 2^32, not wrapped"
+    else
+        fail "the C port's count (${count:-<none>}) is not past 2^32 -- the counter wrapped"
+    fi
+}
+
+gate_js_full() {
+    echo "### REFERENCE LEG (FULL, past 4G): node oracle/run-boot.mjs (the pinned v86)"
+    echo "\$ node oracle/run-boot.mjs $KERNEL $FW $FULL_LIMIT '$CMD' --initrd $INITRD \\"
+    echo "      --memory $MEM > $R/pae-l3-full-js-serial.txt"
+    timeout 3600 node oracle/run-boot.mjs "$KERNEL" "$FW" "$FULL_LIMIT" "$CMD" --initrd "$INITRD" \
+        --memory "$MEM" > "$R/pae-l3-full-js-serial.txt" 2> "$R/pae-l3-full-js-stderr.txt"
+    echo "reference rc=$?"
+    tail -1 "$R/pae-l3-full-js-stderr.txt" | sed 's/^/    /'
+    assert_leg "reference leg (full)" "$R/pae-l3-full-js-serial.txt" "$R/pae-l3-full-js-stderr.txt"
+    assert_pae_init "$R/pae-l3-full-js-serial.txt"
+}
+
 case "${1:-all}" in
-    pin) pin_check ;;
-    c)   pin_check; gate_c ;;
-    js)  pin_check; gate_js ;;
-    all) pin_check; gate_c; gate_js ;;
-    *)   echo "usage: sh tests/gate-pae-l3.sh [pin|c|js|all]"; exit 2 ;;
+    pin)     pin_check ;;
+    c)       pin_check; gate_c ;;
+    js)      pin_check; gate_js ;;
+    all)     pin_check; gate_c; gate_js ;;
+    full-c)  pin_check; gate_c_full ;;
+    full-js) pin_check; gate_js_full ;;
+    full)    pin_check; gate_c_full; gate_js_full ;;
+    *)       echo "usage: sh tests/gate-pae-l3.sh [pin|c|js|all|full-c|full-js|full]"; exit 2 ;;
 esac
 
 echo

@@ -394,7 +394,7 @@ typedef struct run_result {
 	bool halted;
 	int32_t exception; /* vector, or -1 */
 	bool unimplemented;
-	uint32_t count;
+	uint64_t count;
 } run_result_t;
 
 /* REBOOT-1: a guest that reboots forever is a loop, not a boot; the run is a
@@ -416,29 +416,34 @@ static void reboot_prepare_reentry(void)
 	cpu->reboot_requested = false;
 }
 
-static void parse_positive_uint(const char *text, const char *what, uint32_t *out)
+/* U64-COUNTER: the instruction limit is now u64 (a limit past 4 G was inexpressible while the
+ * counter was a u32), so the parser returns u64.  The cap is INT64_MAX, not UINT64_MAX: the
+ * run loop compares the count against the limit and against a signed -1 sentinel, so a limit
+ * past 2^63 could not be compared safely. */
+static void parse_positive_uint(const char *text, const char *what, uint64_t *out)
 {
 	char *end = NULL;
-	long value = strtol(text, &end, 10);
-	if (end == text || *end != '\0' || value <= 0 || value > 0xFFFFFFFFL) {
+	unsigned long long value = strtoull(text, &end, 10);
+	if (end == text || *end != '\0' || value == 0 || value > 0x7FFFFFFFFFFFFFFFull) {
 		fprintf(stderr, "v86c: %s must be a positive integer, got: %s\n", what, text);
 		exit(2);
 	}
-	*out = (uint32_t)value;
+	*out = (uint64_t)value;
 }
 
-static run_result_t run(uint32_t limit)
+static run_result_t run(uint64_t limit)
 {
 	run_result_t result;
 	memset(&result, 0, sizeof(result));
 	result.exception = -1;
 
 	/* `previous_count = -1` is a signed counter upstream: `count === previous_count`
-	 * detects a main_loop() that made no progress at all. */
+	 * detects a main_loop() that made no progress at all.  count is a u64 but always far
+	 * below 2^63, so the signed comparison against the -1 sentinel is exact. */
 	int64_t previous_count = -1;
 	for (;;) {
 		main_loop();
-		uint32_t count = cpu->instruction_counter;
+		uint64_t count = cpu->instruction_counter;
 		if (cpu->in_hlt || guest_exception >= 0 || interpreted_unimplemented
 			|| cpu->reboot_requested
 			|| count >= limit || (int64_t)count == previous_count) {
@@ -457,7 +462,7 @@ static run_result_t run(uint32_t limit)
 /* ------------------------------------------------------------------ *
  * THE M0 ORACLE CONTRACT TRANSCRIPT -- oracle/run.mjs:131-198
  * ------------------------------------------------------------------ */
-static void print_transcript(const uint8_t *image, size_t image_size, uint32_t limit)
+static void print_transcript(const uint8_t *image, size_t image_size, uint64_t limit)
 {
 	printf("{\n");
 
@@ -524,8 +529,11 @@ static void print_transcript(const uint8_t *image, size_t image_size, uint32_t l
 	printf("    \"sha256\": \""); print_sha256(image, image_size); printf("\"\n");
 	printf("  },\n");
 
-	printf("  \"instruction_count\": %u,\n", cpu->instruction_counter);
-	printf("  \"instruction_limit\": %u,\n", limit);
+	/* U64-COUNTER: %llu, not %u -- for a count below 2^32 the decimal bytes are identical to
+	 * %u (the transcript-diff gate's contract), and past 2^32 the true count is printed
+	 * rather than the wrapped low 32 bits. */
+	printf("  \"instruction_count\": %llu,\n", (unsigned long long)cpu->instruction_counter);
+	printf("  \"instruction_limit\": %llu,\n", (unsigned long long)limit);
 
 	printf("  \"memory_window\": {\n");
 	printf("    \"address\": "); hx(WINDOW_ADDRESS, 8); printf(",\n");
@@ -666,8 +674,9 @@ static FILE *boot_serial_sink = NULL;
  * ------------------------------------------------------------------ */
 static void boot_host_fault(int signal, siginfo_t *info, void *context)
 {
-	fprintf(stderr, "\nv86c: HOST FAULT (%d) at address %p (si_code=%d), instruction %u\n",
-	        signal, info->si_addr, info->si_code, (unsigned)cpu->instruction_counter);
+	fprintf(stderr, "\nv86c: HOST FAULT (%d) at address %p (si_code=%d), instruction %llu\n",
+	        signal, info->si_addr, info->si_code,
+	        (unsigned long long)cpu->instruction_counter);
 #ifdef __x86_64__
 	{
 		/* cosmocc's ucontext exposes the register file as named members (struct sigcontext's
@@ -949,13 +958,14 @@ static int boot_main(int argc, char *argv[])
 		else if (strcmp(argv[i], "--virtio-console") == 0 && i + 1 < argc) virtio_console_path = argv[++i];
 		else if (strcmp(argv[i], "--virtio-console-in") == 0 && i + 1 < argc) virtio_console_in_path = argv[++i];
 		else if (strcmp(argv[i], "--memory") == 0 && i + 1 < argc) {
-			uint32_t mib;
+			uint64_t mib;
 			parse_positive_uint(argv[++i], "--memory (MiB)", &mib);
 			if (mib > 4096) {
-				fprintf(stderr, "v86c: --memory: %u MiB is more than this port's 4 GiB guest\n", mib);
+				fprintf(stderr, "v86c: --memory: %llu MiB is more than this port's 4 GiB guest\n",
+				        (unsigned long long)mib);
 				return 2;
 			}
-			memory_size = mib << 20;
+			memory_size = (uint32_t)(mib << 20);
 		}
 		else if (strcmp(argv[i], "--uart1") == 0) uart1 = true;
 		else if (strcmp(argv[i], "--acpi") == 0) acpi = true;
@@ -981,7 +991,7 @@ static int boot_main(int argc, char *argv[])
 	}
 	if (uop_cache_stats || jit_stats_flag) atexit(v86c_stats_print);
 
-	uint32_t limit;
+	uint64_t limit;
 	parse_positive_uint(limit_text, "instruction limit", &limit);
 
 	uint32_t kernel_length = 0;
@@ -1238,9 +1248,9 @@ static int boot_main(int argc, char *argv[])
 
 
 
-	fprintf(stderr, "v86c boot: %u instructions, in_hlt=%d, exception=%d, unimplemented=%d,"
+	fprintf(stderr, "v86c boot: %llu instructions, in_hlt=%d, exception=%d, unimplemented=%d,"
 	                " eip=0x%x cs=0x%x cr0=0x%x cr3=0x%x\n",
-	        (unsigned)result.count, result.halted ? 1 : 0, (int)result.exception,
+	        (unsigned long long)result.count, result.halted ? 1 : 0, (int)result.exception,
 	        result.unimplemented ? 1 : 0, (unsigned)cpu->instruction_pointer,
 	        (unsigned)cpu->sreg[CS], (unsigned)cpu->cr[0], (unsigned)cpu->cr[3]);
 
@@ -1260,8 +1270,8 @@ static int boot_main(int argc, char *argv[])
 	}
 
 	if (result.exception >= 0) {
-		fprintf(stderr, "v86c: guest raised cpu exception %d after %u instructions\n",
-		        result.exception, (unsigned)result.count);
+		fprintf(stderr, "v86c: guest raised cpu exception %d after %llu instructions\n",
+		        result.exception, (unsigned long long)result.count);
 		return 1;
 	}
 	if (result.unimplemented) {
@@ -1310,7 +1320,7 @@ int main(int argc, char *argv[])
 	}
 	if (uop_cache_stats || jit_stats_flag) atexit(v86c_stats_print);
 
-	uint32_t limit;
+	uint64_t limit;
 	parse_positive_uint(limit_text, "instruction limit", &limit);
 
 	/* read the image */
@@ -1405,16 +1415,16 @@ int main(int argc, char *argv[])
 		}
 		print_fixture();
 		if (!result.halted) {
-			fprintf(stderr, "v86c: guest did not halt within %u instructions (reached %u)\n",
-				(unsigned)limit, (unsigned)result.count);
+			fprintf(stderr, "v86c: guest did not halt within %llu instructions (reached %llu)\n",
+				(unsigned long long)limit, (unsigned long long)result.count);
 			return 3;
 		}
 		return 0;
 	}
 
 	if (result.exception >= 0) {
-		fprintf(stderr, "v86c: guest raised cpu exception %d after %u instructions; transcript not produced\n",
-			result.exception, (unsigned)result.count);
+		fprintf(stderr, "v86c: guest raised cpu exception %d after %llu instructions; transcript not produced\n",
+			result.exception, (unsigned long long)result.count);
 		return 1;
 	}
 	if (result.unimplemented) {
@@ -1423,8 +1433,8 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 	if (!result.halted) {
-		fprintf(stderr, "v86c: guest did not halt within %u instructions (reached %u)\n",
-			(unsigned)limit, (unsigned)result.count);
+		fprintf(stderr, "v86c: guest did not halt within %llu instructions (reached %llu)\n",
+			(unsigned long long)limit, (unsigned long long)result.count);
 		return 1;
 	}
 

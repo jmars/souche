@@ -196,7 +196,7 @@ void cycle_internal(void)
 	uint32_t phys_addr = get_phys_eip();
 	if (cpu->pagefault) return;
 
-	uint32_t initial_instruction_counter = cpu->instruction_counter;
+	uint64_t initial_instruction_counter = cpu->instruction_counter;
 
 	/* PERF-4/M2 (plan ss8 step 5): the uop cache is a REPLACEMENT for interpreted_run, not
 	 * a filter in front of it -- it reproduces the reference's batch structure internally
@@ -235,16 +235,24 @@ void cycle_internal(void)
 
 /* PERF-4/M2: the window's end, published for the uop cache (cpu.h).  The initial value is
  * unreachable so a cache run outside do_many_cycles_native -- the selftests drive
- * cycle_internal directly -- is not cut short by a stale window. */
+ * cycle_internal directly -- is not cut short by a stale window.
+ *
+ * U64-COUNTER: this stays u32 ON PURPOSE, even though instruction_counter is now u64.  The
+ * window's end is compared to the counter's LOW 32 BITS in both uop_budget_reached
+ * (uop_cache.c) and the JIT's emitted budget check (jit_codegen.c), using the same
+ * wrapped-signed-difference test the reference's u32 wrapping_sub implies -- and that test
+ * is only correct because BOTH operands live in the same 32-bit domain.  Keeping the end a
+ * u32 (the low 32 bits of the counter plus LOOP_COUNTER, wrapped) preserves the domain; the
+ * low 32 bits wrap exactly as the old u32 counter did, so the staircase is unchanged. */
 uint32_t cpu_cycle_budget_end = 0xFFFFFFFFu;
 
 /* cpu.rs:3417-3423 */
 void do_many_cycles_native(void)
 {
-	uint32_t initial_instruction_counter = cpu->instruction_counter;
-	cpu_cycle_budget_end = initial_instruction_counter + (uint32_t)LOOP_COUNTER;
+	uint64_t initial_instruction_counter = cpu->instruction_counter;
+	cpu_cycle_budget_end = (uint32_t)(initial_instruction_counter + (uint32_t)LOOP_COUNTER);
 
-	while ((cpu->instruction_counter - initial_instruction_counter) < (uint32_t)LOOP_COUNTER
+	while ((cpu->instruction_counter - initial_instruction_counter) < (uint64_t)LOOP_COUNTER
 		&& !cpu->in_hlt
 		&& !interpreted_unimplemented
 		&& !cpu->reboot_requested) {

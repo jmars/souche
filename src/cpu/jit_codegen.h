@@ -62,7 +62,12 @@ typedef struct jit_codegen_stats {
 	uint64_t blocks_reused;       /* the compile-time lookup found a live block for the key */
 	uint64_t refused_fit;         /* the emission did not fit in one code page */
 	uint64_t refused_fit_uops;    /* ... and the uops those blocks held (the sizing evidence) */
-	uint64_t refused_pool;        /* the subtrate refused a page / the bind */
+	uint64_t refused_substrate;   /* the substrate refused to install the block: reserve
+	                              * returned NULL, publish failed, or the bind was refused
+	                              * (block-table-full / hash-full / bad page / span
+	                              * mismatch).  NOT a per-reason count -- jit_stats_t carries
+	                              * the per-reason breakdown (block_table_full, hash_full,
+	                              * lowmem_failures). */
 	uint64_t refused_noblock;     /* the block had no uops to compile */
 	uint64_t compiled_uops;       /* uops inside the blocks that WERE compiled */
 	uint64_t bytes_emitted;       /* emitted code bytes, over the compiled blocks */

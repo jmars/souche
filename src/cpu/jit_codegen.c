@@ -1272,12 +1272,17 @@ static void jitcg_emit_getzf(jx64_t *e)
  * maintained rather than left to the interpreted path on purpose: a counter that silently
  * means something different under --jit on is exactly the kind of instrument this project
  * treats as broken (results/perf-5-tune.md's method), and the flush count is the cheapest
- * independent check that both engines ended the same batches. */
+ * independent check that both engines ended the same batches.
+ *
+ * U64-COUNTER: the add is 64-bit.  JC_PENDING (R9) holds the 32-bit pending count with its
+ * upper 32 bits zero -- every writer is a 32-bit op (the prologue's mov r32, the reloads,
+ * `xor r32`, `inc r32`), and a 32-bit write zero-extends -- so `add [counter], r9` adds the
+ * pending count to the FULL u64 counter.  A 32-bit load/add/store here would advance only
+ * the low 32 bits and the high 32 would never move: the exact silent wrap this widening
+ * exists to remove. */
 static void jitcg_emit_flush(jx64_t *e)
 {
-	jx64_mov_r32_m32(e, JC_TMP, JX_RBP, JC_OFF(instruction_counter));
-	jx64_add_r32_r32(e, JC_TMP, JC_PENDING);
-	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(instruction_counter), JC_TMP);
+	jx64_add_m64_r64(e, JX_RBP, JC_OFF(instruction_counter), JC_PENDING);
 	jx64_xor_r32_r32(e, JC_PENDING, JC_PENDING);
 	jx64_mov_r64_imm64(e, JC_TMP, (uint64_t)(uintptr_t)&uop_stats.flushes);
 	jx64_add_m32_imm8(e, JC_TMP, 0, 1);
@@ -1918,12 +1923,12 @@ uint8_t *jit_compile_block(const uop_t *uops, uint32_t count, uint32_t phys, uin
 	}
 	uint8_t *page = jit_code_reserve_span(len);
 	if (page == NULL) {
-		jit_codegen_stats.refused_pool++;
+		jit_codegen_stats.refused_substrate++;
 		return NULL;
 	}
 	memcpy(page, jitcg_scratch, len);
 	if (jit_code_publish(page, len) == NULL) {
-		jit_codegen_stats.refused_pool++;
+		jit_codegen_stats.refused_substrate++;
 		return NULL;
 	}
 	if (jit_cache_bind(phys, virt, state, page, len)) {
@@ -1932,7 +1937,7 @@ uint8_t *jit_compile_block(const uop_t *uops, uint32_t count, uint32_t phys, uin
 		jit_chain_bind(page, (uint32_t)e.label_at[l_chain_entry]);
 	}
 	else {
-		jit_codegen_stats.refused_pool++;
+		jit_codegen_stats.refused_substrate++;
 		return NULL;
 	}
 
@@ -1957,13 +1962,13 @@ void jit_codegen_stats_print(void)
 
 	fprintf(stderr,
 	        "jit: blocks compiled %llu in %llu attempts (reused %llu); refused: fit %llu "
-	        "(%llu uops), pool %llu, empty %llu\n",
+	        "(%llu uops), substrate %llu, empty %llu\n",
 	        (unsigned long long)jit_codegen_stats.blocks_compiled,
 	        (unsigned long long)jit_codegen_stats.compile_attempts,
 	        (unsigned long long)jit_codegen_stats.blocks_reused,
 	        (unsigned long long)jit_codegen_stats.refused_fit,
 	        (unsigned long long)jit_codegen_stats.refused_fit_uops,
-	        (unsigned long long)jit_codegen_stats.refused_pool,
+	        (unsigned long long)jit_codegen_stats.refused_substrate,
 	        (unsigned long long)jit_codegen_stats.refused_noblock);
 	fprintf(stderr, "jit: block sizes: compiled %llu uops in %llu bytes (mean %.1f B/uop, "
 	                "%.1f uops/block); refused-for-fit %llu uops in %llu blocks (mean %.1f)\n",
