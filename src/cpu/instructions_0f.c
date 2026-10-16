@@ -506,16 +506,20 @@ void instr_0F22(int32_t r, int32_t creg)
 			return;
 		}
 		else {
-			if (((cpu->cr[4] ^ data) & (CR4_PGE | CR4_PSE | CR4_PAE)) != 0) {
-				full_clear_tlb();
-			}
 			int32_t old_cr4 = cpu->cr[4];
-			cpu->cr[4] = data;
+			/* validate BEFORE commit: a #GP from load_pdpte leaves CR4 (and the
+			 * TLB) uncommitted -- the guest's #GP handler sees the state hardware
+			 * would (MOV CR4 never re-reads PDPTEs on hardware; this is the
+			 * emulator's reg_pdpte refresh). */
 			if ((data & CR4_PAE) != 0 &&
 			    ((old_cr4 ^ data) & (CR4_PAE | CR4_PGE | CR4_PSE | CR4_SMEP)) != 0 &&
-			    (cpu->cr[0] & CR0_PG) != 0) {
-				load_pdpte(cpu->cr[3]);
+			    (cpu->cr[0] & CR0_PG) != 0 && !load_pdpte(cpu->cr[3])) {
+				return;
 			}
+			if (((old_cr4 ^ data) & (CR4_PGE | CR4_PSE | CR4_PAE)) != 0) {
+				full_clear_tlb();
+			}
+			cpu->cr[4] = data;
 		}
 		break;
 	}

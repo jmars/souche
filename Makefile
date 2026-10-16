@@ -567,6 +567,15 @@ tests/reboot-geom.img: tests/reboot-geom.asm tests/test.ld
 	$(LD) $(LDFLAGS) -o $(BUILD)/reboot-geom.elf $(BUILD)/reboot-geom.o
 	$(OBJCOPY) -O binary $(BUILD)/reboot-geom.elf $@
 
+# PAE-1's Level-2 differential guest (results/pae-1.md): a synthetic PAE workload
+# (3-level walk, 4 KiB + 2 MiB mappings, an NX #PF through a minimal IDT) run under
+# both legs -- see tests/pae-guest.asm and tests/gate-pae-1.sh.
+tests/pae-guest.img: tests/pae-guest.asm tests/test.ld
+	@mkdir -p $(BUILD)
+	$(AS) $(ASFLAGS) -o $(BUILD)/pae-guest.o tests/pae-guest.asm
+	$(LD) $(LDFLAGS) -o $(BUILD)/pae-guest.elf $(BUILD)/pae-guest.o
+	$(OBJCOPY) -O binary $(BUILD)/pae-guest.elf $@
+
 .PHONY: reboot-images
 reboot-images: tests/reboot-pci.img tests/reboot-ps2.img tests/reboot-fwpage.img tests/reboot-geom.img
 

@@ -83,7 +83,10 @@ void clear_tlb(void);
 void invlpg(int32_t addr);
 void set_cr0(int32_t cr0);
 void set_cr3(int32_t cr3);
-void load_pdpte(int32_t cr3);
+/* cpu.rs:2977-2997.  Fills reg_pdpte from the PDPT at cr3; returns false after
+ * delivering #GP(0) (the two guest-reachable dbg_asserts upstream carried here).
+ * Callers must abort the instruction on false, BEFORE committing the register. */
+bool load_pdpte(int32_t cr3);
 
 void trigger_pagefault(int32_t addr,
                        bool present,

@@ -297,7 +297,7 @@ typedef struct cpu_state {
 
     reg128 reg_xmm[8];     /* 832 */
     uint64_t current_tsc;  /* 960 */
-    uint64_t reg_pdpte[4]; /* 968 -- storage only: the PAE walk is not ported */
+    uint64_t reg_pdpte[4]; /* 968 -- loaded by load_pdpte; interpreted by the PAE walk */
 
     uint8_t fpu_stack_ptr;    /* 1032 */
     uint16_t fpu_control_word;/* 1036 */

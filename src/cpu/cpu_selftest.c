@@ -91,6 +91,18 @@ static void reset_delivery(void)
     delivery_count = 0;
 }
 
+/* The PAE paging cases (defined below, with the other paging tests) read these
+ * recording globals, so they are declared here -- before that section -- while the
+ * trigger_* stand-ins that WRITE them live with the other M1b/M1c stand-ins further
+ * down. */
+static int32_t exc_vector = -1;
+static int32_t exc_code = -1;
+static int32_t exc_count = 0;
+
+/* defined below (with the other M1b/M1c stand-ins); the PAE cases use it before
+ * that point */
+static void reset_exceptions(void);
+
 /* ------------------------------------------------------------------ *
  * gate 1 -- reset values
  * ------------------------------------------------------------------ */
@@ -623,6 +635,354 @@ static void test_paging_pse(void)
     printf("PASS paging: 4 MiB PSE page (translation, A/D, page boundary)\n");
 }
 
+/* ------------------------------------------------------------------ *
+ * PAE paging (CR4.PAE): the port's 3-level walk.  Upstream cpu.rs:2054-2336.
+ *
+ * PAE geometry: 2 bits PDPT | 9 bits PD | 9 bits PT | 12 bits offset, so a
+ * 4 KiB page at PDPT[0]/PD[1]/PT[0] is virtual 0x200000, and a 2 MiB page at
+ * PDPT[0]/PD[2] is virtual 0x400000..0x5FFFFF.  Entries are 64-bit; the walk
+ * requires the high half to be 0 except NX (cpu.rs:2058), which the selftest
+ * pins through the reserved-bit and NX cases.
+ * ------------------------------------------------------------------ */
+
+#define PAE_PDPT_PHYS 0x1000u
+#define PAE_PD_PHYS   0x2000u
+#define PAE_PT_PHYS   0x4000u
+#define PAE_DATA_PHYS 0x5000u
+
+static void pae_setup(void)
+{
+    full_clear_tlb();
+    valid_tlb_entries_count = 0;
+    zero_memory(0, 0x8000);
+    cpu->cr[0] = CR0_PE | CR0_PG;
+    cpu->cr[1] = 0;
+    cpu->cr[2] = 0;
+    cpu->cr[3] = (int32_t)PAE_PDPT_PHYS;
+    cpu->cr[4] = CR4_PAE;
+    cpu->efer = 0;
+    cpu->protected_mode = true;
+    cpu->cpl = 0;
+    cpu->previous_ip = 0;
+    cpu->instruction_pointer = 0;
+    cpu->pagefault = false;
+    reset_delivery();
+    reset_exceptions();
+}
+
+static void test_pae_4k(void)
+{
+    pae_setup();
+    write64_no_mmap_or_dirty_check(PAE_PDPT_PHYS + 0,
+                                   (uint64_t)(PAE_PD_PHYS | PAGE_TABLE_PRESENT_MASK));
+    write64_no_mmap_or_dirty_check(PAE_PD_PHYS + 8 * 1,
+                                   (uint64_t)(PAE_PT_PHYS | PAGE_TABLE_PRESENT_MASK |
+                                              PAGE_TABLE_RW_MASK));
+    write64_no_mmap_or_dirty_check(PAE_PT_PHYS + 8 * 0,
+                                   (uint64_t)(PAE_DATA_PHYS | PAGE_TABLE_PRESENT_MASK |
+                                              PAGE_TABLE_RW_MASK));
+    load_pdpte((int32_t)PAE_PDPT_PHYS);
+    write32(PAE_DATA_PHYS, 0xCAFEBABE);
+
+    CHECK_EQ(translate_address_read_no_side_effects(0x200000), PAE_DATA_PHYS);
+    CHECK(!cpu->pagefault);
+    CHECK_EQ(safe_read32s(0x200000), (int32_t)0xCAFEBABE);
+    CHECK(!cpu->pagefault);
+
+    /* the A/D updates write ONE byte (write8), so a 64-bit entry's high 32 bits
+     * are untouched -- read64s proves the value end to end */
+    CHECK_EQ(read64s(PAE_PD_PHYS + 8 * 1),
+             (int64_t)(PAE_PT_PHYS | 3 | PAGE_TABLE_ACCESSED_MASK));
+    CHECK_EQ(read64s(PAE_PT_PHYS + 8 * 0),
+             (int64_t)(PAE_DATA_PHYS | 3 | PAGE_TABLE_ACCESSED_MASK));
+
+    safe_write32(0x200000, 0x11223344);
+    CHECK(!cpu->pagefault);
+    CHECK_EQ(read32s(PAE_DATA_PHYS), (int32_t)0x11223344);
+    CHECK_EQ(read64s(PAE_PT_PHYS + 8 * 0),
+             (int64_t)(PAE_DATA_PHYS | 3 | PAGE_TABLE_ACCESSED_MASK | PAGE_TABLE_DIRTY_MASK));
+
+    printf("PASS paging: PAE 4 KiB translation + A/D bits (high 32 bits untouched)\n");
+}
+
+static void test_pae_2mb(void)
+{
+    pae_setup();
+    write64_no_mmap_or_dirty_check(PAE_PDPT_PHYS + 0,
+                                   (uint64_t)(PAE_PD_PHYS | PAGE_TABLE_PRESENT_MASK));
+    write64_no_mmap_or_dirty_check(PAE_PD_PHYS + 8 * 2,
+                                   (uint64_t)(0x00600000u | PAGE_TABLE_PSE_MASK |
+                                              PAGE_TABLE_PRESENT_MASK | PAGE_TABLE_RW_MASK));
+    load_pdpte((int32_t)PAE_PDPT_PHYS);
+
+    /* the 0x401234 offset is the discriminator for the 2 MiB high composition
+     * (0xFFE00000 | 0x1FF000): a 4 MiB mask (0xFFC00000 | 0x3FF000) yields 0x40234 */
+    CHECK_EQ(translate_address_read_no_side_effects(0x400000), 0x600000u);
+    CHECK_EQ(translate_address_read_no_side_effects(0x401234), 0x601234u);
+    CHECK_EQ(translate_address_read_no_side_effects(0x5FFFFF), 0x7FFFFFu);
+
+    safe_write32(0x401234, 0xDEADBEEF);
+    CHECK(!cpu->pagefault);
+    CHECK_EQ(read32s(0x601234), (int32_t)0xDEADBEEF);
+    CHECK_EQ(read64s(PAE_PD_PHYS + 8 * 2),
+             (int64_t)(0x00600000u | 0x80 | 3 | PAGE_TABLE_ACCESSED_MASK |
+                       PAGE_TABLE_DIRTY_MASK));
+
+    /* the next 2 MiB (PD[3]) is absent */
+    cpu->pagefault = false;
+    reset_delivery();
+    full_clear_tlb();
+    valid_tlb_entries_count = 0;
+    CHECK_EQ(safe_read32s(0x600000), 0);
+    CHECK(cpu->pagefault);
+    CHECK_EQ(delivered_error_code, 0); /* present=0 */
+
+    printf("PASS paging: PAE 2 MiB translation (0x1FF000 boundary), A/D, next-page fault\n");
+}
+
+static void test_pae_reserved(void)
+{
+    pae_setup();
+    write64_no_mmap_or_dirty_check(PAE_PDPT_PHYS + 0,
+                                   (uint64_t)(PAE_PD_PHYS | PAGE_TABLE_PRESENT_MASK));
+    /* bits 13-20 are reserved in a 2 MiB PDE: bit 13 -> rsvd fault (bit 3) */
+    write64_no_mmap_or_dirty_check(PAE_PD_PHYS + 8 * 0,
+                                   (uint64_t)(0x00600000u | PAGE_TABLE_PSE_MASK |
+                                              PAGE_TABLE_PRESENT_MASK | 0x2000));
+    load_pdpte((int32_t)PAE_PDPT_PHYS);
+
+    cpu->previous_ip = 0xDEAD;
+    cpu->instruction_pointer = 0x1234;
+    cpu->pagefault = false;
+    reset_delivery();
+    CHECK_EQ(safe_read32s(0x000000), 0);
+    CHECK(cpu->pagefault);
+    CHECK_EQ(delivered_error_code, 9); /* rsvd(1<<3) | present(1) */
+    CHECK_EQ(cpu->cr[2], 0x000000);
+
+    /* a 4 KiB PTE with the high half set (bit 32): reserved -> rsvd fault */
+    pae_setup();
+    write64_no_mmap_or_dirty_check(PAE_PDPT_PHYS + 0,
+                                   (uint64_t)(PAE_PD_PHYS | PAGE_TABLE_PRESENT_MASK));
+    write64_no_mmap_or_dirty_check(PAE_PD_PHYS + 8 * 1,
+                                   (uint64_t)(PAE_PT_PHYS | PAGE_TABLE_PRESENT_MASK |
+                                              PAGE_TABLE_RW_MASK));
+    write64_no_mmap_or_dirty_check(PAE_PT_PHYS + 8 * 0, 0x0000000100000003ull);
+    load_pdpte((int32_t)PAE_PDPT_PHYS);
+
+    cpu->previous_ip = 0xDEAD;
+    cpu->instruction_pointer = 0x1234;
+    cpu->pagefault = false;
+    reset_delivery();
+    CHECK_EQ(safe_read32s(0x200000), 0);
+    CHECK(cpu->pagefault);
+    CHECK_EQ(delivered_error_code, 9);
+    CHECK_EQ(cpu->cr[2], 0x200000);
+
+    /* a 4 KiB PDE with the high half set (bit 32): reserved -> rsvd fault.  This is
+     * the silent-wrong shape the uint64_t reserved check guards: an int32_t
+     * truncation would drop bit 32, and the walk would silently translate through
+     * the (valid) PTE behind it instead of faulting. */
+    pae_setup();
+    write64_no_mmap_or_dirty_check(PAE_PDPT_PHYS + 0,
+                                   (uint64_t)(PAE_PD_PHYS | PAGE_TABLE_PRESENT_MASK));
+    write64_no_mmap_or_dirty_check(PAE_PD_PHYS + 8 * 1,
+                                   0x0000000100004003ull); /* bit 32 + PT + RW + present */
+    write64_no_mmap_or_dirty_check(PAE_PT_PHYS + 8 * 0,
+                                   (uint64_t)(PAE_DATA_PHYS | PAGE_TABLE_PRESENT_MASK |
+                                              PAGE_TABLE_RW_MASK));
+    load_pdpte((int32_t)PAE_PDPT_PHYS);
+
+    cpu->previous_ip = 0xDEAD;
+    cpu->instruction_pointer = 0x1234;
+    cpu->pagefault = false;
+    reset_delivery();
+    CHECK_EQ(safe_read32s(0x200000), 0);
+    CHECK(cpu->pagefault);
+    CHECK_EQ(delivered_error_code, 9);
+    CHECK_EQ(cpu->cr[2], 0x200000);
+
+    printf("PASS paging: PAE reserved bits (2 MiB bits 13-20, PDE/PTE high half) -> rsvd fault\n");
+}
+
+static void test_pae_pdpte(void)
+{
+    /* an absent PDPTE is a page fault with present=0 */
+    pae_setup();
+    write64_no_mmap_or_dirty_check(PAE_PDPT_PHYS + 0, 0ull);
+    load_pdpte((int32_t)PAE_PDPT_PHYS);
+
+    cpu->previous_ip = 0xDEAD;
+    cpu->instruction_pointer = 0x1234;
+    cpu->pagefault = false;
+    reset_delivery();
+    CHECK_EQ(safe_read32s(0x000000), 0);
+    CHECK(cpu->pagefault);
+    CHECK_EQ(delivered_error_code, 0); /* present=0 */
+    CHECK_EQ(cpu->cr[2], 0x000000);
+
+    printf("PASS paging: PAE absent PDPTE -> #PF present=0\n");
+}
+
+static void test_pae_nx(void)
+{
+    /* NX in the PTE: with NXE off it is reserved; with NXE on, data reads
+     * succeed and instruction fetches fault with the I/D bit (bit 4). */
+    pae_setup();
+    cpu->efer = 0; /* NXE off */
+    write64_no_mmap_or_dirty_check(PAE_PDPT_PHYS + 0,
+                                   (uint64_t)(PAE_PD_PHYS | PAGE_TABLE_PRESENT_MASK));
+    write64_no_mmap_or_dirty_check(PAE_PD_PHYS + 8 * 1,
+                                   (uint64_t)(PAE_PT_PHYS | PAGE_TABLE_PRESENT_MASK |
+                                              PAGE_TABLE_RW_MASK));
+    write64_no_mmap_or_dirty_check(PAE_PT_PHYS + 8 * 0,
+                                   (uint64_t)(PAE_DATA_PHYS | PAGE_TABLE_PRESENT_MASK |
+                                              PAGE_TABLE_RW_MASK | PAGE_TABLE_NX_MASK));
+    load_pdpte((int32_t)PAE_PDPT_PHYS);
+    write32(PAE_DATA_PHYS, 0x11223344);
+
+    cpu->previous_ip = 0xDEAD;
+    cpu->instruction_pointer = 0x1234;
+    cpu->pagefault = false;
+    reset_delivery();
+    CHECK_EQ(safe_read32s(0x200000), 0);
+    CHECK(cpu->pagefault);
+    CHECK_EQ(delivered_error_code, 9); /* NX is reserved when NXE is off */
+
+    cpu->efer = EFER_NXE;
+    cpu->pagefault = false;
+    reset_delivery();
+    full_clear_tlb();
+    valid_tlb_entries_count = 0;
+    CHECK_EQ(safe_read32s(0x200000), (int32_t)0x11223344);
+    CHECK(!cpu->pagefault);
+    CHECK((tlb_data[0x200] & TLB_NO_EXEC) != 0);
+
+    cpu->pagefault = false;
+    reset_delivery();
+    full_clear_tlb();
+    valid_tlb_entries_count = 0;
+    CHECK_EQ(translate_address_fetch(0x200000), 0u);
+    CHECK(cpu->pagefault);
+    CHECK_EQ(delivered_error_code, 17); /* I/D(1<<4) | present(1) */
+
+    printf("PASS paging: PAE NX in PTE (rsvd w/o NXE, fetch-fault w/ NXE, TLB_NO_EXEC)\n");
+}
+
+static void test_pae_nx_pde(void)
+{
+    /* NX on the PDE of a 4 KiB mapping must carry to the fetch: the 4 KiB arm
+     * ORs the PTE's NX into no_exec; an overwrite (=) would drop the PDE's. */
+    pae_setup();
+    cpu->efer = EFER_NXE;
+    write64_no_mmap_or_dirty_check(PAE_PDPT_PHYS + 0,
+                                   (uint64_t)(PAE_PD_PHYS | PAGE_TABLE_PRESENT_MASK));
+    write64_no_mmap_or_dirty_check(PAE_PD_PHYS + 8 * 1,
+                                   (uint64_t)(PAE_PT_PHYS | PAGE_TABLE_PRESENT_MASK |
+                                              PAGE_TABLE_RW_MASK | PAGE_TABLE_NX_MASK));
+    write64_no_mmap_or_dirty_check(PAE_PT_PHYS + 8 * 0,
+                                   (uint64_t)(PAE_DATA_PHYS | PAGE_TABLE_PRESENT_MASK |
+                                              PAGE_TABLE_RW_MASK));
+    load_pdpte((int32_t)PAE_PDPT_PHYS);
+    write32(PAE_DATA_PHYS, 0x11223344);
+
+    CHECK_EQ(safe_read32s(0x200000), (int32_t)0x11223344);
+    CHECK(!cpu->pagefault);
+
+    cpu->pagefault = false;
+    reset_delivery();
+    full_clear_tlb();
+    valid_tlb_entries_count = 0;
+    CHECK_EQ(translate_address_fetch(0x200000), 0u);
+    CHECK(cpu->pagefault);
+    CHECK_EQ(delivered_error_code, 17);
+
+    printf("PASS paging: PAE NX on the PDE of a 4 KiB mapping (no_exec carries)\n");
+}
+
+static void test_pae_gp(void)
+{
+    /* A sentinel CR3 that differs from any value set_cr3 would commit, so the
+     * "CR3 unwritten" checks below actually discriminate (review F4: pre-setting
+     * cr[3] to the committed value made "unwritten" and "written" indistinguishable
+     * and the old test could not fail). */
+    const int32_t cr3_sentinel = 0xDEAD0000;
+
+    /* load_pdpte's guest-reachable asserts became #GP(0) (plan Q1): a high-half
+     * PDPTE faults at MOV CR3 and CR3 stays unwritten. */
+    pae_setup();
+    write64_no_mmap_or_dirty_check(PAE_PDPT_PHYS + 0, 0x0000000100000001ull);
+    cpu->cr[3] = cr3_sentinel;
+    reset_exceptions();
+    set_cr3((int32_t)PAE_PDPT_PHYS);
+    CHECK_EQ(exc_vector, CPU_EXCEPTION_GP);
+    CHECK_EQ(exc_code, 0);
+    CHECK_EQ(cpu->cr[3], cr3_sentinel); /* CR3 unwritten */
+
+    /* a reserved PDPTE bit (bit 1) with present set also faults */
+    pae_setup();
+    write64_no_mmap_or_dirty_check(PAE_PDPT_PHYS + 0, (uint64_t)(PAE_PD_PHYS | 1 | 0x2));
+    cpu->cr[3] = cr3_sentinel;
+    reset_exceptions();
+    set_cr3((int32_t)PAE_PDPT_PHYS);
+    CHECK_EQ(exc_vector, CPU_EXCEPTION_GP);
+    CHECK_EQ(exc_code, 0);
+    CHECK_EQ(cpu->cr[3], cr3_sentinel);
+
+    /* PWT/PCD (bits 3,4) and ignored bits 9-11 are accepted and masked */
+    pae_setup();
+    write64_no_mmap_or_dirty_check(PAE_PDPT_PHYS + 0,
+                                   (uint64_t)(PAE_PD_PHYS | 1 | 0x8 | 0x10 | 0x600));
+    cpu->cr[3] = cr3_sentinel;
+    reset_exceptions();
+    set_cr3((int32_t)PAE_PDPT_PHYS);
+    CHECK_EQ(exc_vector, -1); /* no fault */
+    CHECK_EQ(cpu->cr[3], (int32_t)PAE_PDPT_PHYS); /* committed (sentinel != committed) */
+    CHECK_EQ(cpu->reg_pdpte[0], (uint64_t)(PAE_PD_PHYS | 1));
+
+    /* the set_cr0 path faults atomically too: CR0 stays uncommitted (a commit
+     * would also set CR0_ET and CR0_CD) */
+    pae_setup();
+    write64_no_mmap_or_dirty_check(PAE_PDPT_PHYS + 0, 0x0000000100000001ull);
+    reset_exceptions();
+    set_cr0(CR0_PE | CR0_PG | CR0_CD); /* CD delta -> load_pdpte runs */
+    CHECK_EQ(exc_vector, CPU_EXCEPTION_GP);
+    CHECK_EQ(exc_code, 0);
+    CHECK_EQ(cpu->cr[0], CR0_PE | CR0_PG); /* CR0 unwritten */
+
+    /* the CR4 write path faults atomically too: CR4 stays uncommitted */
+    pae_setup();
+    write64_no_mmap_or_dirty_check(PAE_PDPT_PHYS + 0, 0x0000000100000001ull);
+    reset_exceptions();
+    write_reg32(EAX, (int32_t)(CR4_PAE | CR4_PSE));
+    instr_0F22(EAX, 4);
+    CHECK_EQ(exc_vector, CPU_EXCEPTION_GP);
+    CHECK_EQ(exc_code, 0);
+    CHECK_EQ(cpu->cr[4], CR4_PAE); /* CR4 unwritten */
+
+    printf("PASS paging: PAE load_pdpte #GP (high-half, reserved bit, masking) + CR fault atomicity\n");
+}
+
+static void test_cr3_nonpae_mask(void)
+{
+    /* F2 (review, PRE-EXISTING, reproduced by the orchestrator): a non-PAE
+     * MOV CR3 with PWT/PCD set (bits 3/4 -- legal CR3 bits) aborted the SHIPPED
+     * binary on the old DBG_ASSERT((cr3 & 0xFFF) == 0); the pinned reference runs
+     * it to completion.  The port now matches: mask ~0xFE7 (upstream) keeps
+     * PWT/PCD, no abort.  Pre-fix this case aborted (SIGABRT) before the first
+     * CHECK. */
+    paging_setup();
+    cpu->cr[4] = 0; /* non-PAE (already 0 from paging_setup, stated) */
+    reset_delivery();
+    reset_exceptions();
+    set_cr3(0x1008); /* 4 KiB base + PWT (bit 3) */
+    CHECK_EQ(cpu->cr[3], 0x1008); /* PWT preserved by the ~0xFE7 mask */
+    CHECK_EQ(exc_vector, -1);     /* no fault -- and, crucially, no abort */
+    set_cr3(0x1010); /* 4 KiB base + PCD (bit 4) */
+    CHECK_EQ(cpu->cr[3], 0x1010);
+    printf("PASS paging: non-PAE MOV CR3 with PWT/PCD set does not abort (mask ~0xFE7)\n");
+}
+
 static void test_paging_crossing(void)
 {
     paging_setup();
@@ -869,9 +1229,6 @@ static void test_memory_router(void)
  * exactly what M1a-1 did for call_interrupt_vector, for the same reason (nothing
  * links without them).  M1c replaces them; nothing here shadows a real definition.
  * ------------------------------------------------------------------ */
-static int32_t exc_vector = -1;
-static int32_t exc_count = 0;
-
 void trigger_de(void)
 {
     exc_vector = CPU_EXCEPTION_DE;
@@ -889,8 +1246,8 @@ void trigger_nm(void)
 }
 void trigger_gp(int32_t code)
 {
-    (void)code;
     exc_vector = CPU_EXCEPTION_GP;
+    exc_code = code;
     exc_count++;
 }
 
@@ -910,6 +1267,7 @@ bool switch_seg(int32_t reg, int32_t selector_raw)
 static void reset_exceptions(void)
 {
     exc_vector = -1;
+    exc_code = -1;
     exc_count = 0;
 }
 
@@ -6001,6 +6359,14 @@ int main(void)
     test_paging_4k();
     test_paging_faults();
     test_paging_pse();
+    test_pae_4k();
+    test_pae_2mb();
+    test_pae_reserved();
+    test_pae_pdpte();
+    test_pae_nx();
+    test_pae_nx_pde();
+    test_pae_gp();
+    test_cr3_nonpae_mask();
     test_paging_crossing();
     test_tlb();
 

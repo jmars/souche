@@ -1,10 +1,11 @@
 /*
- * paging.c -- address translation, the TLB, the PSE-capable page walk, the
+ * paging.c -- address translation, the TLB, the PSE/PAE-capable page walk, the
  * page-fault path and the safe_* accessors.
  *
  * Port of v86/src/rust/cpu/cpu.rs (see paging.h for the file:line map).  PAE is
- * DEFERRED (plan ss3): the state still carries reg_pdpte, and every path that would
- * have to interpret a 64-bit PAE entry traps loudly instead of misreading it.
+ * ported (PAE-1): the walk interprets 64-bit PDPTE/PDE/PTE entries exactly as
+ * upstream requires (high half 0 except NX, cpu.rs:2058), and load_pdpte's two
+ * guest-reachable asserts became #GP(0) delivered at the load site.
  */
 
 #include <stdio.h>
@@ -20,17 +21,6 @@ int32_t valid_tlb_entries_count = 0;
 /* ------------------------------------------------------------------ *
  * loud unimplemented paths
  * ------------------------------------------------------------------ */
-
-/* C stand-in for upstream's panic!/dbg_assert in these two spots.  An emulator that
- * silently misinterprets a 64-bit PAE entry would produce wrong guest results, which
- * is exactly the failure this port must not have; aborting names the gap instead. */
-static void pae_unimplemented(void)
-{
-    fprintf(stderr,
-            "v86c: FATAL: PAE paging (CR4.PAE / 64-bit page tables) is not implemented "
-            "in M1 -- deferred to M2 (plan ss3). Refusing to misinterpret a 64-bit PTE.\n");
-    abort();
-}
 
 static void fatal(const char *msg)
 {
@@ -123,7 +113,7 @@ void trigger_pagefault(int32_t addr,
  *
  * Returns the TLB entry; on fault it sets cpu->pagefault and returns 0 (the
  * caller checks the flag before using the value).  `jit` is gone (see paging.h);
- * the PAE arm is replaced by an explicit trap (plan ss3).
+ * the PAE arm (cpu.rs:2087-2134) is ported below.
  * ------------------------------------------------------------------ */
 
 static int32_t do_page_walk(int32_t addr,
@@ -139,8 +129,7 @@ static int32_t do_page_walk(int32_t addr,
 
     int32_t cr0 = cpu->cr[0];
     int32_t cr4 = cpu->cr[4];
-    /* upstream's `nxe` is consumed only by the PAE arm (pae_reserved_mask), which is
-     * deferred -- so it does not exist here */
+    bool nxe = (cpu->efer & EFER_NXE) != 0;
     bool no_exec = false;
 
     if ((cr0 & CR0_PG) == 0) {
@@ -149,13 +138,49 @@ static int32_t do_page_walk(int32_t addr,
         global = false;
     }
     else {
-        if ((cr4 & CR4_PAE) != 0) {
-            /* upstream walks the PDPTE here (cpu.rs:2087-2134); deferred, trapped */
-            pae_unimplemented();
-        }
+        uint32_t page_dir_addr;
+        int32_t page_dir_entry;
+        /* cpu.rs:2084: the high half of a 64-bit entry must be 0, except the NX bit
+         * when EFER.NXE is set */
+        uint64_t pae_reserved_mask =
+            0x7FFFFFFF00000000ull | (nxe ? 0ull : PAGE_TABLE_NX_MASK);
 
-        uint32_t page_dir_addr = (uint32_t)cpu->cr[3] + (((uint32_t)addr >> 22) << 2);
-        int32_t page_dir_entry = read32s(page_dir_addr);
+        if ((cr4 & CR4_PAE) != 0) {
+            uint64_t pdpt_entry = cpu->reg_pdpte[(uint32_t)addr >> 30];
+            if (((int32_t)pdpt_entry & PAGE_TABLE_PRESENT_MASK) == 0) {
+                if (side_effects) {
+                    trigger_pagefault(addr, false, for_writing, user, is_instruction_fetch, false);
+                }
+                cpu->pagefault = true;
+                return 0;
+            }
+
+            page_dir_addr = ((uint32_t)pdpt_entry & 0xFFFFF000u) +
+                            ((((uint32_t)addr >> 21) & 0x1FFu) << 3);
+            /* read64s returns int64_t; cast to uint64_t BEFORE the mask work so the
+             * reserved-mask check sees the true 64-bit value */
+            uint64_t pde = (uint64_t)read64s(page_dir_addr);
+            page_dir_entry = (int32_t)pde;
+            if ((page_dir_entry & PAGE_TABLE_PRESENT_MASK) != 0) {
+                /* bits 13 to 20 are reserved in a 2 MiB page directory entry */
+                uint64_t reserved_mask =
+                    pae_reserved_mask |
+                    ((page_dir_entry & PAGE_TABLE_PSE_MASK) != 0 ? 0x1FE000u : 0u);
+                if ((pde & reserved_mask) != 0) {
+                    if (side_effects) {
+                        trigger_pagefault(
+                            addr, true, for_writing, user, is_instruction_fetch, true);
+                    }
+                    cpu->pagefault = true;
+                    return 0;
+                }
+                no_exec = (pde & PAGE_TABLE_NX_MASK) != 0;
+            }
+        }
+        else {
+            page_dir_addr = (uint32_t)cpu->cr[3] + (((uint32_t)addr >> 22) << 2);
+            page_dir_entry = read32s(page_dir_addr);
+        }
 
         if ((page_dir_entry & PAGE_TABLE_PRESENT_MASK) == 0) {
             if (side_effects) {
@@ -169,8 +194,9 @@ static int32_t do_page_walk(int32_t addr,
         bool allow_write = (page_dir_entry & PAGE_TABLE_RW_MASK) != 0;
         allow_user = allow_user && (page_dir_entry & PAGE_TABLE_USER_MASK) != 0;
 
-        if ((page_dir_entry & PAGE_TABLE_PSE_MASK) != 0 && (cr4 & CR4_PSE) != 0) {
-            /* 4 MiB page (the `pae` word of upstream's condition is always false here) */
+        if ((page_dir_entry & PAGE_TABLE_PSE_MASK) != 0 &&
+            ((cr4 & CR4_PAE) != 0 || (cr4 & CR4_PSE) != 0)) {
+            /* 2 MiB (PAE) or 4 MiB (PSE) page */
             if ((for_writing && !allow_write && !kernel_write_override) ||
                 (user && !allow_user) || (is_instruction_fetch && no_exec)) {
                 if (side_effects) {
@@ -189,13 +215,40 @@ static int32_t do_page_walk(int32_t addr,
                 write8(page_dir_addr, new_page_dir_entry);
             }
 
-            high = ((uint32_t)page_dir_entry & 0xFFC00000u) | ((uint32_t)addr & 0x3FF000u);
+            high = ((cr4 & CR4_PAE) != 0)
+                       ? (((uint32_t)page_dir_entry & 0xFFE00000u) |
+                          ((uint32_t)addr & 0x1FF000u))
+                       : (((uint32_t)page_dir_entry & 0xFFC00000u) |
+                          ((uint32_t)addr & 0x3FF000u));
             global = (page_dir_entry & PAGE_TABLE_GLOBAL_MASK) == PAGE_TABLE_GLOBAL_MASK;
         }
         else {
-            uint32_t page_table_addr =
-                ((uint32_t)page_dir_entry & 0xFFFFF000u) + ((((uint32_t)addr >> 12) & 0x3FFu) << 2);
-            int32_t page_table_entry = read32s(page_table_addr);
+            uint32_t page_table_addr;
+            int32_t page_table_entry;
+
+            if ((cr4 & CR4_PAE) != 0) {
+                page_table_addr = ((uint32_t)page_dir_entry & 0xFFFFF000u) +
+                                  ((((uint32_t)addr >> 12) & 0x1FFu) << 3);
+                uint64_t pte = (uint64_t)read64s(page_table_addr);
+                page_table_entry = (int32_t)pte;
+                if ((page_table_entry & PAGE_TABLE_PRESENT_MASK) != 0) {
+                    if ((pte & pae_reserved_mask) != 0) {
+                        if (side_effects) {
+                            trigger_pagefault(
+                                addr, true, for_writing, user, is_instruction_fetch, true);
+                        }
+                        cpu->pagefault = true;
+                        return 0;
+                    }
+                    /* |=: the PDE's NX carries over on the 4 KiB path (cpu.rs:2220) */
+                    no_exec |= (pte & PAGE_TABLE_NX_MASK) != 0;
+                }
+            }
+            else {
+                page_table_addr = ((uint32_t)page_dir_entry & 0xFFFFF000u) +
+                                  ((((uint32_t)addr >> 12) & 0x3FFu) << 2);
+                page_table_entry = read32s(page_table_addr);
+            }
 
             bool present = (page_table_entry & PAGE_TABLE_PRESENT_MASK) != 0;
             allow_write = allow_write && (page_table_entry & PAGE_TABLE_RW_MASK) != 0;
@@ -401,16 +454,22 @@ void set_cr0(int32_t cr0)
         fatal("cannot load PG without PE");
     }
 
+    /* validation BEFORE commit: a #GP from load_pdpte must leave CR0 (and the TLB)
+     * untouched -- the guest's #GP handler must see the register state hardware would
+     * (MOV CR0 never re-reads PDPTEs on hardware; this is the emulator's refresh of
+     * the reg_pdpte cache, and #GP is the safest defined behaviour when it faults). */
+    if ((cpu->cr[4] & CR4_PAE) != 0 && (cr0 & CR0_PG) != 0 &&
+        (old_cr0 & (CR0_CD | CR0_NW | CR0_PG)) != (cr0 & (CR0_CD | CR0_NW | CR0_PG))) {
+        if (!load_pdpte(cpu->cr[3])) {
+            return;
+        }
+    }
+
     cpu->cr[0] = cr0;
     cpu->cr[0] |= CR0_ET;
 
     if ((old_cr0 & (CR0_PG | CR0_WP)) != (cr0 & (CR0_PG | CR0_WP))) {
         full_clear_tlb();
-    }
-
-    if ((cpu->cr[4] & CR4_PAE) != 0 && (cr0 & CR0_PG) != 0 &&
-        (old_cr0 & (CR0_CD | CR0_NW | CR0_PG)) != (cr0 & (CR0_CD | CR0_NW | CR0_PG))) {
-        load_pdpte(cpu->cr[3]);
     }
 
     cpu->protected_mode = (cpu->cr[0] & CR0_PE) == CR0_PE;
@@ -421,27 +480,64 @@ void set_cr3(int32_t cr3)
 {
     if ((cpu->cr[4] & CR4_PAE) != 0) {
         cr3 &= ~0xF;
-        if ((cpu->cr[0] & CR0_PG) != 0) {
-            load_pdpte(cr3);
+        if ((cpu->cr[0] & CR0_PG) != 0 && !load_pdpte(cr3)) {
+            return; /* #GP delivered: CR3 stays unwritten and the TLB is not cleared */
         }
     }
     else {
-        cr3 &= ~0x7E7;
-        DBG_ASSERT((cr3 & 0xFFF) == 0); /* upstream dbg_assert!(..., "TODO") */
+        cr3 &= ~0xFE7; /* upstream !0b111111100111: keep PWT/PCD (bits 3/4 -- real
+                         * non-PAE CR3 bits) and clear bits 0-2 and 5-11.  The old
+                         * mask ~0x7E7 also left bit 11, diverging from upstream
+                         * (and hardware ignores it): aligned to ~0xFE7. */
+        /* upstream dbg_assert!(cr3 & 0xFFF == 0, "TODO") -- DROPPED, not reworded:
+         * it is guest-reachable here (a guest MOV CR3 with PWT/PCD set is legal
+         * hardware input and the mask deliberately preserves those bits), and in
+         * upstream it is debug_assert! (dbg.rs:63), compiled out of the shipped
+         * wasm -- this port runs with asserts live (no -DNDEBUG, Makefile).  The
+         * consequence, upstream-faithful NOT hardware-faithful: a PWT/PCD-set CR3
+         * flows into the non-PAE walk (paging.c:181) and offsets the PD base by
+         * 8/16, exactly the reference's release behaviour. */
     }
     cpu->cr[3] = cr3;
     clear_tlb();
 }
 
-void load_pdpte(int32_t cr3)
+bool load_pdpte(int32_t cr3)
 {
-    /* cpu.rs:2977-2997 fills reg_pdpte from the PDPT at cr3 and the PAE walk then
-     * interprets 64-bit entries.  Neither is ported (plan ss3): this traps at the
-     * first moment the emulator would be forced to misread a 64-bit PTE, rather than
-     * silently later.  reg_pdpte remains in cpu_state_t (global_pointers.rs:61) and
-     * stays 0. */
-    (void)cr3;
-    pae_unimplemented();
+    /* mask HERE, not at each call site: set_cr0 (above) and the CR4 write
+     * (instructions_0f.c) pass cpu->cr[3] unmasked, and a CR3 written in non-PAE
+     * mode legally carries PWT/PCD (bits 3/4).  Masking makes upstream's dbg_assert
+     * premise hold by construction instead of by caller discipline. */
+    cr3 &= ~0xF;
+    DBG_ASSERT((cr3 & 0xF) == 0); /* upstream dbg_assert!(cr3 & 0b1111 == 0) */
+    /* validate into a local first: a #GP at index i>=1 must not leave entries
+     * 0..i-1 refreshed from the new PDPT while CR3/CR0/CR4 stay uncommitted (the
+     * guest's #GP handler would translate through PDPTEs of neither committed
+     * state; hardware leaves the cache untouched on a faulting MOV CR3). */
+    uint64_t tmp[4];
+    for (int32_t i = 0; i < 4; i++) {
+        uint64_t pdpt_entry = (uint64_t)read64s((uint32_t)cr3 + 8u * (uint32_t)i);
+        pdpt_entry &= ~0xE00ull; /* bits 9-11 are ignored */
+        pdpt_entry &= ~0x18ull;  /* bits 3 (PWT) and 4 (PCD) are valid; ignored (no
+                                  * cache emulation) */
+        /* upstream's two dbg_asserts (cpu.rs:2984, :2989) are GUEST-REACHABLE and
+         * became #GP(0) (plan Q1) -- a guest that points CR3 at a bad PDPT gets a
+         * real fault, not an abort. */
+        if ((pdpt_entry & 0xFFFFFFFF00000000ull) != 0) {
+            trigger_gp(0);
+            return false;
+        }
+        if (((int32_t)pdpt_entry & PAGE_TABLE_PRESENT_MASK) != 0 &&
+            (pdpt_entry & 0x1E6ull) != 0) {
+            trigger_gp(0);
+            return false;
+        }
+        tmp[i] = pdpt_entry;
+    }
+    for (int32_t i = 0; i < 4; i++) {
+        cpu->reg_pdpte[i] = tmp[i];
+    }
+    return true;
 }
 
 /* ------------------------------------------------------------------ *

@@ -1694,6 +1694,17 @@ void do_task_switch(int32_t selector_raw, bool has_error_code, int32_t error_cod
     cpu->segment_limits[TR] = seg_descriptor_effective_limit(descriptor);
     cpu->sreg[TR] = selector.raw;
 
+    /* PAE-1 atomicity gap (review F3, results/pae-1.md): this is the ONE set_cr3
+     * call site that does NOT validate-before-commit.  new_cr3 was read early and
+     * is in hand, but TR, the segment registers and instruction_pointer are already
+     * committed above, and the CR0.TS set below runs even when load_pdpte delivered
+     * #GP inside set_cr3 (set_cr3 is void; nothing here checks).  A task switch to
+     * a TSS whose CR3 points at a bad PDPT (PAE+PG on) therefore delivers #GP in a
+     * half-switched context (new segments, old IP), whereas hardware faults before
+     * any state change.  Pre-change this aborted the process (pae_unimplemented), so
+     * it is an improvement, not a regression; a fix would hoist the PDPTE load
+     * above the segment switches.  Left as a documented residual: task switches are
+     * not exercised by any in-tree PAE guest. */
     set_cr3(new_cr3);
 
     cpu->cr[0] |= CR0_TS;

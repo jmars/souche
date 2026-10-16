@@ -77,7 +77,7 @@ interrupt line this machine genuinely does not route through a PIRQ byte — the
 
 ---
 
-## 1. Deliberately not ported (the devices, and PAE)
+## 1. Deliberately not ported (the devices)
 
 Each of these is *absent by decision*, not by omission, and each currently **stops loudly by name**
 rather than producing a wrong value — so the cost of deferring is discovery, not risk.
@@ -176,9 +176,14 @@ that landed, and the guest-compatibility fact below still stands.)*
 - **It becomes worth building when** a graphical demo, or a guest that programs VGA registers, is
   wanted. Nothing on baliveau's console+disk path needs it.
 
-### 1.3 PAE — deferred, and trapped rather than half-ported
-- The port stores `reg_pdpte` and **traps explicitly** on the PAE arms of the page walk instead of
-  misreading a 64-bit PTE. The guest is 32-bit non-PAE. Upstream itself asserts 32-bit-only PDPTEs.
+### 1.3 PAE — SHIPPED (PAE-1, results/pae-1.md)
+- The 3-level walk, the 64-bit PDPTE/PDE/PTE handling, the 2 MiB page and NX (EFER.NXE) are ported
+  (upstream cpu.rs:2054-2336), and `load_pdpte`'s two guest-reachable asserts became `#GP(0)`
+  delivered at the load site with validate-before-commit at all three call sites (MOV CR0/CR3/CR4).
+  Gated by the PAE selftest battery, the F2 mutation probes, and a synthetic differential guest
+  (`tests/pae-guest.img`, byte-identical under both legs).  The port previously trapped-and-aborted
+  on the PAE arms rather than half-porting (M1); that trap is gone.  Still deferred (Level 3, a
+  follow-on unit): a `CONFIG_X86_PAE=y` kernel build -- no in-tree guest turns PAE on.
 
 ## 2. JIT headroom (the plan's step 8) — CLOSED by JIT-6
 
