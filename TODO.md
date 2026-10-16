@@ -176,14 +176,21 @@ that landed, and the guest-compatibility fact below still stands.)*
 - **It becomes worth building when** a graphical demo, or a guest that programs VGA registers, is
   wanted. Nothing on baliveau's console+disk path needs it.
 
-### 1.3 PAE — SHIPPED (PAE-1, results/pae-1.md)
+### 1.3 PAE — SHIPPED (PAE-1, results/pae-1.md; PAE-L3, results/pae-l3.md)
 - The 3-level walk, the 64-bit PDPTE/PDE/PTE handling, the 2 MiB page and NX (EFER.NXE) are ported
   (upstream cpu.rs:2054-2336), and `load_pdpte`'s two guest-reachable asserts became `#GP(0)`
   delivered at the load site with validate-before-commit at all three call sites (MOV CR0/CR3/CR4).
   Gated by the PAE selftest battery, the F2 mutation probes, and a synthetic differential guest
   (`tests/pae-guest.img`, byte-identical under both legs).  The port previously trapped-and-aborted
-  on the PAE arms rather than half-porting (M1); that trap is gone.  Still deferred (Level 3, a
-  follow-on unit): a `CONFIG_X86_PAE=y` kernel build -- no in-tree guest turns PAE on.
+  on the PAE arms rather than half-porting (M1); that trap is gone.
+- **Level 3 (the deferred real-kernel boot) is now SHIPPED** (results/pae-l3.md,
+  `sh tests/gate-pae-l3.sh`): a pinned Debian `CONFIG_X86_PAE=y` 686-pae kernel boots on BOTH
+  legs and the gate asserts the guest's own PAE evidence -- `NX (Execute Disable) protection:
+  active` (the PAE-only setup.c string) plus PG set and a non-zero cr3.  The earlier "hang" was a
+  too-low instruction limit: the XZ decompression alone is ~2.34G instructions, so the 2G limit
+  stopped the run mid-decompress.  Reaching userspace (/init, `/proc/cpuinfo` `pae`) needs ~6.45G
+  (past the port's u32 instruction-counter ceiling and a ~64 s `async_synchronize_full` wait); the
+  reference measured it; a u64 counter would let the gate assert it directly.
 
 ## 2. JIT headroom (the plan's step 8) — CLOSED by JIT-6
 
@@ -216,6 +223,15 @@ site; widening the chain across pages would silently break both engines.
 
 ## 4. Instruments — known blind spots
 
+- **JIT-lane follow-up found by PAE-L3 (recorded, NOT fixed):** a full 6.1 kernel boot fills the
+  JIT's 2048-entry block table, and every later bind prints
+  `jit: bind: the block table is full (2048)` — MEASURED at 107,412 lines / 4.5 MB of stderr in one
+  3 G run (`results/pae-l3.md`, which is why that gate's stderr is gitignored). The Alpine 6.6 boot
+  does not fill the table (its m2-5 stderr is 659 B). The JIT degrades gracefully (the fallback is
+  interpretation), so nothing depends on it, but the refusal is printed per bind rather than once,
+  and `jit_mem.h:11`'s comment claiming the JIT is off unless `--jit on` is STALE — it has been on
+  by default (`jit_mem.c:42`) since the JIT landed. Worth a JIT-lane look: grow the table, or print
+  the refusal once.
 - **`tests/perf_bench.sh` was blind to a recipe-table change; that blind spot is now CLOSED, and the
   claim that recorded it was wrong in both directions.** The jcc array-slot swaps are the instrument:
   `jitcg_jcc8_fns`/`jitcg_jcc32_fns` are indexed by the condition nibble, so swapping two entries
