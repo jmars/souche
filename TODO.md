@@ -310,3 +310,41 @@ three lines after their `DISK_FMT` default, so a fresh clone runs them unchanged
 is not fully retired by this change — retiring it needs a history rewrite and a force-push, which is
 the repository owner's call, not a unit's. What this change fixes is the *tip*: no new clone, fetch
 or pack in normal use has to carry it.
+
+## 8. Long mode (64-bit guests) — **one day**, not a non-goal
+
+Not implemented, and deliberately **not** listed as a non-goal: it is wanted one day. It is recorded
+here so the next reader inherits the reconnaissance instead of re-deriving it.
+
+**WHY IT IS A DIFFERENT KIND OF JOB: THE REFERENCE HAS NO LONG MODE (MEASURED).**
+`v86/src/rust/` contains no `EFER_LME`, no `EFER_LMA`, no `CR4_LA57` and no `PML4` anywhere; the only
+EFER bit upstream knows is `EFER_NXE` (`v86/src/rust/cpu/cpu.rs:244`), which PAE-1 wired up. Its
+dispatch table is 32-bit by construction — `v86/gen/x86_table.js:78` encodes opcode `0x63` as `arpl`
+(in long mode that byte is `MOVSXD`) and `0x40`–`0x4f` as `INC`/`DEC`, not REX prefixes — and this
+port's dispatch (`src/cpu/interpreter_gen.c`, 14,727 generated lines / 1922 call sites) is
+**generated from that table**. So there is no source for the 64-bit forms to be generated from.
+
+**THE ANCHOR, NOT THE CODE, IS THE REAL COST.** Every claim this tree makes rests on the M0 contract:
+a byte-identical transcript against the pinned `v86@0.5.471` (`oracle/run.mjs`, sha `8bb8eca5…`). A
+reference with no long mode gives long mode **no oracle**, so the work would begin with acquiring and
+justifying a second reference (QEMU's TCG? a 64-bit `nasm` corpus? that corpus upstream does not
+have) — a new verification method, which is larger than the code it would verify.
+
+**WHAT EXISTS THAT MAKES IT HARD (all READ from this tree).** The shapes are 32-bit end to end:
+`int32_t reg32[8]` and `int32_t dreg[8]` (`src/cpu/cpu_state.h:249,287` — no R8–R15, no 64-bit GPRs),
+`int32_t instruction_pointer` (`:263`), `do_page_walk(int32_t addr)` (`src/cpu/paging.c:119`), a TLB
+indexed by a 32-bit virtual page, and a 32-bit physical address space throughout. The CPU is 58,579
+lines, 20k of it generated.
+
+**THE SKETCH, IF IT EVER STARTS.** REX and 64-bit operand-size decoding plus 64-bit semantics for the
+whole instruction set (a hand-written table, since the generator has none); a widened register file
+with the FS/GS base MSRs and long mode's flat segment model; **4-level paging with 48-bit virtual
+addresses**, which changes the address type in the memory path, the TLB key, `memory.c`'s fast paths
+and both JIT recipe classes; and the new system instructions (`SYSCALL`/`SYSRET`, `SWAPGS`, the
+long-mode MSRs). INTERPRETATION: months, and larger than any lane in this file, because the 32-bit
+core was *ported* with an oracle over ~10 units, while this would be *authored* without one.
+
+**IT BECOMES WORTH STARTING WHEN** a guest that genuinely requires 64-bit appears in one of the futaie
+lanes — and note that nothing does today: the baliveau v86guest kernel is 32-bit non-PAE
+(`CONFIG_PGTABLE_LEVELS=2`), and the browser lane is v86 itself, which is equally 32-bit. The honest
+shape then is a 64-bit core with its own oracle, not a mode bolted onto this one.
