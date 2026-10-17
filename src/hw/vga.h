@@ -8,7 +8,7 @@
  * v86/src/browser/starter.js:307-319 picks ScreenAdapter (canvas) / ANSIScreenAdapter
  * (terminal text) / DummyScreenAdapter (headless) purely from `options.screen`.
  *
- * WHAT THIS UNIT LANDS, and what it deliberately does NOT:
+ * WHAT U0 LANDS, and what U1 (HANDOFF=v86c-vga) LANDS ON TOP OF IT:
  *
  *   - THE SEAM (vga_screen_t, below): the 11 methods upstream's device actually calls, plus
  *     an opaque state pointer.  destroy/pause/continue/set_scale/get_text_screen are NOT
@@ -21,24 +21,27 @@
  *     live), the 0xA0000 window registered through io_mmap_register, and the PCI function
  *     00:12.0 (vga.js:235-241 pci_space, pci_id 0x12 << 3, one 8 MiB memory BAR).
  *
- * NOT HERE, AND NAMED SO NOBODY READS A SILENT GAP AS A PREFIX: the register file and every
- * decode that uses it are the later units' -- text mode's CRTC/attribute/DAC and the redraw
- * and put_char arithmetic (U1), mode 13h and the graphical buffer (U2), the planar
- * reads/writes/latches (U3), and dispi/SVGA/bank switching/the real dirty bitmap (U4).  In
- * U0 the device therefore answers:
- *   - the 0xA0000-0xBFFFF window: 0 on every read, discarding every write -- which is
- *     EXACTLY what this machine answered before the device existed (memory.c's default
- *     table, the R1F carve-out) and what a zeroed VRAM answers at boot.  A WRITE-THEN-READ
- *     at the window still reads 0 here; the reference stores the byte.  That difference is
- *     U1's to close (vga_memory_write_text_mode), and results/vga-u0.md records it as the
- *     one guest-visible stand-in this unit leaves behind.
- *   - every VGA I/O PORT: UNCLAIMED, i.e. the reference empty entry's 0xFF/0xFFFF/-1 with
- *     `V86C_LOG_PORTS` naming the access.  Claiming a port here would mean inventing a
- *     register's value, which is precisely what a later unit must not inherit as truth.
- *   - the device's fields do carry the reference's CONSTRUCTOR DEFAULTS (vga.js:78-304:
- *     max_cols 80, max_rows 25, graphical_mode false, svga_enabled false, svga_bpp 32, the
- *     four dimensions 0).  Those are initial state, not register semantics; the units that
- *     make them change are each named on the field.
+ * U1'S TEXT-MODE SUBSET (the register file above + the decode in vga.c):
+ *   - the CRTC (0x3D4/0x3D5 + the 0x3B4/0x3B5 aliases): start address, offset, line
+ *     compare, cursor, and update_vga_size -> set_size_text;
+ *   - the attribute controller (0x3C0/0x3C1): the index/data flip-flop, the internal
+ *     palette (dac_map[0..15]), attribute_mode (bit 0 flips graphical_mode), color_plane_enable,
+ *     horizontal_panning, color_select;
+ *   - the DAC (0x3C6-0x3C9): dac_mask, dac_state, the read/write indices, and the 6-bit
+ *     expand + byte-lane rotation into vga256_palette;
+ *   - vga_memory_write_text_mode / text_mode_redraw / put_char (the flags + palette math),
+ *     update_cursor / update_cursor_scanline, set_size_text;
+ *   - the 0xA0000-0xBFFFF window's real handlers (vga_memory_read/vga_memory_write);
+ *   - the misc output register (0x3C2/0x3CC) and the input-status flip-flop reset
+ *     (0x3DA/0x3BA), which the attribute controller's index/data state depends on.
+ *
+ * STILL NOT HERE, AND NAMED SO NOBODY READS A SILENT GAP AS A PREFIX: mode 13h and the
+ * graphical buffer (U2), the planar reads/writes/latches (U3), and dispi/SVGA/bank
+ * switching/the real dirty bitmap (U4).  In U1 the sequencer (0x3C4/0x3C5) and graphics
+ * controller (0x3CE/0x3CF) ports stay UNCLAIMED -- their register values (plane_write_bm
+ * 0xF, plane_read 0, miscellaneous_graphics_register 0) are the constructor defaults and
+ * never move, so the window decode always selects memory space 0 (0xA0000) and the text
+ * write path always runs.
  *
  * THE ADAPTER IS INSTALLED BY machine_init() from machine_config.vga_screen (the reference's
  * own shape: the device always exists, `settings.screen` only picks the output).  There is
@@ -63,6 +66,16 @@
  * already has in memory.c.) */
 #define VGA_WINDOW_ADDRESS 0xA0000u
 #define VGA_WINDOW_SIZE 0x20000u
+
+/* vga.js:13,38-55: one 64 KiB plane, four of them (the ISA window's 256 KiB storage, a
+ * SEPARATE buffer from the LFB -- vga.js:368 `svga_memory` is the LFB, vga.js:377
+ * `vga_memory` is this), and the four host memory spaces the miscellaneous_graphics_register
+ * (bits 3-2) selects among.  U1 decodes the default space (index 0, 0xA0000): every
+ * register that changes the select is U2's graphics controller, so in U1 the select is
+ * always 0 and `vga_memory_write_text_mode` sees addr 0..0x1FFFF. */
+#define VGA_BANK_SIZE 0x10000u
+#define VGA_PLANE_MEMORY_SIZE (4 * VGA_BANK_SIZE)
+#define VGA_HOST_MEMORY_SPACE_COUNT 4u
 
 /* One rectangle of the framebuffer, as update_buffer takes it (vga.js:2562-2575 and
  * 2575/2575's `this.layers`; the fields are the object literal screen_fill_buffer builds).
@@ -145,6 +158,16 @@ int32_t vga_screen_flag_font_page_b(vga_screen_t *screen);
  * adapter is not the headless one, or when no text size has been set yet. */
 const uint8_t *vga_screen_headless_text(vga_screen_t *screen, int32_t *cols, int32_t *rows);
 
+/* The document adapter's one recorded cell -- the reference leg's recorder is a
+ * row,col-keyed Map (oracle/run-vga.mjs), and this is its reader.  U1's hw_selftest probes
+ * P2/P4 drive the DEVICE (a window write, a CRTC start-address write) and read the cell the
+ * adapter received, so the decode's exact (chr, flags, bg, fg) is pinned rather than only
+ * the collapsed document.  False when the adapter is not the document one, or the cell is
+ * outside the recorded grid (the cell the device never sent: the out-pointers are untouched
+ * and false is returned -- a reader cannot tell "no grid" from "zero cell" without it). */
+bool vga_screen_document_cell(vga_screen_t *screen, int32_t row, int32_t col, uint8_t *chr,
+                              uint8_t *flags, uint32_t *bg, uint32_t *fg);
+
 /* ------------------------------------------------------------------ *
  * THE DOCUMENT -- decision 2's verified path
  *
@@ -217,6 +240,68 @@ typedef struct vga_device {
     int32_t screen_height;
     int32_t virtual_width;
     int32_t virtual_height;
+
+    /* ------------------------------------------------------------------ *
+     * THE REGISTER FILE -- vga.js:78-304's constructor values (U1's text subset; the
+     * sequencer/graphics/dispi fields that U2-U4 make move are here so the document header
+     * and the decode share ONE source of truth).  Each field's default is the reference's
+     * own; see vga_init for where they are set.
+     * ------------------------------------------------------------------ */
+
+    /* CRTC (vga.js:113-151) */
+    int32_t index_crtc;                    /* 0 */
+    uint8_t crtc[0x19];                    /* the unimplemented registers, all 0 */
+    int32_t crtc_mode;                     /* 0 */
+    int32_t horizontal_display_enable_end; /* 0 */
+    int32_t horizontal_blank_start;        /* 0 */
+    int32_t vertical_display_enable_end;   /* 0 */
+    int32_t vertical_blank_start;          /* 0 */
+    int32_t underline_location_register;   /* 0 */
+    int32_t preset_row_scan;               /* 0 */
+    int32_t offset_register;               /* 0 */
+    int32_t line_compare;                  /* 0 */
+    int32_t max_scan_line;                 /* 0 */
+    uint32_t start_address;                /* 0 */
+    uint32_t start_address_latched;        /* 0 */
+    uint32_t cursor_address;               /* 0 */
+    int32_t cursor_scanline_start;         /* 0xE */
+    int32_t cursor_scanline_end;           /* 0xF */
+
+    /* attribute controller (vga.js:306-318) */
+    int32_t attribute_controller_index;    /* -1 */
+    int32_t palette_source;                /* 0x20 */
+    int32_t attribute_mode;                /* 0 */
+    int32_t color_plane_enable;            /* 0 */
+    int32_t horizontal_panning;            /* 0 */
+    int32_t color_select;                  /* 0 */
+    uint8_t dac_map[0x10];                 /* the 16 internal palette entries, all 0 */
+
+    /* DAC (vga.js:183-193, 298-304) */
+    int32_t dac_mask;                      /* 0xFF */
+    int32_t dac_color_index_write;         /* 0 */
+    int32_t dac_color_index_read;          /* 0 */
+    int32_t dac_state;                     /* 0 */
+    uint32_t vga256_palette[256];          /* all 0 */
+
+    /* sequencer / graphics subsets the text decode reads (vga.js:322-349); their ports are
+     * U2's, so in U1 they hold the constructor values and never move. */
+    int32_t plane_write_bm;                /* 0xF */
+    int32_t plane_read;                    /* 0 */
+    int32_t planar_mode;                   /* 0 */
+    int32_t character_map_select;          /* 0 */
+    int32_t clocking_mode;                 /* 0 */
+    int32_t sequencer_memory_mode;         /* 0 */
+    int32_t miscellaneous_graphics_register; /* 0 -> memory space 0 (0xA0000) */
+    bool font_page_ab_enabled;             /* false */
+
+    /* misc / status (vga.js:344-346, 351-356) */
+    int32_t miscellaneous_output_register; /* 0xFF */
+    int32_t port_3DA_value;                /* 0xFF */
+
+    /* the DAC 6-bit-expand gate (vga.js:392); dispi is U4, so 0 in U1 means "expand". */
+    int32_t dispi_enable_value;            /* 0 */
+
+    uint32_t latch_dword;                  /* vga.js:194: the read latches */
 
     bool installed;
 } vga_device_t;

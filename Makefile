@@ -518,6 +518,15 @@ $(IMAGE): tests/test.asm tests/test.ld
 	$(LD) $(LDFLAGS) -o $(BUILD)/test.elf $(BUILD)/test.o
 	$(OBJCOPY) -O binary $(BUILD)/test.elf $@
 
+# VGA-U1's differential image (tests/gate-vga-1.sh): self-programs a text mode, draws cells
+# with bg != fg, sets a non-zero cursor, reads back and halts.  The same build shape as
+# test.img (as --32 + test.ld + objcopy).
+tests/vga-text.img: tests/vga-text.asm tests/test.ld
+	@mkdir -p $(BUILD)
+	$(AS) $(ASFLAGS) -o $(BUILD)/vga-text.o tests/vga-text.asm
+	$(LD) $(LDFLAGS) -o $(BUILD)/vga-text.elf $(BUILD)/vga-text.o
+	$(OBJCOPY) -O binary $(BUILD)/vga-text.elf $@
+
 # HANDOFF=v86c-repo-weight: the 64 MiB guest-gate disk, materialised from the
 # committed xz (the raw image is not tracked; the helper's contract -- default
 # path only, never clobber, sha256-verified before it is put in place -- is in

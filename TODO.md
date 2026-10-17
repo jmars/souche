@@ -178,28 +178,32 @@ that landed, and the guest-compatibility fact below still stands.)*
   INTERPRETATION: that is a smaller job than the 974-line total and would satisfy every guest we
   can currently name.
 
-### 1.2 VGA — U0 SHIPPED (results/vga-u0.md); the register file is U1-U4
+### 1.2 VGA — U1 SHIPPED (results/vga-u1.md); mode 13h/graphical is U2, planar U3, SVGA U4
 - **Size.** READ: `v86/src/vga.js` is 2,612 lines — the largest single device in the reference. It
   is being ported in five units (the ladder `coder` → `engineer`), each with its own gate, because
   the decode is where a silent-wrong port costs most.
-- **What exists now (U0)**: the device is ALWAYS installed, as upstream (`cpu.js:1193`) — the 8 MiB
-  VRAM (so `memory.c`'s LFB arms are live: an LFB write now *persists*, the reference's answer),
-  the `0xA0000` window registered through `io_mmap_register` (still answering the pre-U0
-  read-0/discard, which U1 flips), PCI `00:12.0` with the reference's own config bytes, and the
-  RENDERING SEAM (`src/hw/vga.h`: the 11 methods `vga.js` calls) with three adapters — headless
-  (the default, a port of `browser/dummy_screen.js`), ANSI text (`--vga-ansi`), and the DOCUMENT
-  (`--vga-doc FILE`), which **both legs produce byte-identically** (`build/v86c … --vga-doc` vs
-  `node oracle/run-vga.mjs`, gated by `sh tests/gate-vga-0.sh`).
-- **What is still absent, and whose it is**: every VGA **I/O port** is unclaimed — text mode's
-  CRTC/attribute/DAC, the redraw and `put_char` arithmetic and the cursor are U1; mode 13h and the
-  graphical buffer are U2; the planar latches/write modes are U3; dispi/SVGA/banks and the real
-  dirty-bitmap callback (still stubbed in `memory.c`) are U4. A graphical document is refused by
-  both legs by name.
-- **A caveat the gates record**: the kernel boot DOES touch the VGA (24 CRTC port accesses, ~8k
-  window accesses including the firmware's `INT 10h` teletype at `0xB84C0`), so it is not
-  VGA-blind; U0 proves the answers did not change (its instruction count and serial stayed at
-  their pins), and U1 must re-run the guest gates. The determinism gate's count moved with U0's
-  PCI device (+72,695, results/vga-u0.md §F1) and was deliberately NOT re-pinned.
+- **What exists now (U0+U1)**: the device is ALWAYS installed, as upstream (`cpu.js:1193`) — the
+  8 MiB VRAM (so `memory.c`'s LFB arms are live), PCI `00:12.0`, the RENDERING SEAM with three
+  adapters (headless / ANSI / DOCUMENT), and **U1's text-mode subset**: the CRTC (`0x3D4`/`0x3D5`
+  + the `0x3B4`/`0x3B5` aliases — start address, offset, line compare, cursor), the attribute
+  controller (`0x3C0`/`0x3C1` — the flip-flop, `dac_map`, `attribute_mode` bit 0 flips
+  `graphical_mode`), the DAC (`0x3C6`-`0x3C9` with the reference's own 6-bit expand + byte-lane
+  rotation), `vga_memory_write_text_mode` / `text_mode_redraw` / `put_char` (flags + palette
+  math), `set_size_text`, the window's real handlers, and the misc/status ports.  The D1
+  differential (`sh tests/gate-vga-1.sh`, image `tests/vga-text.asm`) proves both legs produce a
+  byte-identical document on an image that draws cells with **bg != fg**, a non-zero cursor, and a
+  blinking cell — closing U0's "the colour lane is UNTESTED" finding.
+- **What is still absent, and whose it is**: the sequencer (`0x3C4`/`0x3C5`) and graphics
+  controller (`0x3CE`/`0x3CF`) ports are still unclaimed — mode 13h and the graphical buffer are
+  U2; the planar latches/write modes are U3; dispi/SVGA/banks and the real dirty-bitmap callback
+  (still stubbed in `memory.c`) are U4. A graphical document is refused by both legs by name.
+- **The guest-gate boundary re-verified at U1**: the kernel boot touches the VGA (the firmware's
+  `INT 10h` teletype writes ~8k window bytes at `0xB84C0`), and U1 CLAIMED the CRTC ports — so the
+  ports' answers changed from `0xFF` to the device's.  The guest gates were re-run on U1's binary
+  and **nothing moved**: the determinism count is still **4,000,096,757** (both runs, serial sha
+  `8d360dfc…`), `gate-m2-5-guest`, `gate-pae-1` and `gate-pae-l3` are all green, and the bench pin
+  `200,095,214` holds.  The legs CONVERGE (the kernel's `vgacon` probe now sees the reference's
+  CRTC answers, which is what the JS leg always answered).
 
 ### 1.3 PAE — SHIPPED (PAE-1, results/pae-1.md; PAE-L3, results/pae-l3.md)
 - The 3-level walk, the 64-bit PDPTE/PDE/PTE handling, the 2 MiB page and NX (EFER.NXE) are ported

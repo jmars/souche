@@ -2967,17 +2967,17 @@ static void test_vga(void)
     memcpy_into_svga_lfb(0x1000, 0xE0000100, 1);
     CHECK_EQ(read8(0xE0000100), 0x5A);
 
-    /* (3) THE WINDOW: the device owns these blocks now (io.mmap_register, vga.js:384), and
-     * U0's handlers answer exactly what the default table answered -- 0 and a discard.  The
-     * write-then-read lines are the U1/U2 FLIP SITES: after vga_memory_write_text_mode and
-     * the plane write paths land, they read back what was written. */
+    /* (3) THE WINDOW: the device owns these blocks (io.mmap_register, vga.js:384) and U1's
+     * handlers store text mode LINEARLY -- the write-then-read flips the U0 stand-in (read
+     * 0 / discard) to the written bytes.  (Both land in memory space 0: the 0xB8000 write
+     * reaches vga_planes[0x18000], the read returns it from plane 0's linear block.) */
     CHECK_EQ(read8(0xA0000), 0);
     CHECK_EQ(read32s(0xA0000), 0);
     CHECK_EQ(read16(0xB8000), 0);
     write8(0xB8000, 0x41);
     write32(0xA0000, 0x11223344);
-    CHECK_EQ(read8(0xB8000), 0);   /* U1: 0x41 */
-    CHECK_EQ(read32s(0xA0000), 0); /* U2/U3 */
+    CHECK_EQ(read8(0xB8000), 0x41);   /* U1: vga_memory_write_text_mode stores the byte */
+    CHECK_EQ(read32s(0xA0000), 0x11223344); /* the same linear store, read back */
 
     /* (4) PCI 00:12.0 -- the bytes are the pinned reference's own (MEASURED). */
     io_port_write32(0xCF8, (int32_t)(0x80000000u | 0x90u << 8 | 0));
@@ -3133,6 +3133,126 @@ static void test_vga(void)
     remove(VGA_SELFTEST_DOC);
 }
 
+/* ================================================================== *
+ * 9b. THE VGA TEXT MODE -- VGA-U1 (HANDOFF=v86c-vga), probes P2 and P4
+ *
+ * WHAT THIS CASE IS THE PROBE OF.  U1 lands the text-mode decode; the two silent-wrong
+ * classes it pins are the plan's P2 (a wrong chr/attr decode -- blink mask, font_page_b,
+ * the dac_mask & dac_map lookups -- would record a wrong flags/colour) and P4 (a wrong CRTC
+ * start-address / split-screen arm would read the wrong cell).  Both are driven through the
+ * DEVICE (the window writes and the CRTC/attribute/DAC ports), with the document adapter
+ * swapped in exactly as the reference harness swaps its recorder in (oracle/run-vga.mjs:151),
+ * so the adapter records what put_char actually received -- the exact (chr, flags, bg, fg),
+ * not a collapsed document.
+ * ================================================================== */
+static void crtc_write(int reg, int value)
+{
+    io_port_write8(0x3D4, reg);
+    io_port_write8(0x3D5, value);
+}
+
+static void test_vga_text(void)
+{
+    machine_reset();
+    vga_device_t *vga = vga_device();
+    vga_screen_t *headless = vga->screen;
+    vga_screen_t *doc = vga_screen_document_init();
+    vga->screen = doc; /* the reference harness's recorder swap, driven from here on */
+    /* The document adapter deliberately does NOT self-seed its grid (U0 §9); seed it to the
+     * reference's 80x25 default so the intermediate text_mode_redraws during CRTC programming
+     * (which run against the still-default 80x25 device fields) record instead of drop.  The
+     * device's own set_size_text(4,4) then resizes it, exactly as a real run would. */
+    doc->set_size_text(doc, 80, 25);
+
+    /* A 4x4 text mode, programmed through the device: hdisp=3 -> 4 cols, max_scan_line=3 ->
+     * 4 scans/row, vdisp=15 -> 16 scans -> 4 rows, offset=2 -> offset*2=4=max_cols,
+     * crtc_mode=3 -> no scan-line doubling (scan_line_to_screen_row is the identity for a
+     * line_compare multiple of 4). */
+    crtc_write(0x01, 3);
+    crtc_write(0x02, 4);
+    crtc_write(0x09, 3);
+    crtc_write(0x12, 15);
+    crtc_write(0x15, 16);
+    crtc_write(0x13, 2);
+    crtc_write(0x17, 3);
+    CHECK_EQ(vga->max_cols, 4);
+    CHECK_EQ(vga->max_rows, 4);
+
+    /* dac_map = identity (the attribute controller's internal palette) */
+    for (int i = 0; i < 16; i++) {
+        io_port_write8(0x3C0, i);
+        io_port_write8(0x3C0, i);
+    }
+    /* DAC: palette[1] = red, palette[2] = green -- the reference's 6-bit expand
+     * (vga.js:1680-1684) maps 0x3F to 0xFF. */
+    io_port_write8(0x3C8, 1);
+    io_port_write8(0x3C9, 0x3F);
+    io_port_write8(0x3C9, 0x00);
+    io_port_write8(0x3C9, 0x00);
+    io_port_write8(0x3C8, 2);
+    io_port_write8(0x3C9, 0x00);
+    io_port_write8(0x3C9, 0x3F);
+    io_port_write8(0x3C9, 0x00);
+    CHECK_EQ(vga->vga256_palette[1], 0xFF0000);
+    CHECK_EQ(vga->vga256_palette[2], 0x00FF00);
+
+    uint8_t chr = 0, flags = 0;
+    uint32_t bg = 0, fg = 0;
+
+    /* P2: one cell, bg != fg.  The attr write's put_char carries both bytes (the char was
+     * stored by the previous write).  attr 0x21 -> bg = dac_map[2] = 2, fg = dac_map[1] = 1. */
+    write8(0xA0000, 'A');
+    write8(0xA0001, 0x21);
+    CHECK(vga_screen_document_cell(doc, 0, 0, &chr, &flags, &bg, &fg));
+    CHECK_EQ(chr, 'A');
+    CHECK_EQ(flags, 0); /* attribute_mode is 0: no blink, font_page_ab disabled */
+    CHECK_EQ(bg, 0x00FF00);
+    CHECK_EQ(fg, 0xFF0000);
+
+    /* P2's blink arm: attribute_mode bit 3 set + attr bit 7 set -> FLAG_BLINKING (0x01 on
+     * the document adapter).  blink_enabled also narrows the bg mask to 3 bits, so an attr
+     * 0x87 reads bg = dac_map[0] and fg = dac_map[7], both palette 0. */
+    io_port_write8(0x3C0, 0x10);
+    io_port_write8(0x3C0, 0x08);
+    write8(0xA0002, 'B');
+    write8(0xA0003, 0x87);
+    CHECK(vga_screen_document_cell(doc, 0, 1, &chr, &flags, &bg, &fg));
+    CHECK_EQ(chr, 'B');
+    CHECK_EQ(flags, 0x01);
+    CHECK_EQ(bg, 0);
+    CHECK_EQ(fg, 0);
+
+    /* P4: start address + the split-screen arm.  start_address=2 makes row 0 read the char
+     * at 2*2=4; line_compare=4 makes scan_line_to_screen_row(4)=1, so row 1 resets addr to 0
+     * and reads the char there. */
+    write8(0xA0004, 'X');
+    write8(0xA0005, 0x21);
+    write8(0xA0000, 'Y');
+    write8(0xA0001, 0x21);
+    crtc_write(0x0C, 0); /* start address hi */
+    crtc_write(0x0D, 2); /* start address lo */
+    crtc_write(0x18, 4); /* line compare -> split row 1, and the final text_mode_redraw */
+    CHECK_EQ(vga->start_address, 2);
+    CHECK(vga_screen_document_cell(doc, 0, 0, &chr, &flags, &bg, &fg));
+    CHECK_EQ(chr, 'X');
+    CHECK(vga_screen_document_cell(doc, 1, 0, &chr, &flags, &bg, &fg));
+    CHECK_EQ(chr, 'Y');
+    /* the split-screen arm resets addr to 0 and reads LINEARLY: col 1 is vga_planes[2], the
+     * 'B' the blink arm wrote -- a wrong split would leave it at the row-0 tail's zero. */
+    CHECK(vga_screen_document_cell(doc, 1, 1, &chr, &flags, &bg, &fg));
+    CHECK_EQ(chr, 'B');
+
+    /* the CRTC read-back quirk (vga.js:1902-1907): 0x0C returns the LOW byte, 0x0D the HIGH
+     * byte -- the reference's own swap, pinned so a "fix" cannot silently diverge the
+     * kernel's vgacon probe. */
+    io_port_write8(0x3D4, 0x0C);
+    CHECK_EQ(io_port_read8(0x3D5), (int32_t)(vga->start_address & 0xFF));
+    io_port_write8(0x3D4, 0x0D);
+    CHECK_EQ(io_port_read8(0x3D5), (int32_t)(vga->start_address >> 8));
+
+    vga->screen = headless;
+}
+
 int main(void)
 {
     RUN(test_clock, "clock: 1 guest instruction = 1 us, through the PIT, the PM timer and the TSC");
@@ -3151,7 +3271,8 @@ int main(void)
     RUN(test_kernel_loader, "kernel: the bzImage boot params, the option ROM, the real image");
     RUN(test_ide, "ide: geometry, IDENTIFY, READ SECTORS/DMA, the error status, the ATAPI command set");
     RUN(test_virtio, "virtio: the PCI function and its capability chain, feature negotiation, the queues, both directions of the console, the IRQ route");
-    RUN(test_vga, "vga: the always-present device, the live LFB, the window's U0 stand-in, PCI 00:12.0, the per-adapter flags, the document format");
+    RUN(test_vga, "vga: the always-present device, the live LFB, the window's text store, PCI 00:12.0, the per-adapter flags, the document format");
+    RUN(test_vga_text, "vga text (U1): the CRTC/attribute/DAC decode, put_char flags+colours (P2), the start-address + split-screen arm (P4)");
 
     printf("hw_selftest: %d checks, %d failures, %d skipped\n", checks, failures, skips);
     return failures != 0;

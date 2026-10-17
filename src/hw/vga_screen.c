@@ -998,3 +998,22 @@ int32_t vga_screen_flag_font_page_b(vga_screen_t *screen)
 {
     return screen == &document_screen ? VGA_FLAG_FONT_PAGE_B : 0;
 }
+
+/* The reference leg's recorder is a row,col-keyed Map, so it records a cell even when no
+ * set_size_text has happened; this reader returns the cell the DEVICE sent (through
+ * put_char) and false when the adapter is not the document one or the cell is outside the
+ * recorded grid.  U1's hw_selftest P2/P4 pin the device's exact (chr, flags, bg, fg)
+ * decode through it, which the collapsed document alone cannot show. */
+bool vga_screen_document_cell(vga_screen_t *screen, int32_t row, int32_t col, uint8_t *chr,
+                              uint8_t *flags, uint32_t *bg, uint32_t *fg)
+{
+    if (screen != &document_screen) return false;
+    document_state_t *s = screen->opaque;
+    if (row < 0 || row >= s->common.rows || col < 0 || col >= s->common.cols) return false;
+    int32_t cell = row * s->common.cols + col;
+    if (chr != NULL) *chr = s->chr[cell];
+    if (flags != NULL) *flags = s->flags[cell];
+    if (bg != NULL) *bg = s->bg[cell];
+    if (fg != NULL) *fg = s->fg[cell];
+    return true;
+}
