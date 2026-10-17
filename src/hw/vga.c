@@ -442,10 +442,18 @@ static void vga_set_size_graphical(vga_device_t *vga, int32_t width, int32_t hei
             vga->virtual_width = 0;
             vga->virtual_height = 0;
             vga_dest_pixels = 0;
+            svga_dest_bytes = NULL;
+            svga_dest_pixels = 0;
             return;
         }
         vga_dest_pixels = pixels;
         memset(vga_dest_bytes, 0, sizeof(vga_dest_bytes)); /* vga.js allocates a FRESH (zeroed) wasm region on every size change, so pixels the redraw does not rewrite read as 0; the static must be re-zeroed to match. */
+        svga_dest_bytes = vga_dest_bytes;
+        svga_dest_pixels = (uint32_t)pixels;
+        /* vga.js:1181: set_size_graphical marks the whole dirty bitmap after allocating the
+         * dest buffer, so the FIRST screen_fill_buffer (the document's single stop-time
+         * fill) is a full recompute -- the output-invariance anchor (see memory.c). */
+        svga_mark_dirty();
     }
 
     vga->screen->set_size_graphical(vga->screen, width, height, virtual_width, virtual_height);
@@ -491,9 +499,14 @@ static void vga_reset_diffs(vga_device_t *vga)
 static void vga_complete_redraw(vga_device_t *vga)
 {
     if (vga->graphical_mode) {
-        /* U4 owns the svga_enabled arm (svga_mark_dirty). */
-        vga->diff_addr_min = 0;
-        vga->diff_addr_max = VGA_PIXEL_BUFFER_SIZE;
+        if (vga->svga_enabled) {
+            /* vga.js:966-968: an SVGA complete redraw dirties the whole LFB. */
+            svga_mark_dirty();
+        }
+        else {
+            vga->diff_addr_min = 0;
+            vga->diff_addr_max = VGA_PIXEL_BUFFER_SIZE;
+        }
     }
     else {
         vga_text_mode_redraw(vga);
@@ -697,6 +710,20 @@ static int32_t vga_memory_read(uint32_t addr)
         fprintf(stderr, "trace: vga window read8  %05x\n", (unsigned)addr);
     }
 
+    if (vga->svga_enabled) {
+        /* vga.js:565-570: banked mode -- the window reads the LFB at the bank-selected
+         * offset.  `x | bank_offset` where x = addr - 0xA0000 is a 17-BIT offset (the
+         * window is 0x20000 bytes): the FIRST 64 KiB selects bank B, and the SECOND 64 KiB
+         * ORs bit 16 into the bank, so it selects bank B|1 -- bank+1 for an EVEN bank, and
+         * an alias of the first 64 KiB only for an ODD bank (e.g. 0x10000 | 2<<16 =
+         * 0x30000).  The reference's own arithmetic, reproduced.  The bound is the R4 rule
+         * -- a bank past the 8 MiB LFB reads the unclaimed answer, not a static past its
+         * end. */
+        uint32_t off = (addr - VGA_WINDOW_ADDRESS) | (uint32_t)vga->svga_bank_offset;
+        if (off < vga->vga_memory_size) return (int32_t)vga_mem8[off];
+        return 0xFF;
+    }
+
     int32_t space = vga->miscellaneous_graphics_register >> 2 & 0x3;
     int32_t a = (int32_t)addr - (int32_t)vga_host_memory_space_start[space];
     if (a < 0 || a >= (int32_t)vga_host_memory_space_size[space]) return 0;
@@ -750,6 +777,18 @@ static void vga_memory_write(uint32_t addr, int32_t value)
     if (vga_trace_enabled()) {
         fprintf(stderr, "trace: vga window write8 %05x <- %02x\n", (unsigned)addr,
                 (unsigned)(value & 0xFF));
+    }
+
+    if (vga->svga_enabled) {
+        /* vga.js:639-644: banked mode -- the window writes the LFB at the bank-selected
+         * offset, through the memory write path (so the page is marked dirty, exactly as a
+         * direct LFB write is).  The bound is the R4 rule. */
+        uint32_t off = (addr - VGA_WINDOW_ADDRESS) | (uint32_t)vga->svga_bank_offset;
+        if (off < vga->vga_memory_size) {
+            vga_mark_dirty(VGA_LFB_ADDRESS + off);
+            vga_mem8[off] = (uint8_t)value;
+        }
+        return;
     }
 
     int32_t space = vga->miscellaneous_graphics_register >> 2 & 0x3;
@@ -935,8 +974,37 @@ void vga_screen_fill_buffer(vga_device_t *vga)
         vga_update_vertical_retrace(vga);
         return;
     }
-    /* U4 owns the svga_enabled arm; the reference's wasm-resize check is a node no-op (no
-     * ImageData -> the dest buffer never shrank), so the port skips it. */
+    if (vga->svga_enabled) {
+        /* vga.js:2528-2573: SVGA mode.  bpp 8 is the palette loop (which the reference
+         * keeps in JS because the rust fill has no access to vga256_palette); the other
+         * bpps go through the rust fill port (memory.c's svga_fill_pixel_buffer).  The
+         * wasm-resize re-check is a node no-op (no ImageData -> the dest buffer never
+         * shrank), so the port skips it. */
+        if (vga->svga_bpp == 8) {
+            int32_t buffer_length = vga_dest_pixels; /* screen_width*height == dest pixels */
+            int32_t base = vga->svga_offset;
+            int32_t end = buffer_length;
+            int32_t lfb_remaining = (int32_t)vga->vga_memory_size - base;
+            if (lfb_remaining < end) end = lfb_remaining; /* Math.min(..., memory_size-base) */
+            if (end > 0) {
+                for (int32_t i = 0; i < end; i++) {
+                    uint32_t color = vga->vga256_palette[vga_mem8[base + i]];
+                    uint32_t px = (color & 0xFF00u) | (color << 16) | (color >> 16) |
+                                  0xFF000000u;
+                    vga_dest_bytes[4 * i + 0] = (uint8_t)(px & 0xFF);
+                    vga_dest_bytes[4 * i + 1] = (uint8_t)(px >> 8 & 0xFF);
+                    vga_dest_bytes[4 * i + 2] = (uint8_t)(px >> 16 & 0xFF);
+                    vga_dest_bytes[4 * i + 3] = (uint8_t)(px >> 24 & 0xFF);
+                }
+            }
+        }
+        else {
+            svga_fill_pixel_buffer((uint32_t)vga->svga_bpp, (uint32_t)vga->svga_offset);
+        }
+        vga_reset_diffs(vga);
+        vga_update_vertical_retrace(vga);
+        return;
+    }
     vga_replot(vga);
     vga_redraw(vga);
     vga_reset_diffs(vga);
@@ -1024,7 +1092,13 @@ static void vga_port3C0_write(void *device, int32_t port, int32_t value)
             if (vga->attribute_mode != value) {
                 int32_t previous_mode = vga->attribute_mode;
                 vga->attribute_mode = value;
-                /* the svga deferred-disable is U4 (svga_enabled is always false in U1) */
+                if (vga->svga_enabled && !(vga->dispi_enable_value & 1)) {
+                    /* vga.js:1422-1426: commit the deferred VBE disable (see the dispi
+                     * index-4 write's FLAG_VM arm) -- a legacy mode-register write while a
+                     * deferred disable was pending finally turns SVGA off. */
+                    vga->svga_enabled = false;
+                    vga->svga_bank_offset = 0;
+                }
                 bool is_graphical = (value & 0x1) != 0;
                 if (!vga->svga_enabled && vga->graphical_mode != is_graphical) {
                     vga->graphical_mode = is_graphical;
@@ -1524,6 +1598,142 @@ static int32_t vga_port3DA_read(void *device, int32_t port)
 }
 
 /* ------------------------------------------------------------------ *
+ * the Bochs VBE dispi interface -- vga.js:2133-2330 (0x1CE/0x1CF, U4)
+ *
+ * THE PORTS ARE 16-BIT ONLY, exactly as upstream registers them (vga.js:360-364 passes
+ * `undefined` for the 8-bit handler and the real handler as the 16-bit one): the standard
+ * Bochs idiom `out dx, ax` / `in ax, dx` is what works, and an 8-bit access answers the
+ * empty entry (0xFF read / discarded write).  The index register (0x1CE) selects the field
+ * the data register (0x1CF) reads/writes.
+ * ------------------------------------------------------------------ */
+
+static int32_t vga_port1CE_read(void *device, int32_t port)
+{
+    (void)port;
+    return VGA_DEV(device)->dispi_index;
+}
+
+static void vga_port1CE_write(void *device, int32_t port, int32_t value)
+{
+    (void)port;
+    VGA_DEV(device)->dispi_index = value;
+}
+
+/* vga.js:2286-2330.  dispi index 6 returns the virtual width (screen_width, or 1 when
+ * unset -- "seabios/windows98 divide exception"); 0x0A returns the memory size in 64 KiB
+ * banks; an unimplemented index returns 0xFF. */
+static int32_t vga_svga_register_read(vga_device_t *vga, int32_t n)
+{
+    switch (n) {
+    case 0: return vga->svga_version;
+    case 1: return (vga->dispi_enable_value & 2) ? VGA_MAX_XRES : vga->svga_width;
+    case 2: return (vga->dispi_enable_value & 2) ? VGA_MAX_YRES : vga->svga_height;
+    case 3: return (vga->dispi_enable_value & 2) ? VGA_MAX_BPP : vga->svga_bpp;
+    case 4: return vga->dispi_enable_value;
+    case 5: return (int32_t)((uint32_t)vga->svga_bank_offset >> 16); /* >>> 16, unsigned */
+    case 6: return vga->screen_width ? vga->screen_width : 1;
+    case 8: return vga->svga_offset_x;
+    case 9: return vga->svga_offset_y;
+    case 0x0A: return vga->vga_memory_size / VGA_BANK_SIZE;
+    default: break;
+    }
+    return 0xFF;
+}
+
+static int32_t vga_port1CF_read(void *device, int32_t port)
+{
+    (void)port;
+    return vga_svga_register_read(VGA_DEV(device), VGA_DEV(device)->dispi_index);
+}
+
+static void vga_port1CF_write(void *device, int32_t port, int32_t value)
+{
+    (void)port;
+    vga_device_t *vga = VGA_DEV(device);
+
+    bool was_enabled = vga->svga_enabled;
+
+    switch (vga->dispi_index) {
+    case 0:
+        if (value >= 0xB0C0 && value <= 0xB0C5) vga->svga_version = value;
+        break;
+    case 1:
+        vga->svga_width = value;
+        if (vga->svga_width > VGA_MAX_XRES) vga->svga_width = VGA_MAX_XRES;
+        break;
+    case 2:
+        vga->svga_height = value;
+        if (vga->svga_height > VGA_MAX_YRES) vga->svga_height = VGA_MAX_YRES;
+        break;
+    case 3:
+        vga->svga_bpp = value;
+        break;
+    case 4:
+        vga->dispi_enable_value = value;
+        if (!(value & 1) && vga->svga_enabled && (cpu->flags & FLAG_VM)) {
+            /* vga.js:2183-2187: the Win9x cmd.exe hack -- defer the actual disable until a
+             * legacy mode-register write reaches us (see vga_port3C0_write case 0x10). */
+        }
+        else {
+            vga->svga_enabled = (value & 1) == 1;
+            if (vga->svga_enabled && (value & 0x80) == 0) {
+                memset(vga_vram, 0, vga->vga_memory_size); /* svga_memory.fill(0) */
+            }
+        }
+        break;
+    case 5:
+        vga->svga_bank_offset = (int32_t)((uint32_t)value << 16);
+        break;
+    case 8:
+        if (vga->svga_offset_x != value) {
+            vga->svga_offset_x = value;
+            vga->svga_offset = vga->svga_offset_y * vga->svga_width + vga->svga_offset_x;
+            vga_complete_redraw(vga);
+        }
+        break;
+    case 9:
+        if (vga->svga_offset_y != value) {
+            vga->svga_offset_y = value;
+            vga->svga_offset = vga->svga_offset_y * vga->svga_width + vga->svga_offset_x;
+            vga_complete_redraw(vga);
+        }
+        break;
+    default: break;
+    }
+
+    if (vga->svga_enabled && (!vga->svga_width || !vga->svga_height)) {
+        vga->svga_enabled = false;
+    }
+
+    if (vga->svga_enabled && vga->dispi_index == 4) {
+        if (!was_enabled) {
+            vga->svga_offset = 0;
+            vga->svga_offset_x = 0;
+            vga->svga_offset_y = 0;
+        }
+        vga->graphical_mode = true;
+        vga->screen->set_mode(vga->screen, true);
+        vga_set_size_graphical(vga, vga->svga_width, vga->svga_height, vga->svga_width,
+                               vga->svga_height, vga->svga_bpp);
+    }
+
+    if (was_enabled && !vga->svga_enabled) {
+        bool is_graphical = (vga->attribute_mode & 1) != 0;
+        vga->graphical_mode = is_graphical;
+        vga->screen->set_mode(vga->screen, is_graphical);
+        vga_update_vga_size(vga);
+        vga_set_font_bitmap(vga, false);
+        vga_complete_redraw(vga);
+    }
+
+    if (!vga->svga_enabled) {
+        vga->svga_bank_offset = 0;
+    }
+
+    vga_update_layers(vga);
+}
+
+/* ------------------------------------------------------------------ *
  * the PCI function 00:12.0 -- vga.js:235-256
  *
  * pci_space is upstream's array with upstream's own truncation: the four declaration bytes
@@ -1580,6 +1790,16 @@ void vga_init(vga_screen_t *screen, vga_screen_kind_t kind)
     vga->screen_height = 0;
     vga->virtual_width = 0;
     vga->virtual_height = 0;
+
+    /* the dispi register file -- vga.js:186-214, 357-358's constructor values */
+    vga->svga_version = 0xB0C5;
+    vga->svga_width = 0;
+    vga->svga_height = 0;
+    vga->svga_bank_offset = 0;
+    vga->svga_offset = 0;
+    vga->svga_offset_x = 0;
+    vga->svga_offset_y = 0;
+    vga->dispi_index = 0;
 
     /* the register file -- vga.js:78-304's constructor values */
     vga->index_crtc = 0;
@@ -1647,6 +1867,8 @@ void vga_init(vga_screen_t *screen, vga_screen_kind_t kind)
     memset(vga_pixel_buffer, 0, sizeof(vga_pixel_buffer));
     memset(vga_dest_bytes, 0, sizeof(vga_dest_bytes));
     vga_dest_pixels = 0;
+    svga_dest_bytes = NULL;
+    svga_dest_pixels = 0;
 
     /* memory.c's LFB arms read these two; until this unit they were NULL/0 and every LFB
      * access took the hook table's carve-out instead.  The address constant is memory.h's
@@ -1695,6 +1917,15 @@ void vga_init(vga_screen_t *screen, vga_screen_kind_t kind)
 
     io_register_read(0x3DA, vga, vga_port3DA_read, NULL, NULL);
     io_register_read(0x3BA, vga, vga_port3DA_read, NULL, NULL);
+
+    /* vga.js:360-364: the dispi ports are 16-BIT ONLY -- register_write(0x1CE, this,
+     * undefined, port1CE_write) passes the 8-bit slot as `undefined`, so an 8-bit access
+     * answers the empty entry and the 16-bit `out dx, ax` idiom is what programs the
+     * registers.  The same NULL-8-bit shape is reproduced here. */
+    io_register_read(0x1CE, vga, NULL, vga_port1CE_read, NULL);
+    io_register_write(0x1CE, vga, NULL, vga_port1CE_write, NULL);
+    io_register_read(0x1CF, vga, NULL, vga_port1CF_read, NULL);
+    io_register_write(0x1CF, vga, NULL, vga_port1CF_write, NULL);
 
     /* vga.js:384-387.  NULL read32/write32 means io_mmap_register installs its four-8-bit
      * shims (io.js:259-277), which is also what the reference's two-callback registration

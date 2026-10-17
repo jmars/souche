@@ -3941,6 +3941,201 @@ static void test_vga_planar(void)
     CHECK_EQ(vga_px(dest, 7), vga_dac_color(7));
 }
 
+/* ================================================================== *
+ * 9f. THE SVGA/VBE PATH -- VGA-U4
+ *
+ * U4 lands the Bochs dispi interface (0x1CE/0x1CF), the banked 0xA0000 window, and the
+ * bpp 8/15/16/24/32 LFB->RGBA fill.  Each probe drives the DEVICE through the dispi ports
+ * (16-bit out/in, exactly as upstream registers them), writes the LFB through the real
+ * memory router (which marks pages dirty), then vga_screen_fill_buffer + vga_dest_buffer.
+ * One probe per bpp arm, each with a mutation that flips it (the mutation table is in
+ * results/vga-u4.md); the differential image (tests/vga-lfb.img, tests/gate-vga-4.sh) is the
+ * end-to-end proof, these are the asymmetry instruments.
+ *
+ * The fill arithmetic is the reference's OWN (v86/src/rust/cpu/vga.rs:64-135): a 32bpp LFB
+ * dword 0xXRGB -> dest RGBA 0xFFBBGGRR (byte-lane shuffle, NOT a "corrected" read), 24bpp
+ * is 3-byte unaligned reads, 16bpp is 5-6-5 and 15bpp is 5-5-5 with the integer scale
+ * `v * 0xFF / max`.  A textbook "fix" to any of these would diverge the document.
+ * ================================================================== */
+
+/* dispi16_write: `out dx, ax` to 0x1CE (index) then 0x1CF (value) -- the 16-bit idiom the
+ * reference's write16-only registration answers (an 8-bit access is the empty entry). */
+static void dispi16_write(int32_t index, int32_t value)
+{
+    io_port_write16(0x1CE, index);
+    io_port_write16(0x1CF, value);
+}
+
+static int32_t dispi16_read(int32_t index)
+{
+    io_port_write16(0x1CE, index);
+    return io_port_read16(0x1CF);
+}
+
+/* Enable a small SVGA mode: dispi width/height/bpp then enable | LFB (0x41).  The enable
+ * clears the LFB (bit 7 of the enable value is clear -- vga.js:2196) and set_size_graphical
+ * zeroes + marks the dest buffer dirty, so the following fill is a full recompute. */
+static void svga_enable_mode(vga_device_t *vga, int32_t w, int32_t h, int32_t bpp)
+{
+    (void)vga;
+    dispi16_write(1, w);
+    dispi16_write(2, h);
+    dispi16_write(3, bpp);
+    dispi16_write(4, 0x41);
+}
+
+/* rgb -> the dest buffer's 24-bit colour order (R low, G mid, B high -- vga_px's order). */
+static uint32_t vga_rgb(int32_t r, int32_t g, int32_t b)
+{
+    return (uint32_t)r | (uint32_t)g << 8 | (uint32_t)b << 16;
+}
+
+static void test_vga_svga(void)
+{
+    vga_device_t *vga = vga_device();
+    const uint8_t *dest = NULL;
+    int32_t pixels = 0;
+
+    /* ---- P-DISPI: the register round-trip, the enable, and the derived dims ---- */
+    machine_reset();
+    vga = vga_device();
+    CHECK(!vga->svga_enabled);
+    CHECK_EQ(dispi16_read(0), 0xB0C5); /* the constructor's svga_version */
+    dispi16_write(1, 320);
+    dispi16_write(2, 200);
+    dispi16_write(3, 32);
+    CHECK_EQ(dispi16_read(1), 320);
+    CHECK_EQ(dispi16_read(2), 200);
+    CHECK_EQ(dispi16_read(3), 32);
+    CHECK_EQ(dispi16_read(6), 1); /* virtual width before enable: screen_width 0 -> 1 */
+    dispi16_write(4, 0x41);       /* enable | LFB */
+    CHECK(vga->svga_enabled);
+    CHECK(vga->graphical_mode);
+    CHECK(vga_screen_is_graphical(vga->screen));
+    CHECK_EQ(vga->screen_width, 320);
+    CHECK_EQ(vga->screen_height, 200);
+    CHECK_EQ(vga->virtual_width, 320);
+    CHECK_EQ(vga->virtual_height, 200);
+    CHECK_EQ(dispi16_read(6), 320); /* virtual width now screen_width */
+    CHECK_EQ(dispi16_read(0x0A), 128); /* 8 MiB / 64 KiB banks */
+    CHECK_EQ(dispi16_read(4), 0x41);
+
+    /* ---- P-BPP32: the 32bpp byte-lane shuffle (LFB dword 0xXRGB -> RGBA) ---- */
+    machine_reset();
+    vga = vga_device();
+    svga_enable_mode(vga, 320, 200, 32);
+    write8(0xE0000000 + 0, 0x00); /* B */ write8(0xE0000000 + 1, 0x00); /* G */
+    write8(0xE0000000 + 2, 0xFF); /* R */ write8(0xE0000000 + 3, 0x00); /* X */
+    write8(0xE0000000 + 4, 0x00); write8(0xE0000000 + 5, 0xFF);
+    write8(0xE0000000 + 6, 0x00); write8(0xE0000000 + 7, 0x00);
+    write8(0xE0000000 + 8, 0xFF); write8(0xE0000000 + 9, 0x00);
+    write8(0xE0000000 + 10, 0x00); write8(0xE0000000 + 11, 0x00);
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(pixels, 320 * 200);
+    CHECK_EQ(vga_px(dest, 0), vga_rgb(255, 0, 0));   /* red   */
+    CHECK_EQ(vga_px(dest, 1), vga_rgb(0, 255, 0));   /* green */
+    CHECK_EQ(vga_px(dest, 2), vga_rgb(0, 0, 255));   /* blue  */
+
+    /* ---- P-BPP24: 3-byte pixels, unaligned 4-byte reads.  The 24bpp LFB byte order is
+     * BGR (blue first -- the reference reuses the 32bpp shuffle, so byte0=blue), NOT the
+     * RGB a textbook would assume. ---- */
+    machine_reset();
+    vga = vga_device();
+    svga_enable_mode(vga, 320, 200, 24);
+    write8(0xE0000000 + 0, 0x00); /* B0 */ write8(0xE0000000 + 1, 0x00); /* G0 */
+    write8(0xE0000000 + 2, 0xFF); /* R0 */ write8(0xE0000000 + 3, 0x00); /* B1 */
+    write8(0xE0000000 + 4, 0xFF); /* G1 */ write8(0xE0000000 + 5, 0x00); /* R1 */
+    write8(0xE0000000 + 6, 0xFF); /* B2 */ write8(0xE0000000 + 7, 0x00); /* G2 */
+    write8(0xE0000000 + 8, 0x00); /* R2 */
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(vga_px(dest, 0), vga_rgb(255, 0, 0));   /* red   */
+    CHECK_EQ(vga_px(dest, 1), vga_rgb(0, 255, 0));   /* green */
+    CHECK_EQ(vga_px(dest, 2), vga_rgb(0, 0, 255));   /* blue  */
+
+    /* ---- P-BPP16: 5-6-5.  The reference's extraction order is BGR565, NOT RGB565 --
+     * r = word & 0x1F (LOW 5 bits), g = word>>5 & 0x3F, b = word>>11 (HIGH 5 bits), and the
+     * dest u32 is `r<<16 | g<<8 | b | 0xFF000000`, whose little-endian BYTES are [b,g,r,A].
+     * So the blue value lands in dest byte 0 and the red value in byte 2 -- the OPPOSITE of
+     * the 32bpp/24bpp shuffle, and a textbook RGB565 "fix" would diverge.  Asserted on the
+     * raw bytes so the quirk is pinned, not hidden. ---- */
+    machine_reset();
+    vga = vga_device();
+    svga_enable_mode(vga, 320, 200, 16);
+    write16(0xE0000000 + 0, 0xF800); /* B=31 (bits 11-15) */
+    write16(0xE0000000 + 2, 0x07E0); /* G=63 (bits 5-10) */
+    write16(0xE0000000 + 4, 0x001F); /* R=31 (bits 0-4) */
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(memcmp(dest + 4 * 0, "\xFF\x00\x00\xFF", 4), 0); /* b=255 in byte 0 */
+    CHECK_EQ(memcmp(dest + 4 * 1, "\x00\xFF\x00\xFF", 4), 0); /* g=255 in byte 1 */
+    CHECK_EQ(memcmp(dest + 4 * 2, "\x00\x00\xFF\xFF", 4), 0); /* r=255 in byte 2 */
+
+    /* ---- P-BPP15: 5-5-5, the same BGR555 order (r = low 5 bits, b = high 5 bits) ---- */
+    machine_reset();
+    vga = vga_device();
+    svga_enable_mode(vga, 320, 200, 15);
+    write16(0xE0000000 + 0, 0x7C00); /* B=31 (bits 10-14) */
+    write16(0xE0000000 + 2, 0x03E0); /* G=31 (bits 5-9) */
+    write16(0xE0000000 + 4, 0x001F); /* R=31 (bits 0-4) */
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(memcmp(dest + 4 * 0, "\xFF\x00\x00\xFF", 4), 0); /* b=255 in byte 0 */
+    CHECK_EQ(memcmp(dest + 4 * 1, "\x00\xFF\x00\xFF", 4), 0); /* g=255 in byte 1 */
+    CHECK_EQ(memcmp(dest + 4 * 2, "\x00\x00\xFF\xFF", 4), 0); /* r=255 in byte 2 */
+
+    /* ---- P-BPP8: the palette loop (vga.js:2533-2549, NOT the rust fill) ---- */
+    machine_reset();
+    vga = vga_device();
+    svga_enable_mode(vga, 320, 200, 8);
+    io_port_write8(0x3C8, 7);
+    io_port_write8(0x3C9, 0x3F); io_port_write8(0x3C9, 0x00); io_port_write8(0x3C9, 0x00);
+    io_port_write8(0x3C8, 8);
+    io_port_write8(0x3C9, 0x00); io_port_write8(0x3C9, 0x3F); io_port_write8(0x3C9, 0x00);
+    io_port_write8(0x3C8, 9);
+    io_port_write8(0x3C9, 0x00); io_port_write8(0x3C9, 0x00); io_port_write8(0x3C9, 0x3F);
+    write8(0xE0000000 + 0, 7);
+    write8(0xE0000000 + 1, 8);
+    write8(0xE0000000 + 2, 9);
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(vga_px(dest, 0), vga_rgb(255, 0, 0));   /* palette[7] = red   */
+    CHECK_EQ(vga_px(dest, 1), vga_rgb(0, 255, 0));   /* palette[8] = green */
+    CHECK_EQ(vga_px(dest, 2), vga_rgb(0, 0, 255));   /* palette[9] = blue  */
+
+    /* ---- P-BANK: bank switching through the 0xA0000 window ---- */
+    machine_reset();
+    vga = vga_device();
+    svga_enable_mode(vga, 320, 200, 32);
+    dispi16_write(5, 1); /* bank 1 -> LFB byte offset 0x10000 */
+    CHECK_EQ(dispi16_read(5), 1);
+    write8(0xA0000, 0x5A); /* lands at LFB[0x10000] via `x | bank_offset` */
+    CHECK_EQ(read8(0xE0000000 + 0x10000), 0x5A);
+    CHECK_EQ(read8(0xA0000), 0x5A);  /* the banked read-back */
+    CHECK_EQ(read8(0xE0000000), 0);  /* bank 0's byte is untouched */
+
+    /* ---- P-OFFSET: svga_offset (x) selects the visible window start (page-aligned) ---- */
+    machine_reset();
+    vga = vga_device();
+    svga_enable_mode(vga, 320, 200, 32);
+    write32(0xE0000000 + 4 * 1024, 0x00FF0000); /* LFB pixel 1024 = red (dword 0x00RRGGBB) */
+    dispi16_write(8, 1024);                    /* offset_x = 1024 pixels (one 32bpp page) */
+    CHECK_EQ(vga->svga_offset, 1024);
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(vga_px(dest, 0), vga_rgb(255, 0, 0)); /* dest[0] = LFB pixel 1024 */
+    CHECK_EQ(vga_px(dest, 1), vga_rgb(0, 0, 0));   /* dest[1] = LFB pixel 1025 (zero) */
+
+    (void)vga;
+}
+
 int main(void)
 {
     RUN(test_clock, "clock: 1 guest instruction = 1 us, through the PIT, the PM timer and the TSC");
@@ -3964,6 +4159,7 @@ int main(void)
     RUN(test_vga_graphical, "vga mode 13h (U2): the sequencer/graphics registers, the graphical_mode flip (P5), the pixel stride (P3), the palette lanes (P1)");
     RUN(test_vga_planar_defects, "vga planar/graphical defect guards (U2 R2): div-by-zero, negative static writes, plane_read>=4, mid-run resize");
     RUN(test_vga_planar, "vga planar 16-colour (U3): write modes 0-3 + rotate/logical/setreset/bitmask, chain-2, shift 0x00/0x20, read modes 0/1, odd/even, colorset, the substitution arm");
+    RUN(test_vga_svga, "vga SVGA/VBE (U4): the dispi register file + enable, the bpp 8/15/16/24/32 LFB fill, the banked window, the svga_offset page flip");
 
     printf("hw_selftest: %d checks, %d failures, %d skipped\n", checks, failures, skips);
     return failures != 0;

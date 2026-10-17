@@ -82,7 +82,20 @@ extern uint8_t *vga_mem8;
 extern uint32_t vga_memory_size;
 #define VGA_LFB_ADDRESS 0xE0000000u
 bool in_svga_lfb(uint32_t addr);
-void vga_mark_dirty(uint32_t addr); /* vga::mark_dirty: dirty-bitmap callback, stubbed */
+/* vga::mark_dirty: one bit per 4 KiB page of the LFB (vga.rs:22-27).  Called by the LFB
+ * write arms and the banked-window write below. */
+void vga_mark_dirty(uint32_t addr);
+/* vga.rs:29-33: mark the WHOLE bitmap dirty (a complete redraw / dest-buffer realloc). */
+void svga_mark_dirty(void);
+/* vga.rs:64-135: convert the dirty pages' LFB pixels to RGBA in the dest buffer, then
+ * clear the bitmap.  bpp is 15/16/24/32 (the bpp-8 palette loop is vga.c's, exactly as
+ * upstream splits it); svga_offset is in PIXELS.  Writes through the two externs below. */
+void svga_fill_pixel_buffer(uint32_t bpp, uint32_t svga_offset);
+
+/* The RGBA dest buffer (vga.rs's dest_buffer global + svga_allocate_dest_buffer), owned by
+ * vga.c and written by svga_fill_pixel_buffer.  NULL / 0 until set_size_graphical sizes it. */
+extern uint8_t *svga_dest_bytes; /* one RGBA u32 per pixel, 4 bytes each */
+extern uint32_t svga_dest_pixels; /* virtual_width * virtual_height */
 
 /* APIC / IOAPIC stubs (apic.rs, ioapic.rs are M2 -- plan ss3, ss7) */
 int32_t apic_read32(uint32_t addr);

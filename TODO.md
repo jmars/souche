@@ -178,7 +178,7 @@ that landed, and the guest-compatibility fact below still stands.)*
   INTERPRETATION: that is a smaller job than the 974-line total and would satisfy every guest we
   can currently name.
 
-### 1.2 VGA — U1/U2/U3 SHIPPED (results/vga-u1.md, results/vga-u2.md, results/vga-u3.md); SVGA U4
+### 1.2 VGA — SHIPPED (U1/U2/U3/U4; results/vga-u1.md, vga-u2.md, vga-u3.md, vga-u4.md)
 - **Size.** READ: `v86/src/vga.js` is 2,612 lines — the largest single device in the reference. It
   is being ported in five units (the ladder `coder` → `engineer`), each with its own gate, because
   the decode is where a silent-wrong port costs most.
@@ -193,9 +193,18 @@ that landed, and the guest-compatibility fact below still stands.)*
   and the `hw_selftest` case 9e probes (14 probes, each with a measured fail-before/pass-after
   mutation).  The D2 differentials (`sh tests/gate-vga-1/2/3.sh`) prove both legs produce
   byte-identical documents on images that paint known patterns and read back in-guest.
-- **What is still absent, and whose it is**: dispi/SVGA/banks and the real dirty-bitmap callback
-  (still stubbed in `memory.c`) are U4.  `svga_enabled` is still always false; the
-  `vga_memory_read/write` svga arms and the dispi registers (0x1CE/0x1CF) are U4's.
+- **What U4 added, and how it is gated**: the Bochs VBE dispi interface (0x1CE/0x1CF, registered
+  16-bit-only exactly as upstream), `svga_enabled`/`svga_width`/`svga_height`/`svga_bpp`/
+  `svga_bank_offset`/`svga_offset[_x/_y]`, bank switching through the 0xA0000 window, the
+  8/15/16/24/32-bpp LFB->RGBA fill (the reference's own byte-lane shuffle and 5-6-5 / 5-5-5
+  extraction, including its BGR order), the LFB at 0xE0000000 (U0's arms made live by the real
+  dirty bitmap), and the REAL `svga_mark_dirty` dirty bitmap replacing the `memory.c` stub (the
+  rust `svga_fill_pixel_buffer` port, one bit per 4 KiB page).  Gated by `tests/gate-vga-4.sh`
+  (the self-programming `tests/vga-lfb.img`, byte-identical on both legs) and the `hw_selftest`
+  case 9f probes (dispi round-trip, five bpp arms, the banked window, the svga_offset page flip --
+  each with a measured fail-before/pass-after mutation).  The lane's hardest requirement is
+  OUTPUT INVARIANCE: the dirty bitmap must be invisible to the differential (the reference's own
+  redraw is a full recompute), and the byte-identical D1 proves it by construction.
 - **The guest-gate boundary re-verified at U1, U2 AND U3**: the kernel boot touches the VGA (the
   firmware's `INT 10h` teletype writes ~8k window bytes at `0xB84C0`), and U1/U2/U3 claimed the
   CRTC, sequencer and graphics-controller ports — so the ports' answers changed from `0xFF` to the

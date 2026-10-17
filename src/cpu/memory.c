@@ -120,6 +120,19 @@ void write_blob(const uint8_t *data, uint32_t length, uint32_t offset)
 uint8_t *vga_mem8 = NULL;
 uint32_t vga_memory_size = 0;
 
+/* The RGBA dest buffer the fill writes (vga.rs's dest_buffer global): the POINTER lives
+ * here so memory.c is self-contained for the cpu-level selftests, and vga.c points it at
+ * its own vga_dest_bytes storage when set_size_graphical sizes the buffer.  NULL / 0 until
+ * then -- svga_fill_pixel_buffer no-ops on NULL. */
+uint8_t *svga_dest_bytes = NULL;
+uint32_t svga_dest_pixels = 0;
+
+/* The port's fixed LFB size (vga.js:216-228's default 8 MiB, set by vga_init).  The
+ * reference clamps vga_memory_size to [256 KiB, 256 MiB]; this port fixes it at the default
+ * because vga_init sets it and nothing writes it -- and the dirty bitmap's static size below
+ * depends on that being a compile-time constant. */
+#define VGA_DEFAULT_VRAM_SIZE 0x800000u
+
 bool in_svga_lfb(uint32_t addr)
 {
     /* memory.rs:57-59, arithmetic kept in u32 exactly as upstream: with
@@ -127,18 +140,167 @@ bool in_svga_lfb(uint32_t addr)
     return addr >= VGA_LFB_ADDRESS && addr <= VGA_LFB_ADDRESS + (vga_memory_size - 1);
 }
 
-void vga_mark_dirty(uint32_t addr) { (void)addr; } /* vga::mark_dirty -- M2 */
+/* ------------------------------------------------------------------ *
+ * the SVGA dirty bitmap -- v86/src/rust/cpu/vga.rs:1-135 (VGA-U4)
+ *
+ * The reference keeps a Vec<u64> with ONE BIT PER 4 KiB PAGE of the LFB: mark_dirty sets a
+ * page's bit on every LFB write, svga_mark_dirty sets them ALL (a complete redraw or a
+ * dest-buffer realloc), and svga_fill_pixel_buffer converts each dirty page's LFB pixels to
+ * RGBA in the dest buffer and then clears the whole bitmap.  This port's LFB is a FIXED
+ * 8 MiB (VGA_DEFAULT_VRAM_SIZE, set by vga_init), so the bitmap is 8 MiB / 4 KiB / 64 = 32
+ * u64 words -- a static, like every other device buffer.
+ *
+ * OUTPUT INVARIANCE (the brief's hardest requirement): the fill skips CLEAN pages and the
+ * dest buffer is ZEROED at allocation (vga.c's set_size_graphical, the reference's fresh
+ * wasm region) with svga_mark_dirty called in the same block -- so the FIRST fill at the
+ * document stop covers every page, and a skipped recompute of a never-written pixel reads
+ * the same zero it would from a full recompute.  The bitmap is therefore invisible to the
+ * differential: it exists to let a later unit skip work, never to change a document byte.
+ * ------------------------------------------------------------------ */
+#define SVGA_DIRTY_PAGE_BITS 64
+#define SVGA_DIRTY_PAGES (VGA_DEFAULT_VRAM_SIZE >> 12)
+#define SVGA_DIRTY_WORDS (SVGA_DIRTY_PAGES / SVGA_DIRTY_PAGE_BITS)
+
+static uint64_t svga_dirty_bitmap[SVGA_DIRTY_WORDS];
+
+void vga_mark_dirty(uint32_t addr)
+{
+    /* vga.rs:22-27.  The callers (the LFB write arms and the banked-window write) have all
+     * checked in_svga_lfb(addr) first, so page is in [0, 2048); the bound is the R4 rule --
+     * never a guest-reachable OOB static write -- not a value the reference observes. */
+    uint32_t page = (addr - VGA_LFB_ADDRESS) >> 12;
+    if (page < SVGA_DIRTY_PAGES) {
+        svga_dirty_bitmap[page >> 6] |= 1ull << (page & 63);
+    }
+}
+
+void svga_mark_dirty(void)
+{
+    for (uint32_t i = 0; i < SVGA_DIRTY_WORDS; i++) svga_dirty_bitmap[i] = ~0ull;
+}
+
+static void svga_fill_clear_bitmap(void)
+{
+    for (uint32_t i = 0; i < SVGA_DIRTY_WORDS; i++) svga_dirty_bitmap[i] = 0;
+}
+
+/* vga.rs:64-135.  Each dirty page's LFB pixels -> RGBA dwords in the dest buffer.  The
+ * reference's dbg_asserts are compiled out of the pinned release; the port keeps the exact
+ * arithmetic and bounds every read against the +16-byte slack of vga_vram (vga.c) and every
+ * write against svga_dest_pixels -- a guest can reach this through a dispi enable + LFB
+ * write, so nothing here may index past a static (the last unit's review found four of that
+ * class).  The 32-bit expression is the reference's own byte-lane shuffle (a 32bpp LFB
+ * dword 0xXRGB becomes 0xFFBBGGRR), NOT a "corrected" read. */
+void svga_fill_pixel_buffer(uint32_t bpp, uint32_t svga_offset)
+{
+    uint8_t *dest = svga_dest_bytes;
+    uint32_t dest_len = svga_dest_pixels;
+
+    if (dest == NULL) {
+        /* Unreachable in the shipped machine (set_size_graphical sizes the buffer before
+         * the fill can run), but a clean no-op beats a NULL dereference. */
+        svga_fill_clear_bitmap();
+        return;
+    }
+
+    switch (bpp) {
+    case 32: {
+        for (uint32_t w = 0; w < SVGA_DIRTY_WORDS; w++) {
+            uint64_t word = svga_dirty_bitmap[w];
+            if (word == 0) continue;
+            for (int j = 0; j < SVGA_DIRTY_PAGE_BITS; j++) {
+                if (!(word & (1ull << j))) continue;
+                uint32_t off = ((w << 6) | (uint32_t)j) << 12;
+                int64_t dest_offset = (int64_t)(off / 4) - (int64_t)svga_offset;
+                int64_t end = dest_offset < 0 ? 0
+                                              : (int64_t)dest_len - dest_offset < 1024
+                                                    ? (int64_t)dest_len - dest_offset
+                                                    : 1024;
+                for (int64_t i = 0; i < end; i++) {
+                    uint32_t dword;
+                    memcpy(&dword, vga_mem8 + off + 4 * i, sizeof(dword));
+                    uint32_t px = (dword << 16) | ((dword >> 16) & 0xFF) |
+                                  (dword & 0xFF00) | 0xFF000000u;
+                    memcpy(dest + 4 * (dest_offset + i), &px, sizeof(px));
+                }
+            }
+        }
+        break;
+    }
+    case 24: {
+        for (uint32_t w = 0; w < SVGA_DIRTY_WORDS; w++) {
+            uint64_t word = svga_dirty_bitmap[w];
+            if (word == 0) continue;
+            for (int j = 0; j < SVGA_DIRTY_PAGE_BITS; j++) {
+                if (!(word & (1ull << j))) continue;
+                /* vga.rs:75: align the page down to a 3-byte pixel boundary -- the page's
+                 * fill then re-reads the boundary pixel, idempotently overlapping the
+                 * previous page's last pixel (harmless: same source bytes). */
+                uint32_t page_off = ((w << 6) | (uint32_t)j) << 12;
+                uint32_t off = page_off - page_off % 3;
+                int64_t dest_offset = (int64_t)(off / 3) - (int64_t)svga_offset;
+                int64_t end = dest_offset < 0 ? 0
+                                              : (int64_t)dest_len - dest_offset < 4096 / 3 + 1
+                                                    ? (int64_t)dest_len - dest_offset
+                                                    : 4096 / 3 + 1;
+                for (int64_t i = 0; i < end; i++) {
+                    uint32_t dword;
+                    /* A 4-byte unaligned read at the last page's last pixel runs 2 bytes
+                     * into vga_vram's +16-byte slack (zeroed) -- the slack's purpose. */
+                    memcpy(&dword, vga_mem8 + off + 3 * i, sizeof(dword));
+                    uint32_t px = (dword << 16) | ((dword >> 16) & 0xFF) |
+                                  (dword & 0xFF00) | 0xFF000000u;
+                    memcpy(dest + 4 * (dest_offset + i), &px, sizeof(px));
+                }
+            }
+        }
+        break;
+    }
+    case 16:
+    case 15: {
+        bool is_15 = bpp == 15;
+        for (uint32_t w = 0; w < SVGA_DIRTY_WORDS; w++) {
+            uint64_t word = svga_dirty_bitmap[w];
+            if (word == 0) continue;
+            for (int j = 0; j < SVGA_DIRTY_PAGE_BITS; j++) {
+                if (!(word & (1ull << j))) continue;
+                uint32_t off = ((w << 6) | (uint32_t)j) << 12;
+                int64_t dest_offset = (int64_t)(off / 2) - (int64_t)svga_offset;
+                int64_t end = dest_offset < 0 ? 0
+                                              : (int64_t)dest_len - dest_offset < 2048
+                                                    ? (int64_t)dest_len - dest_offset
+                                                    : 2048;
+                for (int64_t i = 0; i < end; i++) {
+                    uint16_t word16;
+                    memcpy(&word16, vga_mem8 + off + 2 * i, sizeof(word16));
+                    /* vga.rs:100-111 (16bpp 5-6-5) / 116-127 (15bpp 5-5-5): integer scale
+                     * `v * 0xFF / max`, truncating -- the reference's own expansion. */
+                    uint32_t r = (uint32_t)(word16 & 0x1F) * 0xFF / 0x1F;
+                    uint32_t g = is_15
+                                     ? (uint32_t)((word16 >> 5) & 0x1F) * 0xFF / 0x1F
+                                     : (uint32_t)((word16 >> 5) & 0x3F) * 0xFF / 0x3F;
+                    uint32_t b = is_15
+                                     ? (uint32_t)((word16 >> 10) & 0x1F) * 0xFF / 0x1F
+                                     : (uint32_t)(word16 >> 11) * 0xFF / 0x1F;
+                    uint32_t px = r << 16 | g << 8 | b | 0xFF000000u;
+                    memcpy(dest + 4 * (dest_offset + i), &px, sizeof(px));
+                }
+            }
+        }
+        break;
+    }
+    default:
+        /* bpp 4 and 8 never reach here (vga.c runs the bpp-8 palette loop; bpp 4 is
+         * dbg_assert'd out in the release reference, which then no-ops the fill). */
+        break;
+    }
+
+    svga_fill_clear_bitmap();
+}
 
 /* ------------------------------------------------------------------ *
  * device hooks -- the C replacement for the mmap_* JS imports
  * ------------------------------------------------------------------ */
-
-/* The reference's default VGA memory size.  browser/starter.js:234 creates a VGA
- * regardless of config and vga_memory_size defaults to 8 MiB, so at boot the LFB
- * window [VGA_LFB_ADDRESS, +8 MiB) reads a zeroed buffer.  vga_memory_size is 0 in
- * this tree until M2 installs a real VGA, so the default table carries the boot
- * value itself. */
-#define VGA_DEFAULT_VRAM_SIZE 0x800000u
 
 /* The two ranges the reference's always-present VGA claims: the 0xA0000-0xBFFFF
  * window and the LFB.  Both hold a zeroed buffer at boot -- MEASURED against the

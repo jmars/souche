@@ -564,6 +564,16 @@ tests/vga-planarsub.img: tests/vga-planarsub.asm tests/test.ld
 	$(LD) $(LDFLAGS) -o $(BUILD)/vga-planarsub.elf $(BUILD)/vga-planarsub.o
 	$(OBJCOPY) -O binary $(BUILD)/vga-planarsub.elf $@
 
+# VGA-U4's differential image (tests/gate-vga-4.sh): self-programs a Bochs VBE 320x200x32
+# mode through the dispi interface, paints the LFB through 0xE0000000 + a bank-switched
+# 0xA0000 write, reads back in-guest and halts.  Same build shape (as --32 + test.ld +
+# objcopy).
+tests/vga-lfb.img: tests/vga-lfb.asm tests/test.ld
+	@mkdir -p $(BUILD)
+	$(AS) $(ASFLAGS) -o $(BUILD)/vga-lfb.o tests/vga-lfb.asm
+	$(LD) $(LDFLAGS) -o $(BUILD)/vga-lfb.elf $(BUILD)/vga-lfb.o
+	$(OBJCOPY) -O binary $(BUILD)/vga-lfb.elf $@
+
 # HANDOFF=v86c-repo-weight: the 64 MiB guest-gate disk, materialised from the
 # committed xz (the raw image is not tracked; the helper's contract -- default
 # path only, never clobber, sha256-verified before it is put in place -- is in

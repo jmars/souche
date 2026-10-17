@@ -82,14 +82,26 @@
  * redraw loop's end is clamped to VGA_PIXEL_BUFFER_SIZE-1 (vga.js:2341,2466). */
 #define VGA_PIXEL_BUFFER_SIZE (8 * VGA_BANK_SIZE)
 
+/* vga.js:17-19: the dispi dimensions are clamped to these. */
+#define VGA_MAX_XRES 2560
+#define VGA_MAX_YRES 1600
+#define VGA_MAX_BPP 32
+
 /* The dest buffer's hard bound (the reference's image_data grows wasm memory on demand; this
  * port uses a fixed array and reports a refusal past the bound -- the R4 rule, never an
- * unbounded index).  The largest VGA (non-SVGA) dest buffer is 1,052,640 pixels: virtual_width
- * = offset<<4 (max 255 -> 4080) and virtual_height = ceil(0x20000 / bytes_per_line), whose
- * product peaks at 4080 * ceil(131072/510) = 1,052,640 when crtc_mode bit 6 halves
- * bytes_per_line (offset<<2 >> 1 = 510).  Mode 12h itself is 640 * ceil(131072/80) = 1,048,960.
- * 2 MiB pixels leaves ~2x headroom over the true maximum. */
-#define VGA_DEST_BUFFER_MAX_PIXELS (2u << 20)
+ * unbounded index).  The two maxima, whichever is larger:
+ *
+ *   VGA (non-SVGA): virtual_width = offset<<4 (max 255 -> 4080) and virtual_height =
+ *   ceil(0x20000 / bytes_per_line), whose product peaks at 4080 * ceil(131072/510) =
+ *   1,052,640 when crtc_mode bit 6 halves bytes_per_line.  Mode 12h itself is
+ *   640 * ceil(131072/80) = 1,048,960.
+ *
+ *   SVGA (U4): the dispi dims clamp to VGA_MAX_XRES * VGA_MAX_YRES = 2560 * 1600 =
+ *   4,096,000 (vga.js sets virtual == screen for SVGA, so the dest buffer is
+ *   svga_width * svga_height).
+ *
+ * 2560 * 1600 pixels (16 MiB of RGBA) is the larger, so the bound is that. */
+#define VGA_DEST_BUFFER_MAX_PIXELS (VGA_MAX_XRES * VGA_MAX_YRES)
 
 /* One rectangle of the framebuffer, as update_buffer takes it (vga.js:2562-2575 and
  * 2575/2575's `this.layers`; the fields are the object literal screen_fill_buffer builds).
@@ -259,6 +271,23 @@ typedef struct vga_device {
     int32_t screen_height;
     int32_t virtual_width;
     int32_t virtual_height;
+
+    /* ------------------------------------------------------------------ *
+     * THE DISPI REGISTER FILE -- vga.js:186-214, 357-358 (U4's SVGA/VBE).
+     * svga_width/svga_height are the dispi indices 1/2 (clamped to VGA_MAX_XRES/YRES);
+     * screen_width/screen_height above are the RENDERED size set_size_graphical receives
+     * (equal to svga_width/svga_height in SVGA mode).  svga_offset is in PIXELS
+     * (offset_y * width + offset_x); svga_bank_offset is `bank << 16` (a byte offset into
+     * the LFB, low 16 bits zero so the window's `x | bank_offset` selects a 64 KiB bank).
+     * ------------------------------------------------------------------ */
+    int32_t svga_version;      /* 0xB0C5 */
+    int32_t svga_width;        /* 0 */
+    int32_t svga_height;       /* 0 */
+    int32_t svga_bank_offset;  /* 0 */
+    int32_t svga_offset;       /* 0 */
+    int32_t svga_offset_x;     /* 0 */
+    int32_t svga_offset_y;     /* 0 */
+    int32_t dispi_index;       /* 0 (the 0x1CE index register) */
 
     /* ------------------------------------------------------------------ *
      * THE REGISTER FILE -- vga.js:78-304's constructor values (U1's text subset; the
