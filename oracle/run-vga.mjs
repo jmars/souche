@@ -49,6 +49,25 @@ import path from "node:path";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PKG = path.join(HERE, "node_modules", "v86", "build");
 
+// The reference's set_size_graphical creates its dest buffer (image_data) only when the
+// BROWSER global ImageData exists (vga.js:1174, `typeof ImageData !== "undefined"`).  node
+// has none, so a headless graphical run would leave image_data null and screen_fill_buffer
+// would throw on `.data`.  This is a polyfill of the reference's OWN browser primitive -- a
+// thin wrapper over the wasm Uint8ClampedArray -- NOT a reimplementation of pixel math: the
+// harness still replays the device's own methods (screen_fill_buffer, which calls
+// vga_replot + vga_redraw), and only provides the constructor the reference calls.  Without
+// it, the reference leg could not MEASURE its own graphical output at all.
+class ImageData
+{
+    constructor(data, width, height)
+    {
+        this.data = data;
+        this.width = width;
+        this.height = height;
+    }
+}
+globalThis.ImageData = ImageData;
+
 const MEMORY_SIZE = 2 * 1024 * 1024; // run.mjs:36
 const LOAD_ADDRESS = 0x100000;
 const ENTRY_ADDRESS = 0x100020;      // LOAD_ADDRESS + sizeof(multiboot header)
@@ -187,40 +206,63 @@ if(!cpu.in_hlt[0])
         + instruction_count + ", in_hlt=" + cpu.in_hlt[0] + ")");
     process.exit(1);
 }
-if(vga.graphical_mode)
+if(vga.graphical_mode && !vga.image_data)
 {
-    console.error("refusing to write a GRAPHICAL document: graphical_mode is set and its"
-        + " payload is the dest buffer's pixels, which unit U2 owns");
+    console.error("graphical_mode is set but the reference produced no image_data (a"
+        + " set_size_graphical never ran); no document produced");
     process.exit(1);
 }
 
 // THE REPLAY, from the device's own state.
-vga.text_mode_redraw();
-vga.update_cursor();
-vga.update_cursor_scanline();
+//   text:       text_mode_redraw + update_cursor + update_cursor_scanline, which collapse
+//               the final grid + cursor into the recorder (oracle/run-vga.mjs's U1 shape).
+//   graphical:  screen_fill_buffer() ONCE -- the single replot+redraw that turns the final
+//               plane memory into the dest buffer (vga.js:2509-2576); the run's
+//               register/window writes only expanded the diff ranges.  Then the payload is
+//               the raw image_data.data (RGBA), which the device's own vga_redraw wrote.
+let payload;
+let payload_bytes;
+let mode;
+if(vga.graphical_mode)
+{
+    vga.screen_fill_buffer();
+    payload = Buffer.from(vga.image_data.data);
+    payload_bytes = payload.length;
+    mode = "graphical";
+}
+else
+{
+    vga.text_mode_redraw();
+    vga.update_cursor();
+    vga.update_cursor_scanline();
+
+    const cols = vga.max_cols;
+    const rows = vga.max_rows;
+    payload_bytes = rows * cols * 10;
+
+    payload = Buffer.alloc(payload_bytes);
+    let written = 0;
+    for(let row = 0; row < rows; row++)
+    {
+        for(let col = 0; col < cols; col++)
+        {
+            const cell = recorded_chars.get(row + "," + col);
+            if(cell)
+            {
+                payload.writeUInt8(cell[0], written);
+                payload.writeUInt8(cell[1], written + 1);
+                payload.writeUInt32LE(cell[2], written + 2);
+                payload.writeUInt32LE(cell[3], written + 6);
+            }
+            // a cell the device never sent stays zero -- see the recorder's note
+            written += 10;
+        }
+    }
+    mode = "text";
+}
 
 const cols = vga.max_cols;
 const rows = vga.max_rows;
-const payload_bytes = rows * cols * 10;
-
-const payload = Buffer.alloc(payload_bytes);
-let written = 0;
-for(let row = 0; row < rows; row++)
-{
-    for(let col = 0; col < cols; col++)
-    {
-        const cell = recorded_chars.get(row + "," + col);
-        if(cell)
-        {
-            payload.writeUInt8(cell[0], written);
-            payload.writeUInt8(cell[1], written + 1);
-            payload.writeUInt32LE(cell[2], written + 2);
-            payload.writeUInt32LE(cell[3], written + 6);
-        }
-        // a cell the device never sent stays zero -- see the recorder's note
-        written += 10;
-    }
-}
 
 const document_header = {
     bpp: vga.svga_bpp,
@@ -234,7 +276,7 @@ const document_header = {
     image_sha256: image_sha256,
     instruction_count: instruction_count,
     instruction_limit: instruction_limit,
-    mode: "text",
+    mode: mode,
     payload_bytes: payload_bytes,
     rows: rows,
     screen_height: vga.screen_height,

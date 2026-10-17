@@ -3253,6 +3253,299 @@ static void test_vga_text(void)
     vga->screen = headless;
 }
 
+/* ================================================================== *
+ * 9c. THE VGA MODE 13h -- VGA-U2 (HANDOFF=v86c-vga), probes P1, P3 and P5
+ *
+ * WHAT THIS CASE IS THE PROBE OF.  U2 lands the graphical core: the sequencer/graphics
+ * controller registers, the graphical_mode flip, the shift modes 0x40/0x60, vga_replot/
+ * vga_redraw and the dest buffer.  The three silent-wrong classes it pins are the plan's
+ * P5 (the mode-set flip never reaching the adapter / dims never recomputed), P3 (a wrong
+ * pixel stride from the nibble-pairing/shift-mode arithmetic in the 0x40/0x60 case) and P1
+ * (a palette swap whose byte lanes land wrong).  All three drive the DEVICE through the
+ * ports and the 0xA0000 window, with the document adapter swapped in exactly as the
+ * reference harness swaps its recorder (oracle/run-vga.mjs:151) -- the dest buffer is read
+ * back through vga_dest_buffer, the device's own image_data-equivalent.
+ * ================================================================== */
+static void seq16_write(int32_t reg, int32_t value)
+{
+    /* the VGA idiom `out dx, ax` to 0x3C4: index = low byte, data = high byte -- which the
+     * consecutive write16 shim splits (io.c's consecutive_write16_1). */
+    io_port_write16(0x3C4, (value << 8) | reg);
+}
+
+static void gc16_write(int32_t reg, int32_t value)
+{
+    io_port_write16(0x3CE, (value << 8) | reg);
+}
+
+/* The full mode-13h register sequence (tests/vga-mode13.asm's), driven through the ports.
+ * Shared by case 9d's defect probes, which need a real graphical mode before they perturb
+ * the un-gated arms. */
+static void vga_program_mode13(vga_device_t *vga)
+{
+    (void)vga;
+    seq16_write(0x00, 0x01);
+    io_port_write8(0x3C2, 0x63);
+    seq16_write(0x00, 0x03);
+    seq16_write(0x01, 0x01);
+    seq16_write(0x02, 0x0F);
+    seq16_write(0x03, 0x00);
+    seq16_write(0x04, 0x08);
+    crtc_write(0x01, 0x4F);
+    crtc_write(0x02, 0x50);
+    crtc_write(0x07, 0x1F);
+    crtc_write(0x08, 0x00);
+    crtc_write(0x09, 0x41);
+    crtc_write(0x0A, 0x00);
+    crtc_write(0x0B, 0x00);
+    crtc_write(0x0C, 0x00);
+    crtc_write(0x0D, 0x00);
+    crtc_write(0x0E, 0x00);
+    crtc_write(0x0F, 0x00);
+    crtc_write(0x12, 0x8F);
+    crtc_write(0x13, 0x28);
+    crtc_write(0x14, 0x40);
+    crtc_write(0x15, 0x96);
+    crtc_write(0x17, 0xA3);
+    gc16_write(0x05, 0x40);
+    gc16_write(0x06, 0x05);
+    io_port_write8(0x3C0, 0x10);
+    io_port_write8(0x3C0, 0x41);
+}
+
+static void test_vga_graphical(void)
+{
+    machine_reset();
+    vga_device_t *vga = vga_device();
+    vga_screen_t *headless = vga->screen;
+    vga_screen_t *doc = vga_screen_document_init();
+    vga->screen = doc;
+
+    /* ---- the mode-13h sequence (tests/vga-mode13.asm's, driven through the ports) ---- */
+    seq16_write(0x00, 0x01);
+    io_port_write8(0x3C2, 0x63);
+    seq16_write(0x00, 0x03);
+    seq16_write(0x01, 0x01); /* clocking mode: 8 dots */
+    seq16_write(0x02, 0x0F); /* map mask: all planes */
+    seq16_write(0x03, 0x00); /* character map select */
+    seq16_write(0x04, 0x08); /* memory mode: CHAIN 4 */
+
+    /* P5 (first half): still TEXT until attribute_mode bit 0 flips -- the sequencer/graphics
+     * writes must not flip graphical_mode by themselves. */
+    CHECK(!vga->graphical_mode);
+    CHECK(!vga_screen_is_graphical(doc));
+
+    crtc_write(0x01, 0x4F);
+    crtc_write(0x02, 0x50);
+    crtc_write(0x07, 0x1F);
+    crtc_write(0x08, 0x00);
+    crtc_write(0x09, 0x41);
+    crtc_write(0x0A, 0x00);
+    crtc_write(0x0B, 0x00);
+    crtc_write(0x0C, 0x00);
+    crtc_write(0x0D, 0x00);
+    crtc_write(0x0E, 0x00);
+    crtc_write(0x0F, 0x00);
+    crtc_write(0x12, 0x8F);
+    crtc_write(0x13, 0x28);
+    crtc_write(0x14, 0x40);
+    crtc_write(0x15, 0x96);
+    crtc_write(0x17, 0xA3);
+
+    gc16_write(0x05, 0x40); /* planar mode: 256-colour shift */
+    gc16_write(0x06, 0x05); /* misc graphics: memory space 1 (0xA0000, 64K) */
+
+    /* P5 (second half): the flip.  The attribute controller's index/data flip-flop (the
+     * 0x3C0 write pair) must flip graphical_mode, reach the adapter, and recompute the
+     * mode-13h dimensions. */
+    io_port_write8(0x3C0, 0x10);
+    io_port_write8(0x3C0, 0x41);
+    CHECK(vga->graphical_mode);
+    CHECK(vga_screen_is_graphical(doc));
+    CHECK_EQ(vga->screen_width, 320);
+    CHECK_EQ(vga->screen_height, 200);
+    CHECK_EQ(vga->virtual_width, 320);
+    CHECK_EQ(vga->virtual_height, 410);
+    CHECK_EQ(vga->svga_bpp, 32); /* the document's bpp field stays 32 in VGA modes */
+
+    /* The sequencer/graphics reads now answer the register file (the 16-bit `out` idiom was
+     * the write; the reads are individual). */
+    io_port_write8(0x3C4, 0x04);
+    CHECK_EQ(io_port_read8(0x3C5), 0x08); /* chain 4 stuck */
+    io_port_write8(0x3CE, 0x06);
+    CHECK_EQ(io_port_read8(0x3CF), 0x05);
+
+    /* The DAC: entries 1..4 become four DISTINCT colours (the reference's 6-bit expand:
+     * 0x3F -> 0xFF). */
+    for (int i = 1; i <= 4; i++) {
+        io_port_write8(0x3C8, i);
+        io_port_write8(0x3C9, (i == 1 || i == 4) ? 0x3F : 0x00); /* red   */
+        io_port_write8(0x3C9, (i == 2 || i == 4) ? 0x3F : 0x00); /* green */
+        io_port_write8(0x3C9, (i == 3 || i == 4) ? 0x3F : 0x00); /* blue  */
+    }
+    CHECK_EQ(vga->vga256_palette[1], 0xFF0000); /* red   */
+    CHECK_EQ(vga->vga256_palette[2], 0x00FF00); /* green */
+    CHECK_EQ(vga->vga256_palette[3], 0x0000FF); /* blue  */
+    CHECK_EQ(vga->vga256_palette[4], 0xFFFFFF); /* white */
+
+    int32_t pixels = 0;
+    const uint8_t *dest = NULL;
+
+    /* P3: the pixel stride.  Four window bytes (0..3) must land in dest pixels 0..3 -- any
+     * nibble-pairing/shift-mode error in the 0x40 case would scatter them -- and pixels 4..7
+     * (bytes 4..7, never written) must be palette 0 (black). */
+    write8(0xA0000, 1);
+    write8(0xA0001, 2);
+    write8(0xA0002, 3);
+    write8(0xA0003, 4);
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(pixels, 320 * 410);
+    /* dest pixel n is RGBA little-endian in the byte buffer at 4*n */
+    CHECK_EQ(memcmp(dest + 4 * 0, "\xFF\x00\x00\xFF", 4), 0); /* red   */
+    CHECK_EQ(memcmp(dest + 4 * 1, "\x00\xFF\x00\xFF", 4), 0); /* green */
+    CHECK_EQ(memcmp(dest + 4 * 2, "\x00\x00\xFF\xFF", 4), 0); /* blue  */
+    CHECK_EQ(memcmp(dest + 4 * 3, "\xFF\xFF\xFF\xFF", 4), 0); /* white */
+    for (int i = 4; i < 8; i++) {
+        CHECK_EQ(memcmp(dest + 4 * i, "\x00\x00\x00\xFF", 4), 0); /* black */
+    }
+
+    /* P1: the palette swap.  DAC entry 5 becomes red (0x3F,0,0), then pixel 0 is repointed
+     * to it -- the redraw must read the palette's byte lanes in the reference's order (red
+     * = 0xFF0000, not a transposed lane). */
+    io_port_write8(0x3C8, 5);
+    io_port_write8(0x3C9, 0x3F);
+    io_port_write8(0x3C9, 0x00);
+    io_port_write8(0x3C9, 0x00);
+    CHECK_EQ(vga->vga256_palette[5], 0xFF0000);
+    write8(0xA0000, 5);
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(memcmp(dest + 4 * 0, "\xFF\x00\x00\xFF", 4), 0);
+
+    /* the read mode 1 (colour compare) path, exercised end to end: colour don't care 0xF
+     * and colour compare 0x0F over a 4-pixel run written 0xFF must read 0xFF, and a
+     * non-matching run must not. */
+    write8(0xA0008, 0xFF);
+    write8(0xA0009, 0xFF);
+    write8(0xA000A, 0xFF);
+    write8(0xA000B, 0xFF);
+    gc16_write(0x07, 0x0F); /* colour don't care: all planes */
+    gc16_write(0x02, 0x0F); /* colour compare: 0xF */
+    gc16_write(0x05, 0x48); /* planar_mode |= read mode 1 */
+    CHECK_EQ(read8(0xA0008), 0xFF);
+    CHECK(read8(0xA000C) != 0xFF);
+
+    vga->screen = headless;
+}
+
+/* ================================================================== *
+ * 9d. THE VGA PLANAR/GRAPHICAL DEFECT GUARDS -- VGA-U2 Round 2
+ *
+ * Four probes that reach the UN-GATED arms the mode-13h gate does NOT exercise, one per
+ * review finding (handoff-v86c-vga-u2-review should-fix 1-4; the fixes are hunks A-G on
+ * handoff-v86c-vga-u2-fix-1).  Each FAILS on the pre-fix shape and passes after:
+ *
+ *   R1 (finding 1, the guest-reachable HOST ABORT): flip attribute_mode bit 0 on a fresh
+ *      machine (crtc_mode 0 -> the substitution arm, virtual_width 0) then write 0xA0000 --
+ *      the pre-fix code divided by zero (SIGFPE).
+ *   R2 (finding 2, negative static writes): start_address > addr through the substitution
+ *      arm poisons the diff ranges negative; the pre-fix replot/redraw then index the
+ *      pixel/dest statics negatively and zero a canaried LFB tail.
+ *   R3 (finding 3, OOB static read): read mode 0 with plane_read >= 4 (graphical, no
+ *      chain-4) must answer 0 (the reference's typed-array undefined), not the adjacent
+ *      static's bytes.
+ *   R4 (finding 4, silent resize divergence): a mid-run CRTC offset change resizes the dest
+ *      buffer; the reference allocates a FRESH zeroed region, so the pre-fix static's stale
+ *      pixels are a divergence.
+ * ================================================================== */
+static void test_vga_planar_defects(void)
+{
+    /* R1: the div-by-zero.  No CRTC programming -- crtc_mode stays 0 (vga.h's constructor
+     * value), so the substitution arm runs with virtual_width 0. */
+    machine_reset();
+    {
+        vga_device_t *vga = vga_device();
+        io_port_write8(0x3C0, 0x10);
+        io_port_write8(0x3C0, 0x01);
+        CHECK(vga->graphical_mode);
+        write8(0xA0000, 0x42);       /* the pre-fix SIGFPE was in vga_addr_to_pixel here */
+        CHECK_EQ(read8(0xA0000), 0x42);
+        vga_screen_fill_buffer(vga); /* and the pre-fix SIGFPE in vga_replot here */
+        CHECK_EQ(vga_dest_buffer(vga, NULL), NULL); /* no size -> no dest buffer */
+    }
+
+    /* R2: negative diff starts.  Program mode 13h, then force the substitution arm
+     * (crtc_mode bits 0-1 clear) and a start address far above the written byte.  The
+     * pre-fix replot/redraw index the pixel/dest statics negatively; the fix's start<0 clamp
+     * skips those iterations (the JS typed-array no-op).  The negative write lands inside
+     * the dest buffer's UNUSED tail (beyond virtual_width*virtual_height pixels), which the
+     * redraw never legitimately touches -- so a canary there detects the corruption. */
+    machine_reset();
+    {
+        vga_device_t *vga = vga_device();
+        vga_program_mode13(vga);
+        crtc_write(0x17, 0xCC); /* substitution arm: crtc_mode & 3 == 0 */
+        crtc_write(0x0C, 0xFF);
+        crtc_write(0x0D, 0xFF); /* start_address = 0xFFFF > addr 0 */
+        int32_t pixels = 0;
+        const uint8_t *dest = vga_dest_buffer(vga, &pixels);
+        CHECK(dest != NULL);
+        /* canary the last 512 KiB of the 4 MiB dest static (well past the used pixels) */
+        const uint32_t base = (uint32_t)VGA_DEST_BUFFER_MAX_PIXELS * 4 - 0x80000u;
+        for (uint32_t o = base; o < (uint32_t)VGA_DEST_BUFFER_MAX_PIXELS * 4; o++) {
+            ((uint8_t *)dest)[o] = 0x5A;
+        }
+        write8(0xA0000, 0x42);  /* poisons diff_plot_min/diff_addr_min negative */
+        vga_screen_fill_buffer(vga);
+        bool intact = true;
+        for (uint32_t o = base; o < (uint32_t)VGA_DEST_BUFFER_MAX_PIXELS * 4; o++) {
+            if (dest[o] != 0x5A) { intact = false; break; }
+        }
+        CHECK(intact); /* the pre-fix negative writes clobbered part of the dest tail */
+    }
+
+    /* R3: plane_read >= 4 in graphical non-chain-4 read mode 0.  The pre-fix read indexes
+     * vga_planes[plane<<16 | a] with plane unmasked -- plane 4 is one past the 256 KiB array
+     * (which, in this build, is the LFB's first byte), so a canary there is leaked.  The fix
+     * returns 0, the reference's typed-array undefined. */
+    machine_reset();
+    {
+        vga_device_t *vga = vga_device();
+        vga_program_mode13(vga);
+        seq16_write(0x04, 0x00);    /* no chain-4: plane = plane_read, unmasked */
+        write8(0xE0000000, 0x5A);   /* canary one-past-planes (the LFB base in this layout) */
+        gc16_write(0x04, 4);        /* plane_read = 4 */
+        CHECK_EQ(read8(0xA0000), 0); /* the pre-fix read leaked the adjacent static's 0x5A */
+    }
+
+    /* R4: a mid-run resize re-zeroes the dest buffer (the reference's fresh allocation). */
+    machine_reset();
+    {
+        vga_device_t *vga = vga_device();
+        int32_t pixels = 0;
+        const uint8_t *dest = NULL;
+        vga_program_mode13(vga);
+        io_port_write8(0x3C8, 5);
+        io_port_write8(0x3C9, 0x3F);
+        io_port_write8(0x3C9, 0x00);
+        io_port_write8(0x3C9, 0x00);
+        write8(0xA0000, 5);
+        vga_screen_fill_buffer(vga);
+        dest = vga_dest_buffer(vga, &pixels);
+        CHECK(dest != NULL);
+        CHECK_EQ(memcmp(dest + 4 * 0, "\xFF\x00\x00\xFF", 4), 0); /* pixel 0 red, pre-resize */
+        crtc_write(0x13, 0x30); /* offset 48 -> virtual_width 384: a real resize */
+        CHECK_EQ(vga->virtual_width, 384);
+        dest = vga_dest_buffer(vga, &pixels);
+        CHECK(dest != NULL);
+        /* the fresh region is FULLY zero, alpha included (the reference's wasm growth) */
+        CHECK_EQ(memcmp(dest + 4 * 0, "\x00\x00\x00\x00", 4), 0); /* freshly zeroed, not red */
+    }
+}
+
 int main(void)
 {
     RUN(test_clock, "clock: 1 guest instruction = 1 us, through the PIT, the PM timer and the TSC");
@@ -3273,6 +3566,8 @@ int main(void)
     RUN(test_virtio, "virtio: the PCI function and its capability chain, feature negotiation, the queues, both directions of the console, the IRQ route");
     RUN(test_vga, "vga: the always-present device, the live LFB, the window's text store, PCI 00:12.0, the per-adapter flags, the document format");
     RUN(test_vga_text, "vga text (U1): the CRTC/attribute/DAC decode, put_char flags+colours (P2), the start-address + split-screen arm (P4)");
+    RUN(test_vga_graphical, "vga mode 13h (U2): the sequencer/graphics registers, the graphical_mode flip (P5), the pixel stride (P3), the palette lanes (P1)");
+    RUN(test_vga_planar_defects, "vga planar/graphical defect guards (U2 R2): div-by-zero, negative static writes, plane_read>=4, mid-run resize");
 
     printf("hw_selftest: %d checks, %d failures, %d skipped\n", checks, failures, skips);
     return failures != 0;

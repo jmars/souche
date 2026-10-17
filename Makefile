@@ -527,6 +527,14 @@ tests/vga-text.img: tests/vga-text.asm tests/test.ld
 	$(LD) $(LDFLAGS) -o $(BUILD)/vga-text.elf $(BUILD)/vga-text.o
 	$(OBJCOPY) -O binary $(BUILD)/vga-text.elf $@
 
+# VGA-U2's differential image (tests/gate-vga-2.sh): self-programs mode 13h, paints a
+# 16-colour ramp + edge cells, reads back through read modes 0 and 1, halts.  Same shape.
+tests/vga-mode13.img: tests/vga-mode13.asm tests/test.ld
+	@mkdir -p $(BUILD)
+	$(AS) $(ASFLAGS) -o $(BUILD)/vga-mode13.o tests/vga-mode13.asm
+	$(LD) $(LDFLAGS) -o $(BUILD)/vga-mode13.elf $(BUILD)/vga-mode13.o
+	$(OBJCOPY) -O binary $(BUILD)/vga-mode13.elf $@
+
 # HANDOFF=v86c-repo-weight: the 64 MiB guest-gate disk, materialised from the
 # committed xz (the raw image is not tracked; the helper's contract -- default
 # path only, never clobber, sha256-verified before it is put in place -- is in

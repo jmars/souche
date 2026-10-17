@@ -1,37 +1,34 @@
 /*
- * vga.c -- the VGA device: U0's seats plus U1's TEXT-MODE SUBSET (HANDOFF=v86c-vga).
+ * vga.c -- the VGA device: U0's seats, U1's text mode, U2's MODE 13h (HANDOFF=v86c-vga).
  *
- * U0 landed the 8 MiB LFB, the 0xA0000 window (as a read-0/discard stand-in), PCI 00:12.0,
- * and the adapter installation.  U1 lands the reference's text mode on top:
+ * U0 landed the 8 MiB LFB, the 0xA0000 window, PCI 00:12.0, and the adapter installation.
+ * U1 landed the reference's text mode: the CRTC, the attribute controller, the DAC, the text
+ * window handlers, and the redraw/put_char arithmetic.  U2 lands the reference's mode 13h
+ * and the graphical document:
  *
- *   - the CRTC (0x3D4/0x3D5 and the 0x3B4/0x3B5 monochrome aliases): start address,
- *     offset, line compare, cursor, and update_vga_size -> set_size_text;
- *   - the attribute controller (0x3C0/0x3C1): the index/data flip-flop, the internal
- *     palette (dac_map[0..15]), attribute_mode (bit 0 flips graphical_mode),
- *     color_plane_enable, horizontal_panning, color_select;
- *   - the DAC (0x3C6-0x3C9): dac_mask, dac_state, the read/write indices, and the 6-bit
- *     expand + byte-lane rotation into vga256_palette;
- *   - vga_memory_write_text_mode / text_mode_redraw / put_char (the flags + palette math),
- *     update_cursor / update_cursor_scanline, set_size_text;
- *   - the 0xA0000-0xBFFFF window's real handlers (vga_memory_read / vga_memory_write);
- *   - the misc output register (0x3C2/0x3CC) and the input-status flip-flop reset
- *     (0x3DA/0x3BA).
+ *   - the sequencer (0x3C4/0x3C5): clocking_mode, plane_write_bm, character_map_select,
+ *     sequencer_memory_mode (whose bit 3 -- Chain 4 -- is what mode 13h turns on);
+ *   - the graphics controller (0x3CE/0x3CF): the planar write pipeline (set/reset, rotate,
+ *     bitmap, write modes 0-3), plane_read, planar_mode (the 0x40/0x60 shift modes), the
+ *     miscellaneous graphics register (memory space select), color compare/don't care;
+ *   - the graphical_mode flip (attribute_mode bit 0) feeding update_vga_size's graphical
+ *     branch -> set_size_graphical -> the dest buffer;
+ *   - vga_memory_write_graphical / the read modes 0 and 1 window arms;
+ *   - vga_replot + vga_redraw (with the reference's DEST-BUFFER CLAMP QUIRK: a pixel past
+ *     virtual_width*virtual_height is a typed-array no-op, reproduced as a bounded skip) and
+ *     vga_screen_fill_buffer, which the document writer calls ONCE at the stop.
  *
  * Every arithmetic detail is the REFERENCE'S OWN, reproduced rather than "corrected" -- the
- * two places a silent "fix" would cost a byte-exact document are the DAC 6-bit expand
- * (vga.js:1680-1684: `b = v & 1; v = v<<2 | b<<1 | b`, NOT the textbook `v<<2|v>>4`) and
- * the CRTC read swap (0x0C returns start_address's LOW byte, 0x0D its HIGH byte, while the
- * writes are unswapped -- vga.js:1902-1907).  Both are pinned by the hw_selftest and the
- * differential gate.
+ * three places a silent "fix" would cost a byte-exact document are the DAC 6-bit expand
+ * (vga.js:1680-1684: `b = v & 1; v = v<<2 | b<<1 | b`, NOT the textbook `v<<2|v>>4`), the
+ * CRTC read swap (0x0C returns start_address's LOW byte, 0x0D its HIGH byte --
+ * vga.js:1902-1907), and the address-to-pixel shift count (vga.js:1032-1048, load-bearing
+ * for chain-4).  All three are pinned by the hw_selftest and the differential gate.
  *
- * NOT HERE (named so nobody reads a silent gap as a prefix): mode 13h and the graphical
- * buffer (U2), the planar reads/writes/latches (U3), dispi/SVGA/bank switching (U4).  In U1
- * the sequencer (0x3C4/0x3C5) and graphics controller (0x3CE/0x3CF) ports are UNCLAIMED:
- * their register values are the constructor defaults (plane_write_bm 0xF, plane_read 0,
- * miscellaneous_graphics_register 0), so the window decode always selects memory space 0
- * (0xA0000) and the text write path always runs.  graphical_mode is only reachable through
- * the attribute controller's bit 0, and U1's gates never set it (the document refuses it,
- * as does the reference leg).
+ * NOT HERE (named so nobody reads a silent gap as a prefix): the planar 16-colour modes'
+ * LATCH paths and shift modes 0x00/0x20 are U3's (ported whole here -- the replot/redraw/
+ * write switches are ONE function each in the reference -- but U3's gate proves them), and
+ * dispi/SVGA/bank switching/the real dirty bitmap are U4's (svga_enabled is always false).
  */
 
 #include "vga.h"
@@ -64,6 +61,14 @@ static uint8_t vga_vram[VGA_DEFAULT_VRAM_SIZE + 16];
  * only to the planar paths U3 owns and to the read latches below. */
 static uint8_t vga_planes[VGA_PLANE_MEMORY_SIZE];
 
+/* THE PIXEL BUFFER (vga.js:382) -- vga_replot's output, 8 pixels per plane byte, indexed by
+ * pixel address.  Then THE DEST BUFFER (vga.js:1176-1180 image_data.data over the dest wasm
+ * buffer): virtual_width*virtual_height RGBA bytes, what vga_redraw writes and what the
+ * graphical document serializes.  Both static, like every other device buffer. */
+static uint8_t vga_pixel_buffer[VGA_PIXEL_BUFFER_SIZE];
+static uint8_t vga_dest_bytes[VGA_DEST_BUFFER_MAX_PIXELS * 4];
+static int32_t vga_dest_pixels; /* virtual_width * virtual_height, 0 = unsized */
+
 /* vga.js:38-55: the four host memory spaces, selected by miscellaneous_graphics_register
  * bits 3-2.  U1 decodes the default (index 0, 0xA0000); the register that changes the
  * select is U2's graphics controller, so in U1 the select is always 0. */
@@ -88,6 +93,22 @@ static bool vga_trace_enabled(void)
     }
     return enabled != 0;
 }
+
+/* forward declarations: the graphical methods call each other and the text methods call
+ * complete_redraw/replot from below. */
+static void vga_complete_redraw(vga_device_t *vga);
+static void vga_complete_replot(vga_device_t *vga);
+static void vga_update_layers(vga_device_t *vga);
+static void vga_update_vertical_retrace(vga_device_t *vga);
+static void vga_set_font_page(vga_device_t *vga);
+static void vga_set_size_graphical(vga_device_t *vga, int32_t width, int32_t height,
+                                   int32_t virtual_width, int32_t virtual_height, int32_t bpp);
+static void vga_replot(vga_device_t *vga);
+static void vga_redraw(vga_device_t *vga);
+static int32_t vga_addr_to_pixel(vga_device_t *vga, int32_t addr);
+static int32_t vga_bytes_per_line(vga_device_t *vga);
+static void vga_partial_redraw(vga_device_t *vga, int32_t min, int32_t max);
+static void vga_partial_replot(vga_device_t *vga, int32_t min, int32_t max);
 
 /* ------------------------------------------------------------------ *
  * the device methods the register decode drives (vga.js:841-1375's text half)
@@ -165,9 +186,24 @@ static void vga_set_font_bitmap(vga_device_t *vga, bool font_plane_dirty)
     }
 }
 
-/* vga.js:1279-1357, TEXT BRANCH ONLY.  The graphical branch (U2's mode-13h size) is
- * unreachable in U1: graphical_mode only flips through the attribute controller's bit 0,
- * and no U1 gate sets it. */
+/* vga.js:2601-2612.  Computes font_page_ab_enabled (the put_char flags reader) from the
+ * character map select and replays the page pair through the adapter (a no-op on every
+ * adapter this lane ships) + complete_redraw. */
+static void vga_set_font_page(vga_device_t *vga)
+{
+    static const int32_t linear_index_map[8] = { 0, 2, 4, 6, 1, 3, 5, 7 };
+    int32_t vga_index_a = ((vga->character_map_select & 0x0C) >> 2) |
+                          ((vga->character_map_select & 0x20) >> 3);
+    int32_t vga_index_b = (vga->character_map_select & 0x03) |
+                          ((vga->character_map_select & 0x10) >> 2);
+    vga->font_page_ab_enabled = vga_index_a != vga_index_b;
+    vga->screen->set_font_page(vga->screen, linear_index_map[vga_index_a],
+                               linear_index_map[vga_index_b]);
+    vga_complete_redraw(vga);
+}
+
+/* vga.js:1194-1271.  Both branches live now: text -> set_size_text, graphical -> the
+ * mode-13h size (set_size_graphical + update_vertical_retrace + update_layers). */
 static void vga_update_vga_size(vga_device_t *vga)
 {
     if (vga->svga_enabled) return;
@@ -186,7 +222,36 @@ static void vga_update_vga_size(vga_device_t *vga)
     if (!horizontal_characters || !vertical_scans) return;
 
     if (vga->graphical_mode) {
-        /* U2: the mode-13h size path. */
+        int32_t screen_width = horizontal_characters << 3;
+        /* vga.js:1219-1221: offset is half the bytes/words/dwords per line, but the number
+         * of pixels latched is 8 per character clock (4 for 8-bit PEL width). */
+        int32_t virtual_width = vga->offset_register << 4;
+        int32_t bpp = 4;
+
+        if (vga->attribute_mode & 0x40) {
+            screen_width >>= 1;
+            virtual_width >>= 1;
+            bpp = 8;
+        }
+        else if (vga->attribute_mode & 0x2) {
+            bpp = 1;
+        }
+
+        int32_t screen_height = vga_scan_line_to_screen_row(vga, (uint32_t)vertical_scans);
+
+        /* vga.js:1239-1248: the virtual height is however many rows fit in the host memory
+         * space (index 0's 128 KiB, ALWAYS -- the reference reads [0] even when the memory
+         * space select is a different one). */
+        int32_t available_bytes = (int32_t)vga_host_memory_space_size[0];
+        int32_t bytes_per_line = vga_bytes_per_line(vga);
+        int32_t virtual_height = bytes_per_line
+                                     ? (available_bytes + bytes_per_line - 1) / bytes_per_line
+                                     : screen_height;
+
+        vga_set_size_graphical(vga, screen_width, screen_height, virtual_width, virtual_height,
+                               bpp);
+        vga_update_vertical_retrace(vga);
+        vga_update_layers(vga);
         return;
     }
 
@@ -287,39 +352,342 @@ static void vga_memory_write_text_mode(vga_device_t *vga, int32_t addr, int32_t 
     vga_put_char(vga, row, col, chr, color);
 }
 
-/* vga.js:960-977.  In text mode the complete redraw IS the text redraw; the graphical arm
- * (svga_mark_dirty / the pixel-buffer diff) is U2's and unreachable in U1. */
+/* vga.js:1024-1048: the bytes per display line, from the offset register and the
+ * underline/crtc clocking bits.  update_vga_size's virtual_height divides the host memory
+ * space by this. */
+static int32_t vga_bytes_per_line(vga_device_t *vga)
+{
+    int32_t bytes_per_line = vga->offset_register << 2;
+    if (vga->underline_location_register & 0x40) bytes_per_line <<= 1;
+    else if (vga->crtc_mode & 0x40) bytes_per_line >>= 1;
+    return bytes_per_line;
+}
+
+/* vga.js:1032-1048: the address-to-pixel shift, counted in multiples of 0x40 then reduced
+ * by >>>6.  Load-bearing for mode 13h (underline 0x40 + crtc_mode 0xA3 + attribute_mode
+ * 0x41 -> 0, so a pixel's plane byte is at the SAME address -- which is what makes the
+ * chain-4 write's `addr &= ~3` line up with the replot's read). */
+static int32_t vga_addr_shift_count(vga_device_t *vga)
+{
+    int32_t shift_count = 0x80;
+    shift_count += ~vga->underline_location_register & vga->crtc_mode & 0x40;
+    shift_count -= vga->underline_location_register & 0x40;
+    shift_count -= vga->attribute_mode & 0x40;
+    return (int32_t)((uint32_t)shift_count >> 6);
+}
+
+/* vga.js:1050-1100: a plane address -> pixel address, undoing the CRTC's bit 13/14 row
+ * substitution.  Used by the window write's partial_replot (through vga_addr_to_pixel) and
+ * by update_layers' panning; mode 13h (crtc_mode & 3 == 3) takes the plain `addr << shift`
+ * arm. */
+static int32_t vga_addr_to_pixel(vga_device_t *vga, int32_t addr)
+{
+    int32_t shift_count = vga_addr_shift_count(vga);
+
+    if (~vga->crtc_mode & 0x3) {
+        int32_t pixel_addr = addr - (int32_t)vga->start_address;
+        pixel_addr &= (vga->crtc_mode << 13) | ~0x6000;
+        pixel_addr <<= shift_count;
+
+        int32_t row = 0, col = 0;
+        if (vga->virtual_width > 0) { /* vga.js: row = Infinity|0 = 0, col = NaN -- the NaN col makes the reassembled address substitution_bits | start_address; the caller (hunk A) never uses this value when virtual_width is 0. */
+            row = pixel_addr / vga->virtual_width;
+            col = pixel_addr % vga->virtual_width;
+        }
+
+        switch (vga->crtc_mode & 0x3) {
+        case 0x2:
+            row = (row << 1) | (addr >> 13 & 0x1);
+            break;
+        case 0x1:
+            row = (row << 1) | (addr >> 14 & 0x1);
+            break;
+        case 0x0:
+            row = (row << 2) | (addr >> 13 & 0x3);
+            break;
+        default: break;
+        }
+
+        return row * vga->virtual_width + col + ((int32_t)vga->start_address << shift_count);
+    }
+
+    return addr << shift_count;
+}
+
+/* vga.js:1154-1192.  The dest buffer (image_data) is (re)allocated only when the
+ * dimensions change; the adapter's set_size_graphical records them either way.  The bpp
+ * argument is the reference's (a bus message argument here); only the dimensions drive the
+ * buffer. */
+static void vga_set_size_graphical(vga_device_t *vga, int32_t width, int32_t height,
+                                   int32_t virtual_width, int32_t virtual_height, int32_t bpp)
+{
+    if (virtual_width < 1) virtual_width = 1;
+    if (virtual_height < 1) virtual_height = 1;
+
+    bool needs_update = vga->screen_width != width || vga->screen_height != height ||
+                        vga->virtual_width != virtual_width ||
+                        vga->virtual_height != virtual_height;
+
+    if (needs_update) {
+        vga->screen_width = width;
+        vga->screen_height = height;
+        vga->virtual_width = virtual_width;
+        vga->virtual_height = virtual_height;
+
+        int32_t pixels = virtual_width * virtual_height;
+        if (pixels > (int32_t)VGA_DEST_BUFFER_MAX_PIXELS) {
+            /* the R4 hard bound: report and refuse, never a guest-reachable overrun. */
+            fprintf(stderr, "v86c: vga: refusing a %dx%d dest buffer (bounded at %u pixels)\n",
+                    (int)virtual_width, (int)virtual_height, VGA_DEST_BUFFER_MAX_PIXELS);
+            vga->virtual_width = 0;
+            vga->virtual_height = 0;
+            vga_dest_pixels = 0;
+            return;
+        }
+        vga_dest_pixels = pixels;
+        memset(vga_dest_bytes, 0, sizeof(vga_dest_bytes)); /* vga.js allocates a FRESH (zeroed) wasm region on every size change, so pixels the redraw does not rewrite read as 0; the static must be re-zeroed to match. */
+    }
+
+    vga->screen->set_size_graphical(vga->screen, width, height, virtual_width, virtual_height);
+    (void)bpp;
+}
+
+/* vga.js:1357-1366.  The latched start address updates here (the reference only latches on
+ * a vertical retrace, which is the stop's fill and update_vga_size's graphical arm). */
+static void vga_update_vertical_retrace(vga_device_t *vga)
+{
+    vga->port_3DA_value |= 0x8;
+    if (vga->start_address_latched != vga->start_address) {
+        vga->start_address_latched = vga->start_address;
+        vga_update_layers(vga);
+    }
+}
+
+/* vga.js:997-1017.  The diff ranges: register/window writes EXPAND them (or, on a complete
+ * redraw/replot, reset them to the whole pixel buffer); the pixels are computed only when
+ * vga_screen_fill_buffer runs at the stop. */
+static void vga_partial_redraw(vga_device_t *vga, int32_t min, int32_t max)
+{
+    if (min < vga->diff_addr_min) vga->diff_addr_min = min;
+    if (max > vga->diff_addr_max) vga->diff_addr_max = max;
+}
+
+static void vga_partial_replot(vga_device_t *vga, int32_t min, int32_t max)
+{
+    if (min < vga->diff_plot_min) vga->diff_plot_min = min;
+    if (max > vga->diff_plot_max) vga->diff_plot_max = max;
+    vga_partial_redraw(vga, min, max);
+}
+
+static void vga_reset_diffs(vga_device_t *vga)
+{
+    vga->diff_addr_min = (int32_t)vga->vga_memory_size;
+    vga->diff_addr_max = 0;
+    vga->diff_plot_min = (int32_t)vga->vga_memory_size;
+    vga->diff_plot_max = 0;
+}
+
+/* vga.js:960-980. */
 static void vga_complete_redraw(vga_device_t *vga)
 {
     if (vga->graphical_mode) {
-        return; /* U2: svga_mark_dirty / diff_addr_min..max */
+        /* U4 owns the svga_enabled arm (svga_mark_dirty). */
+        vga->diff_addr_min = 0;
+        vga->diff_addr_max = VGA_PIXEL_BUFFER_SIZE;
     }
-    vga_text_mode_redraw(vga);
+    else {
+        vga_text_mode_redraw(vga);
+    }
 }
 
-/* vga.js:984-997.  A no-op in text mode (its guard returns before touching the pixel
- * buffer), which is the only mode U1 can reach. */
+/* vga.js:982-995. */
 static void vga_complete_replot(vga_device_t *vga)
 {
     if (!vga->graphical_mode || vga->svga_enabled) return;
-    /* U2: diff_plot_min..max = 0..VGA_PIXEL_BUFFER_SIZE + complete_redraw */
+
+    vga->diff_plot_min = 0;
+    vga->diff_plot_max = VGA_PIXEL_BUFFER_SIZE;
+    vga_complete_redraw(vga);
 }
 
-/* vga.js:1301-1378, TEXT HALF.  In text mode update_layers is exactly text_mode_redraw; the
- * two early returns (svga_enabled; no virtual/screen width) are both true-by-construction
- * in U1, so the graphical layer composition is U2's. */
+/* vga.js:1273-1355.  In text mode this is text_mode_redraw; in graphical mode it computes
+ * the layer list (panning + split screen), which only the canvas adapter draws -- the
+ * document adapter's update_buffer is a no-op, so the document depends on the dest buffer,
+ * not on the layers.  The two early returns (svga_enabled; no virtual/screen width) and the
+ * palette-source/screen-disable arm are reproduced for the device's own state. */
 static void vga_update_layers(vga_device_t *vga)
 {
     if (!vga->graphical_mode) vga_text_mode_redraw(vga);
+
     if (vga->svga_enabled) return;
     if (!vga->virtual_width || !vga->screen_width) return;
-    /* U2: palette-source/screen-disable clear + the layer list */
+
+    if (!vga->palette_source || (vga->clocking_mode & 0x20)) {
+        vga->screen->clear_screen(vga->screen);
+        return;
+    }
+
+    int32_t pixel_panning = vga->horizontal_panning;
+    if (vga->attribute_mode & 0x40) pixel_panning >>= 1;
+    int32_t byte_panning = vga->preset_row_scan >> 5 & 0x3;
+    int32_t pixel_addr_start =
+        vga_addr_to_pixel(vga, (int32_t)vga->start_address_latched + byte_panning);
+    int32_t start_buffer_row = pixel_addr_start / vga->virtual_width;
+    int32_t start_buffer_col = pixel_addr_start % vga->virtual_width + pixel_panning;
+
+    int32_t split_screen_row =
+        vga_scan_line_to_screen_row(vga, (uint32_t)(1 + vga->line_compare));
+    if (split_screen_row > vga->screen_height) split_screen_row = vga->screen_height;
+    int32_t split_buffer_height = vga->screen_height - split_screen_row;
+
+    /* The reference builds `this.layers` and calls screen.update_buffer(this.layers); every
+     * adapter this lane ships treats update_buffer as a no-op, so the list itself is not
+     * materialized -- the device's observable state (screen clear, retrace latch) is above. */
+    (void)start_buffer_col;
+    (void)start_buffer_row;
+    (void)split_screen_row;
+    (void)split_buffer_height;
+}
+
+/* ------------------------------------------------------------------ *
+ * the planar write pipeline -- vga.js:743-839 (apply_*) and 675-741
+ * (vga_memory_write_graphical)
+ *
+ * Ported WHOLE (all four write modes and both chains) rather than the mode-13h subset, so
+ * the reference's single switch is not split into a partial function with a silent-wrong
+ * divergence surface (the plan's R1).  Mode 13h exercises write mode 0 + chain 4; U3's gate
+ * will exercise the rest.  A plane write whose address runs past the 64 KiB plane VIEW is
+ * the reference's typed-array out-of-range no-op -- reproduced as a bounded drop.
+ * ------------------------------------------------------------------ */
+static int32_t vga_plane_view_byte(int32_t plane, int32_t a)
+{
+    if ((uint32_t)a >= VGA_BANK_SIZE) return 0;
+    return vga_planes[(uint32_t)(plane << 16) | (uint32_t)a];
+}
+
+static uint32_t vga_apply_feed(int32_t data_byte)
+{
+    uint32_t dword = (uint32_t)data_byte;
+    dword |= dword << 8;
+    dword |= dword << 16;
+    dword |= dword << 24;
+    return dword;
+}
+
+static uint32_t vga_apply_expand(int32_t data_byte)
+{
+    uint32_t dword = (data_byte & 0x1) ? 0xFFu : 0u;
+    dword |= (uint32_t)((data_byte & 0x2) ? 0xFFu : 0u) << 8;
+    dword |= (uint32_t)((data_byte & 0x4) ? 0xFFu : 0u) << 16;
+    dword |= (uint32_t)((data_byte & 0x8) ? 0xFFu : 0u) << 24;
+    return dword;
+}
+
+static int32_t vga_apply_rotate(vga_device_t *vga, int32_t data_byte)
+{
+    uint32_t wrapped = (uint32_t)data_byte | ((uint32_t)data_byte << 8);
+    uint32_t count = (uint32_t)vga->planar_rotate_reg & 0x7;
+    return (int32_t)((wrapped >> count) & 0xFF);
+}
+
+static uint32_t vga_apply_setreset(vga_device_t *vga, uint32_t data_dword,
+                                   uint32_t enable_dword)
+{
+    uint32_t setreset_dword = vga_apply_expand(vga->planar_setreset);
+    data_dword |= enable_dword & setreset_dword;
+    data_dword &= ~enable_dword | setreset_dword;
+    return data_dword;
+}
+
+static uint32_t vga_apply_logical(vga_device_t *vga, uint32_t data_dword,
+                                  uint32_t latch_dword)
+{
+    switch (vga->planar_rotate_reg & 0x18) {
+    case 0x08: return data_dword & latch_dword;
+    case 0x10: return data_dword | latch_dword;
+    case 0x18: return data_dword ^ latch_dword;
+    default: break;
+    }
+    return data_dword;
+}
+
+static uint32_t vga_apply_bitmask(uint32_t data_dword, uint32_t bitmask_dword,
+                                  uint32_t latch_dword)
+{
+    uint32_t plane_dword = bitmask_dword & data_dword;
+    plane_dword |= ~bitmask_dword & latch_dword;
+    return plane_dword;
+}
+
+static void vga_memory_write_graphical(vga_device_t *vga, int32_t addr, int32_t value)
+{
+    int32_t write_mode = vga->planar_mode & 3;
+    uint32_t bitmask = vga_apply_feed(vga->planar_bitmap);
+    uint32_t setreset_dword = vga_apply_expand(vga->planar_setreset);
+    uint32_t setreset_enable_dword = vga_apply_expand(vga->planar_setreset_enable);
+    uint32_t latch = (uint32_t)vga->latch_dword;
+    uint32_t plane_dword;
+
+    switch (write_mode) {
+    case 0:
+        value = vga_apply_rotate(vga, value);
+        plane_dword = vga_apply_feed(value);
+        plane_dword = vga_apply_setreset(vga, plane_dword, setreset_enable_dword);
+        plane_dword = vga_apply_logical(vga, plane_dword, latch);
+        plane_dword = vga_apply_bitmask(plane_dword, bitmask, latch);
+        break;
+    case 1:
+        plane_dword = latch;
+        break;
+    case 2:
+        plane_dword = vga_apply_expand(value);
+        plane_dword = vga_apply_logical(vga, plane_dword, latch);
+        plane_dword = vga_apply_bitmask(plane_dword, bitmask, latch);
+        break;
+    case 3:
+        value = vga_apply_rotate(vga, value);
+        bitmask &= vga_apply_feed(value);
+        plane_dword = setreset_dword;
+        plane_dword = vga_apply_bitmask(plane_dword, bitmask, latch);
+        break;
+    default:
+        plane_dword = 0;
+        break;
+    }
+
+    int32_t plane_select = 0xF;
+    switch (vga->sequencer_memory_mode & 0xC) {
+    case 0x0: /* Odd/Even (chain 2) */
+        plane_select = 0x5 << (addr & 0x1);
+        addr &= ~0x1;
+        break;
+    case 0x8: /* Chain 4 */
+    case 0xC:
+        plane_select = 1 << (addr & 0x3);
+        addr &= ~0x3;
+        break;
+    default: break;
+    }
+
+    plane_select &= vga->plane_write_bm;
+
+    if ((uint32_t)addr < VGA_BANK_SIZE) {
+        if (plane_select & 0x1) vga_planes[addr] = (uint8_t)(plane_dword & 0xFF);
+        if (plane_select & 0x2) vga_planes[1 * VGA_BANK_SIZE + addr] = (uint8_t)(plane_dword >> 8 & 0xFF);
+        if (plane_select & 0x4) vga_planes[2 * VGA_BANK_SIZE + addr] = (uint8_t)(plane_dword >> 16 & 0xFF);
+        if (plane_select & 0x8) vga_planes[3 * VGA_BANK_SIZE + addr] = (uint8_t)(plane_dword >> 24 & 0xFF);
+    }
+
+    if (vga->virtual_width > 0) { /* vga.js: with virtual_width 0 vga_addr_to_pixel yields NaN, partial_replot's NaN comparisons leave the diff ranges untouched -- the same as not expanding. */
+        int32_t pixel_addr = vga_addr_to_pixel(vga, addr);
+        vga_partial_replot(vga, pixel_addr, pixel_addr + 7);
+    }
 }
 
 /* ------------------------------------------------------------------ *
  * the window handlers -- vga.js:565-662 (vga_memory_read / vga_memory_write)
  *
- * The svga_enabled (banked mode) arms are U4's: svga_enabled is always false in U1 (no
+ * The svga_enabled (banked mode) arms are U4's: svga_enabled is always false in U1/U2 (no
  * dispi), so they are unreachable and not implemented.
  * ------------------------------------------------------------------ */
 static int32_t vga_memory_read(uint32_t addr)
@@ -333,7 +701,7 @@ static int32_t vga_memory_read(uint32_t addr)
     int32_t a = (int32_t)addr - (int32_t)vga_host_memory_space_start[space];
     if (a < 0 || a >= (int32_t)vga_host_memory_space_size[space]) return 0;
 
-    /* the read latches (vga.js:588-592).  Each plane VIEW is 64 KiB, so an address past it
+    /* the read latches (vga.js:583-586).  Each plane VIEW is 64 KiB, so an address past it
      * reads as the JS typed array's out-of-range 0 -- reproduced here. */
     vga->latch_dword = 0;
     if (a < (int32_t)VGA_BANK_SIZE) {
@@ -343,10 +711,36 @@ static int32_t vga_memory_read(uint32_t addr)
                            (uint32_t)vga_planes[3 * VGA_BANK_SIZE + a] << 24;
     }
 
-    /* read mode 0 (read mode 1, planar_mode & 8, is U3's).  Text mode stores linearly and
-     * reads plane 0 (plane_read & 3); the chain-4/odd-even arms are U2/U3's. */
+    if (vga->planar_mode & 0x08) {
+        /* read mode 1 (vga.js:588-611): the colour compare / don't-care path. */
+        int32_t reading = 0xFF;
+        if (vga->color_dont_care & 0x1)
+            reading &= vga_plane_view_byte(0, a) ^ ~((vga->color_compare & 0x1) ? 0xFF : 0x00);
+        if (vga->color_dont_care & 0x2)
+            reading &= vga_plane_view_byte(1, a) ^ ~((vga->color_compare & 0x2) ? 0xFF : 0x00);
+        if (vga->color_dont_care & 0x4)
+            reading &= vga_plane_view_byte(2, a) ^ ~((vga->color_compare & 0x4) ? 0xFF : 0x00);
+        if (vga->color_dont_care & 0x8)
+            reading &= vga_plane_view_byte(3, a) ^ ~((vga->color_compare & 0x8) ? 0xFF : 0x00);
+        return reading;
+    }
+
+    /* read mode 0 (vga.js:612-635) */
     int32_t plane = vga->plane_read;
-    if (!vga->graphical_mode) plane &= 0x3;
+    if (!vga->graphical_mode) {
+        plane &= 0x3;
+    }
+    else if (vga->sequencer_memory_mode & 0x8) {
+        /* Chain 4 */
+        plane = a & 0x3;
+        a &= ~0x3;
+    }
+    else if (vga->planar_mode & 0x10) {
+        /* Odd/Even host read */
+        plane = a & 0x1;
+        a &= ~0x1;
+    }
+    if (plane > 3) return 0; /* vga.js: vga_memory[plane << 16 | a] with plane >= 4 is past the 256 KiB typed array -> undefined -> the guest reads 0 (cpu.js:235-242). */
     return vga_planes[(uint32_t)(plane << 16) | (uint32_t)a];
 }
 
@@ -363,18 +757,198 @@ static void vga_memory_write(uint32_t addr, int32_t value)
     if (a < 0 || a >= (int32_t)vga_host_memory_space_size[space]) return;
 
     if (vga->graphical_mode) {
-        /* U2: vga_memory_write_graphical */
+        vga_memory_write_graphical(vga, a, value);
         return;
     }
     if (!(vga->plane_write_bm & 0x3)) {
         if (vga->plane_write_bm & 0x4) {
-            /* U3: write to plane 2 (the font bitmap).  plane2 is a 64 KiB VIEW, so an
-             * address past it is a no-op in the reference (typed-array out of range). */
+            /* write to plane 2 (the font bitmap).  plane2 is a 64 KiB VIEW, so an address
+             * past it is a no-op in the reference (typed-array out of range). */
             if (a < (int32_t)VGA_BANK_SIZE) vga_planes[2 * VGA_BANK_SIZE + a] = (uint8_t)value;
         }
         return;
     }
     vga_memory_write_text_mode(vga, a, value);
+}
+
+/* ------------------------------------------------------------------ *
+ * the pixel pipeline -- vga.js:2337-2580 (vga_replot, vga_redraw,
+ * screen_fill_buffer).  Reached ONLY from vga_screen_fill_buffer (the stop's replay); the
+ * run's register/window writes expand the diff ranges instead (vga.js's browser frame loop
+ * is the other caller, and this port has none).
+ * ------------------------------------------------------------------ */
+
+/* vga.js:2337-2455.  plane memory -> pixel buffer, honouring the shift mode (0x40/0x60 for
+ * mode 13h; 0x00/0x20 are the planar shift modes U3's gate will exercise -- ported whole
+ * because they are ONE switch in the reference).  A plane read past the 64 KiB VIEW reads as
+ * the typed array's out-of-range 0, which makes pixel_buffer entries past 64 KiB zero. */
+static void vga_replot(vga_device_t *vga)
+{
+    int32_t start = vga->diff_plot_min & ~0xF;
+    if (start < 0) start = 0; /* vga.js: negative pixel_buffer writes are typed-array no-ops and the plane reads are undefined -> 0; starting at 0 is byte-exact. */
+    int32_t end = vga->diff_plot_max | 0xF;
+    if (end > (int32_t)VGA_PIXEL_BUFFER_SIZE - 1) end = (int32_t)VGA_PIXEL_BUFFER_SIZE - 1;
+
+    int32_t addr_shift = vga_addr_shift_count(vga);
+    int32_t addr_substitution = ~vga->crtc_mode & 0x3;
+    int32_t shift_mode = vga->planar_mode & 0x60;
+    bool pel_width = (vga->attribute_mode & 0x40) != 0;
+
+    int32_t pixel_addr = start;
+    while (pixel_addr <= end) {
+        int32_t addr = pixel_addr >> addr_shift;
+        if (addr_substitution) {
+            int32_t row = 0, col = 0;
+            if (vga->virtual_width > 0) { row = pixel_addr / vga->virtual_width; col = pixel_addr - vga->virtual_width * row; }
+
+            switch (addr_substitution) {
+            case 0x1:
+                addr = (row & 0x1) << 13;
+                row >>= 1;
+                break;
+            case 0x2:
+                addr = (row & 0x1) << 14;
+                row >>= 1;
+                break;
+            case 0x3:
+                addr = (row & 0x3) << 13;
+                row >>= 2;
+                break;
+            default: break;
+            }
+
+            addr |= ((row * vga->virtual_width + col) >> addr_shift) + (int32_t)vga->start_address;
+        }
+
+        int32_t byte0 = vga_plane_view_byte(0, addr);
+        int32_t byte1 = vga_plane_view_byte(1, addr);
+        int32_t byte2 = vga_plane_view_byte(2, addr);
+        int32_t byte3 = vga_plane_view_byte(3, addr);
+
+        uint8_t shift_loads[8] = { 0 };
+        switch (shift_mode) {
+        case 0x00: /* Planar Shift Mode */
+            byte0 <<= 0;
+            byte1 <<= 1;
+            byte2 <<= 2;
+            byte3 <<= 3;
+            for (int i = 7; i >= 0; i--) {
+                shift_loads[7 - i] = (uint8_t)((byte0 >> i & 1) | (byte1 >> i & 2) |
+                                              (byte2 >> i & 4) | (byte3 >> i & 8));
+            }
+            break;
+        case 0x20: /* Packed Shift Mode (modes 4h/5h) */
+            shift_loads[0] = (uint8_t)((byte0 >> 6 & 0x3) | (byte2 >> 4 & 0xC));
+            shift_loads[1] = (uint8_t)((byte0 >> 4 & 0x3) | (byte2 >> 2 & 0xC));
+            shift_loads[2] = (uint8_t)((byte0 >> 2 & 0x3) | (byte2 >> 0 & 0xC));
+            shift_loads[3] = (uint8_t)((byte0 >> 0 & 0x3) | (byte2 << 2 & 0xC));
+            shift_loads[4] = (uint8_t)((byte1 >> 6 & 0x3) | (byte3 >> 4 & 0xC));
+            shift_loads[5] = (uint8_t)((byte1 >> 4 & 0x3) | (byte3 >> 2 & 0xC));
+            shift_loads[6] = (uint8_t)((byte1 >> 2 & 0x3) | (byte3 >> 0 & 0xC));
+            shift_loads[7] = (uint8_t)((byte1 >> 0 & 0x3) | (byte3 << 2 & 0xC));
+            break;
+        case 0x40: /* 256-Color Shift Mode (modes 13h and unchained 256) */
+        case 0x60:
+            shift_loads[0] = (uint8_t)(byte0 >> 4 & 0xF);
+            shift_loads[1] = (uint8_t)(byte0 >> 0 & 0xF);
+            shift_loads[2] = (uint8_t)(byte1 >> 4 & 0xF);
+            shift_loads[3] = (uint8_t)(byte1 >> 0 & 0xF);
+            shift_loads[4] = (uint8_t)(byte2 >> 4 & 0xF);
+            shift_loads[5] = (uint8_t)(byte2 >> 0 & 0xF);
+            shift_loads[6] = (uint8_t)(byte3 >> 4 & 0xF);
+            shift_loads[7] = (uint8_t)(byte3 >> 0 & 0xF);
+            break;
+        default: break;
+        }
+
+        if (pel_width) {
+            for (int i = 0, j = 0; i < 4; i++, pixel_addr++, j += 2) {
+                vga_pixel_buffer[pixel_addr] = (uint8_t)((shift_loads[j] << 4) | shift_loads[j + 1]);
+            }
+        }
+        else {
+            for (int i = 0; i < 8; i++, pixel_addr++) {
+                vga_pixel_buffer[pixel_addr] = shift_loads[i];
+            }
+        }
+    }
+}
+
+/* vga.js:2463-2507.  pixel buffer -> dest buffer, through the internal palette (4-bit) or
+ * straight through vga256_palette (8-bit).  THE DEST-BUFFER CLAMP QUIRK: the reference's
+ * `buffer` is an Int32Array of virtual_width*virtual_height, and the loop's end is clamped
+ * to VGA_PIXEL_BUFFER_SIZE-1 -- so a pixel_addr past the dest buffer is a typed-array
+ * OUT-OF-RANGE NO-OP in JS.  Reproduced exactly: the write is skipped past the length. */
+static void vga_redraw(vga_device_t *vga)
+{
+    int32_t start = vga->diff_addr_min;
+    if (start < 0) start = 0; /* vga.js: negative dest writes are typed-array no-ops (pixel_buffer reads undefined) -- skipping them is byte-exact. */
+    int32_t end = vga->diff_addr_max;
+    if (end > (int32_t)VGA_PIXEL_BUFFER_SIZE - 1) end = (int32_t)VGA_PIXEL_BUFFER_SIZE - 1;
+
+    int32_t buffer_length = vga->virtual_width * vga->virtual_height;
+
+    int32_t mask = 0xFF;
+    int32_t colorset = 0x00;
+    if (vga->attribute_mode & 0x80) {
+        mask &= 0xCF;
+        colorset |= vga->color_select << 4 & 0x30;
+    }
+
+    if (vga->attribute_mode & 0x40) {
+        /* 8-bit mode */
+        for (int32_t pixel_addr = start; pixel_addr <= end; pixel_addr++) {
+            int32_t color256 = (vga_pixel_buffer[pixel_addr] & mask) | colorset;
+            uint32_t color = vga->vga256_palette[color256];
+            if (pixel_addr < buffer_length) {
+                uint32_t px = (color & 0xFF00u) | (color << 16) | (color >> 16) | 0xFF000000u;
+                vga_dest_bytes[4 * pixel_addr + 0] = (uint8_t)(px & 0xFF);
+                vga_dest_bytes[4 * pixel_addr + 1] = (uint8_t)(px >> 8 & 0xFF);
+                vga_dest_bytes[4 * pixel_addr + 2] = (uint8_t)(px >> 16 & 0xFF);
+                vga_dest_bytes[4 * pixel_addr + 3] = (uint8_t)(px >> 24 & 0xFF);
+            }
+        }
+    }
+    else {
+        /* 4-bit mode */
+        mask &= 0x3F;
+        colorset |= vga->color_select << 4 & 0xC0;
+        for (int32_t pixel_addr = start; pixel_addr <= end; pixel_addr++) {
+            int32_t color16 = vga_pixel_buffer[pixel_addr] & vga->color_plane_enable;
+            int32_t color256 = (vga->dac_map[color16] & mask) | colorset;
+            uint32_t color = vga->vga256_palette[color256];
+            if (pixel_addr < buffer_length) {
+                uint32_t px = (color & 0xFF00u) | (color << 16) | (color >> 16) | 0xFF000000u;
+                vga_dest_bytes[4 * pixel_addr + 0] = (uint8_t)(px & 0xFF);
+                vga_dest_bytes[4 * pixel_addr + 1] = (uint8_t)(px >> 8 & 0xFF);
+                vga_dest_bytes[4 * pixel_addr + 2] = (uint8_t)(px >> 16 & 0xFF);
+                vga_dest_bytes[4 * pixel_addr + 3] = (uint8_t)(px >> 24 & 0xFF);
+            }
+        }
+    }
+}
+
+void vga_screen_fill_buffer(vga_device_t *vga)
+{
+    if (!vga->graphical_mode) {
+        /* text mode: update the retrace latch and nothing else (vga.js:2511-2517). */
+        vga_update_vertical_retrace(vga);
+        return;
+    }
+    /* U4 owns the svga_enabled arm; the reference's wasm-resize check is a node no-op (no
+     * ImageData -> the dest buffer never shrank), so the port skips it. */
+    vga_replot(vga);
+    vga_redraw(vga);
+    vga_reset_diffs(vga);
+    vga_update_vertical_retrace(vga);
+}
+
+const uint8_t *vga_dest_buffer(const vga_device_t *vga, int32_t *pixels)
+{
+    (void)vga;
+    if (pixels != NULL) *pixels = vga_dest_pixels;
+    if (vga_dest_pixels == 0) return NULL;
+    return vga_dest_bytes;
 }
 
 /* ------------------------------------------------------------------ *
@@ -594,6 +1168,138 @@ static int32_t vga_port3C9_read(void *device, int32_t port)
     vga->dac_color_index_read = (vga->dac_color_index_read + 1) % 768;
     if (vga->dispi_enable_value & 0x20) return color8;
     return color8 >> 2;
+}
+
+/* ------------------------------------------------------------------ *
+ * the sequencer -- 0x3C4 (index) / 0x3C5 (data), vga.js:1534-1612
+ * ------------------------------------------------------------------ */
+static int32_t vga_port3C4_read(void *device, int32_t port)
+{
+    (void)port;
+    return VGA_DEV(device)->sequencer_index;
+}
+
+static void vga_port3C4_write(void *device, int32_t port, int32_t value)
+{
+    (void)port;
+    VGA_DEV(device)->sequencer_index = value;
+}
+
+static int32_t vga_port3C5_read(void *device, int32_t port)
+{
+    (void)port;
+    vga_device_t *vga = VGA_DEV(device);
+    switch (vga->sequencer_index) {
+    case 0x01: return vga->clocking_mode;
+    case 0x02: return vga->plane_write_bm;
+    case 0x03: return vga->character_map_select;
+    case 0x04: return vga->sequencer_memory_mode;
+    case 0x06: return 0x12; /* vga.js:1607-1608: the fixed sequencer id */
+    default: break;
+    }
+    return 0;
+}
+
+static void vga_port3C5_write(void *device, int32_t port, int32_t value)
+{
+    (void)port;
+    vga_device_t *vga = VGA_DEV(device);
+    switch (vga->sequencer_index) {
+    case 0x01: {
+        int32_t previous_clocking_mode = vga->clocking_mode;
+        vga->clocking_mode = value;
+        if ((previous_clocking_mode ^ value) & 0x20) vga_update_layers(vga);
+        vga_set_font_bitmap(vga, false);
+        break;
+    }
+    case 0x02: {
+        int32_t previous_plane_write_bm = vga->plane_write_bm;
+        vga->plane_write_bm = value;
+        if (!vga->graphical_mode && (previous_plane_write_bm & 0x4) &&
+            !(vga->plane_write_bm & 0x4)) {
+            /* End of font plane 2 write access (vga.js:1569-1573). */
+            vga_set_font_bitmap(vga, true);
+        }
+        break;
+    }
+    case 0x03: {
+        int32_t previous_character_map_select = vga->character_map_select;
+        vga->character_map_select = value;
+        if (!vga->graphical_mode && previous_character_map_select != value) {
+            vga_set_font_page(vga);
+        }
+        break;
+    }
+    case 0x04:
+        vga->sequencer_memory_mode = value;
+        break;
+    default: break;
+    }
+}
+
+/* ------------------------------------------------------------------ *
+ * the graphics controller -- 0x3CE (index) / 0x3CF (data), vga.js:1727-1825
+ * ------------------------------------------------------------------ */
+static int32_t vga_port3CE_read(void *device, int32_t port)
+{
+    (void)port;
+    return VGA_DEV(device)->graphics_index;
+}
+
+static void vga_port3CE_write(void *device, int32_t port, int32_t value)
+{
+    (void)port;
+    VGA_DEV(device)->graphics_index = value;
+}
+
+static int32_t vga_port3CF_read(void *device, int32_t port)
+{
+    (void)port;
+    vga_device_t *vga = VGA_DEV(device);
+    switch (vga->graphics_index) {
+    case 0x0: return vga->planar_setreset;
+    case 0x1: return vga->planar_setreset_enable;
+    case 0x2: return vga->color_compare;
+    case 0x3: return vga->planar_rotate_reg;
+    case 0x4: return vga->plane_read;
+    case 0x5: return vga->planar_mode;
+    case 0x6: return vga->miscellaneous_graphics_register;
+    case 0x7: return vga->color_dont_care;
+    case 0x8: return vga->planar_bitmap;
+    default: break;
+    }
+    return 0;
+}
+
+static void vga_port3CF_write(void *device, int32_t port, int32_t value)
+{
+    (void)port;
+    vga_device_t *vga = VGA_DEV(device);
+    switch (vga->graphics_index) {
+    case 0x0: vga->planar_setreset = value; break;
+    case 0x1: vga->planar_setreset_enable = value; break;
+    case 0x2: vga->color_compare = value; break;
+    case 0x3: vga->planar_rotate_reg = value; break;
+    case 0x4: vga->plane_read = value; break;
+    case 0x5: {
+        int32_t previous_planar_mode = vga->planar_mode;
+        vga->planar_mode = value;
+        if ((previous_planar_mode ^ value) & 0x60) {
+            /* Shift mode modified.  Pixel buffer invalidated (vga.js:1771-1775). */
+            vga_complete_replot(vga);
+        }
+        break;
+    }
+    case 0x6:
+        if (vga->miscellaneous_graphics_register != value) {
+            vga->miscellaneous_graphics_register = value;
+            vga_update_vga_size(vga);
+        }
+        break;
+    case 0x7: vga->color_dont_care = value; break;
+    case 0x8: vga->planar_bitmap = value; break;
+    default: break;
+    }
 }
 
 static int32_t vga_port3CC_read(void *device, int32_t port)
@@ -908,19 +1614,39 @@ void vga_init(vga_screen_t *screen, vga_screen_kind_t kind)
     vga->dac_state = 0;
     memset(vga->vga256_palette, 0, sizeof(vga->vga256_palette));
 
+    vga->sequencer_index = -1;
     vga->plane_write_bm = 0xF;
+    vga->sequencer_memory_mode = 0;
+    vga->clocking_mode = 0;
+    vga->graphics_index = -1;
+    vga->character_map_select = 0;
     vga->plane_read = 0;
     vga->planar_mode = 0;
-    vga->character_map_select = 0;
-    vga->clocking_mode = 0;
-    vga->sequencer_memory_mode = 0;
+    vga->planar_rotate_reg = 0;
+    vga->planar_bitmap = 0xFF;
+    vga->planar_setreset = 0;
+    vga->planar_setreset_enable = 0;
     vga->miscellaneous_graphics_register = 0;
+    vga->color_compare = 0;
+    vga->color_dont_care = 0;
     vga->font_page_ab_enabled = false;
+
+    vga->diff_addr_min = (int32_t)vga->vga_memory_size;
+    vga->diff_addr_max = 0;
+    vga->diff_plot_min = (int32_t)vga->vga_memory_size;
+    vga->diff_plot_max = 0;
 
     vga->miscellaneous_output_register = 0xFF;
     vga->port_3DA_value = 0xFF;
     vga->dispi_enable_value = 0;
     vga->latch_dword = 0;
+
+    /* The pixel and dest buffers are zeroed each fresh machine; the redraw writes every
+     * in-bounds dest pixel, but zeroing keeps a partial replay deterministic (and matches
+     * a fresh wasm dest allocation's zero-init on growth). */
+    memset(vga_pixel_buffer, 0, sizeof(vga_pixel_buffer));
+    memset(vga_dest_bytes, 0, sizeof(vga_dest_bytes));
+    vga_dest_pixels = 0;
 
     /* memory.c's LFB arms read these two; until this unit they were NULL/0 and every LFB
      * access took the hook table's carve-out instead.  The address constant is memory.h's
@@ -928,13 +1654,19 @@ void vga_init(vga_screen_t *screen, vga_screen_kind_t kind)
     vga_mem8 = vga_vram;
     vga_memory_size = vga->vga_memory_size;
 
-    /* THE PORTS (vga.js:328-365) -- the text-mode subset U1 owns.  The sequencer
-     * (0x3C4/0x3C5) and graphics controller (0x3CE/0x3CF) stay UNCLAIMED (U2/U3): their
-     * register values are the constructor defaults and never move in U1. */
+    /* THE PORTS (vga.js:306-365).  The sequencer/graphics writes use the CONSECUTIVE form
+     * so a 16-bit `out dx, ax` (the VGA programming idiom) lands as index=lo, data=hi --
+     * exactly the reference's register_write_consecutive.  The reads are individual (a
+     * 16-bit read of the index port answers the empty 0xFFFF in the reference, since only
+     * read8 is registered). */
     io_register_read(0x3C0, vga, vga_port3C0_read, vga_port3C0_read16, NULL);
     io_register_write(0x3C0, vga, vga_port3C0_write, NULL, NULL);
     io_register_read(0x3C1, vga, vga_port3C1_read, NULL, NULL);
     io_register_write(0x3C2, vga, vga_port3C2_write, NULL, NULL);
+
+    io_register_write_consecutive(0x3C4, vga, vga_port3C4_write, vga_port3C5_write, NULL, NULL);
+    io_register_read(0x3C4, vga, vga_port3C4_read, NULL, NULL);
+    io_register_read(0x3C5, vga, vga_port3C5_read, NULL, NULL);
 
     io_register_read(0x3C6, vga, vga_port3C6_read, NULL, NULL);
     io_register_write(0x3C6, vga, vga_port3C6_write, NULL, NULL);
@@ -947,6 +1679,10 @@ void vga_init(vga_screen_t *screen, vga_screen_kind_t kind)
 
     io_register_read(0x3CC, vga, vga_port3CC_read, NULL, NULL);
     io_register_read(0x3CA, vga, vga_port3CA_read, NULL, NULL);
+
+    io_register_write_consecutive(0x3CE, vga, vga_port3CE_write, vga_port3CF_write, NULL, NULL);
+    io_register_read(0x3CE, vga, vga_port3CE_read, NULL, NULL);
+    io_register_read(0x3CF, vga, vga_port3CF_read, NULL, NULL);
 
     io_register_read(0x3D4, vga, vga_port3D4_read, NULL, NULL);
     io_register_write(0x3D4, vga, vga_port3D4_write, vga_port3D4_write16, NULL);
@@ -985,25 +1721,21 @@ bool vga_write_document(const char *path, const char *image_sha256, uint64_t ima
         return false;
     }
 
-    /* THE REPLAY (oracle/run-vga.mjs:198-200): the reference leg replays the device's OWN
-     * text state through its recorder at the stop -- text_mode_redraw, update_cursor,
-     * update_cursor_scanline, in that order -- so the document is a function of final device
-     * state rather than of the call stream.  The C leg replays the same three calls through
-     * the installed adapter; the device does all the palette/attribute math.  (A graphical
-     * mode is refused by the writer below, exactly as the reference leg refuses it by name
-     * BEFORE its replay.)
-     *
-     * The set_size_text ahead of them is the reference's own set_state text branch
-     * (vga.js:557) and a C-only bookkeeping step: the reference recorder is a row,col-keyed
-     * Map with no grid, so its set_size_text is a no-op, but the C document adapter must
-     * know its grid size before put_char will record into it (a put_char outside the
-     * recorded grid is dropped).  It changes no document byte -- the cells it would have
-     * dropped are the zero cells the writer emits for an unsized grid anyway. */
+    /* THE REPLAY.  Text: the reference leg replays the device's OWN text state through its
+     * recorder at the stop -- set_size_text (the reference's set_state text branch,
+     * vga.js:557, and this port's grid-seeding step), text_mode_redraw, update_cursor,
+     * update_cursor_scanline, in that order (oracle/run-vga.mjs:198-200).  Graphical: the
+     * reference leg calls vga.screen_fill_buffer() ONCE at the stop (the plan's Q4/d), which
+     * is the ONE replot+redraw -- the run's register/window writes only expanded the diff
+     * ranges.  The C leg replays the same call through the device. */
     if (!vga->graphical_mode) {
         vga_set_size_text(vga, vga->max_cols, vga->max_rows);
         vga_text_mode_redraw(vga);
         vga_update_cursor(vga);
         vga_update_cursor_scanline(vga);
+    }
+    else {
+        vga_screen_fill_buffer(vga);
     }
 
     vga_doc_meta_t meta;
@@ -1021,6 +1753,7 @@ bool vga_write_document(const char *path, const char *image_sha256, uint64_t ima
     meta.virtual_height = vga->virtual_height;
     meta.cols = vga->max_cols;
     meta.rows = vga->max_rows;
+    meta.dest_buffer = vga_dest_buffer(vga, NULL);
 
     return vga_screen_document_write(vga->screen, path, &meta);
 }

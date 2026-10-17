@@ -77,6 +77,18 @@
 #define VGA_PLANE_MEMORY_SIZE (4 * VGA_BANK_SIZE)
 #define VGA_HOST_MEMORY_SPACE_COUNT 4u
 
+/* vga.js:26: the maximum number of pixels for a non-SVGA mode -- 8 pixels per byte over
+ * 256 KiB of plane memory.  The pixel_buffer replot writes into this many indices, and the
+ * redraw loop's end is clamped to VGA_PIXEL_BUFFER_SIZE-1 (vga.js:2341,2466). */
+#define VGA_PIXEL_BUFFER_SIZE (8 * VGA_BANK_SIZE)
+
+/* The dest buffer's hard bound (the reference's image_data grows wasm memory on demand; this
+ * port uses a fixed array and reports a refusal past the bound -- the R4 rule, never an
+ * unbounded index).  The largest VGA (non-SVGA) dest buffer is ~526K pixels: virtual_width
+ * <= offset<<4 <= 4080 (4-bit) and virtual_height = ceil(0x20000 / bytes_per_line), whose
+ * product peaks at 4080 * ceil(32768/255) = 526,320.  1 MiB pixels leaves ~2x headroom. */
+#define VGA_DEST_BUFFER_MAX_PIXELS (1u << 20)
+
 /* One rectangle of the framebuffer, as update_buffer takes it (vga.js:2562-2575 and
  * 2575/2575's `this.layers`; the fields are the object literal screen_fill_buffer builds).
  * `buffer` is the reference's `image_data` (an ImageData over the 32-bit dest buffer) --
@@ -168,6 +180,10 @@ const uint8_t *vga_screen_headless_text(vga_screen_t *screen, int32_t *cols, int
 bool vga_screen_document_cell(vga_screen_t *screen, int32_t row, int32_t col, uint8_t *chr,
                               uint8_t *flags, uint32_t *bg, uint32_t *fg);
 
+/* U2: the adapter's last set_mode value -- the graphical_mode flip REACHING the adapter,
+ * not just the device's own flag.  U2's hw_selftest P5 asserts both moved together. */
+bool vga_screen_is_graphical(vga_screen_t *screen);
+
 /* ------------------------------------------------------------------ *
  * THE DOCUMENT -- decision 2's verified path
  *
@@ -189,9 +205,8 @@ bool vga_screen_document_cell(vga_screen_t *screen, int32_t row, int32_t col, ui
  * (cp437->Unicode stays out: raw chr bytes are host-independent), no timestamps, no pointer
  * values -- the document is a pure function of (image bytes, limit, machine geometry).
  *
- * GRAPHICAL DOCUMENTS ARE U2's and this writer REFUSES them rather than emitting a
- * half-truth: the payload there is virtual_width*virtual_height*4 raw RGBA bytes of the
- * dest buffer, which U0 does not have (there is no mode-13 path to reach it with either).
+ * GRAPHICAL payload (U2): virtual_width*virtual_height*4 raw RGBA bytes of the dest buffer
+ * (the reference's image_data.data), which vga_redraw writes (vga.js:2463-2507).
  * ------------------------------------------------------------------ */
 typedef struct vga_doc_meta {
     const char *image_sha256; /* 64 lowercase hex chars: main.c's digest of the image */
@@ -207,6 +222,8 @@ typedef struct vga_doc_meta {
     int32_t virtual_height;
     int32_t cols;
     int32_t rows;
+    const uint8_t *dest_buffer; /* U2: the RGBA dest bytes (image_data.data), read only when
+                                 * graphical_mode is set; virtual_width*virtual_height*4 bytes */
 } vga_doc_meta_t;
 
 /* Writes the document to `path`.  False (with a stderr line) on a non-document adapter, a
@@ -283,16 +300,33 @@ typedef struct vga_device {
     int32_t dac_state;                     /* 0 */
     uint32_t vga256_palette[256];          /* all 0 */
 
-    /* sequencer / graphics subsets the text decode reads (vga.js:322-349); their ports are
-     * U2's, so in U1 they hold the constructor values and never move. */
+    /* sequencer / graphics (vga.js:279-297).  U1 held the constructor values; U2 owns the
+     * ports that move them (0x3C4/0x3C5 and 0x3CE/0x3CF). */
+    int32_t sequencer_index;               /* -1 */
     int32_t plane_write_bm;                /* 0xF */
+    int32_t sequencer_memory_mode;         /* 0 */
+    int32_t clocking_mode;                 /* 0 */
+    int32_t graphics_index;                /* -1 */
+    int32_t character_map_select;          /* 0 */
     int32_t plane_read;                    /* 0 */
     int32_t planar_mode;                   /* 0 */
-    int32_t character_map_select;          /* 0 */
-    int32_t clocking_mode;                 /* 0 */
-    int32_t sequencer_memory_mode;         /* 0 */
+    int32_t planar_rotate_reg;             /* 0 */
+    int32_t planar_bitmap;                 /* 0xFF */
+    int32_t planar_setreset;               /* 0 */
+    int32_t planar_setreset_enable;        /* 0 */
     int32_t miscellaneous_graphics_register; /* 0 -> memory space 0 (0xA0000) */
+    int32_t color_compare;                 /* 0 */
+    int32_t color_dont_care;               /* 0 */
     bool font_page_ab_enabled;             /* false */
+
+    /* the incremental-render dirty ranges (vga.js:370-373, 1011-1017).  In the reference the
+     * pixels are computed only when screen_fill_buffer runs (the browser frame loop), so the
+     * register/window writes during the run merely EXPAND these ranges; the stop's replay
+     * (vga_write_document's graphical branch) is the one caller of vga_replot/vga_redraw. */
+    int32_t diff_addr_min;                 /* vga_memory_size at construction */
+    int32_t diff_addr_max;                 /* 0 */
+    int32_t diff_plot_min;                 /* vga_memory_size */
+    int32_t diff_plot_max;                 /* 0 */
 
     /* misc / status (vga.js:344-346, 351-356) */
     int32_t miscellaneous_output_register; /* 0xFF */
@@ -319,5 +353,18 @@ vga_device_t *vga_device(void);
  * digest (main.c already computes it; the port keeps ONE sha256 implementation). */
 bool vga_write_document(const char *path, const char *image_sha256, uint64_t image_bytes,
                         uint64_t instruction_limit, uint64_t instruction_count);
+
+/* U2: the reference's screen_fill_buffer for a non-SVGA VGA mode (vga.js:2509-2576): replot
+ * the plane memory into the pixel buffer, redraw the pixel buffer through the palette into
+ * the dest buffer, then reset the diff ranges and update the retrace latch.  The document
+ * writer calls this once at the stop, exactly as the reference leg's recorder does; during
+ * the run the register/window writes only EXPAND the diff ranges (vga.js's browser frame
+ * loop is the only other caller, and this port has none). */
+void vga_screen_fill_buffer(vga_device_t *vga);
+
+/* The dest buffer's RGBA bytes (virtual_width*virtual_height*4, the reference's
+ * image_data.data), or NULL with *pixels = 0 when set_size_graphical has not sized it.
+ * U2's hw_selftest P3 reads pixels through this. */
+const uint8_t *vga_dest_buffer(const vga_device_t *vga, int32_t *pixels);
 
 #endif /* V86C_HW_VGA_H */

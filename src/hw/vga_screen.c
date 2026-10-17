@@ -855,25 +855,28 @@ static void put_u32_le(FILE *out, uint32_t value)
 bool vga_screen_document_write(vga_screen_t *screen, const char *path,
                                const vga_doc_meta_t *meta)
 {
-    if (meta->graphical_mode) {
-        fprintf(stderr,
-                "v86c: vga: refusing to write a GRAPHICAL document: its payload is the dest"
-                " buffer's %dx%d pixels and unit U2 owns that path (results/vga-u0.md)\n",
-                (int)meta->virtual_width, (int)meta->virtual_height);
-        return false;
+    bool graphical = meta->graphical_mode;
+
+    if (graphical) {
+        if (meta->virtual_width <= 0 || meta->virtual_height <= 0 || meta->dest_buffer == NULL) {
+            fprintf(stderr,
+                    "v86c: vga: refusing to write a GRAPHICAL document without a dest buffer"
+                    " (a %dx%d mode never completed set_size_graphical)\n",
+                    (int)meta->virtual_width, (int)meta->virtual_height);
+            return false;
+        }
     }
-    if (meta->cols <= 0 || meta->rows <= 0 || meta->cols > VGA_TEXT_MAX_COLS ||
-        meta->rows > VGA_TEXT_MAX_ROWS) {
+    else if (meta->cols <= 0 || meta->rows <= 0 || meta->cols > VGA_TEXT_MAX_COLS ||
+             meta->rows > VGA_TEXT_MAX_ROWS) {
         fprintf(stderr, "v86c: vga: refusing to write a document for a %dx%d text grid"
                         " (the port's grid is bounded at %dx%d)\n",
                 (int)meta->cols, (int)meta->rows, VGA_TEXT_MAX_COLS, VGA_TEXT_MAX_ROWS);
         return false;
     }
 
-    /* The grid the device asked for, or zeros when the device never sized the adapter (U0:
-     * no register path calls set_size_text, so every cell is "never drawn").  A grid of a
-     * DIFFERENT size is not reinterpreted: a row-major grid indexed by another mode's width
-     * would be silently wrong, so it is treated as absent and said so. */
+    /* The document adapter's recorded state: the text grid (or, for a graphical document,
+     * only the cursor/scanline fields matter -- the payload is the dest buffer, not the
+     * grid). */
     document_state_t *doc = NULL;
     if (screen != NULL && screen->opaque != NULL &&
         ((vga_adapter_common_t *)screen->opaque)->magic == VGA_ADAPTER_MAGIC &&
@@ -885,8 +888,9 @@ bool vga_screen_document_write(vga_screen_t *screen, const char *path,
                         " selecting it)\n");
         return false;
     }
-    bool have_grid = doc->common.cols == meta->cols && doc->common.rows == meta->rows;
-    if (!have_grid && doc->common.cols != 0) {
+    bool have_grid = !graphical && doc->common.cols == meta->cols &&
+                     doc->common.rows == meta->rows;
+    if (!graphical && !have_grid && doc->common.cols != 0) {
         fprintf(stderr, "v86c: vga: the recorded grid is %dx%d but the device reports %dx%d;"
                         " writing a zero grid rather than reinterpreting it\n",
                 (int)doc->common.cols, (int)doc->common.rows, (int)meta->cols, (int)meta->rows);
@@ -909,16 +913,19 @@ bool vga_screen_document_write(vga_screen_t *screen, const char *path,
         return false;
     }
 
-    uint64_t payload_bytes = (uint64_t)meta->cols * (uint64_t)meta->rows * 10ull;
+    uint64_t payload_bytes = graphical
+        ? (uint64_t)meta->virtual_width * (uint64_t)meta->virtual_height * 4ull
+        : (uint64_t)meta->cols * (uint64_t)meta->rows * 10ull;
 
     /* The header.  Keys sorted (the M0 transcript's canonical form, oracle/run.mjs:184-196),
-     * one line, no whitespace. */
+     * one line, no whitespace.  Text and graphical share every key; only `mode` and
+     * `payload_bytes` differ. */
     fputs("v86c-vga-doc/1\n", out);
     fprintf(out,
             "{\"bpp\":%d,\"cols\":%d,\"cursor_col\":%d,\"cursor_row\":%d,"
             "\"cursor_scanline\":{\"end\":%d,\"start\":%d,\"visible\":%s},"
             "\"format\":1,\"graphical_mode\":%s,\"image_bytes\":%llu,\"image_sha256\":\"%s\","
-            "\"instruction_count\":%llu,\"instruction_limit\":%llu,\"mode\":\"text\","
+            "\"instruction_count\":%llu,\"instruction_limit\":%llu,\"mode\":\"%s\","
             "\"payload_bytes\":%llu,\"rows\":%d,\"screen_height\":%d,\"screen_width\":%d,"
             "\"svga_enabled\":%s,\"virtual_height\":%d,\"virtual_width\":%d}\n",
             (int)meta->svga_bpp, (int)meta->cols, (int)doc->common.cursor_col,
@@ -926,29 +933,43 @@ bool vga_screen_document_write(vga_screen_t *screen, const char *path,
             doc->scanline_visible ? "true" : "false", meta->graphical_mode ? "true" : "false",
             (unsigned long long)meta->image_bytes, meta->image_sha256,
             (unsigned long long)meta->instruction_count,
-            (unsigned long long)meta->instruction_limit, (unsigned long long)payload_bytes,
-            (int)meta->rows, (int)meta->screen_height, (int)meta->screen_width,
-            meta->svga_enabled ? "true" : "false", (int)meta->virtual_height,
-            (int)meta->virtual_width);
+            (unsigned long long)meta->instruction_limit, graphical ? "graphical" : "text",
+            (unsigned long long)payload_bytes, (int)meta->rows, (int)meta->screen_height,
+            (int)meta->screen_width, meta->svga_enabled ? "true" : "false",
+            (int)meta->virtual_height, (int)meta->virtual_width);
 
-    /* The payload: rows*cols records of chr, flags, bg, fg -- row-major. */
-    for (int32_t row = 0; row < meta->rows; row++) {
-        for (int32_t col = 0; col < meta->cols; col++) {
-            int32_t cell = row * meta->cols + col;
-            uint8_t chr = 0;
-            uint8_t flags = 0;
-            uint32_t bg = 0;
-            uint32_t fg = 0;
-            if (have_grid) {
-                chr = doc->chr[cell];
-                flags = doc->flags[cell];
-                bg = doc->bg[cell];
-                fg = doc->fg[cell];
+    if (graphical) {
+        /* The payload: the dest buffer's raw RGBA bytes, virtual_width*virtual_height*4 --
+         * exactly what the reference's vga_redraw wrote into image_data.data. */
+        uint64_t bytes = (uint64_t)meta->virtual_width * (uint64_t)meta->virtual_height * 4ull;
+        if (fwrite(meta->dest_buffer, 1, (size_t)bytes, out) != (size_t)bytes) {
+            fprintf(stderr, "v86c: vga: writing the graphical payload failed\n");
+            fclose(out);
+            remove(tmp_path);
+            free(tmp_path);
+            return false;
+        }
+    }
+    else {
+        /* The payload: rows*cols records of chr, flags, bg, fg -- row-major. */
+        for (int32_t row = 0; row < meta->rows; row++) {
+            for (int32_t col = 0; col < meta->cols; col++) {
+                int32_t cell = row * meta->cols + col;
+                uint8_t chr = 0;
+                uint8_t flags = 0;
+                uint32_t bg = 0;
+                uint32_t fg = 0;
+                if (have_grid) {
+                    chr = doc->chr[cell];
+                    flags = doc->flags[cell];
+                    bg = doc->bg[cell];
+                    fg = doc->fg[cell];
+                }
+                fputc(chr, out);
+                fputc(flags, out);
+                put_u32_le(out, bg);
+                put_u32_le(out, fg);
             }
-            fputc(chr, out);
-            fputc(flags, out);
-            put_u32_le(out, bg);
-            put_u32_le(out, fg);
         }
     }
 
@@ -1016,4 +1037,11 @@ bool vga_screen_document_cell(vga_screen_t *screen, int32_t row, int32_t col, ui
     if (bg != NULL) *bg = s->bg[cell];
     if (fg != NULL) *fg = s->fg[cell];
     return true;
+}
+
+bool vga_screen_is_graphical(vga_screen_t *screen)
+{
+    if (screen == NULL || screen->opaque == NULL) return false;
+    if (((vga_adapter_common_t *)screen->opaque)->magic != VGA_ADAPTER_MAGIC) return false;
+    return ((vga_adapter_common_t *)screen->opaque)->is_graphical;
 }
