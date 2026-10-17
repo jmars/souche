@@ -14,8 +14,12 @@
  * "what machine is this" instead of one per caller.  The selftest's fresh machine is
  * machine_init() again.
  *
- * NOT in this machine, and therefore not devices: the VGA, the floppy controller, virtio-net
- * /virtio-9p/virtio-balloon, the APIC/IOAPIC and the sound card -- the later M2 units.
+ * THE VGA IS IN THIS MACHINE SINCE VGA-U0 (src/hw/vga.h), unconditionally, in cpu.js's own
+ * slot (after the DMA, before the PS/2); what machine_config.vga_screen selects is its
+ * rendering adapter, not its existence.  Its register file lands in U1-U4.
+ *
+ * NOT in this machine, and therefore not devices: the floppy controller, virtio-net
+ * /virtio-9p/virtio-balloon and the sound card -- the later units.
  * THE VIRTIO CONSOLE IS here when machine_config.virtio_console is set (M2-4): the reference
  * creates it only for `settings.virtio_console` (cpu.js:1253), so the default machine has
  * none and the M0 transcript machine stays identical to the reference's.  A guest that touches one of their
@@ -40,6 +44,7 @@
 
 #include "bus.h"
 #include "ide.h"
+#include "vga.h"
 #include "virtio_console.h"
 
 /* cpu.js:1219-1228's settings: the three disk slots the machine is built with.  A slot
@@ -57,6 +62,16 @@ typedef struct machine_config {
      * always creates.  The default is false, which is what the reference's default settings
      * give, and it is what keeps the M0 transcript machine identical to the reference's. */
     bool virtio_console;
+
+    /* VGA-U0: the reference's `settings.screen` (cpu.js:1193's third argument, decided at
+     * browser/starter.js:307-319).  THE DEVICE IS ALWAYS CREATED -- there is no "enable the
+     * VGA" switch, because upstream has none and because the reference leg of every two-leg
+     * gate in this tree already runs with the device.  What this selects is the OUTPUT: the
+     * headless adapter (the default, a port of dummy_screen.js), the ANSI text adapter, or
+     * the document recorder.  `vga_doc_path` is only read by the document adapter's writer
+     * (main.c's --vga-doc). */
+    vga_screen_kind_t vga_screen;
+    const char *vga_doc_path;
 } machine_config_t;
 
 extern machine_config_t machine_config;

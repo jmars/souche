@@ -71,6 +71,10 @@ pci 0000:00:0c.0: BAR 0 [io  0xb800-0xb83f]
 pci 0000:00:0c.0: BAR 1 [io  0xb900-0xb90f]
 pci 0000:00:0c.0: BAR 2 [io  0xb700-0xb70f]
 pci 0000:00:0c.0: BAR 3 [io  0xb600-0xb60f]
+pci 0000:00:12.0: [1234:1111] type 00 class 0x030000 conventional PCI endpoint
+pci 0000:00:12.0: BAR 0 [mem 0xe0000000-0xe07fffff pref]
+pci 0000:00:12.0: ROM [mem 0xfebe0000-0xfebeffff pref]
+pci 0000:00:12.0: Video device with shadowed ROM at [mem 0x000c0000-0x000dffff]
 pci 0000:00:1e.0: [8086:7010] type 00 class 0x010180 conventional PCI endpoint
 pci 0000:00:1e.0: BAR 0 [io  0x01f0-0x01f7]
 pci 0000:00:1e.0: BAR 2 [io  0x0170-0x0177]
@@ -80,6 +84,9 @@ pci 0000:00:1e.0: BAR 1 [io  0x03f6]: legacy IDE quirk
 pci 0000:00:1e.0: BAR 2 [io  0x0170-0x0177]: legacy IDE quirk
 pci 0000:00:1e.0: BAR 3 [io  0x0376]: legacy IDE quirk
 pci_bus 0000:00: busn_res: [bus 00-ff] end is updated to 00
+pci 0000:00:12.0: vgaarb: setting as boot VGA device
+pci 0000:00:12.0: vgaarb: bridge control possible
+pci 0000:00:12.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
 vgaarb: loaded
 clocksource: Switched to clocksource pit
 pci_bus 0000:00: resource 4 [io  0x0000-0xffff]
@@ -96,8 +103,8 @@ io scheduler mq-deadline registered
 io scheduler kyber registered
 Serial: 8250/16550 driver, 4 ports, IRQ sharing disabled
 serial8250: ttyS0 at I/O 0x3f8 (irq = 4, base_baud = 115200) is a 16550A
-printk: legacy console [hvc0] enabled
 scsi host0: ata_piix
+printk: legacy console [hvc0] enabled
 scsi host1: ata_piix
 ata1: PATA max MWDMA2 cmd 0x1f0 ctl 0x3f6 bmdma 0xb400 irq 14 lpm-pol 0
 ata2: PATA max MWDMA2 cmd 0x170 ctl 0x376 bmdma 0xb408 irq 15 lpm-pol 0

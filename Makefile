@@ -120,11 +120,12 @@ CPU_CFLAGS := $(CFLAGS) $(PERF_CFLAGS) -Werror
 HW_SRC := src/hw/io.c src/hw/bus.c src/hw/pit.c src/hw/rtc.c src/hw/dma.c \
           src/hw/ps2.c src/hw/acpi.c src/hw/acpi_tables.c src/hw/pci.c src/hw/machine.c \
           src/hw/uart.c src/hw/kernel.c src/hw/ide.c \
-          src/hw/virtio.c src/hw/virtio_console.c
+          src/hw/virtio.c src/hw/virtio_console.c \
+          src/hw/vga.c src/hw/vga_screen.c
 HW_HDR := src/hw/io.h src/hw/bus.h src/hw/pit.h src/hw/rtc.h src/hw/dma.h \
           src/hw/ps2.h src/hw/acpi.h src/hw/acpi_tables.h src/hw/pci.h src/hw/machine.h \
           src/hw/uart.h src/hw/kernel.h src/hw/ide.h \
-          src/hw/virtio.h src/hw/virtio_console.h
+          src/hw/virtio.h src/hw/virtio_console.h src/hw/vga.h
 HW_OBJ := $(patsubst src/hw/%.c,$(BUILD)/hw/%.o,$(HW_SRC))
 
 # M2-2's firmware.  THESE MUST BE DEFINED BEFORE THE $(BUILD)/v86c RULE BELOW: a rule's

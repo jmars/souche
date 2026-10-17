@@ -1,17 +1,12 @@
-74,77d73
-< pci 0000:00:12.0: [1234:1111] type 00 class 0x030000 conventional PCI endpoint
-< pci 0000:00:12.0: BAR 0 [mem 0xe0000000-0xe07fffff pref]
-< pci 0000:00:12.0: ROM [mem 0xfebe0000-0xfebeffff pref]
-< pci 0000:00:12.0: Video device with shadowed ROM at [mem 0x000c0000-0x000dffff]
-87,89d82
-< pci 0000:00:12.0: vgaarb: setting as boot VGA device
-< pci 0000:00:12.0: vgaarb: bridge control possible
-< pci 0000:00:12.0: vgaarb: VGA device added: decodes=io+mem,owns=io+mem,locks=none
-106d98
+106d105
 < printk: legacy console [hvc0] enabled
-107a100
+110a110
 > printk: legacy console [hvc0] enabled
-113a107
-> ata2.00: ATAPI: v86 ATAPI CD-ROM, 1.00, max MWDMA2
-118d111
+114d113
 < ata2.00: ATAPI: v86 ATAPI CD-ROM, 1.00, max MWDMA2
+119c118
+< scsi 1:0:0:0: CD-ROM            SONY     CD-ROM CDU-1000  1.1a PQ: 0 ANSI: 1 CCS
+---
+> ata2.00: ATAPI: v86 ATAPI CD-ROM, 1.00, max MWDMA2
+120a120
+> scsi 1:0:0:0: CD-ROM            SONY     CD-ROM CDU-1000  1.1a PQ: 0 ANSI: 1 CCS

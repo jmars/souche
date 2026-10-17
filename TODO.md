@@ -8,10 +8,21 @@ INTERPRETATION, as the rest of the tree is.
 
 **Gates at the time of writing** (orchestrator-verified, clean build): `make` rc 0 · `make nasm`
 118/118 in both cache and JIT modes · the M0 transcript byte-identical to the pinned JS reference
-(`8bb8eca5…`) · `make selftest` green (`hw_selftest` 694 checks / 0 failures plus the CPU, m1c, uop,
+(`8bb8eca5…`) · `make selftest` green (`hw_selftest` 778 checks / 0 failures plus the CPU, m1c, uop,
 uop-exec, JIT and JIT-codegen suites) · `make bench` **~0.83 s / ~240 MIPS** on the 200M-instruction
-kernel boot · `sh tests/gate-reboot-1.sh` 39/39 · `sh tests/gate-m2-5-determinism.sh all` rc 0 at the
-pinned 4,000,024,062 instructions.
+kernel boot · `sh tests/gate-reboot-1.sh` 39/39 · `sh tests/gate-m2-5-determinism.sh all` rc 0 at
+**4,000,096,757** instructions.
+
+**That count moved on VGA-U0 and the move is a STRENGTHENING, not a re-pin to hide a regression**
+(recorded here because it will be the next reader's question). It was 4,000,024,062; the delta is
++72,695, and it is the kernel enumerating the VGA's PCI function `00:12.0`, which the REFERENCE leg
+always had and the C leg did not. MEASURED on both sides of the change and independently by the
+review: the C leg's serial now carries the same 7 `00:12.0` lines the JS leg's serial always
+carried, and the C-vs-JS leg diff (`results/m2-5-guest-leg-diff.txt`) shrank to message-ORDER jitter
+alone — the legs converge. The count reproduces across runs. Two honest caveats: it is a **C-leg
+determinism record** (the gate compares run1 against run2; there is no absolute pin in code), and it
+is **not** a cross-leg count-equality claim — the JS leg has never been run at this exact config
+(the plan's `--vga-doc` document diff is the cross-leg comparison for this lane, not the count).
 
 ---
 
@@ -167,14 +178,28 @@ that landed, and the guest-compatibility fact below still stands.)*
   INTERPRETATION: that is a smaller job than the 974-line total and would satisfy every guest we
   can currently name.
 
-### 1.2 VGA — deferred; the one device the browser lane has that this port lacks
-- **Size.** READ: `v86/src/vga.js` is 2,612 lines — **the largest single unported device**, and the
-  only one a *visual* browser-lane demo needs and the native lane does not.
-- **What exists**: the VGA window (`0xA0000-0xBFFFF`) and the 8 MiB LFB are routed through the
-  device-hook table and read the zeroed VGA buffer (R1F's carve-out, MEASURED against the
-  reference); the dirty-bitmap callback is stubbed.
-- **It becomes worth building when** a graphical demo, or a guest that programs VGA registers, is
-  wanted. Nothing on baliveau's console+disk path needs it.
+### 1.2 VGA — U0 SHIPPED (results/vga-u0.md); the register file is U1-U4
+- **Size.** READ: `v86/src/vga.js` is 2,612 lines — the largest single device in the reference. It
+  is being ported in five units (the ladder `coder` → `engineer`), each with its own gate, because
+  the decode is where a silent-wrong port costs most.
+- **What exists now (U0)**: the device is ALWAYS installed, as upstream (`cpu.js:1193`) — the 8 MiB
+  VRAM (so `memory.c`'s LFB arms are live: an LFB write now *persists*, the reference's answer),
+  the `0xA0000` window registered through `io_mmap_register` (still answering the pre-U0
+  read-0/discard, which U1 flips), PCI `00:12.0` with the reference's own config bytes, and the
+  RENDERING SEAM (`src/hw/vga.h`: the 11 methods `vga.js` calls) with three adapters — headless
+  (the default, a port of `browser/dummy_screen.js`), ANSI text (`--vga-ansi`), and the DOCUMENT
+  (`--vga-doc FILE`), which **both legs produce byte-identically** (`build/v86c … --vga-doc` vs
+  `node oracle/run-vga.mjs`, gated by `sh tests/gate-vga-0.sh`).
+- **What is still absent, and whose it is**: every VGA **I/O port** is unclaimed — text mode's
+  CRTC/attribute/DAC, the redraw and `put_char` arithmetic and the cursor are U1; mode 13h and the
+  graphical buffer are U2; the planar latches/write modes are U3; dispi/SVGA/banks and the real
+  dirty-bitmap callback (still stubbed in `memory.c`) are U4. A graphical document is refused by
+  both legs by name.
+- **A caveat the gates record**: the kernel boot DOES touch the VGA (24 CRTC port accesses, ~8k
+  window accesses including the firmware's `INT 10h` teletype at `0xB84C0`), so it is not
+  VGA-blind; U0 proves the answers did not change (its instruction count and serial stayed at
+  their pins), and U1 must re-run the guest gates. The determinism gate's count moved with U0's
+  PCI device (+72,695, results/vga-u0.md §F1) and was deliberately NOT re-pinned.
 
 ### 1.3 PAE — SHIPPED (PAE-1, results/pae-1.md; PAE-L3, results/pae-l3.md)
 - The 3-level walk, the 64-bit PDPTE/PDE/PTE handling, the 2 MiB page and NX (EFER.NXE) are ported

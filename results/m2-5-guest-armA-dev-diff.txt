@@ -1,15 +1,18 @@
---- results/m2-5-guest-armA-js.dev.txt	2026-10-14 13:22:26.945414273 +0000
-+++ results/m2-5-guest-armA-c.dev.txt	2026-10-14 13:22:26.948414234 +0000
-@@ -3,11 +3,11 @@
+--- results/m2-5-guest-armA-js.dev.txt	2026-10-17 15:02:05.876208001 +0000
++++ results/m2-5-guest-armA-c.dev.txt	2026-10-17 15:02:05.879207961 +0000
+@@ -3,13 +3,13 @@
  ata1.00: ATA-0: v86 ATA HD, 1.00, max MWDMA2
  ata1.00: 131072 sectors, multi 0: LBA48 
  scsi 0:0:0:0: Direct-Access ATA v86 ATA HD n/a PQ: 0 ANSI: 5
-+ata2.00: ATAPI: v86 ATAPI CD-ROM, 1.00, max MWDMA2
+-ata2.00: ATAPI: v86 ATAPI CD-ROM, 1.00, max MWDMA2
  sd 0:0:0:0: [sda] 131072 512-byte logical blocks: (67.1 MB/64.0 MiB)
  sd 0:0:0:0: [sda] Write Protect is off
  sd 0:0:0:0: [sda] Write cache: disabled, read cache: enabled, doesn't support DPO or FUA
  sd 0:0:0:0: [sda] Preferred minimum I/O size 512 bytes
--ata2.00: ATAPI: v86 ATAPI CD-ROM, 1.00, max MWDMA2
- scsi 1:0:0:0: CD-ROM SONY CD-ROM CDU-1000 1.1a PQ: 0 ANSI: 1 CCS
+-scsi 1:0:0:0: CD-ROM SONY CD-ROM CDU-1000 1.1a PQ: 0 ANSI: 1 CCS
++ata2.00: ATAPI: v86 ATAPI CD-ROM, 1.00, max MWDMA2
  sd 0:0:0:0: [sda] Attached SCSI disk
++scsi 1:0:0:0: CD-ROM SONY CD-ROM CDU-1000 1.1a PQ: 0 ANSI: 1 CCS
  Run /fx/store/047b11f9e9a69cee311c14820ed5d39acccf8d78c1001fc574da6dba7719dffa-fx-init/fx-init as init process
+ fx-init: store from kernel command line fx.store=/fx/store
+ fx-init: boot start store /fx/store

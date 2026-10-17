@@ -9,14 +9,20 @@
  *     acpi_init()                    only when cpu->acpi_enabled (cpu.js:1181-1185)
  *     rtc_init(); rtc_fill_cmos()    the CMOS RTC + its bring-up
  *     dma_init()                     the 8237
+ *     vga_init(screen)               VGA-U0: the VGA device, always (cpu.js:1193)
  *     ps2_init(device_bus)           the 8042 + keyboard + mouse
  *     uart_init(device_bus)          M2-2: COM1 at 0x3F8 (uart.c)
  *     pit_init(device_bus)           the 8254
  *
- * Absent, and therefore NOT devices on this machine: the VGA (and its LFB), COM2-COM4 (the
+ * THE VGA IS ALWAYS PRESENT since VGA-U0, as it is upstream: what the machine's config
+ * selects is only its RENDERING ADAPTER (headless by default).  Its I/O PORTS are still
+ * unclaimed in U0 -- the register file is U1-U4's -- while its 0xA0000 window, its 8 MiB
+ * LFB and its PCI function 00:12.0 are the device's; see src/hw/vga.h.
+ *
+ * Absent, and therefore NOT devices on this machine: COM2-COM4 (the
  * reference's settings.uart1/2/3 arms -- uart_attach exists for them and nothing enables
- * them by default), the parallel port, the floppy controller, the IDE controller, the
- * network cards, virtio and the sound card -- the following M2 units.  Their ports are UNCLAIMED, and an unclaimed
+ * them by default), the parallel port, the floppy controller, the network cards, virtio-net
+ * /balloon/9p and the sound card -- the later units.  Their ports are UNCLAIMED, and an unclaimed
  * port answers exactly as the pinned reference's empty entry does -- 0xFF/0xFFFF/-1 on a
  * read, a discarded write (io.h D1, D-F1/M2-1F) -- with `V86C_LOG_PORTS` printing each such
  * access to stderr as a diagnostic.  M2-1 stopped on them instead; M2-1F made that a
@@ -66,7 +72,7 @@ virtio_console_t *machine_virtio_console_device(void)
  * secondary channel's master an ATAPI device UNCONDITIONALLY, so machine_init fills that
  * slot in below even when the caller left it zeroed. */
 machine_config_t machine_config = { { NULL, 0, false }, { NULL, 0, false }, { NULL, 0, true },
-                                    false };
+                                    false, VGA_SCREEN_HEADLESS, NULL };
 
 static bool machine_ready = false;
 
@@ -99,6 +105,23 @@ void machine_init(void)
     rtc_fill_cmos();
 
     dma_init();
+
+    /* cpu.js:1193: `this.devices.vga = new VGAScreen(this, device_bus, settings.screen,
+     * settings.vga_memory_size || 8 * 1024 * 1024)` -- in the device block's own order,
+     * after the DMA and BEFORE the PS/2, and unconditional.  The adapter is the reference's
+     * `settings.screen`; machine_config.vga_screen is the port's reader of it (main.c's
+     * --vga-ansi / --vga-doc).  vga.h states what the device answers in U0 and which unit
+     * owns each of the rest. */
+    {
+        vga_screen_t *screen = NULL;
+        switch (machine_config.vga_screen) {
+        case VGA_SCREEN_ANSI: screen = vga_screen_ansi_init(); break;
+        case VGA_SCREEN_DOC: screen = vga_screen_document_init(); break;
+        case VGA_SCREEN_HEADLESS:
+        default: screen = vga_screen_headless_init(); break;
+        }
+        vga_init(screen, machine_config.vga_screen);
+    }
 
     ps2_init(machine_bus);
 

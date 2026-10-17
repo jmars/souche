@@ -67,6 +67,7 @@
 #include "ps2.h"
 #include "rtc.h"
 #include "uart.h"
+#include "vga.h"
 #include "virtio.h"
 #include "virtio_console.h"
 
@@ -2894,6 +2895,244 @@ static void test_virtio(void)
         printf("%s %s (%d checks so far)\n", failures == before ? "PASS" : "FAIL", name, checks); \
     } while (0)
 
+
+/* ================================================================== *
+ * 9. THE VGA -- VGA-U0 (HANDOFF=v86c-vga)
+ *
+ * WHAT THIS CASE IS THE PROBE OF.  The unit's claim is that the machine has the reference's
+ * VGA DEVICE SEATS and its three RENDERING ADAPTERS, and that no register semantic has been
+ * invented to fill them.  So it asserts, in order:
+ *
+ *   1. the device exists unconditionally, with the reference's 8 MiB VRAM (cpu.js:1193);
+ *   2. memory.c's LFB arms are ALIVE -- a write to 0xE0000000 STORES and reads back, where
+ *      the pre-unit machine answered 0 and discarded the write (the A1 asymmetry);
+ *   3. the 0xA0000 window is the device's, and in U0 it still answers the pre-unit machine's
+ *      0-and-discard -- asserted DELIBERATELY, because U1 flips it and this line is how the
+ *      flip gets noticed;
+ *   4. PCI 00:12.0 carries the reference's own config space (MEASURED against the pinned
+ *      libv86, not transcribed from the source);
+ *   5. the seam's per-adapter FLAG constants are the reference's (0 / 0 / 1,2 -- screen.js:30-34
+ *      defines them on the canvas adapter only, and the document adapter stands in for it);
+ *   6. the document FORMAT: a written document is re-read and every part of it checked --
+ *      magic, canonical JSON keys and values, the 10-byte cell records, the zero cell the
+ *      device never sent -- plus the two refusals (a graphical mode, a non-document adapter)
+ *      that keep a half-truth out of the gate's comparison.
+ * ================================================================== */
+#define VGA_SELFTEST_DOC "/tmp/v86c-hw-selftest-vga.doc"
+
+static void test_vga(void)
+{
+    machine_reset();
+
+    vga_device_t *vga = vga_device();
+    CHECK(vga->installed);
+    CHECK_EQ(vga->vga_memory_size, 0x800000);
+    CHECK_EQ(vga_memory_size, 0x800000); /* memory.h's global: memory.c's LFB arms read it */
+    CHECK(vga_mem8 != NULL);
+    CHECK(vga->screen_kind == VGA_SCREEN_HEADLESS); /* decision 1: headless by default */
+    CHECK_EQ(vga->max_cols, 80);                    /* vga.js:89-99's constructor values */
+    CHECK_EQ(vga->max_rows, 25);
+    CHECK(!vga->graphical_mode && !vga->svga_enabled);
+    CHECK_EQ(vga->svga_bpp, 32);
+
+    /* (2) THE LFB.  Before this unit in_svga_lfb() was false everywhere (vga_memory_size was
+     * 0), so these reads came from the hook table's carve-out (0) and every write was
+     * DISCARDED.  The asymmetry: the write below reads back. */
+    CHECK(in_svga_lfb(0xE0000000));
+    CHECK(!in_svga_lfb(0xDFFFFFFF));
+    CHECK(!in_svga_lfb(0xE0800000)); /* one past the 8 MiB */
+    CHECK_EQ(read32s(0xE0000000), 0); /* zeroed at boot, as the wasm view starts */
+    write32(0xE0000000, 0x11223344);
+    CHECK_EQ(read32s(0xE0000000), 0x11223344);
+    CHECK_EQ(read8(0xE0000002), 0x22); /* 0x11223344 is STORED little-endian */
+    CHECK_EQ(read8(0xE0000003), 0x11);
+    write8(0xE0000010, 0xAB);
+    CHECK_EQ(read8(0xE0000010), 0xAB);
+    /* the LAST byte: read128 there issues a 16-byte load that runs past the 8 MiB and lands
+     * in the VRAM array's own slack (vga.c) -- mem8's +16-byte argument, same size */
+    write8(0xE07FFFFF, 0xCD);
+    CHECK_EQ(read8(0xE07FFFFF), 0xCD);
+    reg128 tail = read128(0xE07FFFF0);
+    CHECK_EQ(tail.u8[15], 0xCD);
+    /* THE SLACK ITSELF.  vga.c allocates 16 bytes past the 8 MiB so that a 16-byte load
+     * starting AT the last byte does not overflow the array; every probe above stops at or
+     * before the boundary, so that allocation was never exercised (VGA-U0 review,
+     * nice-to-have 2).  This load starts on the last guest byte and touches all 16 slack
+     * bytes -- it must not fault and its first byte must still be the guest's. */
+    reg128 overrun = read128(0xE07FFFFF);
+    CHECK_EQ(overrun.u8[0], 0xCD);
+    /* the string path's own sink (memory.rs:254-264), which had no live caller before this
+     * unit: a copy into the LFB from guest RAM */
+    mem8[0x1000] = 0x5A;
+    memcpy_into_svga_lfb(0x1000, 0xE0000100, 1);
+    CHECK_EQ(read8(0xE0000100), 0x5A);
+
+    /* (3) THE WINDOW: the device owns these blocks now (io.mmap_register, vga.js:384), and
+     * U0's handlers answer exactly what the default table answered -- 0 and a discard.  The
+     * write-then-read lines are the U1/U2 FLIP SITES: after vga_memory_write_text_mode and
+     * the plane write paths land, they read back what was written. */
+    CHECK_EQ(read8(0xA0000), 0);
+    CHECK_EQ(read32s(0xA0000), 0);
+    CHECK_EQ(read16(0xB8000), 0);
+    write8(0xB8000, 0x41);
+    write32(0xA0000, 0x11223344);
+    CHECK_EQ(read8(0xB8000), 0);   /* U1: 0x41 */
+    CHECK_EQ(read32s(0xA0000), 0); /* U2/U3 */
+
+    /* (4) PCI 00:12.0 -- the bytes are the pinned reference's own (MEASURED). */
+    io_port_write32(0xCF8, (int32_t)(0x80000000u | 0x90u << 8 | 0));
+    CHECK_EQ(io_port_read32(0xCFC), 0x11111234); /* 0x1234:0x1111 */
+    io_port_write32(0xCF8, (int32_t)(0x80000000u | 0x90u << 8 | 0x08));
+    CHECK_EQ(io_port_read32(0xCFC), 0x03000000); /* class 0x000300, prog-if 0 */
+    io_port_write32(0xCF8, (int32_t)(0x80000000u | 0x90u << 8 | 0x10));
+    CHECK_EQ(io_port_read32(0xCFC), (int32_t)0xE0000008); /* bar0: the LFB, prefetchable */
+    io_port_write32(0xCF8, (int32_t)(0x80000000u | 0x90u << 8 | 0x2C));
+    CHECK_EQ(io_port_read32(0xCFC), 0x11001AF4); /* subsystem 0x1af4:0x1100 */
+    io_port_write32(0xCF8, (int32_t)(0x80000000u | 0x90u << 8 | 0x30));
+    /* the ROM window: the CONFIG SPACE says 0xFEBE0000 while vga.js:255's own
+     * `pci_rom_address` says 0xFEB00000 -- the two really do differ in the reference (its
+     * array literal is `0x00, 0x00, 0xbe, 0xfe`), and the config space is what a guest
+     * reads.  Read the artifact, not the field name. */
+    CHECK_EQ(io_port_read32(0xCFC), (int32_t)0xFEBE0000);
+
+    /* (5) THE FLAG CONSTANTS, per adapter (screen.js:30-34). */
+    vga_screen_t *headless = vga_screen_headless_init();
+    vga_screen_t *ansi = vga_screen_ansi_init();
+    vga_screen_t *document = vga_screen_document_init();
+    CHECK_EQ(vga_screen_flag_blinking(headless), 0);
+    CHECK_EQ(vga_screen_flag_font_page_b(headless), 0);
+    CHECK_EQ(vga_screen_flag_blinking(ansi), 0);
+    CHECK_EQ(vga_screen_flag_font_page_b(ansi), 0);
+    CHECK_EQ(vga_screen_flag_blinking(document), 0x01);
+    CHECK_EQ(vga_screen_flag_font_page_b(document), 0x02);
+
+    /* the headless adapter stores the BYTE and nothing else (dummy_screen.js's put_char);
+     * its set_size_text returns early on the same size and clears on a real resize */
+    headless->set_size_text(headless, 80, 25);
+    headless->put_char(headless, 3, 7, 'Q', 0, 0xFF0000, 0x00FF00);
+    int32_t cols = 0, rows = 0;
+    const uint8_t *text = vga_screen_headless_text(headless, &cols, &rows);
+    CHECK(text != NULL);
+    CHECK_EQ(cols, 80);
+    CHECK_EQ(rows, 25);
+    CHECK_EQ(text[3 * 80 + 7], 'Q');
+    CHECK_EQ(text[0], 0);
+    headless->set_size_text(headless, 80, 25); /* the early return: the grid SURVIVES */
+    CHECK_EQ(text[3 * 80 + 7], 'Q');
+    headless->set_size_text(headless, 40, 10); /* a real resize: a fresh, zeroed grid */
+    CHECK_EQ(text[3 * 80 + 7], 0);             /* the same bytes, cleared in place */
+    headless->put_char(headless, 9, 39, 'Z', 0, 0, 0);
+    CHECK_EQ(text[9 * 40 + 39], 'Z');
+    /* an out-of-grid cell is DROPPED (upstream's typed-array store out of range) */
+    headless->put_char(headless, 10, 0, 'X', 0, 0, 0);
+    CHECK_EQ(text[10 * 40], 0);
+    CHECK(vga_screen_headless_text(ansi, NULL, NULL) == NULL); /* only the headless adapter */
+
+    /* (6) THE DOCUMENT.
+     *
+     * FIRST THE U0 STATE, which is the one every gate sees today: the device never calls
+     * set_size_text (no register path does), so the recorder has no grid and the writer must
+     * emit cols*rows ZERO records -- the size comes from the DEVICE, not from the adapter. */
+    static const char digest[65] =
+        "0000000000000000000000000000000000000000000000000000000000000000";
+    vga_doc_meta_t meta;
+    memset(&meta, 0, sizeof(meta));
+    meta.image_sha256 = digest;
+    meta.image_bytes = 283;
+    meta.instruction_limit = 1000000;
+    meta.instruction_count = 561;
+    meta.svga_bpp = 32;
+    meta.cols = 80;
+    meta.rows = 25;
+
+    static uint8_t document_bytes[64 * 1024];
+    remove(VGA_SELFTEST_DOC);
+    CHECK(vga_screen_document_write(document, VGA_SELFTEST_DOC, &meta));
+    FILE *f = fopen(VGA_SELFTEST_DOC, "rb");
+    CHECK(f != NULL);
+    if (f != NULL) {
+        size_t length = fread(document_bytes, 1, sizeof(document_bytes) - 1, f);
+        fclose(f);
+        document_bytes[length] = 0;
+        CHECK_EQ(memcmp(document_bytes, "v86c-vga-doc/1\n", 15), 0);
+        const char *header_text = (const char *)document_bytes + 15;
+        const uint8_t *payload = (const uint8_t *)strchr(header_text, '\n') + 1;
+        size_t header_length = (size_t)((const char *)payload - header_text);
+        CHECK_EQ(length, 15 + header_length + 20000);
+        bool payload_zero = true;
+        for (int i = 0; i < 20000; i++) {
+            if (payload[i] != 0) payload_zero = false;
+        }
+        CHECK(payload_zero); /* a device that never drew: 2000 zero records */
+        CHECK(strstr(header_text, "\"cursor_row\":0,") != NULL);
+        CHECK(strstr(header_text, "\"cursor_scanline\":{\"end\":0,\"start\":0,"
+                                  "\"visible\":false},") != NULL);
+    }
+
+    /* ... AND THE FORMAT ITSELF, driven: two cells, (0,0) with every field distinct and
+     * (0,1) never written -- which is what makes the document a function of device state
+     * rather than of the call stream. */
+    document->set_size_text(document, 80, 25);
+    document->put_char(document, 0, 0, 'A', 0x01, 0x00112233, 0x00445566);
+    document->update_cursor(document, 4, 9);
+    document->update_cursor_scanline(document, 2, 3, true);
+    remove(VGA_SELFTEST_DOC);
+    CHECK(vga_screen_document_write(document, VGA_SELFTEST_DOC, &meta));
+    f = fopen(VGA_SELFTEST_DOC, "rb");
+    CHECK(f != NULL);
+    if (f != NULL) {
+        size_t length = fread(document_bytes, 1, sizeof(document_bytes) - 1, f);
+        fclose(f);
+        document_bytes[length] = 0;
+        CHECK_EQ(memcmp(document_bytes, "v86c-vga-doc/1\n", 15), 0);
+        const char *header_text = (const char *)document_bytes + 15;
+        const uint8_t *payload = (const uint8_t *)strchr(header_text, '\n') + 1;
+        size_t header_length = (size_t)((const char *)payload - header_text);
+        CHECK_EQ(length, 15 + header_length + 20000);
+        /* the canonical header, prefix and shape: sorted keys, no whitespace, the values
+         * the device and the recorder hold (the gate compares these bytes against the
+         * reference leg's) */
+        static const char header_prefix[] =
+            "{\"bpp\":32,\"cols\":80,\"cursor_col\":9,\"cursor_row\":4,"
+            "\"cursor_scanline\":{\"end\":3,\"start\":2,\"visible\":true},"
+            "\"format\":1,\"graphical_mode\":false,\"image_bytes\":283,"
+            "\"image_sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\","
+            "\"instruction_count\":561,\"instruction_limit\":1000000,\"mode\":\"text\","
+            "\"payload_bytes\":20000,\"rows\":25,\"screen_height\":0,\"screen_width\":0,"
+            "\"svga_enabled\":false,\"virtual_height\":0,\"virtual_width\":0}";
+        CHECK_EQ(header_length, strlen(header_prefix) + 1); /* + the newline */
+        CHECK_EQ(memcmp(header_text, header_prefix, strlen(header_prefix)), 0);
+        /* the payload: cell 0 is the recorded record, cell 1 (never sent) is zeros */
+        CHECK_EQ(payload[0], 'A');
+        CHECK_EQ(payload[1], 0x01);
+        CHECK_EQ(payload[2], 0x33);
+        CHECK_EQ(payload[3], 0x22);
+        CHECK_EQ(payload[4], 0x11);
+        CHECK_EQ(payload[5], 0x00);
+        CHECK_EQ(payload[6], 0x66);
+        CHECK_EQ(payload[7], 0x55);
+        CHECK_EQ(payload[8], 0x44);
+        CHECK_EQ(payload[9], 0x00);
+        for (int i = 10; i < 20; i++) CHECK_EQ(payload[i], 0);
+    }
+
+    /* THE TWO REFUSALS.  A graphical mode is U2's payload; a non-document adapter has no
+     * grid.  Either would be a document the gate could compare against nothing. */
+    meta.graphical_mode = true;
+    meta.virtual_width = 320;
+    meta.virtual_height = 200;
+    CHECK(!vga_screen_document_write(document, VGA_SELFTEST_DOC ".refused", &meta));
+    f = fopen(VGA_SELFTEST_DOC ".refused", "rb");
+    CHECK(f == NULL); /* whole-or-nothing: no file, not a truncated one */
+    if (f != NULL) fclose(f);
+    meta.graphical_mode = false;
+    CHECK(!vga_screen_document_write(headless, VGA_SELFTEST_DOC ".refused", &meta));
+    f = fopen(VGA_SELFTEST_DOC ".refused", "rb");
+    CHECK(f == NULL);
+    if (f != NULL) fclose(f);
+    remove(VGA_SELFTEST_DOC);
+}
+
 int main(void)
 {
     RUN(test_clock, "clock: 1 guest instruction = 1 us, through the PIT, the PM timer and the TSC");
@@ -2912,6 +3151,7 @@ int main(void)
     RUN(test_kernel_loader, "kernel: the bzImage boot params, the option ROM, the real image");
     RUN(test_ide, "ide: geometry, IDENTIFY, READ SECTORS/DMA, the error status, the ATAPI command set");
     RUN(test_virtio, "virtio: the PCI function and its capability chain, feature negotiation, the queues, both directions of the console, the IRQ route");
+    RUN(test_vga, "vga: the always-present device, the live LFB, the window's U0 stand-in, PCI 00:12.0, the per-adapter flags, the document format");
 
     printf("hw_selftest: %d checks, %d failures, %d skipped\n", checks, failures, skips);
     return failures != 0;

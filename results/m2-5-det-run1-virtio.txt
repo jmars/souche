@@ -1,4 +1,3 @@
-scsi host0: ata_piix
 scsi host1: ata_piix
 ata1: PATA max MWDMA2 cmd 0x1f0 ctl 0x3f6 bmdma 0xb400 irq 14 lpm-pol 0
 ata2: PATA max MWDMA2 cmd 0x170 ctl 0x376 bmdma 0xb408 irq 15 lpm-pol 0

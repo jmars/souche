@@ -4,6 +4,9 @@
  *
  *     v86c <image> <instruction-limit>              -> the M0 ORACLE CONTRACT transcript
  *     v86c <image> <instruction-limit> --fixture    -> the nasm differential fixture
+ *     v86c <image> <instruction-limit> --vga-doc F  -> the same transcript + the VGA document
+ *                                                      (VGA-U0; oracle/run-vga.mjs is the
+ *                                                      reference leg of the same file)
  *
  * The first form is README.md's contract, byte for byte the shape `node oracle/run.mjs`
  * prints (keys sorted at every level, 2-space indent, one trailing newline, lowercase
@@ -57,6 +60,7 @@
 #include "hw/kernel.h" /* M2-2: the bzImage loader */
 #include "hw/machine.h" /* M2-1: the device layer (the machine) */
 #include "hw/uart.h"   /* M2-2: the serial ports */
+#include "hw/vga.h"    /* VGA-U0: the device, its adapter and the --vga-doc document */
 
 /* README.md ss2/ss3 -- the fixed machine geometry of the oracle contract, and run.js:38-39
  * for the fixture form. */
@@ -195,6 +199,23 @@ static void print_sha256_to(FILE *out, const void *data, size_t len)
 }
 
 static void print_sha256(const void *data, size_t len) { print_sha256_to(stdout, data, len); }
+
+/* VGA-U0: the same digest, as a 64-character string -- vga_doc_meta_t.image_sha256, so the
+ * document's image field is the transcript's own value and the port keeps ONE sha256. */
+static void sha256_hex(const void *data, size_t len, char out[65])
+{
+	static const char hex[] = "0123456789abcdef";
+	sha256_ctx ctx;
+	uint8_t digest[32];
+	sha256_init(&ctx);
+	sha256_update(&ctx, data, len);
+	sha256_final(&ctx, digest);
+	for (unsigned i = 0; i < 32; i++) {
+		out[2 * i] = hex[digest[i] >> 4];
+		out[2 * i + 1] = hex[digest[i] & 0xF];
+	}
+	out[64] = '\0';
+}
 
 /* ------------------------------------------------------------------ *
  * helpers
@@ -969,6 +990,17 @@ static int boot_main(int argc, char *argv[])
 		}
 		else if (strcmp(argv[i], "--uart1") == 0) uart1 = true;
 		else if (strcmp(argv[i], "--acpi") == 0) acpi = true;
+		else if (strcmp(argv[i], "--vga-ansi") == 0) machine_config.vga_screen = VGA_SCREEN_ANSI;
+		else if (strcmp(argv[i], "--vga-doc") == 0) {
+			/* VGA-U0: the document is the M0 TRANSCRIPT's stop (vga.h).  A boot-mode stop is
+			 * an instruction limit in a guest that never halts, and a framebuffer document
+			 * there is U4's LFB image -- refusing is the honest answer, not writing a
+			 * document whose stop point nothing has pinned. */
+			fprintf(stderr, "v86c: --vga-doc is the transcript mode's stop (v86c <image>"
+			                " <limit> --vga-doc FILE); a boot-mode framebuffer document is"
+			                " unit U4's\n");
+			return 2;
+		}
 		else if (strcmp(argv[i], "--uop-cache") == 0 || strcmp(argv[i], "--uop-cache-stats") == 0)
 			i = parse_uop_cache_flag(argc, argv, i);
 		else if (strcmp(argv[i], "--jit") == 0 || strcmp(argv[i], "--jit-stats") == 0)
@@ -985,8 +1017,8 @@ static int boot_main(int argc, char *argv[])
 		fprintf(stderr, "usage: %s --bzimage <kernel> <instruction-limit> [--cmdline TEXT]"
 		                " [--initrd FILE] [--bios FILE] [--serial FILE] [--hda FILE]"
 		                " [--memory MIB] [--virtio-console FILE] [--virtio-console-in FILE]"
-		                " [--uart1] [--acpi] [--uop-cache on|off] [--uop-cache-stats]"
-		                " [--jit on|off]\n", argv[0]);
+		                " [--uart1] [--acpi] [--vga-ansi] [--uop-cache on|off]"
+		                " [--uop-cache-stats] [--jit on|off]\n", argv[0]);
 		return 2;
 	}
 	if (uop_cache_stats || jit_stats_flag) atexit(v86c_stats_print);
@@ -1278,6 +1310,11 @@ static int boot_main(int argc, char *argv[])
 		fprintf(stderr, "v86c: unimplemented: %s\n", unimplemented_instruction_name());
 		return 1;
 	}
+	/* --vga-ansi's reader.  Upstream's browser starter polls the adapter's get_text_screen
+	 * from the UI; this port has no UI, so the run's stop prints the text screen to stderr
+	 * (never stdout: the serial sink and the transcript own those).  A no-op for every other
+	 * adapter. */
+	vga_screen_ansi_flush(vga_device()->screen);
 	return 0;
 }
 
@@ -1304,6 +1341,14 @@ int main(int argc, char *argv[])
 
 	for (int i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "--fixture") == 0) fixture_mode = true;
+		/* VGA-U0: the adapter selection (the device itself is always installed -- vga.h).
+		 * --vga-doc FILE selects the recording adapter AND names the document's path, the
+		 * shape --serial FILE and --virtio-console FILE already have. */
+		else if (strcmp(argv[i], "--vga-ansi") == 0) machine_config.vga_screen = VGA_SCREEN_ANSI;
+		else if (strcmp(argv[i], "--vga-doc") == 0 && i + 1 < argc) {
+			machine_config.vga_screen = VGA_SCREEN_DOC;
+			machine_config.vga_doc_path = argv[++i];
+		}
 		else if (strcmp(argv[i], "--uop-cache") == 0 || strcmp(argv[i], "--uop-cache-stats") == 0)
 			i = parse_uop_cache_flag(argc, argv, i);
 		else if (strcmp(argv[i], "--jit") == 0 || strcmp(argv[i], "--jit-stats") == 0)
@@ -1315,7 +1360,8 @@ int main(int argc, char *argv[])
 
 	if (image_path == NULL || limit_text == NULL) {
 		fprintf(stderr, "usage: %s <image> <instruction-limit> [--fixture]"
-		                " [--uop-cache on|off] [--uop-cache-stats] [--jit on|off]\n", argv[0]);
+		                " [--vga-ansi] [--vga-doc FILE] [--uop-cache on|off]"
+		                " [--uop-cache-stats] [--jit on|off]\n", argv[0]);
 		return 2;
 	}
 	if (uop_cache_stats || jit_stats_flag) atexit(v86c_stats_print);
@@ -1392,6 +1438,15 @@ int main(int argc, char *argv[])
 	}
 
 	if (fixture_mode) {
+		/* VGA-U0: --vga-doc/--vga-ansi are transcript-mode flags, and a silent no-op is the
+		 * one thing a flag may not be (the fixture document is the nasm differential's, and
+		 * it has no machine geometry to describe). */
+		if (machine_config.vga_doc_path != NULL || machine_config.vga_screen != VGA_SCREEN_HEADLESS) {
+			fprintf(stderr, "v86c: --vga-ansi/--vga-doc select a VGA adapter for the"
+			                " TRANSCRIPT mode's stop (v86c <image> <limit> --vga-doc FILE);"
+			                " the --fixture document has no machine geometry\n");
+			return 2;
+		}
 		/* A fault the machine STOPPED ON because it could not be DELIVERED (an empty or
 		 * too-small IDT, an invalid gate -- the paths upstream `panic!`s on) is a result
 		 * in this mode: the runner compares the host signal and the faulting eip, so the
@@ -1437,6 +1492,23 @@ int main(int argc, char *argv[])
 			(unsigned long long)limit, (unsigned long long)result.count);
 		return 1;
 	}
+
+	/* VGA-U0: the framebuffer document, at THE SAME STOP the transcript is taken at --
+	 * the HLT (or the limit, which the M0 contract already makes a nonzero exit) -- so
+	 * both legs document the same machine state.  Never on a stop the transcript refuses:
+	 * a failed write is a nonzero exit, like a failed stop. */
+	if (machine_config.vga_doc_path != NULL) {
+		char digest[65];
+		sha256_hex(image, (size_t)file_size, digest);
+		if (!vga_write_document(machine_config.vga_doc_path, digest, (uint64_t)file_size,
+		                        limit, cpu->instruction_counter)) {
+			return 1;
+		}
+	}
+	/* --vga-ansi's reader: upstream's browser starter polls the adapter's
+	 * get_text_screen; this port has no UI, so the stop prints it to stderr (never
+	 * stdout, which the transcript owns).  A no-op for every other adapter. */
+	vga_screen_ansi_flush(vga_device()->screen);
 
 	print_transcript(image, (size_t)file_size, limit);
 	return 0;
