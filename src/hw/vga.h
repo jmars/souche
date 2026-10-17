@@ -84,10 +84,12 @@
 
 /* The dest buffer's hard bound (the reference's image_data grows wasm memory on demand; this
  * port uses a fixed array and reports a refusal past the bound -- the R4 rule, never an
- * unbounded index).  The largest VGA (non-SVGA) dest buffer is ~526K pixels: virtual_width
- * <= offset<<4 <= 4080 (4-bit) and virtual_height = ceil(0x20000 / bytes_per_line), whose
- * product peaks at 4080 * ceil(32768/255) = 526,320.  1 MiB pixels leaves ~2x headroom. */
-#define VGA_DEST_BUFFER_MAX_PIXELS (1u << 20)
+ * unbounded index).  The largest VGA (non-SVGA) dest buffer is 1,052,640 pixels: virtual_width
+ * = offset<<4 (max 255 -> 4080) and virtual_height = ceil(0x20000 / bytes_per_line), whose
+ * product peaks at 4080 * ceil(131072/510) = 1,052,640 when crtc_mode bit 6 halves
+ * bytes_per_line (offset<<2 >> 1 = 510).  Mode 12h itself is 640 * ceil(131072/80) = 1,048,960.
+ * 2 MiB pixels leaves ~2x headroom over the true maximum. */
+#define VGA_DEST_BUFFER_MAX_PIXELS (2u << 20)
 
 /* One rectangle of the framebuffer, as update_buffer takes it (vga.js:2562-2575 and
  * 2575/2575's `this.layers`; the fields are the object literal screen_fill_buffer builds).

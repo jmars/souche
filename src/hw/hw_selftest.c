@@ -3546,6 +3546,401 @@ static void test_vga_planar_defects(void)
     }
 }
 
+/* ================================================================== *
+ * 9e. THE VGA PLANAR 16-COLOUR ARMS -- VGA-U3
+ *
+ * The arms U2 ported WHOLE but left UN-GATED (results/vga-u2.md sec.8's list): write modes
+ * 1-3 with the latches, rotate counts != 0, the 0x18 logical ops, setreset + setreset_enable,
+ * the partial bitmask, chain-2 (odd/even) write, shift modes 0x00/0x20 with pel_width 0
+ * (4-bit redraw through dac_map + color_plane_enable), attribute_mode 0x80 colorset, read
+ * mode 0 plane_read 1-3, read mode 1 colour compare, odd/even host read, and the row
+ * substitution arm (crtc_mode & 3 != 3).  Each probe drives the DEVICE through the ports and
+ * the 0xA0000 window, then reads the dest buffer back (vga_screen_fill_buffer + vga_dest_buffer)
+ * -- the device's own image_data-equivalent -- or the window read (read8) for the read-mode
+ * arms.  Each expected value is hand-computed from vga.js's arithmetic, so a mutation in the
+ * corresponding vga.c arm FAILS here.  The differential images (tests/vga-planar*.asm,
+ * tests/gate-vga-3.sh) are the end-to-end proof; these probes are the asymmetry instruments.
+ * ================================================================== */
+
+/* A small 32x16 planar 16-colour mode (chain-2 odd/even, shift 0x00, write mode 0), with an
+ * identity dac_map, colour-plane-enable 0x0F and a known 8-colour DAC palette.  CRTC offset 2
+ * gives virtual_width 32 (small enough to hand-compute); crtc_mode 0x43 keeps bits 1-0 = 3
+ * (no row substitution) and bit 6 (byte mode -> the address-to-pixel shift is 3 -> 8 pixels
+ * per plane byte).  This is mode 0x12's arithmetic at a smaller size. */
+static void vga_program_planar(void)
+{
+    seq16_write(0x00, 0x01);
+    io_port_write8(0x3C2, 0xE3);
+    seq16_write(0x00, 0x03);
+    seq16_write(0x01, 0x01);
+    seq16_write(0x02, 0x0F);
+    seq16_write(0x03, 0x00);
+    seq16_write(0x04, 0x02);   /* chain 2 (odd/even) */
+    crtc_write(0x01, 0x03);    /* hdisp 3 -> 4 chars -> screen_width 32 */
+    crtc_write(0x02, 0x04);
+    crtc_write(0x09, 0x00);    /* max scan line 0 */
+    crtc_write(0x12, 0x0F);    /* vdisp 15 -> 16 scans -> screen_height 16 */
+    crtc_write(0x15, 0x10);
+    crtc_write(0x13, 0x02);    /* offset 2 -> virtual_width 32 */
+    crtc_write(0x17, 0x43);    /* byte mode, no row substitution */
+    gc16_write(0x05, 0x00);    /* shift 0x00 (planar), write mode 0 */
+    gc16_write(0x06, 0x05);    /* misc graphics: memory space 0 (0xA0000) */
+    gc16_write(0x08, 0xFF);    /* bit mask: all bits */
+    /* identity dac_map + colour plane enable + graphical (4-bit) */
+    for (int i = 0; i < 16; i++) {
+        io_port_write8(0x3C0, i);
+        io_port_write8(0x3C0, i);
+    }
+    io_port_write8(0x3C0, 0x12);
+    io_port_write8(0x3C0, 0x0F);
+    io_port_write8(0x3C0, 0x10);
+    io_port_write8(0x3C0, 0x01);
+    /* a known DAC palette: the classic 16-colour VGA palette (6-bit; 0x2A->0xA8, 0x15->0x57,
+     * 0x3F->0xFF through the reference's expand), matching vga_dac_color() below */
+    static const uint8_t classic[16][3] = {
+        {0x00,0x00,0x00}, {0x00,0x00,0x2A}, {0x00,0x2A,0x00}, {0x00,0x2A,0x2A},
+        {0x2A,0x00,0x00}, {0x2A,0x00,0x2A}, {0x2A,0x15,0x00}, {0x2A,0x2A,0x2A},
+        {0x15,0x15,0x15}, {0x15,0x15,0x3F}, {0x15,0x3F,0x15}, {0x15,0x3F,0x3F},
+        {0x3F,0x15,0x15}, {0x3F,0x15,0x3F}, {0x3F,0x3F,0x15}, {0x3F,0x3F,0x3F},
+    };
+    for (int i = 0; i < 16; i++) {
+        io_port_write8(0x3C8, i);
+        io_port_write8(0x3C9, classic[i][0]);
+        io_port_write8(0x3C9, classic[i][1]);
+        io_port_write8(0x3C9, classic[i][2]);
+    }
+}
+
+/* The dest buffer stores RGBA little-endian (R at 4*n); vga_redraw's byte swap puts R low.
+ * These two helpers return the dest pixel's RGB in that byte order (R low) and the expected
+ * DAC colour for palette entry i, so a probe asserts `vga_px(dest, n) == vga_dac_color(i)`. */
+static uint32_t vga_px(const uint8_t *dest, int32_t n)
+{
+    return (uint32_t)dest[4 * n] | (uint32_t)dest[4 * n + 1] << 8 |
+           (uint32_t)dest[4 * n + 2] << 16;
+}
+
+static uint32_t vga_dac_color(int i)
+{
+    /* the classic 16-colour VGA palette, 6-bit -> 8-bit through the reference's expand
+     * (`b = v & 1; v = v<<2 | b<<1 | b`: 0x2A->0xA8, 0x15->0x57, 0x3F->0xFF).  Sixteen
+     * DISTINCT colours, so a probe asserting colour i actually distinguishes it from i+8
+     * (the earlier 3-bit palette collapsed 8-15 onto 0-7 and let a wrong pixel pass). */
+    static const uint8_t classic[16][3] = {
+        {0x00,0x00,0x00}, {0x00,0x00,0xA8}, {0x00,0xA8,0x00}, {0x00,0xA8,0xA8},
+        {0xA8,0x00,0x00}, {0xA8,0x00,0xA8}, {0xA8,0x57,0x00}, {0xA8,0xA8,0xA8},
+        {0x57,0x57,0x57}, {0x57,0x57,0xFF}, {0x57,0xFF,0x57}, {0x57,0xFF,0xFF},
+        {0xFF,0x57,0x57}, {0xFF,0x57,0xFF}, {0xFF,0xFF,0x57}, {0xFF,0xFF,0xFF},
+    };
+    i &= 0xF;
+    return (uint32_t)classic[i][0] | (uint32_t)classic[i][1] << 8 |
+           (uint32_t)classic[i][2] << 16;
+}
+
+static void test_vga_planar(void)
+{
+    vga_device_t *vga = vga_device();
+    const uint8_t *dest = NULL;
+    int32_t pixels = 0;
+
+    /* ---- the geometry the whole case builds on (the reference's own numbers) ---- */
+    machine_reset();
+    vga_program_planar();
+    CHECK(vga->graphical_mode);
+    CHECK_EQ(vga->screen_width, 32);
+    CHECK_EQ(vga->screen_height, 16);
+    CHECK_EQ(vga->virtual_width, 32);
+    CHECK_EQ(vga->virtual_height, 32768); /* ceil(0x20000 / (2<<2>>1)) = ceil(131072/4) */
+
+    /* P-W0: chain-2 odd/even write + shift-0x00 replot.  Writing the EVEN address 0 (planes
+     * 0,2) with 0xFF and the ODD address 1 (planes 1,3) with 0x0F puts plane0/2 = 0xFF and
+     * plane1/3 = 0x0F at plane byte 0.  The planar shift unpacks 8 pixels per byte (MSB
+     * first): bits 7-4 of each plane -> pixels 0-3, bits 3-0 -> pixels 4-7. */
+    write8(0xA0000, 0xFF);
+    write8(0xA0001, 0x0F);
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(vga_px(dest, 0), vga_dac_color(5));  /* 1 | 4 (plane2 bit7) */
+    CHECK_EQ(vga_px(dest, 3), vga_dac_color(5));
+    CHECK_EQ(vga_px(dest, 4), vga_dac_color(15)); /* 1|2|4|8 */
+    CHECK_EQ(vga_px(dest, 7), vga_dac_color(15));
+
+    /* P-W1: write mode 1 copies the latches.  The latches are loaded by a READ of the window
+     * (vga_memory_read), so: set all four plane bytes at plane addr 0, read them (latch), then
+     * write mode 1 to plane addr 2 -- the latch's bytes 0/2 (0xAA) must land in planes 0/2. */
+    machine_reset();
+    vga_program_planar();
+    write8(0xA0000, 0xAA);          /* planes 0,2 <- 0xAA */
+    write8(0xA0001, 0x55);          /* planes 1,3 <- 0x55 */
+    CHECK_EQ(read8(0xA0000), 0xAA); /* the read loads latch_dword = 0x55AA55AA */
+    gc16_write(0x05, 0x01);         /* write mode 1 */
+    write8(0xA0002, 0x00);          /* plane addr 2 (planes 0,2) <- latch bytes 0,2 = 0xAA */
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    /* pixels 16-23 come from plane addr 2 (16 >> 3 = 2): plane0/2 = 0xAA, plane1/3 = 0 */
+    CHECK_EQ(vga_px(dest, 16), vga_dac_color(5));  /* 0xAA bit7 */
+    CHECK_EQ(vga_px(dest, 17), vga_dac_color(0));  /* 0xAA bit6 = 0 */
+    CHECK_EQ(vga_px(dest, 22), vga_dac_color(5));  /* 0xAA bit1 */
+    CHECK_EQ(vga_px(dest, 23), vga_dac_color(0));  /* 0xAA bit0 = 0 */
+
+    /* P-W2: write mode 2 (apply_expand).  value 0x0B -> planes 0,1,3 = 0xFF, plane 2 = 0x00
+     * (dword 0xFF00FFFF); value 0x05 -> planes 0,2 = 0xFF, planes 1,3 = 0x00 (dword
+     * 0x00FF00FF).  Chain-2 even (planes 0,2) takes 0x0B's bytes 0,2 = 0xFF,0x00; odd (planes
+     * 1,3) takes 0x05's bytes 1,3 = 0x00,0x00.  So plane0=0xFF and planes 1-3 = 0 -> every
+     * pixel is colour 1. */
+    machine_reset();
+    vga_program_planar();
+    gc16_write(0x05, 0x02);         /* write mode 2 */
+    write8(0xA0000, 0x0B);
+    write8(0xA0001, 0x05);
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(vga_px(dest, 0), vga_dac_color(1));  /* plane0=FF, others 0 -> colour 1 */
+    CHECK_EQ(vga_px(dest, 7), vga_dac_color(1));
+
+    /* P-W3: write mode 3 (setreset + rotate + bitmask).  setreset 0x01 (plane 0 only), rotate
+     * 0, bitmask 0xFF, value 0x0F: bitmask &= feed(0x0F) -> 0x0F0F0F0F, plane_dword =
+     * setreset_dword (0x000000FF) & bitmask -> 0x0000000F.  plane0 = 0x0F, plane2 = 0x00, so
+     * pixels 0-3 = colour 0 and 4-7 = colour 1 -- DISPATCH-SHARP: write mode 0 with the same
+     * value would replicate 0x0F into plane2 (colour 5 on bits 3-0), so a `case 3`->`case 0`
+     * routing FAILS here rather than coinciding. */
+    machine_reset();
+    vga_program_planar();
+    gc16_write(0x00, 0x01);         /* setreset: plane 0 only */
+    gc16_write(0x05, 0x03);         /* write mode 3 */
+    write8(0xA0000, 0x0F);
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(vga_px(dest, 0), vga_dac_color(0));  /* plane0 bit7 = 0 */
+    CHECK_EQ(vga_px(dest, 4), vga_dac_color(1));  /* plane0 bit3=1, plane2=0 -> colour 1 */
+    CHECK_EQ(vga_px(dest, 7), vga_dac_color(1));  /* plane0 bit0=1 -> colour 1 */
+
+    /* P-ROTATE: rotate count 1.  value 0x01 rotated right by 1 -> 0x80 (0x0101 >>> 1 =
+     * 0x80), so plane0/2 = 0x80 and only pixel 0 (bit 7) is lit. */
+    machine_reset();
+    vga_program_planar();
+    gc16_write(0x03, 0x01);         /* rotate count 1 */
+    write8(0xA0000, 0x01);
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(vga_px(dest, 0), vga_dac_color(5));  /* 1 | 4 */
+    CHECK_EQ(vga_px(dest, 1), vga_dac_color(0));
+
+    /* P-LOGICAL: the 0x18 XOR.  Latch all four planes to 0xFF (write + read), then write
+     * mode 0 with rotate reg 0x18 (XOR): feed(0x0F) ^ latch = 0xF0F0F0F0 in planes 0/2. */
+    machine_reset();
+    vga_program_planar();
+    write8(0xA0000, 0xFF);
+    write8(0xA0001, 0xFF);
+    CHECK_EQ(read8(0xA0000), 0xFF); /* latch = 0xFFFFFFFF */
+    gc16_write(0x03, 0x18);         /* XOR */
+    write8(0xA0000, 0x0F);
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(vga_px(dest, 0), vga_dac_color(15)); /* planes 0,1,2,3 bits 7-4 all 1 */
+    CHECK_EQ(vga_px(dest, 4), vga_dac_color(10)); /* plane0/2 = 0xF0, plane1/3 = 0xFF */
+
+    /* P-SETRESET: write mode 0 with setreset 0x05 + enable 0x0F overrides the written byte.
+     * apply_setreset forces plane_dword = expand(0x05) = 0x00FF00FF -> planes 0,2 = 0xFF. */
+    machine_reset();
+    vga_program_planar();
+    gc16_write(0x00, 0x05);         /* setreset */
+    gc16_write(0x01, 0x0F);         /* setreset enable: all planes */
+    write8(0xA0000, 0x00);          /* the written byte is overridden */
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(vga_px(dest, 0), vga_dac_color(5));
+    CHECK_EQ(vga_px(dest, 7), vga_dac_color(5));
+
+    /* P-BITMASK: partial bitmask 0x0F.  Latch all planes 0xFF, then write mode 0 with
+     * bitmask 0x0F and data 0x00: the low nibble takes DATA (0), the high nibble takes the
+     * LATCH (0xFF) -> plane0/2 = 0xF0. */
+    machine_reset();
+    vga_program_planar();
+    write8(0xA0000, 0xFF);
+    write8(0xA0001, 0xFF);
+    CHECK_EQ(read8(0xA0000), 0xFF);
+    gc16_write(0x08, 0x0F);         /* bitmask */
+    write8(0xA0000, 0x00);
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(vga_px(dest, 0), vga_dac_color(15));
+    CHECK_EQ(vga_px(dest, 4), vga_dac_color(10));
+
+    /* P-READ0: read mode 0, plane_read 1-3.  plane0=0xAA, plane1=0x55, plane2=0xAA,
+     * plane3=0x55 (chain-2 writes); each plane_read must answer its own plane's byte. */
+    machine_reset();
+    vga_program_planar();
+    write8(0xA0000, 0xAA);
+    write8(0xA0001, 0x55);
+    gc16_write(0x04, 0);
+    CHECK_EQ(read8(0xA0000), 0xAA);
+    gc16_write(0x04, 1);
+    CHECK_EQ(read8(0xA0000), 0x55);
+    gc16_write(0x04, 2);
+    CHECK_EQ(read8(0xA0000), 0xAA);
+    gc16_write(0x04, 3);
+    CHECK_EQ(read8(0xA0000), 0x55);
+
+    /* P-READ1: read mode 1 colour compare.  Chain-4 writes plane0=0x5A, planes 1-3=0x0F; with
+     * don't-care 0xF and compare 0x0F the result is the AND over planes of (plane ^ ~compare)
+     * = 0x5A & 0x0F & 0x0F & 0x0F = 0x0A -- DISPATCH-SHARP: read mode 0 (plane_read 0) would
+     * return plane0 = 0x5A, so a read-mode-1 dispatch that fell through would return 0x5A and
+     * FAIL here. */
+    machine_reset();
+    vga_program_planar();
+    seq16_write(0x04, 0x08);        /* chain 4: one plane per byte */
+    write8(0xA0000, 0x5A);
+    write8(0xA0001, 0x0F);
+    write8(0xA0002, 0x0F);
+    write8(0xA0003, 0x0F);
+    gc16_write(0x07, 0x0F);         /* colour don't care: all planes */
+    gc16_write(0x02, 0x0F);         /* colour compare: 0x0F */
+    gc16_write(0x05, 0x08);         /* read mode 1 */
+    CHECK_EQ(read8(0xA0000), 0x0A);
+
+    /* P-ODDEVEN: odd/even host read (planar_mode & 0x10).  plane0=0xAA, plane1=0x55; an EVEN
+     * address reads plane 0, an ODD address reads plane 1 at the halved address. */
+    machine_reset();
+    vga_program_planar();
+    write8(0xA0000, 0xAA);
+    write8(0xA0001, 0x55);
+    gc16_write(0x05, 0x10);         /* odd/even host read (still shift 0x00) */
+    CHECK_EQ(read8(0xA0000), 0xAA);
+    CHECK_EQ(read8(0xA0001), 0x55);
+
+    /* P-COLORSET: attribute_mode 0x80 + color_select.  A pixel of colour 15 with color_select
+     * 0x05 maps to DAC entry (15 & 0x0F) | (0x05 << 4) = 0x5F, NOT 15 -- so programming
+     * DAC[0x5F] and asserting the dest pixel follows it pins the mask+colorset arithmetic. */
+    machine_reset();
+    vga_program_planar();
+    write8(0xA0000, 0xFF);
+    write8(0xA0001, 0xFF);
+    io_port_write8(0x3C0, 0x10);
+    io_port_write8(0x3C0, 0x81);    /* attribute_mode: graphical | colorset */
+    io_port_write8(0x3C0, 0x14);
+    io_port_write8(0x3C0, 0x05);    /* color_select = 5 -> colorset 0x50 */
+    io_port_write8(0x3C8, 0x5F);
+    io_port_write8(0x3C9, 0x3F);    /* DAC[0x5F] = red */
+    io_port_write8(0x3C9, 0x00);
+    io_port_write8(0x3C9, 0x00);
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(vga_px(dest, 0), 0xFFu); /* red: source 15 -> (15&0xF)|0x50 = 0x5F -> DAC[0x5F] = red */
+
+    /* P-SHIFT20: packed shift mode 0x20 (CGA 4-colour).  Chain-4 writes byte0=0xE4,
+     * byte2=0x1B (byte1/byte3 = 0); the packed shift unpacks 2 bits per pixel from byte0/2
+     * (pixels 0-3) and byte1/3 (pixels 4-7): 3, 6, 9, 12, 0, 0, 0, 0. */
+    machine_reset();
+    vga_program_planar();
+    seq16_write(0x04, 0x08);        /* chain 4 */
+    write8(0xA0000, 0xE4);
+    write8(0xA0001, 0x00);
+    write8(0xA0002, 0x1B);
+    write8(0xA0003, 0x00);
+    gc16_write(0x05, 0x20);         /* packed shift mode */
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(vga_px(dest, 0), vga_dac_color(3));
+    CHECK_EQ(vga_px(dest, 1), vga_dac_color(6));
+    CHECK_EQ(vga_px(dest, 2), vga_dac_color(9));
+    CHECK_EQ(vga_px(dest, 3), vga_dac_color(12));
+    CHECK_EQ(vga_px(dest, 4), vga_dac_color(0));
+
+    /* P-SUBSTITUTION: the row-substitution arm (crtc_mode & 3 != 3).  crtc_mode 0x40 keeps
+     * byte mode (addr shift 3) but clears bits 1-0 -> the substitution arm runs.  A write to
+     * window addr 0x2000 has bit 13 set: vga_addr_to_pixel undoes the substitution (row =
+     * addr>>13 & 3 = 1 -> pixel 32), and vga_replot re-inserts it (row 1 -> plane addr 0x2000).
+     * The 0xFF/0x0F plane bytes at 0x2000 must therefore land in pixels 32-35 (=5) / 36-39
+     * (=15).  A mutation in either substitution arm's bit-13 reconstruction FAILS here. */
+    machine_reset();
+    vga_program_planar();
+    crtc_write(0x17, 0x40);         /* substitution: crtc_mode & 3 == 0 */
+    write8(0xA2000, 0xFF);          /* window 0xA0000+0x2000, chain-2 even -> planes 0,2 */
+    write8(0xA2001, 0x0F);          /* window 0xA0000+0x2001, chain-2 odd  -> planes 1,3 */
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(vga_px(dest, 32), vga_dac_color(5));
+    CHECK_EQ(vga_px(dest, 36), vga_dac_color(15));
+
+    /* P-WBM: partial plane_write_bm (map mask).  SR 0x02 = 0x05 masks the odd write (planes
+     * 1,3) out entirely, so plane1/3 stay 0 and every pixel is plane0 bit | plane2 bit<<2 = 5.
+     * A mutation that ignores the mask lets the odd write through and flips pixels 4-7. */
+    machine_reset();
+    vga_program_planar();
+    seq16_write(0x02, 0x05);        /* map mask: planes 0,2 only */
+    write8(0xA0000, 0xFF);          /* planes 0,2 <- 0xFF */
+    write8(0xA0001, 0x0F);          /* planes 1,3 <- MASKED OUT */
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(vga_px(dest, 0), vga_dac_color(5));
+    CHECK_EQ(vga_px(dest, 4), vga_dac_color(5));
+    CHECK_EQ(vga_px(dest, 7), vga_dac_color(5));
+
+    /* P-LOGICAL-AND: the 0x08 arm (the only previously un-gated logical op).  Latch 0x0F in
+     * all planes, then write 0xF0 through AND -> 0xF0 & 0x0F = 0x00 in planes 0/2, planes 1/3
+     * keep the latch 0x0F.  A mutation of AND->replace (data 0xF0) leaves plane0/2 = 0xF0. */
+    machine_reset();
+    vga_program_planar();
+    write8(0xA0000, 0x0F);
+    write8(0xA0001, 0x0F);
+    CHECK_EQ(read8(0xA0000), 0x0F); /* latch = 0x0F0F0F0F */
+    gc16_write(0x03, 0x08);         /* logical AND */
+    write8(0xA0000, 0xF0);          /* planes 0,2 <- 0xF0 & 0x0F = 0x00 */
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(vga_px(dest, 0), vga_dac_color(0));   /* plane0/2 = 0 */
+    CHECK_EQ(vga_px(dest, 3), vga_dac_color(0));
+    CHECK_EQ(vga_px(dest, 4), vga_dac_color(10));  /* plane1/3 = 0x0F -> 2|8 */
+    CHECK_EQ(vga_px(dest, 7), vga_dac_color(10));
+
+    /* P-LOGICAL-OR: the 0x10 arm.  Latch 0x0F, write 0xF0 through OR -> 0xFF in planes 0/2. */
+    machine_reset();
+    vga_program_planar();
+    write8(0xA0000, 0x0F);
+    write8(0xA0001, 0x0F);
+    CHECK_EQ(read8(0xA0000), 0x0F);
+    gc16_write(0x03, 0x10);         /* logical OR */
+    write8(0xA0000, 0xF0);          /* planes 0,2 <- 0xF0 | 0x0F = 0xFF */
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(vga_px(dest, 0), vga_dac_color(5));   /* plane0/2 = 0xFF, plane1/3 = 0x0F */
+    CHECK_EQ(vga_px(dest, 4), vga_dac_color(15));
+    CHECK_EQ(vga_px(dest, 7), vga_dac_color(15));
+
+    /* P-DACMAP: non-identity dac_map with a PARTIAL colour-plane-enable mask.  dac_map[10]
+     * = 7, colour-plane-enable 0x0A (planes 1,3); a pixel of colour 15 gives color16 =
+     * 15 & 0x0A = 10 -> dac_map[10] = 7 -> DAC[7] (light gray).  A mutation that reads the
+     * raw color16 instead of dac_map[color16] maps 10 -> DAC[10] (light green) and fails. */
+    machine_reset();
+    vga_program_planar();
+    io_port_write8(0x3C0, 0x0A);
+    io_port_write8(0x3C0, 0x07);    /* dac_map[10] = 7 */
+    io_port_write8(0x3C0, 0x12);
+    io_port_write8(0x3C0, 0x0A);    /* colour plane enable: planes 1,3 */
+    write8(0xA0000, 0xFF);
+    write8(0xA0001, 0xFF);          /* all planes -> pixel colour 15 */
+    vga_screen_fill_buffer(vga);
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(vga_px(dest, 0), vga_dac_color(7));  /* light gray, via dac_map[10] */
+    CHECK_EQ(vga_px(dest, 7), vga_dac_color(7));
+}
+
 int main(void)
 {
     RUN(test_clock, "clock: 1 guest instruction = 1 us, through the PIT, the PM timer and the TSC");
@@ -3568,6 +3963,7 @@ int main(void)
     RUN(test_vga_text, "vga text (U1): the CRTC/attribute/DAC decode, put_char flags+colours (P2), the start-address + split-screen arm (P4)");
     RUN(test_vga_graphical, "vga mode 13h (U2): the sequencer/graphics registers, the graphical_mode flip (P5), the pixel stride (P3), the palette lanes (P1)");
     RUN(test_vga_planar_defects, "vga planar/graphical defect guards (U2 R2): div-by-zero, negative static writes, plane_read>=4, mid-run resize");
+    RUN(test_vga_planar, "vga planar 16-colour (U3): write modes 0-3 + rotate/logical/setreset/bitmask, chain-2, shift 0x00/0x20, read modes 0/1, odd/even, colorset, the substitution arm");
 
     printf("hw_selftest: %d checks, %d failures, %d skipped\n", checks, failures, skips);
     return failures != 0;

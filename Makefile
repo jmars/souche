@@ -535,6 +535,35 @@ tests/vga-mode13.img: tests/vga-mode13.asm tests/test.ld
 	$(LD) $(LDFLAGS) -o $(BUILD)/vga-mode13.elf $(BUILD)/vga-mode13.o
 	$(OBJCOPY) -O binary $(BUILD)/vga-mode13.elf $@
 
+# VGA-U3's differential images (tests/gate-vga-3.sh): the planar 16-colour path.  planar12 is
+# mode 0x12 (640x480x16, chain-2, shift 0x00) mixing write modes 0-3 + rotate/logical/setreset/
+# bitmask + colorset on one frame; planar4 is the packed shift 0x20 (CGA 4-colour); planar0d is
+# the cheap mode-0x0D geometry (320x200x16); planarsub reaches the row-substitution arm.  Same
+# build shape (as --32 + test.ld + objcopy).
+tests/vga-planar12.img: tests/vga-planar12.asm tests/test.ld
+	@mkdir -p $(BUILD)
+	$(AS) $(ASFLAGS) -o $(BUILD)/vga-planar12.o tests/vga-planar12.asm
+	$(LD) $(LDFLAGS) -o $(BUILD)/vga-planar12.elf $(BUILD)/vga-planar12.o
+	$(OBJCOPY) -O binary $(BUILD)/vga-planar12.elf $@
+
+tests/vga-planar4.img: tests/vga-planar4.asm tests/test.ld
+	@mkdir -p $(BUILD)
+	$(AS) $(ASFLAGS) -o $(BUILD)/vga-planar4.o tests/vga-planar4.asm
+	$(LD) $(LDFLAGS) -o $(BUILD)/vga-planar4.elf $(BUILD)/vga-planar4.o
+	$(OBJCOPY) -O binary $(BUILD)/vga-planar4.elf $@
+
+tests/vga-planar0d.img: tests/vga-planar0d.asm tests/test.ld
+	@mkdir -p $(BUILD)
+	$(AS) $(ASFLAGS) -o $(BUILD)/vga-planar0d.o tests/vga-planar0d.asm
+	$(LD) $(LDFLAGS) -o $(BUILD)/vga-planar0d.elf $(BUILD)/vga-planar0d.o
+	$(OBJCOPY) -O binary $(BUILD)/vga-planar0d.elf $@
+
+tests/vga-planarsub.img: tests/vga-planarsub.asm tests/test.ld
+	@mkdir -p $(BUILD)
+	$(AS) $(ASFLAGS) -o $(BUILD)/vga-planarsub.o tests/vga-planarsub.asm
+	$(LD) $(LDFLAGS) -o $(BUILD)/vga-planarsub.elf $(BUILD)/vga-planarsub.o
+	$(OBJCOPY) -O binary $(BUILD)/vga-planarsub.elf $@
+
 # HANDOFF=v86c-repo-weight: the 64 MiB guest-gate disk, materialised from the
 # committed xz (the raw image is not tracked; the helper's contract -- default
 # path only, never clobber, sha256-verified before it is put in place -- is in

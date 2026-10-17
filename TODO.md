@@ -178,34 +178,32 @@ that landed, and the guest-compatibility fact below still stands.)*
   INTERPRETATION: that is a smaller job than the 974-line total and would satisfy every guest we
   can currently name.
 
-### 1.2 VGA — U1 SHIPPED (results/vga-u1.md), U2 SHIPPED (results/vga-u2.md); planar U3, SVGA U4
+### 1.2 VGA — U1/U2/U3 SHIPPED (results/vga-u1.md, results/vga-u2.md, results/vga-u3.md); SVGA U4
 - **Size.** READ: `v86/src/vga.js` is 2,612 lines — the largest single device in the reference. It
   is being ported in five units (the ladder `coder` → `engineer`), each with its own gate, because
   the decode is where a silent-wrong port costs most.
-- **What exists now (U0+U1+U2)**: the device is ALWAYS installed, as upstream (`cpu.js:1193`) — the
-  8 MiB VRAM (so `memory.c`'s LFB arms are live), PCI `00:12.0`, the RENDERING SEAM with three
+- **What exists now (U0+U1+U2+U3)**: the device is ALWAYS installed, as upstream (`cpu.js:1193`) —
+  the 8 MiB VRAM (so `memory.c`'s LFB arms are live), PCI `00:12.0`, the RENDERING SEAM with three
   adapters (headless / ANSI / DOCUMENT), **U1's text-mode subset** (the CRTC, the attribute
-  controller, the DAC, `text_mode_redraw`/`put_char`, the window's text handlers), and **U2's mode
-  13h + graphical document**: the sequencer (`0x3C4`/`0x3C5` — clocking mode, plane write mask,
-  character map, memory mode with Chain 4), the graphics controller (`0x3CE`/`0x3CF` — the planar
-  write pipeline, `plane_read`, `planar_mode` with the 0x40/0x60 shift modes, the memory-space
-  select, colour compare/don't-care), the graphical_mode flip, `set_size_graphical`/`update_vga_size`
-  → the dest buffer, `vga_replot`/`vga_redraw` (with the reference's dest-buffer clamp quirk), and
-  the graphical document.  The D2 differential (`sh tests/gate-vga-2.sh`, image
-  `tests/vga-mode13.asm`) proves both legs produce a byte-identical 320x410 RGBA document on an
-  image that paints a 16-colour ramp plus pixel-column/row edge cells and reads back through read
-  modes 0 and 1.
-- **What is still absent, and whose it is**: the planar 16-colour modes' LATCH paths and the
-  0x00/0x20 shift modes are U3 (ported whole in U2's single-switch functions, but U3's gate proves
-  them); dispi/SVGA/banks and the real dirty-bitmap callback (still stubbed in `memory.c`) are U4.
-- **The guest-gate boundary re-verified at U1 AND U2**: the kernel boot touches the VGA (the
-  firmware's `INT 10h` teletype writes ~8k window bytes at `0xB84C0`), and U1/U2 CLAIMED the CRTC,
-  sequencer and graphics-controller ports — so the ports' answers changed from `0xFF` to the
-  device's.  The guest gates were re-run on U2's binary and **nothing moved**: the determinism
-  count is still **4,000,096,757** (both runs), `gate-m2-5-guest`, `gate-pae-1` and `gate-pae-l3`
-  are all green, and the bench pin `200,095,214` holds.  The legs CONVERGE (the kernel's `vgacon`
-  probe now sees the reference's CRTC/sequencer/graphics answers, which is what the JS leg always
-  answered).
+  controller, the DAC, `text_mode_redraw`/`put_char`, the window's text handlers), **U2's mode
+  13h + graphical document**, and **U3's planar 16-colour path, proven arm by arm**: read modes
+  0/1, write modes 0-3 with rotate/expand/setreset/logical/bitmask, chain-2 odd/even, the shift
+  modes 0x00/0x20, the latches, odd/even host read, the colorset arm, and the row-substitution
+  arm — gated by `tests/gate-vga-3.sh` (four self-programming images, byte-identical on both legs)
+  and the `hw_selftest` case 9e probes (14 probes, each with a measured fail-before/pass-after
+  mutation).  The D2 differentials (`sh tests/gate-vga-1/2/3.sh`) prove both legs produce
+  byte-identical documents on images that paint known patterns and read back in-guest.
+- **What is still absent, and whose it is**: dispi/SVGA/banks and the real dirty-bitmap callback
+  (still stubbed in `memory.c`) are U4.  `svga_enabled` is still always false; the
+  `vga_memory_read/write` svga arms and the dispi registers (0x1CE/0x1CF) are U4's.
+- **The guest-gate boundary re-verified at U1, U2 AND U3**: the kernel boot touches the VGA (the
+  firmware's `INT 10h` teletype writes ~8k window bytes at `0xB84C0`), and U1/U2/U3 claimed the
+  CRTC, sequencer and graphics-controller ports — so the ports' answers changed from `0xFF` to the
+  device's.  The guest gates were re-run on U3's binary and **nothing moved**: the determinism
+  count is still **4,000,096,757** (both runs), the bench pin **200,095,214** holds,
+  `gate-m2-5-guest`, `gate-pae-1`, `gate-pae-l3` and `gate-reboot-1` are all green.  The legs
+  CONVERGE (the kernel's `vgacon` probe now sees the reference's CRTC/sequencer/graphics answers,
+  which is what the JS leg always answered).
 
 ### 1.3 PAE — SHIPPED (PAE-1, results/pae-1.md; PAE-L3, results/pae-l3.md)
 - The 3-level walk, the 64-bit PDPTE/PDE/PTE handling, the 2 MiB page and NX (EFER.NXE) are ported

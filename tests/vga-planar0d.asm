@@ -1,0 +1,206 @@
+/* tests/vga-planar0d.asm -- VGA-U3's mode 0x0D image (HANDOFF=v86c-vga).
+ *
+ * The "cheap" second 16-colour geometry: mode 0x0D (320x200x16, chain-2 odd/even, planar
+ * shift 0x00).  The arithmetic is identical to mode 0x12's -- only the CRTC geometry differs
+ * (offset 0x14 = 20 -> virtual_width 320, vdisp 0x8F -> 200 scans), which pins update_vga_size's
+ * width/height recompute on a SECOND input rather than just 640x480.  Draws two write-mode
+ * columns and reads them back through read mode 0 (planes 0-3) before halting.
+ *
+ *   column A (addr 0x000, write mode 0): 0xFF/0x0F -> p0=FF p1=0F p2=FF p3=0F
+ *        pixels 0-3 = colour 5, 4-7 = colour 15
+ *   column B (addr 0x002, write mode 2 expand): 0x0B/0x05 -> p0=FF p1=00 p2=00 p3=00
+ *        pixels 8-15 = colour 1 (mode 0x0D is WORD mode -- crtc_mode 0xA3 bit 6 clear, so the
+ *        addr-to-pixel shift is 2 and plane byte 2 lands in pixels 8-15, not 16-23)
+ */
+
+	.intel_syntax noprefix
+
+	.section .mbheader, "a", @progbits
+	.align 4
+	.long	0x1BADB002
+	.long	0x00010000
+	.long	-(0x1BADB002 + 0x00010000)
+	.long	0x00100000
+	.long	0x00100000
+	.long	0
+	.long	0x00101000
+	.long	0x00100020
+
+	.section .text
+	.code32
+	.globl _start
+
+.macro SEQ idx, val
+	mov	dx, 0x3C4
+	mov	ax, (\idx) | ((\val) << 8)
+	out	dx, ax
+.endm
+
+.macro GC idx, val
+	mov	dx, 0x3CE
+	mov	ax, (\idx) | ((\val) << 8)
+	out	dx, ax
+.endm
+
+.macro CRTC reg, val
+	mov	dx, 0x3D4
+	mov	al, \reg
+	out	dx, al
+	mov	dx, 0x3D5
+	mov	al, \val
+	out	dx, al
+.endm
+
+.macro DAC idx, r, g, b
+	mov	dx, 0x3C8
+	mov	al, \idx
+	out	dx, al
+	mov	dx, 0x3C9
+	mov	al, \r
+	out	dx, al
+	mov	al, \g
+	out	dx, al
+	mov	al, \b
+	out	dx, al
+.endm
+
+.macro AC idx, val
+	mov	dx, 0x3C0
+	mov	al, \idx
+	out	dx, al
+	mov	al, \val
+	out	dx, al
+.endm
+
+_start:
+	cld
+	mov	esp, 0x102000
+
+/* ---- sequencer + misc (mode 0x0D) ---- */
+	SEQ	0x00, 0x01
+	mov	dx, 0x3C2
+	mov	al, 0x63
+	out	dx, al
+	SEQ	0x00, 0x03
+	SEQ	0x01, 0x01
+	SEQ	0x02, 0x0F
+	SEQ	0x03, 0x00
+	SEQ	0x04, 0x02		/* CHAIN 2 (odd/even) */
+
+/* ---- the CRTC: mode 0x0D ---- */
+	CRTC	0x11, 0x00
+	CRTC	0x00, 0x2D
+	CRTC	0x01, 0x27		/* hdisp 39 -> 40 chars -> 320 px */
+	CRTC	0x02, 0x28
+	CRTC	0x03, 0x90
+	CRTC	0x04, 0x2B
+	CRTC	0x05, 0x80
+	CRTC	0x06, 0xBF
+	CRTC	0x07, 0x1F
+	CRTC	0x08, 0x00
+	CRTC	0x09, 0x41
+	CRTC	0x0A, 0x00
+	CRTC	0x0B, 0x00
+	CRTC	0x0C, 0x00
+	CRTC	0x0D, 0x00
+	CRTC	0x0E, 0x00
+	CRTC	0x0F, 0x00
+	CRTC	0x10, 0x9C
+	CRTC	0x11, 0x8E
+	CRTC	0x12, 0x8F		/* vdisp -> 200 scans */
+	CRTC	0x13, 0x14		/* offset 20 -> virtual_width 320 */
+	CRTC	0x14, 0x00
+	CRTC	0x15, 0x96
+	CRTC	0x16, 0xB9
+	CRTC	0x17, 0xA3		/* no row substitution */
+
+/* ---- the graphics controller: planar shift 0x00, write mode 0 ---- */
+	GC	0x00, 0x00
+	GC	0x01, 0x00
+	GC	0x02, 0x00
+	GC	0x03, 0x00
+	GC	0x04, 0x00
+	GC	0x05, 0x00
+	GC	0x06, 0x05
+	GC	0x07, 0x0F
+	GC	0x08, 0xFF
+
+/* ---- the attribute controller: identity palette, graphical ---- */
+	AC	0x00, 0x00
+	AC	0x01, 0x01
+	AC	0x02, 0x02
+	AC	0x03, 0x03
+	AC	0x04, 0x04
+	AC	0x05, 0x05
+	AC	0x06, 0x06
+	AC	0x07, 0x07
+	AC	0x08, 0x08
+	AC	0x09, 0x09
+	AC	0x0A, 0x0A
+	AC	0x0B, 0x0B
+	AC	0x0C, 0x0C
+	AC	0x0D, 0x0D
+	AC	0x0E, 0x0E
+	AC	0x0F, 0x0F
+	AC	0x12, 0x0F
+	AC	0x10, 0x01
+
+/* ---- the DAC: the classic 16-colour palette ---- */
+	DAC	0,  0x00, 0x00, 0x00
+	DAC	1,  0x00, 0x00, 0x2A
+	DAC	2,  0x00, 0x2A, 0x00
+	DAC	3,  0x00, 0x2A, 0x2A
+	DAC	4,  0x2A, 0x00, 0x00
+	DAC	5,  0x2A, 0x00, 0x2A
+	DAC	6,  0x2A, 0x15, 0x00
+	DAC	7,  0x2A, 0x2A, 0x2A
+	DAC	8,  0x15, 0x15, 0x15
+	DAC	9,  0x15, 0x15, 0x3F
+	DAC	10, 0x15, 0x3F, 0x15
+	DAC	11, 0x15, 0x3F, 0x3F
+	DAC	12, 0x3F, 0x15, 0x15
+	DAC	13, 0x3F, 0x15, 0x3F
+	DAC	14, 0x3F, 0x3F, 0x15
+	DAC	15, 0x3F, 0x3F, 0x3F
+
+/* ---- column A: write mode 0 identity ---- */
+	mov	edi, 0xA0000
+	mov	byte ptr [edi], 0xFF
+	mov	byte ptr [edi + 1], 0x0F
+
+/* ---- column B: write mode 2 (expand) ---- */
+	GC	0x05, 0x02
+	mov	byte ptr [edi + 2], 0x0B
+	mov	byte ptr [edi + 3], 0x05
+
+/* ---- in-guest read-back: read mode 0, planes 0-3 of column A ---- */
+	GC	0x05, 0x00		/* back to write mode 0 (read mode 0) */
+	GC	0x04, 0x00
+	mov	al, byte ptr [edi]
+	cmp	al, 0xFF
+	jne	bad
+	GC	0x04, 0x01
+	mov	al, byte ptr [edi]
+	cmp	al, 0x0F
+	jne	bad
+	GC	0x04, 0x02
+	mov	al, byte ptr [edi]
+	cmp	al, 0xFF
+	jne	bad
+	GC	0x04, 0x03
+	mov	al, byte ptr [edi]
+	cmp	al, 0x0F
+	jne	bad
+
+/* ---- column B plane 0 = 0xFF (expand) ---- */
+	GC	0x04, 0x00
+	mov	al, byte ptr [edi + 2]
+	cmp	al, 0xFF
+	jne	bad
+
+halt_loop:
+	hlt
+	jmp	halt_loop
+
+bad:
+	jmp	bad
