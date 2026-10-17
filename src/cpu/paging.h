@@ -87,6 +87,12 @@ void set_cr3(int32_t cr3);
  * delivering #GP(0) (the two guest-reachable dbg_asserts upstream carried here).
  * Callers must abort the instruction on false, BEFORE committing the register. */
 bool load_pdpte(int32_t cr3);
+/* cpu.rs:2977-2997's checks only, WITHOUT installing reg_pdpte.  Returns false after
+ * delivering #GP(0) on the same two conditions as load_pdpte.  The task switch uses
+ * this to validate the new task's PDPT before any register commit, while the new TSS
+ * is still read under the old page tables (load_pdpte/set_cr3 installs the cache and
+ * commits at the end of the switch). */
+bool validate_pdpte(int32_t cr3);
 
 void trigger_pagefault(int32_t addr,
                        bool present,

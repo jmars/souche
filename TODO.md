@@ -201,8 +201,9 @@ that landed, and the guest-compatibility fact below still stands.)*
   dirty bitmap), and the REAL `svga_mark_dirty` dirty bitmap replacing the `memory.c` stub (the
   rust `svga_fill_pixel_buffer` port, one bit per 4 KiB page).  Gated by `tests/gate-vga-4.sh`
   (the self-programming `tests/vga-lfb.img`, byte-identical on both legs) and the `hw_selftest`
-  case 9f probes (dispi round-trip, five bpp arms, the banked window, the svga_offset page flip --
-  each with a measured fail-before/pass-after mutation).  The lane's hardest requirement is
+  case 9f probes (dispi round-trip, five bpp arms, the banked window, the svga_offset page flip,
+  and the disable + same-size re-enable lifecycle arms -- each with a measured fail-before/
+  pass-after mutation).  The lane's hardest requirement is
   OUTPUT INVARIANCE: the dirty bitmap must be invisible to the differential (the reference's own
   redraw is a full recompute), and the byte-identical D1 proves it by construction.
 - **The guest-gate boundary re-verified at U1, U2 AND U3**: the kernel boot touches the VGA (the
@@ -217,7 +218,9 @@ that landed, and the guest-compatibility fact below still stands.)*
 ### 1.3 PAE — SHIPPED (PAE-1, results/pae-1.md; PAE-L3, results/pae-l3.md)
 - The 3-level walk, the 64-bit PDPTE/PDE/PTE handling, the 2 MiB page and NX (EFER.NXE) are ported
   (upstream cpu.rs:2054-2336), and `load_pdpte`'s two guest-reachable asserts became `#GP(0)`
-  delivered at the load site with validate-before-commit at all three call sites (MOV CR0/CR3/CR4).
+  delivered at the load site with validate-before-commit at all four call sites (MOV CR0/CR3/CR4
+  and the hardware task switch, whose PDPTE load is hoisted above every memory and register
+  commit, so a bad-PDPT switch is fully atomic -- results/followups.md).
   Gated by the PAE selftest battery, the F2 mutation probes, and a synthetic differential guest
   (`tests/pae-guest.img`, byte-identical under both legs).  The port previously trapped-and-aborted
   on the PAE arms rather than half-porting (M1); that trap is gone.

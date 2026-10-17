@@ -4133,6 +4133,69 @@ static void test_vga_svga(void)
     CHECK_EQ(vga_px(dest, 0), vga_rgb(255, 0, 0)); /* dest[0] = LFB pixel 1024 */
     CHECK_EQ(vga_px(dest, 1), vga_rgb(0, 0, 0));   /* dest[1] = LFB pixel 1025 (zero) */
 
+    /* ---- P-DISABLE: the dispi disable arm (was_enabled && !svga_enabled, vga.c:1711).
+     * A disable must revert graphical_mode to the legacy attribute_mode & 1 (the SVGA
+     * enable FORCED it true), and the adapter must follow.  The default attribute_mode is
+     * 0 (text), so the arm reverts to text.  The diff-range assert below pins the arm's
+     * ORDER: complete_redraw must run with graphical_mode ALREADY reverted, so it takes
+     * the TEXT branch (text_mode_redraw, which does not touch diff_addr_min/max); if it
+     * ran before the revert it would take the graphical branch and reset the diff range to
+     * 0..VGA_PIXEL_BUFFER_SIZE (vga.c:507-508), which is the ordering bug this probe is
+     * here to see.  HONEST SCOPE: the arm's other three sub-effects are unreachable in
+     * this fixture and are stated, not asserted -- vga_update_vga_size early-returns
+     * (default CRTC: horizontal_blank_start 0 < horizontal_characters 1 -> 0 chars, vga.c
+     * 211-214), vga_set_font_bitmap(false) is a no-op by construction (max_scan_line 0 ->
+     * height 0, vga.c:176-178), and text_mode_redraw's CELLS are unobservable because the
+     * document grid is never populated here (no window write, and a seed write would
+     * itself put_char and mask the redraw -- so "complete_redraw deleted" is not
+     * separately flipped, only the ordering is). ---- */
+    machine_reset();
+    vga = vga_device();
+    svga_enable_mode(vga, 320, 200, 32);
+    CHECK(vga->svga_enabled);
+    CHECK(vga->graphical_mode);
+    dispi16_write(4, 0x40); /* enable bit 0 clear -> disable (the LFB bit 6 stays) */
+    CHECK(!vga->svga_enabled);                    /* the case-4 write itself flips this */
+    CHECK(!vga->graphical_mode);                  /* the ARM reverts to attribute_mode & 1 */
+    CHECK(!vga_screen_is_graphical(vga->screen)); /* and the adapter follows */
+    CHECK_EQ(vga->diff_addr_min, (int32_t)vga->vga_memory_size); /* text redraw, not the */
+    CHECK_EQ(vga->diff_addr_max, 0); /* graphical reset (an ordering bug would set 0..PIXEL) */
+
+    /* ---- P-REENABLE: a same-size re-enable (dispi index-4 with the dims unchanged) has
+     * needs_update false, so set_size_graphical does NOT re-zero the dest buffer and does
+     * NOT mark the bitmap dirty -- only newly-written pages are re-filled on the next
+     * fill.  The re-enable's fill(0) zeroes the LFB, so a previously-filled page that is
+     * NOT re-dirtied reads back STALE (its old pixels), not zero.  That is the reference's
+     * own incremental-redraw shape, and it is what a mutation forcing needs_update (or
+     * dropping the guard) would break. ---- */
+    machine_reset();
+    vga = vga_device();
+    svga_enable_mode(vga, 320, 200, 32);
+    write32(0xE0000000 + 0, 0x00FF0000); /* pixel 0 (page 0) = red */
+    vga_screen_fill_buffer(vga);          /* full recompute; bitmap cleared */
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(vga_px(dest, 0), vga_rgb(255, 0, 0));
+
+    dispi16_write(4, 0x41);                     /* re-enable, SAME size: LFB fill(0) */
+    write32(0xE0000000 + 4 * 1024, 0x0000FF00); /* pixel 1024 (page 1) = green */
+    vga_screen_fill_buffer(vga);                /* only page 1 is re-filled */
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(vga_px(dest, 0), vga_rgb(255, 0, 0));    /* STALE red: page 0 untouched */
+    CHECK_EQ(vga_px(dest, 1024), vga_rgb(0, 255, 0)); /* green */
+
+    /* pin the re-enable's fill(0) (the case-4 memset, the reference's svga_memory.fill(0)):
+     * page 0 was NOT re-filled after the re-enable (dest[0] is stale), so writing page-0
+     * pixel 1 and re-filling now re-reads page 0 from the LFB -- dest[0] must be BLACK
+     * (fill(0) zeroed the LFB), and only RED if that zeroing was lost. */
+    write32(0xE0000000 + 4 * 1, 0x000000FF); /* pixel 1 (page 0) = blue */
+    vga_screen_fill_buffer(vga);              /* page 0 re-filled from the zeroed LFB */
+    dest = vga_dest_buffer(vga, &pixels);
+    CHECK(dest != NULL);
+    CHECK_EQ(vga_px(dest, 0), vga_rgb(0, 0, 0));   /* BLACK: fill(0) ran */
+    CHECK_EQ(vga_px(dest, 1), vga_rgb(0, 0, 255)); /* blue */
+
     (void)vga;
 }
 
@@ -4159,7 +4222,7 @@ int main(void)
     RUN(test_vga_graphical, "vga mode 13h (U2): the sequencer/graphics registers, the graphical_mode flip (P5), the pixel stride (P3), the palette lanes (P1)");
     RUN(test_vga_planar_defects, "vga planar/graphical defect guards (U2 R2): div-by-zero, negative static writes, plane_read>=4, mid-run resize");
     RUN(test_vga_planar, "vga planar 16-colour (U3): write modes 0-3 + rotate/logical/setreset/bitmask, chain-2, shift 0x00/0x20, read modes 0/1, odd/even, colorset, the substitution arm");
-    RUN(test_vga_svga, "vga SVGA/VBE (U4): the dispi register file + enable, the bpp 8/15/16/24/32 LFB fill, the banked window, the svga_offset page flip");
+    RUN(test_vga_svga, "vga SVGA/VBE (U4): the dispi register file + enable, the bpp 8/15/16/24/32 LFB fill, the banked window, the svga_offset page flip, the disable + same-size re-enable lifecycle");
 
     printf("hw_selftest: %d checks, %d failures, %d skipped\n", checks, failures, skips);
     return failures != 0;

@@ -502,19 +502,17 @@ void set_cr3(int32_t cr3)
     clear_tlb();
 }
 
-bool load_pdpte(int32_t cr3)
+/* Read the PDPT at cr3 and run the two guest-reachable checks, WITHOUT committing
+ * reg_pdpte.  This is the shared body: load_pdpte (below) calls it and then installs
+ * the cache; validate_pdpte calls it and discards the entries.  The mask is HERE,
+ * not at each call site: set_cr0 (above) and the CR4 write (instructions_0f.c) pass
+ * cpu->cr[3] unmasked, and a CR3 written in non-PAE mode legally carries PWT/PCD
+ * (bits 3/4).  Masking makes upstream's dbg_assert premise hold by construction
+ * instead of by caller discipline. */
+static bool read_pdpt(int32_t cr3, uint64_t out[4])
 {
-    /* mask HERE, not at each call site: set_cr0 (above) and the CR4 write
-     * (instructions_0f.c) pass cpu->cr[3] unmasked, and a CR3 written in non-PAE
-     * mode legally carries PWT/PCD (bits 3/4).  Masking makes upstream's dbg_assert
-     * premise hold by construction instead of by caller discipline. */
     cr3 &= ~0xF;
     DBG_ASSERT((cr3 & 0xF) == 0); /* upstream dbg_assert!(cr3 & 0b1111 == 0) */
-    /* validate into a local first: a #GP at index i>=1 must not leave entries
-     * 0..i-1 refreshed from the new PDPT while CR3/CR0/CR4 stay uncommitted (the
-     * guest's #GP handler would translate through PDPTEs of neither committed
-     * state; hardware leaves the cache untouched on a faulting MOV CR3). */
-    uint64_t tmp[4];
     for (int32_t i = 0; i < 4; i++) {
         uint64_t pdpt_entry = (uint64_t)read64s((uint32_t)cr3 + 8u * (uint32_t)i);
         pdpt_entry &= ~0xE00ull; /* bits 9-11 are ignored */
@@ -532,12 +530,37 @@ bool load_pdpte(int32_t cr3)
             trigger_gp(0);
             return false;
         }
-        tmp[i] = pdpt_entry;
+        out[i] = pdpt_entry;
+    }
+    return true;
+}
+
+bool load_pdpte(int32_t cr3)
+{
+    /* validate into a local first: a #GP at index i>=1 must not leave entries
+     * 0..i-1 refreshed from the new PDPT while CR3/CR0/CR4 stay uncommitted (the
+     * guest's #GP handler would translate through PDPTEs of neither committed
+     * state; hardware leaves the cache untouched on a faulting MOV CR3). */
+    uint64_t tmp[4];
+    if (!read_pdpt(cr3, tmp)) {
+        return false;
     }
     for (int32_t i = 0; i < 4; i++) {
         cpu->reg_pdpte[i] = tmp[i];
     }
     return true;
+}
+
+bool validate_pdpte(int32_t cr3)
+{
+    /* the task switch's validate-before-commit arm: it must #GP before any register
+     * commit (a faulting task switch leaves the old task intact), but it must NOT
+     * install the new PDPTE cache yet -- the new TSS is read under the OLD page
+     * tables (hardware reads the TSS before loading CR3), and reg_pdpte is exactly
+     * what switches translation.  load_pdpte (via set_cr3) re-runs this and commits
+     * at the end of the switch. */
+    uint64_t tmp[4];
+    return read_pdpt(cr3, tmp);
 }
 
 /* ------------------------------------------------------------------ *

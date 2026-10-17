@@ -1473,6 +1473,25 @@ void do_task_switch(int32_t selector_raw, bool has_error_code, int32_t error_cod
         return;
     }
 
+    /* PAE-1 atomicity (review F3/F1): validate the new task's PDPT BEFORE ANYTHING is
+     * written.  A task switch to a TSS whose CR3 points at a bad PDPT must deliver #GP
+     * with the old task FULLY intact -- hardware faults a task switch before any state
+     * change, and a guest #GP handler that fixes the PDPT and retries must find the new
+     * TSS descriptor still NOT busy (the earlier hoist left the busy-bit write and the
+     * old-TSS save ahead of the validation, so a retry after a fix hit
+     * panic_stop("...busy task")).  This is safe at the very top because validate_pdpte
+     * reads the PDPT PHYSICALLY (read64s, memory.c:467 -- raw mem8/vga_mem8, no
+     * translation, no pagefault, no reg_pdpte/TLB/CR/TR writes) and new_cr3 is a
+     * physical address, so the validation does not depend on the old task's page tables
+     * or on any register state. */
+    int32_t new_tsr_offset = seg_descriptor_base(descriptor);
+    int32_t new_cr3 = safe_read32s(new_tsr_offset + TSR_CR3);
+    DBG_ASSERT(!cpu->pagefault);
+    if ((cpu->cr[4] & CR4_PAE) != 0 && (cpu->cr[0] & CR0_PG) != 0 &&
+        !validate_pdpte(new_cr3)) {
+        return; /* #GP delivered before any write: descriptor, backlinks, registers untouched */
+    }
+
     /* upstream's `let _tsr_size = *segment_limits.offset(TR)` is unused; dropped */
     int32_t tsr_offset = cpu->segment_offsets[TR];
 
@@ -1549,17 +1568,15 @@ void do_task_switch(int32_t selector_raw, bool has_error_code, int32_t error_cod
     }
 
     /* let new_tsr_size = descriptor.effective_limit; -- commented out upstream */
-    int32_t new_tsr_offset = seg_descriptor_base(descriptor);
-
 
     if (source == TASK_SWITCH_CALL_OR_INT) {
         safe_write16(new_tsr_offset + TSR_BACKLINK, (int32_t)cpu->sreg[TR]);
         DBG_ASSERT(!cpu->pagefault);
     }
 
-    int32_t new_cr3 = safe_read32s(new_tsr_offset + TSR_CR3);
-    DBG_ASSERT(!cpu->pagefault);
-
+    /* new_cr3 and the PDPTE validation were hoisted to the top (above the old-TSS save
+     * and the busy/backlink writes), so by this point a bad PDPT has already #GP'd and
+     * returned with the descriptor, the backlinks and every register untouched. */
     cpu->flags &= ~FLAG_VM;
 
     int32_t new_eip = safe_read32s(new_tsr_offset + TSR_EIP);
@@ -1694,17 +1711,18 @@ void do_task_switch(int32_t selector_raw, bool has_error_code, int32_t error_cod
     cpu->segment_limits[TR] = seg_descriptor_effective_limit(descriptor);
     cpu->sreg[TR] = selector.raw;
 
-    /* PAE-1 atomicity gap (review F3, results/pae-1.md): this is the ONE set_cr3
-     * call site that does NOT validate-before-commit.  new_cr3 was read early and
-     * is in hand, but TR, the segment registers and instruction_pointer are already
-     * committed above, and the CR0.TS set below runs even when load_pdpte delivered
-     * #GP inside set_cr3 (set_cr3 is void; nothing here checks).  A task switch to
-     * a TSS whose CR3 points at a bad PDPT (PAE+PG on) therefore delivers #GP in a
-     * half-switched context (new segments, old IP), whereas hardware faults before
-     * any state change.  Pre-change this aborted the process (pae_unimplemented), so
-     * it is an improvement, not a regression; a fix would hoist the PDPTE load
-     * above the segment switches.  Left as a documented residual: task switches are
-     * not exercised by any in-tree PAE guest. */
+    /* The PDPTE was validated up at the top (review F3's hoist, above the segment
+     * switches): by this point a bad PDPT has already #GP'd and returned, so this
+     * set_cr3's load_pdpte re-validates the PDPT and commits CR3 + the TLB clear as the
+     * last register commit of the switch.  The success path therefore reads the PDPT
+     * TWICE (validate at the top, then load_pdpte here); for a PDPT in guest RAM the two
+     * reads are byte-identical (single-threaded, no write between), and the only
+     * divergence is the pre-existing self-aliasing shape -- a guest that overlaps its old
+     * TSS/GDT onto the new PDPT page could be overwritten between the two reads and fault
+     * the second validation after the commits, exactly as upstream's single late read
+     * would.  Upstream reads once at this same late point, so the port is no worse; the
+     * hoist strictly narrows the window (the first read, at the top, catches every fault
+     * reachable from a non-aliased PDPT). */
     set_cr3(new_cr3);
 
     cpu->cr[0] |= CR0_TS;

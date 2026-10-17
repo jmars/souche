@@ -99,6 +99,11 @@ static int failures = 0;
 #define STACK_TOP 0x7000
 #define HANDLER_EIP 0x8000
 #define ABSENT_B  0x9000 /* the fault target's page: absent (test 1) */
+#define PAE_PDPT  0xA000 /* the PAE PDPT (test 6b's identity map) */
+#define PAE_PD    0xB000 /* the PAE page directory (one 2 MiB page at 0) */
+#define BAD_PDPT  0xC000 /* a PDPT whose entry 0 has the high half set -> #GP */
+#define NEW_PDPT  0xD000 /* a GOOD PDPT that maps 0..2 MiB to 0x100000.. (test 6c) */
+#define NEW_PD    0xE000 /* its page directory: one 2 MiB page at 0x100000 */
 
 /* selectors (rpl 0): GDT index 1 code, 2 data, 3 code2, 4 TSS_OLD, 5 TSS_NEW, 6 LDT */
 #define SEL_CODE    0x08
@@ -797,6 +802,183 @@ static void test_task_switch(void)
 }
 
 /* ================================================================== *
+ * TEST 6b -- a task switch to a BAD PDPT is atomic (review F3)
+ *
+ * The PAE-1 unit reordered load_pdpte to validate-before-commit at MOV CR0/CR3/CR4, but
+ * the hardware task switch (do_task_switch) was the ONE set_cr3 site left out: it
+ * committed TR/segments/IP before set_cr3 and set CR0.TS after it, so a switch to a TSS
+ * whose CR3 points at a bad PDPT delivered #GP in a half-switched context.  The fix
+ * hoists the PDPTE validation to the TOP of do_task_switch, above every memory and
+ * register commit (review F1).  This drives the path DIRECTLY (no in-tree PAE guest uses
+ * hardware task switching), in PAE+PG with an identity map, and asserts the old task is
+ * byte-for-byte intact when the #GP lands -- the asymmetry probe: a mutation that drops the
+ * hoisted validate_pdpte (or moves it back after the commits) fails every "unchanged"
+ * CHECK below.
+ * ================================================================== */
+static void test_task_switch_pae_atomicity(void)
+{
+    machine_setup(false);
+
+    /* a PAE identity map: PDPT[0] -> PD, PD[0] = a 2 MiB page at 0 (present+rw+pse), so
+     * linear 0..2 MiB == physical 0..2 MiB and the GDT/IDT/TSS/stack/handler stay
+     * reachable through the 3-level walk.  The TSS reads must work under the OLD page
+     * tables -- which is exactly what reg_pdpte (installed below by set_cr0) provides. */
+    wr64(PAE_PDPT + 0, (uint64_t)(PAE_PD | PAGE_TABLE_PRESENT_MASK));
+    wr64(PAE_PD + 8 * 0,
+         (uint64_t)(PAGE_TABLE_PSE_MASK | PAGE_TABLE_PRESENT_MASK | PAGE_TABLE_RW_MASK));
+    cpu->cr[3] = (int32_t)PAE_PDPT;
+    cpu->cr[4] = CR4_PAE;
+    set_cr0(cpu->cr[0] | CR0_PG);
+
+    /* a #GP gate (vector 13) so the delivered #GP is observable as a real transfer */
+    wr64((uint32_t)IDT_BASE + 13 * 8,
+         make_idt_entry(HANDLER_EIP, SEL_CODE2, INTR_GATE_TRAP, 0, true));
+
+    /* the old task */
+    load_tr(0x20);
+    CHECK(!cpu->pagefault);
+    CHECK_EQ(cpu->sreg[TR], 0x20);
+    CHECK_EQ(cpu->segment_offsets[TR], TSS_OLD);
+
+    write_reg32(EAX, 0xAAAA0000);
+    write_reg32(ECX, 0x00001111);
+    write_reg32(ESP, STACK_TOP);
+    cpu->instruction_pointer = 0x1234;
+    cpu->previous_ip = 0x1230;
+    cpu->flags = FLAGS_DEFAULT;
+
+    /* the new task's TSS: CR3 points at a BAD PDPT (entry 0 has the high half set).  The
+     * register values differ from the old task's so a half-switch is observable. */
+    memset(mem8 + TSS_NEW, 0, 104);
+    wr64(TSS_NEW + TSR_CR3, BAD_PDPT);
+    wr64(TSS_NEW + TSR_EIP, 0x8000);
+    wr64(TSS_NEW + TSR_EFLAGS, 0x202); /* IF set */
+    wr64(TSS_NEW + TSR_EAX, 0xBBBB1111);
+    wr64(TSS_NEW + TSR_ECX, 0xCCCC2222);
+    wr64(TSS_NEW + TSR_EDX, 0xDDDD3333);
+    wr64(TSS_NEW + TSR_EBX, 0xEEEE4444);
+    wr64(TSS_NEW + TSR_ESP, 0x6F00);
+    wr64(TSS_NEW + TSR_ES, SEL_DATA);
+    wr64(TSS_NEW + TSR_CS, SEL_CODE);
+    wr64(TSS_NEW + TSR_SS, SEL_DATA);
+    wr64(TSS_NEW + TSR_DS, SEL_DATA);
+    wr64(TSS_NEW + TSR_FS, SEL_DATA);
+    wr64(TSS_NEW + TSR_GS, SEL_DATA);
+    wr64(TSS_NEW + TSR_LDT, 0);
+    wr64(BAD_PDPT + 0, 0x0000000100000001ull); /* high-half PDPTE -> #GP(0) */
+
+    cpu->pagefault = false;
+    do_task_switch(0x28, false, 0, TASK_SWITCH_JUMP);
+
+    /* the #GP was delivered (the handler's context), not a stop */
+    CHECK(!cpu->pagefault);
+    CHECK_EQ(cpu->sreg[CS], SEL_CODE2);
+    CHECK_EQ(cpu->instruction_pointer, HANDLER_EIP);
+    CHECK_EQ(read_reg32(ESP), STACK_TOP - 16); /* error code + eip + cs + eflags */
+
+    /* and NO register commit happened: the old task is intact */
+    CHECK_EQ(cpu->sreg[TR], 0x20);                  /* not 0x28 */
+    CHECK_EQ(cpu->segment_offsets[TR], TSS_OLD);    /* not TSS_NEW */
+    CHECK_EQ(cpu->cr[3], (int32_t)PAE_PDPT);        /* not BAD_PDPT */
+    CHECK_EQ(cpu->cr[0] & CR0_TS, 0);               /* TS not set */
+    CHECK_EQ(read_reg32(EAX), (int32_t)0xAAAA0000); /* not 0xBBBB1111 */
+    CHECK_EQ(read_reg32(ECX), (int32_t)0x00001111); /* not 0xCCCC2222 */
+    CHECK_EQ(cpu->instruction_pointer, HANDLER_EIP); /* the rewind went to the handler */
+
+    /* F1: the switch is MEMORY-atomic too -- no descriptor or backlink write happened,
+     * so the new TSS is still NOT busy (a #GP handler that fixes the PDPT and retries
+     * must find it non-busy) and the old TSS is still busy (its clear never ran). */
+    CHECK_EQ((mem8[GDT_BASE + 5 * 8 + 5] & 2), 0); /* new TSS descriptor: busy CLEAR */
+    CHECK_EQ((mem8[GDT_BASE + 4 * 8 + 5] & 2), 2); /* old TSS descriptor: still busy */
+
+    /* and the retry after a fix COMPLETES (the F1 regression was a host panic_stop
+     * "jump/call/int to a busy task" on exactly this retry). */
+    wr64(BAD_PDPT + 0, (uint64_t)(PAE_PD | PAGE_TABLE_PRESENT_MASK)); /* fix the PDPTE */
+    interpreted_unimplemented = false;
+    cpu->pagefault = false;
+    do_task_switch(0x28, false, 0, TASK_SWITCH_JUMP);
+    CHECK(!interpreted_unimplemented);          /* no "busy task" stop on the retry */
+    CHECK_EQ(cpu->sreg[TR], 0x28);              /* the retry switched */
+    CHECK_EQ(cpu->segment_offsets[TR], TSS_NEW);
+}
+
+/* ================================================================== *
+ * TEST 6c -- the PAE success path of the task switch (review F3, complements 6b)
+ *
+ * 6b drives the #GP path (a bad PDPT).  This drives the SUCCESS path: the new task's
+ * PDPT is GOOD but remaps 0..2 MiB to 0x100000.. (not identity), so the switch must
+ * still load the new task's registers correctly from the fixture at 0x6000.  It proves
+ * the switch completes under PAE+PG -- no in-tree guest reaches this path (task switches
+ * need a guest that uses them).
+ *
+ * HONEST LIMIT (MEASURED, results/followups.md): this does NOT discriminate the hoisted
+ * validate_pdpte from a load_pdpte "simplification" -- do_task_switch's old-TSS save and
+ * the new-CR3 read warm the TSS's page in the TLB under the OLD map before the PDPTE
+ * cache could change, so the later TSS reads hit the stale (old) entry either way.  The
+ * only observable difference (a TSS straddling a 4 KiB page with its post-CR3 fields in a
+ * cold page) is not probed; validate-only is kept for faithfulness, not because this test
+ * forces it.
+ * ================================================================== */
+static void test_task_switch_tss_old_tables(void)
+{
+    machine_setup(false);
+
+    /* old task: identity PAE map */
+    wr64(PAE_PDPT + 0, (uint64_t)(PAE_PD | PAGE_TABLE_PRESENT_MASK));
+    wr64(PAE_PD + 8 * 0,
+         (uint64_t)(PAGE_TABLE_PSE_MASK | PAGE_TABLE_PRESENT_MASK | PAGE_TABLE_RW_MASK));
+    /* new task: a GOOD PDPT that maps 0..2 MiB to 0x100000..0x2FFFFF -- the TSS fixture at
+     * physical 0x6000 is reachable ONLY through the old (identity) map. */
+    wr64(NEW_PDPT + 0, (uint64_t)(NEW_PD | PAGE_TABLE_PRESENT_MASK));
+    wr64(NEW_PD + 8 * 0,
+         (uint64_t)(0x100000 | PAGE_TABLE_PSE_MASK | PAGE_TABLE_PRESENT_MASK |
+                    PAGE_TABLE_RW_MASK));
+    cpu->cr[3] = (int32_t)PAE_PDPT;
+    cpu->cr[4] = CR4_PAE;
+    set_cr0(cpu->cr[0] | CR0_PG);
+
+    load_tr(0x20);
+    CHECK(!cpu->pagefault);
+    CHECK_EQ(cpu->sreg[TR], 0x20);
+
+    write_reg32(EAX, 0xAAAA0000);
+    write_reg32(ESP, STACK_TOP);
+    cpu->instruction_pointer = 0x1234;
+    cpu->previous_ip = 0x1230;
+    cpu->flags = FLAGS_DEFAULT;
+
+    /* the new task's TSS: CR3 points at the GOOD-but-different PDPT; the rest is a normal
+     * task that the switch must load correctly. */
+    memset(mem8 + TSS_NEW, 0, 104);
+    wr64(TSS_NEW + TSR_CR3, NEW_PDPT);
+    wr64(TSS_NEW + TSR_EIP, 0x8000);
+    wr64(TSS_NEW + TSR_EFLAGS, 0x202);
+    wr64(TSS_NEW + TSR_EAX, 0xBBBB1111);
+    wr64(TSS_NEW + TSR_ESP, 0x6F00);
+    wr64(TSS_NEW + TSR_ES, SEL_DATA);
+    wr64(TSS_NEW + TSR_CS, SEL_CODE);
+    wr64(TSS_NEW + TSR_SS, SEL_DATA);
+    wr64(TSS_NEW + TSR_DS, SEL_DATA);
+    wr64(TSS_NEW + TSR_FS, SEL_DATA);
+    wr64(TSS_NEW + TSR_GS, SEL_DATA);
+    wr64(TSS_NEW + TSR_LDT, 0);
+
+    cpu->pagefault = false;
+    do_task_switch(0x28, false, 0, TASK_SWITCH_JUMP);
+
+    /* the switch COMPLETED: the TSS was read under the OLD identity map, not the new one */
+    CHECK(!cpu->pagefault);
+    CHECK_EQ(cpu->sreg[TR], 0x28);
+    CHECK_EQ(cpu->segment_offsets[TR], TSS_NEW);
+    CHECK_EQ(cpu->cr[3], (int32_t)NEW_PDPT);
+    CHECK(cpu->cr[0] & CR0_TS);
+    CHECK_EQ(cpu->instruction_pointer, 0x8000);
+    CHECK_EQ(cpu->sreg[CS], SEL_CODE);
+    CHECK_EQ(read_reg32(EAX), (int32_t)0xBBBB1111);
+    CHECK_EQ(read_reg32(ESP), 0x6F00);
+}
+
+/* ================================================================== *
  * TEST 7 -- switch_seg's contracts and lar/lsl/verr/verw's ZF
  * ================================================================== */
 static void test_segments(void)
@@ -1118,6 +1300,8 @@ int main(void)
     RUN(test_gate_types, "interrupt vs trap gates, the software-int DPL check");
     RUN(test_pic_and_irq, "the PIC: ICW programming, priority, a delivered IRQ");
     RUN(test_task_switch, "a task switch through a TSS");
+    RUN(test_task_switch_pae_atomicity, "a task switch to a bad PDPT is atomic (review F3)");
+    RUN(test_task_switch_tss_old_tables, "a task switch reads the TSS under the OLD page tables (review F3)");
     RUN(test_segments, "switch_seg and lar/lsl/verr/verw");
     RUN(test_m1c_opcodes, "the 31 landed 0F encodings");
 
