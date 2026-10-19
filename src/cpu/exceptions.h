@@ -92,10 +92,15 @@ static inline seg_descriptor_t seg_descriptor_of_u64(uint64_t raw)
     d.raw = raw;
     return d;
 }
-static inline int32_t seg_descriptor_base(seg_descriptor_t d)
+/* S3: uint32_t, not int32_t.  A descriptor base is an ADDRESS: bit 31 set means 2 GiB+,
+ * not a negative number, and the segment_offsets[] slots it is stored into are 64-bit now
+ * (cpu_state.h).  Signed here, `base = 0xFFF00000` would sign-extend to
+ * 0xFFFFFFFFFFF00000 at the store -- a high-half leak the invariant would rightly stop on,
+ * manufactured by a cast. */
+static inline uint32_t seg_descriptor_base(seg_descriptor_t d)
 {
-    return (int32_t)(((d.raw >> 16) & 0xffff) | ((d.raw & 0xff00000000ull) >> 16) |
-                     ((d.raw >> 56) << 24));
+    return (uint32_t)(((d.raw >> 16) & 0xffff) | ((d.raw & 0xff00000000ull) >> 16) |
+                      ((d.raw >> 56) << 24));
 }
 static inline uint32_t seg_descriptor_limit(seg_descriptor_t d)
 {
@@ -312,7 +317,7 @@ void load_ldt(int32_t selector);
  * binary and `make selftest`, which links no exceptions.c (its own recording definitions
  * replace this unit's symbols).  An inline definition has no link dependency and, unlike
  * a stub in the test binary, there is exactly ONE copy of the logic. */
-static inline void cpl_changed(void) { cpu->last_virt_eip = -1; }
+static inline void cpl_changed(void) { cpu->last_virt_eip = VIRT_EIP_NONE; }
 
 static inline void update_cs_size(bool new_size)
 {

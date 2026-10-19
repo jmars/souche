@@ -287,17 +287,43 @@ typedef struct cpu_state {
     bool apic_enabled; /* 548 -> APIC deferral flag, plan ss3 */
     bool acpi_enabled; /* 552 */
 
-    int32_t instruction_pointer; /* 556 */
-    int32_t previous_ip;         /* 560 */
-    int32_t idtr_size;           /* 564 */
-    int32_t idtr_offset;         /* 568 */
-    int32_t gdtr_size;           /* 572 */
-    int32_t gdtr_offset;         /* 576 */
-    int32_t cr[8];               /* 580 */
-    uint8_t cpl;                 /* 612 */
-    bool in_hlt;                 /* 616 */
-    int32_t last_virt_eip;       /* 620 */
-    int32_t eip_phys;            /* 624 */
+    /* S3 (results/x86-64-plan.md ss4, ss6): WIDENED IN PLACE to uint64_t, and the comment
+     * numbers on the right are UPSTREAM's wasm offsets (global_pointers.rs), kept for
+     * parity -- the C struct has not had those offsets since the singleton replaced the
+     * shared wasm block, and they are not re-derived here.
+     *
+     * SIGNEDNESS: these hold a FLAT LINEAR ADDRESS (segment base + offset), and they are
+     * UNSIGNED.  Upstream's i32 made 0xFFFF0000 a negative number; a widened field that
+     * sign-extends a 32-bit base becomes 0xFFFFFFFFFFFF0000, which is a different address,
+     * so every producer of a 32-bit base casts through uint32_t (see get_seg in modrm.c).
+     *
+     * THE PROJECTION RULE (S3's whole correctness story): a field may hold 64 bits, but
+     * every consumer that leaves the model's 32-bit PHYSICAL space -- a mem8 index, an
+     * `in_mapped_range` test, the page walk's table indexing -- takes `(uint32_t)` and says
+     * why at the site (plan ss5.1: the port cannot represent a physical address above
+     * 4 GiB; a 64-bit PTE that names one is S11's named refusal, never a silent truncation).
+     * Outside long mode the HIGH HALF MUST BE ZERO, and cpu_assert_address_widening()
+     * (below) asserts exactly that at the mode boundaries and at every batch boundary, so a
+     * widened arithmetic that leaks bits above 32 is a named stop rather than a wrong
+     * address. */
+    uint64_t instruction_pointer; /* 556 */
+    uint64_t previous_ip;         /* 560 */
+    int32_t idtr_size;            /* 564 */
+    uint64_t idtr_offset;         /* 568 */
+    int32_t gdtr_size;            /* 572 */
+    uint64_t gdtr_offset;         /* 576 */
+    int32_t cr[8];                /* 580 -- NOT widened: the physical model is 32-bit
+                                   * (plan ss5.1), so a CR3 above 4 GiB is the case that
+                                   * path REFUSES by name; widening the field would widen
+                                   * a bound the machine does not have. */
+    uint8_t cpl;                  /* 612 */
+    bool in_hlt;                  /* 616 */
+    uint64_t last_virt_eip;       /* 620 -- the cached virtual PAGE; VIRT_EIP_NONE when
+                                   * no translation is cached (it was `-1`, whose 64-bit
+                                   * sign extension would itself be a high-half leak) */
+    uint64_t eip_phys;            /* 624 -- `phys ^ eip` (cpu.c:get_phys_eip); not a
+                                   * physical address itself, but it carries the eip's
+                                   * page bits, so it is a uint64_t like the eip */
 
     int32_t sysenter_cs;  /* 636 */
     int32_t sysenter_esp; /* 640 */
@@ -319,7 +345,12 @@ typedef struct cpu_state {
     uint32_t svga_dirty_bitmap_max_offset; /* 720 */
 
     bool segment_is_null[8];   /* 724 */
-    int32_t segment_offsets[8];/* 736 */
+    /* S3: WIDENED (ss4) -- FS/GS keep real 64-bit bases in long mode (the MSRs), which is
+     * the whole reason this array widens; CS/DS/ES/SS bases are 0 there and limits are
+     * ignored, so `segment_limits` stays 32-bit.  UNSIGNED for the reason in the address
+     * block above: `selector << 4` for selector 0xF000 is a positive address, not a
+     * negative i32. */
+    uint64_t segment_offsets[8];/* 736 */
     uint32_t segment_limits[8];/* 768 */
 
     bool protected_mode;   /* 800 */
@@ -461,6 +492,82 @@ void write_xmm_f64(int32_t r, double data);
 void write_xmm128(int32_t r, int32_t i0, int32_t i1, int32_t i2, int32_t i3);
 void write_xmm128_2(int32_t r, uint64_t i0, uint64_t i1);
 void write_xmm_reg128(int32_t r, reg128 data);
+
+/* ------------------------------------------------------------------ *
+ * S3: THE STORE INTO THE FETCH CURSOR, AND WHY IT IS A FUNCTION
+ *
+ * In the 32-bit model the guest's instruction-pointer arithmetic is 32 bits wide and WRAPS
+ * -- upstream's i32 field, and the hardware's own linear-address width -- so the store must
+ * project.  In long mode the same store must not.
+ *
+ * EVERY STORE, ENUMERATED -- the earlier version of this comment claimed this function was
+ * the only producer and backed it with an `rg` that misses half of them (round 2's review:
+ * the claim was wider than its evidence).  The actual population is three classes, and only
+ * the first can introduce a new value:
+ *
+ *   1. COMPUTED HERE.  Every new eip: the sixteen `get_seg_cs() + offset` stores in
+ *      exceptions.c, the far transfers and `sysenter`/`sysexit` in instructions.c /
+ *      instructions_0f.c, the jumps in misc_instr.c / instructions.c, the fetch cursor in
+ *      modrm.c and both loops, the uop executor's `body_ip` store (uop_cache.c), main.c's
+ *      boot entry.  `rg 'instruction_pointer\s*=[^=]' src/cpu` lists exactly these plus the
+ *      next two classes.
+ *   2. A COPY OF AN ALREADY-PROJECTED VALUE: `instruction_pointer = previous_ip` (six in
+ *      exceptions.c's trigger_*, paging.c's trigger_pagefault, two in string.c), and
+ *      `cpu_state.c`'s reset constant.  A copy cannot add a high half if the source has none,
+ *      and `previous_ip`'s own stores come from class 1 or from a 32-bit uop field.
+ *   3. THE JIT'S FIVE EMITTED STORES (jit_codegen.c: `jitcg_emit_stores`' pair and the three
+ *      recipes' ip writes).  These are COMPILE-TIME 32-bit values stored eight bytes wide
+ *      (`jitcg_store_u64`), so the high half is zero by construction rather than by this
+ *      function -- and `jitcg_target32` is where their arithmetic is wrapped.
+ *
+ * That is what lets cpu_assert_address_widening() be a DETECTOR rather than a tautology: the
+ * one way left to get a non-zero high half is a store that is none of the three -- i.e. the
+ * class a later slice adds.
+ *
+ * The long-mode arm cannot be taken today -- nothing SETS EFER.LMA before S5's mode
+ * transition (S2 defines the bit and refuses the transitions that would need it) -- so the
+ * mask is unconditional in fact and conditional in form, which is the inert slice's whole
+ * shape.  MEASURED: `--poison` seeds the high halves of exactly these fields behind this
+ * function's back and the M0 transcript does not move.
+ *
+ * previous_ip needs no counterpart: every store into it is either the (already projected)
+ * instruction_pointer or a 32-bit uop field (uop_cache.c).  Stated, not assumed -- it is
+ * checked by the invariant, which covers previous_ip too.
+ * ------------------------------------------------------------------ */
+static inline void set_instruction_pointer(uint64_t eip)
+{
+    cpu->instruction_pointer = (cpu->efer & EFER_LMA) ? eip : (uint64_t)(uint32_t)eip;
+}
+
+/* ------------------------------------------------------------------ *
+ * S3: THE WIDENED ADDRESS FIELDS' HIGH-HALF INVARIANT (plan ss6 S3)
+ *
+ * Outside long mode every linear address the machine can form is 32 bits, so the fields
+ * widened in ss4 must have a ZERO high half.  That is not a fact about the types, it is a
+ * fact about the code that writes them -- which is exactly what makes it a detector: a
+ * widened arithmetic that forgets to project (a sign-extended 32-bit segment base, a
+ * `previous_ip = pfx + len` left at 64 bits, a sum upstream's i32 would have wrapped) shows
+ * up here instead of as a wrong address in one guest.  RISK R2's second instrument.
+ *
+ * cpu_address_widening_leak() names the offending field (NULL: clean); the selftest poisons
+ * each field in turn and requires the NAME, so the instrument is shown able to fail rather
+ * than assumed to be live.  cpu_assert_address_widening() is the run-time form: it ABORTS
+ * with the name, and is called from the mode boundaries (the three transitions that can
+ * change the mode, plus reset) and once per backend batch (cpu.c's cycle_internal) -- the
+ * batch call is what makes it a continuous instrument over a run instead of a boot-time one.
+ * It is a no-op IN long mode, and it is disabled by `--poison` (which seeds the high halves
+ * on purpose: the probe's claim is the opposite direction, that the transcript does not
+ * move).
+ * ------------------------------------------------------------------ */
+extern bool cpu_address_widening_check_enabled;
+const char *cpu_address_widening_leak(void);
+void cpu_assert_address_widening(const char *where);
+
+/* The "no translation cached" sentinel for last_virt_eip.  Upstream writes `-1`; with a
+ * 64-bit field that literal sign-extends to 0xFFFFFFFFFFFFFFFF, which is BOTH a high-half
+ * leak by construction and impossible to tell from a real 64-bit page.  A value whose low
+ * 12 bits are set can never be a page (every page is page-aligned), so it cannot collide. */
+#define VIRT_EIP_NONE 0x00000000FFFFFFFFull
 
 /* ------------------------------------------------------------------ *
  * Cached state byte (state_flags.rs:3-26) + update_state_flags (cpu.rs:3346)

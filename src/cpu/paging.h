@@ -57,30 +57,45 @@ void call_interrupt_vector(int32_t interrupt, bool is_int, bool has_error_code, 
  * the CALLER must check cpu->pagefault before using the result.
  */
 
-uint32_t translate_address(int32_t address,
+/* S3 (results/x86-64-plan.md ss4, ss6): THE ADDRESS PARAMETERS ARE uint64_t and the
+ * RESULT IS STILL uint32_t.  That asymmetry IS the model (plan ss5.1): the virtual address
+ * is 64 bits wide in long mode, the physical space this port can represent is 32, and a
+ * 4-level PTE that names a physical address above 4 GiB is S11's named refusal -- never a
+ * silent truncation.  The projection happens ONCE, inside translate_address (paging.c), and
+ * it is exactly upstream's i32 wrap for every value a 32-bit guest can form (the low 32 bits
+ * of a sum are the wrapped sum).
+ *
+ * ITS GUARD IS THE LONG-MODE STOP AT THE TOP OF THE BODY, not the mode-boundary invariant
+ * (round 2's N4; this comment previously said the invariant guarded it, and that was wrong:
+ * cpu_address_widening_leak() answers NULL when EFER.LMA is set, by design, so in long mode
+ * nothing was checking the projection at all).  Until S11 lands the 4-level walk, a long-mode
+ * translation stops BY NAME -- and sets the abort flag, get_seg's precedent -- rather than
+ * returning the low 32 bits of a 64-bit address.  Unreachable today: S2 refuses the three
+ * writes that could enter IA-32e and nothing sets LMA. */
+uint32_t translate_address(uint64_t address,
                            bool for_writing,
                            bool user,
                            bool side_effects,
                            bool is_instruction_fetch);
 
-uint32_t translate_address_read_no_side_effects(int32_t address);
-uint32_t translate_address_read(int32_t address);
-uint32_t translate_address_fetch(int32_t address);
-uint32_t translate_address_write(int32_t address);
-uint32_t translate_address_system_read(int32_t address);
-uint32_t translate_address_system_write(int32_t address);
+uint32_t translate_address_read_no_side_effects(uint64_t address);
+uint32_t translate_address_read(uint64_t address);
+uint32_t translate_address_fetch(uint64_t address);
+uint32_t translate_address_write(uint64_t address);
+uint32_t translate_address_system_read(uint64_t address);
+uint32_t translate_address_system_write(uint64_t address);
 
 /* Upstream returns (phys_addr, can_skip_dirty_page); the bool only gates
  * jit::jit_dirty_page, which this port does not have, so it is dropped. */
-uint32_t translate_address_write_and_can_skip_dirty(int32_t address);
+uint32_t translate_address_write_and_can_skip_dirty(uint64_t address);
 
-void readable_or_pagefault(int32_t addr, int32_t size);
-void writable_or_pagefault(int32_t addr, int32_t size);
-void writable_or_pagefault_cpl(uint8_t other_cpl, int32_t addr, int32_t size);
+void readable_or_pagefault(uint64_t addr, int32_t size);
+void writable_or_pagefault(uint64_t addr, int32_t size);
+void writable_or_pagefault_cpl(uint8_t other_cpl, uint64_t addr, int32_t size);
 
 void full_clear_tlb(void);
 void clear_tlb(void);
-void invlpg(int32_t addr);
+void invlpg(uint64_t addr);
 void set_cr0(int32_t cr0);
 void set_cr3(int32_t cr3);
 /* cpu.rs:2977-2997.  Fills reg_pdpte from the PDPT at cr3; returns false after
@@ -94,7 +109,10 @@ bool load_pdpte(int32_t cr3);
  * commits at the end of the switch). */
 bool validate_pdpte(int32_t cr3);
 
-void trigger_pagefault(int32_t addr,
+/* S3: `addr` is the FAULTING LINEAR ADDRESS (64-bit since ss4); cr[2] -- the guest-visible
+ * CR2 -- stays 32-bit because the physical model is (ss5.1), so the store projects with a
+ * comment at the site.  Long mode's 64-bit CR2 is S11's. */
+void trigger_pagefault(uint64_t addr,
                        bool present,
                        bool write,
                        bool user,

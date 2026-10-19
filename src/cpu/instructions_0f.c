@@ -154,7 +154,9 @@ static void sgdt(int32_t addr, int32_t mask)
 	if (cpu->pagefault) return;
 	safe_write16(addr, (int32_t)cpu->gdtr_size);
 	DBG_ASSERT(!cpu->pagefault); /* upstream's .unwrap() */
-	safe_write32(addr + 2, cpu->gdtr_offset & mask);
+	/* S3: the base is 64-bit now; upstream's `offset & mask` is 32-bit arithmetic, so the
+	 * projection is explicit here rather than an implicit narrowing at safe_write32 */
+	safe_write32(addr + 2, (int32_t)((uint32_t)cpu->gdtr_offset & (uint32_t)mask));
 	DBG_ASSERT(!cpu->pagefault); /* upstream's .unwrap() */
 }
 void instr16_0F01_0_mem(int32_t addr) { sgdt(addr, 0xFFFFFF); }
@@ -177,7 +179,7 @@ static void sidt(int32_t addr, int32_t mask)
 	if (cpu->pagefault) return;
 	safe_write16(addr, (int32_t)cpu->idtr_size);
 	DBG_ASSERT(!cpu->pagefault); /* upstream's .unwrap() */
-	safe_write32(addr + 2, cpu->idtr_offset & mask);
+	safe_write32(addr + 2, (int32_t)((uint32_t)cpu->idtr_offset & (uint32_t)mask));
 	DBG_ASSERT(!cpu->pagefault); /* upstream's .unwrap() */
 }
 void instr16_0F01_1_mem(int32_t addr) { sidt(addr, 0xFFFFFF); }
@@ -205,7 +207,9 @@ static void lgdt(int32_t addr, int32_t mask)
 	int32_t offset = safe_read32s(addr + 2);
 	if (cpu->pagefault) return;
 	cpu->gdtr_size = size;
-	cpu->gdtr_offset = offset & mask;
+	/* widened in S3: a base with bit 31 set is an ADDRESS above 2 GiB, not a negative
+	 * number, so it must not sign-extend into the 64-bit field */
+	cpu->gdtr_offset = (uint32_t)offset & (uint32_t)mask;
 }
 void instr16_0F01_2_mem(int32_t addr) { lgdt(addr, 0xFFFFFF); }
 void instr32_0F01_2_mem(int32_t addr) { lgdt(addr, -1); }
@@ -232,7 +236,7 @@ static void lidt(int32_t addr, int32_t mask)
 	int32_t offset = safe_read32s(addr + 2);
 	if (cpu->pagefault) return;
 	cpu->idtr_size = size;
-	cpu->idtr_offset = offset & mask;
+	cpu->idtr_offset = (uint32_t)offset & (uint32_t)mask;
 }
 void instr16_0F01_3_mem(int32_t addr) { lidt(addr, 0xFFFFFF); }
 void instr32_0F01_3_mem(int32_t addr) { lidt(addr, -1); }
@@ -533,6 +537,10 @@ void instr_0F22(int32_t r, int32_t creg)
 				full_clear_tlb();
 			}
 			cpu->cr[4] = data;
+			/* S3 MODE BOUNDARY: the second of the three transitions (CR4.PAE set
+			 * while CR0.PG && EFER.LME -- the one the plan does not name and this port
+			 * refuses above).  After the commit, on the state the write produced. */
+			cpu_assert_address_widening("MOV CR4");
 		}
 		break;
 	}
@@ -6344,6 +6352,12 @@ void instr_0F30(void)
 			full_clear_tlb();
 		}
 		cpu->efer = value;
+		/* S3 MODE BOUNDARY: the third transition, and the only write that can clear
+		 * EFER.LMA as well as ask for it.  After the commit: if a long-mode machine (S5)
+		 * ever drops back to a 32-bit mode with a non-zero high half in a widened address
+		 * field, this is the seat that names it instead of letting the 32-bit walk read
+		 * the low half of a 64-bit address. */
+		cpu_assert_address_widening("WRMSR(EFER)");
 	}
 		break;
 	case IA32_SYSENTER_CS: cpu->sysenter_cs = low & 0xFFFF; break;
@@ -6508,7 +6522,9 @@ void instr_0F34(void)
 	}
 	else {
 		cpu->flags &= ~FLAG_VM & ~FLAG_INTERRUPT;
-		cpu->instruction_pointer = cpu->sysenter_eip;
+		/* S3: the widened store, projected through the 32-bit MSR (upstream's value is an
+		 * i32; a long-mode SYSENTER target is S11's) */
+		set_instruction_pointer(cpu->sysenter_eip);
 		write_reg32(ESP, cpu->sysenter_esp);
 		cpu->sreg[CS] = (uint16_t)seg;
 		cpu->segment_is_null[CS] = false;
@@ -6538,7 +6554,7 @@ void instr_0F35(void)
 		return;
 	}
 	else {
-		cpu->instruction_pointer = read_reg32(EDX);
+		set_instruction_pointer(read_reg32(EDX));
 		write_reg32(ESP, read_reg32(ECX));
 		cpu->sreg[CS] = (uint16_t)((seg + 16) | 3); /* upstream: seg + 16 | 3, `+` binding tighter than `|` */
 		cpu->segment_is_null[CS] = false;

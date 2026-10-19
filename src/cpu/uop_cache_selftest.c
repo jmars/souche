@@ -263,7 +263,7 @@ static void probe_begin(uint32_t start, bool is32, uint32_t eflags)
     cpu->previous_ip = start;
     cpu->prefixes = 0;
     cpu->pagefault = false;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     cpu->eip_phys = 0;
     interpreted_unimplemented = false;
 }
@@ -318,7 +318,7 @@ static int run_decoder(uint32_t start, bool is32, uop_t *uops, int cap, uop_bloc
 {
     probe_begin(start, is32, FLAGS_DEFAULT);
     cpu->instruction_pointer = (int32_t)start;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     uint32_t phys = get_phys_eip();
     if (cpu->pagefault) {
         cpu->pagefault = false;
@@ -1100,6 +1100,89 @@ static void hand_table(void)
 }
 
 /* ------------------------------------------------------------------ *
+ * (d) THE LAST VIRTUAL PAGE (S3 round 2, review S2)
+ *
+ * The decode window's end used to be `(virt_start | 0xFFF) + 1` in a uint32_t, which WRAPS to
+ * 0 for `virt_start` in 0xFFFFF000..0xFFFFFFFF: `dec_fetch` then failed on the first byte and
+ * every block at the top page was refused, so the interpreter ran those instructions forever.
+ * S3's masked form gives the window a real end (2^32, a value the 32-bit field could not even
+ * hold), so a block there now DECODES.  These three arms are that claim, its boundary, and the
+ * thing it must NOT have done:
+ *
+ *   1. a block at the top page decodes, with the FULL virtual address in its uops (the eip
+ *      field is 64-bit now, so `eip`, `body_ip` and `stop_eip` carry 0xFFFFFxxx rather than
+ *      a projected low half);
+ *   2. the window still ENDS at the page: the byte past 0xFFFFFFFF is an overrun, and an
+ *      instruction that would need it is dropped (the fix widened the window's END VALUE, not
+ *      the window);
+ *   3. the pre-change behaviour is named: with the old expression this stream yields n == 0
+ *      and a PAGE_END stop, i.e. uop_block_decode() returns NULL and uop_run falls back to
+ *      interpreted_run.  Arm 1 failing IS that regression returning.
+ *
+ * The END-TO-END arm -- does the guest still get the same answer, in all three engines, when
+ * the last page holds the code -- is jit_codegen_selftest's test_last_page, because which
+ * ENGINE runs is exactly what changed.
+ * ------------------------------------------------------------------ */
+static void last_page_tests(void)
+{
+    const uint64_t top = 0xFFFFF000ull;
+
+    /* 1. a stream ending at the page's last byte decodes as a block, at the TOP page */
+    {
+        uint8_t bytes[16] = { 0x90, 0x90, 0x90, 0x90, 0x89, 0xC1, 0x90, 0x90, 0x90, 0x90 };
+        uint32_t off = CODE_SIZE - 8;          /* exactly 8 bytes to the page end */
+        memcpy(mem8 + CODE_PAGE, code_pristine, CODE_SIZE);
+        memcpy(mem8 + CODE_PAGE + off, bytes, 10);
+        /* the virtual start is the top page's matching offset: the window is the VIRTUAL page */
+        uint64_t start = top + off;
+        cpu->prefixes = 0;
+        uop_t uops[UOP_MAX_BLOCK_UOPS];
+        uop_block_t blk;
+        int n = uop_decode_block(uops, UOP_MAX_BLOCK_UOPS, start, CODE_PAGE + off, &blk);
+        CHECK_EQ(n, 7);                        /* the framing, unchanged by the address */
+        CHECK_EQ(blk.stop, UOP_STOP_PAGE_END);
+        CHECK_EQ(blk.virt_start, start);
+        CHECK_EQ(blk.stop_eip, top + 0x1000ull); /* the window's end: 2^32, representable */
+        CHECK_EQ(uops[0].eip, start);            /* the uop carries the FULL address */
+        CHECK_EQ(uops[1].eip, start + 1);
+        CHECK_EQ(uops[1].body_ip, start + 2);
+    }
+
+    /* 2. the window still ends at the page: an instruction that needs the byte PAST
+     *    0xFFFFFFFF is dropped, and the block is empty */
+    {
+        memcpy(mem8 + CODE_PAGE, code_pristine, CODE_SIZE);
+        mem8[CODE_PAGE + CODE_SIZE - 1] = 0xB8; /* mov eax, imm32, one byte of room left */
+        cpu->prefixes = 0;
+        uop_t uops[UOP_MAX_BLOCK_UOPS];
+        uop_block_t blk;
+        int n = uop_decode_block(uops, UOP_MAX_BLOCK_UOPS, 0xFFFFFFFFull,
+                                 CODE_PAGE + CODE_SIZE - 1, &blk);
+        CHECK_EQ(n, 0);                        /* no partial instruction in a block */
+        CHECK_EQ(blk.stop, UOP_STOP_PAGE_END);
+        CHECK_EQ(uop_last_stop_eip, 0xFFFFFFFFull);
+    }
+
+    /* 3. a one-byte instruction AT the top page decodes (the minimum case: the old window
+     *    was empty there, which is what arm 1's n == 7 grew out of) */
+    {
+        memcpy(mem8 + CODE_PAGE, code_pristine, CODE_SIZE);
+        mem8[CODE_PAGE] = 0xF4; /* hlt: one byte, a block end */
+        cpu->prefixes = 0;
+        uop_t uops[UOP_MAX_BLOCK_UOPS];
+        uop_block_t blk;
+        int n = uop_decode_block(uops, UOP_MAX_BLOCK_UOPS, top, CODE_PAGE, &blk);
+        CHECK_EQ(n, 1);
+        CHECK_EQ(uops[0].eip, top);
+        CHECK_EQ(uops[0].len, 1);
+        CHECK_EQ(blk.stop, UOP_STOP_BLOCK_END);
+    }
+
+    printf("PASS (d) the top virtual page: a block there decodes with its full 64-bit address,"
+           " the window still ends at 2^32, and the empty-window regression is named\n");
+}
+
+/* ------------------------------------------------------------------ *
  * (c) the block framing, asserted explicitly
  * ------------------------------------------------------------------ */
 
@@ -1321,6 +1404,7 @@ int main(int argc, char **argv)
     const char *corpus = argc > 1 ? argv[1] : "build/nasm_corpus.bin";
 
     RUN(framing_tests, "(c) the block framing: page end, block end, no_bib, cap, no descriptor");
+    RUN(last_page_tests, "(d) the LAST virtual page: the block decodes there, the window ends at 2^32");
     RUN(hand_table, "(a)/(b) the hand table: forms, both operand sizes, sib, prefixes");
     RUN(sweep_opcode_forms, "(a)/(b) every base and 0F opcode x {reg,mem,sib} forms x {16,32}");
     RUN(sweep_prefixes, "(a)/(b) every prefix byte and the prefix combinations");

@@ -303,7 +303,16 @@ static void jitcg_emit_addr(jx64_t *e, const uop_t *u, int dst, bool with_seg, i
 
 	jx64_cmp_m8_imm8(e, JX_RBP, JC_OFF(segment_is_null) + (int32_t)seg, 0);
 	jx64_jcc_label(e, JX_CC_NE, l_slow);
-	jx64_alu_r32_rm(e, 0 /* add */, dst, jc_state(JC_OFF(segment_offsets) + 4 * (int32_t)seg));
+	/* S3: THE STRIDE IS 8, NOT 4.  segment_offsets[] is uint64_t[8] now (cpu_state.h).  The
+	 * 4-byte stride survived the widening invisibly: `4 * seg` still lands inside the array
+	 * for seg 0..3, so the compiled path added the WRONG segment's base (and for seg 4..7 the
+	 * high half of a neighbour).  MEASURED, and it is the widening's one real catch in this
+	 * tree so far: the selftest's prefix pin (`mov eax, fs:[0x1400]`, where FS's base is
+	 * 0x40000 and DS's is 0) went red in the compiled arm only -- the array's own element
+	 * width is exactly the kind of constant a byte-level audit does not see.  The ADD is
+	 * still 32-bit, which is exact while the base's high half is zero (the S3 invariant; the
+	 * 64-bit addressing form is S7's). */
+	jx64_alu_r32_rm(e, 0 /* add */, dst, jc_state(JC_OFF(segment_offsets) + 8 * (int32_t)seg));
 }
 
 /* materialise the physical address in JC_TMP2 and the mem8 base in JC_TMP.  `write` selects
@@ -589,6 +598,27 @@ static void rec_mov_r16_rm16(jx64_t *e, const uop_t *u, int l_slow)
 	}
 }
 
+/* S3: defined with the executor's own stores further down; the recipes below need it too. */
+static void jitcg_store_u64(jx64_t *e, int32_t disp, uint64_t value);
+
+/* S3: THE RECIPES' IP ARITHMETIC IS 32-BIT, and this is the one place it is spelled.
+ *
+ * `u->eip` became uint64_t with the widening (uop_cache.h), and that ALONE silently changed
+ * an expression's arithmetic width: `u->eip + u->len + (uint32_t)u->imm` used to be uint32
+ * arithmetic all the way through (every operand uint32), so a negative rel8/rel32
+ * displacement was the two's-complement value it looks like and the sum wrapped at 32 bits.
+ * With a uint64 `eip` the same expression adds 4294967294 instead of -2 -- MEASURED, and the
+ * existing battery caught it: the chain test's self-loop wrote instruction_pointer =
+ * 0x1_0000_1000 and the jit_codegen selftest's whole-state comparison went red on
+ * last_virt_eip's high half (offset 204), which is exactly the S3 invariant's own signal.
+ * The displacement is therefore SIGN-EXTENDED explicitly and the result wrapped to the
+ * JIT's 32-bit ip width, which is the C body's arithmetic (`instruction_pointer + imm` on a
+ * 32-bit eip) and the old expression's. */
+static uint32_t jitcg_target32(const uop_t *u)
+{
+	return (uint32_t)(u->eip + u->len + (uint64_t)(int64_t)u->imm);
+}
+
 /* lea r32, m -- 0x8D (instr32_8D_mem).  The body ORs SEG_PREFIX_ZERO into cpu->prefixes before
  * modrm_resolve, so the segment base is NOT added and the whole instruction is the offset sum:
  * the recipe is the decoder's own extracted fields and cannot fault. */
@@ -603,8 +633,7 @@ static void rec_lea(jx64_t *e, const uop_t *u, int l_slow)
 	 * transfer that never happened.  MEASURED: without this, a `lea` inside a block sent the
 	 * next lookup to eip + pfx_len + opcode_bytes + 1 and a second block was decoded from the
 	 * middle of the lea (the codegen selftest's shapes-B arm). */
-	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(instruction_pointer),
-	                   u->eip + (uint32_t)u->len);
+	jitcg_store_u64(e, JC_OFF(instruction_pointer), (uint32_t)(u->eip + u->len));
 }
 
 /* the group-1 ALU family: `<digit> r/m32, r32` (0x01/09/21/29/31/39) and the immediate forms
@@ -753,8 +782,7 @@ static void rec_jcc(jx64_t *e, const uop_t *u, int l_slow, int cc)
 	 * means the flag is ZERO" for AE/NE/A, and "taken means the flag is SET" for E/B/BE. */
 	not_taken = (cc == JX_CC_AE || cc == JX_CC_A || cc == JX_CC_NE) ? JX_CC_NE : JX_CC_E;
 	jx64_jcc_label(e, not_taken, l_skip);
-	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(instruction_pointer),
-	                   u->eip + (uint32_t)u->len + (uint32_t)u->imm);
+	jitcg_store_u64(e, JC_OFF(instruction_pointer), jitcg_target32(u));
 	jx64_bind(e, l_skip);
 }
 
@@ -762,8 +790,7 @@ static void rec_jcc(jx64_t *e, const uop_t *u, int l_slow, int cc)
 static void rec_jmp(jx64_t *e, const uop_t *u, int l_slow)
 {
 	(void)l_slow;
-	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(instruction_pointer),
-	                   u->eip + (uint32_t)u->len + (uint32_t)u->imm);
+	jitcg_store_u64(e, JC_OFF(instruction_pointer), jitcg_target32(u));
 }
 
 /* PERF-7 F2: shl/shr r32, cl -- D3 /4, D3 /5, the register forms (instr32_D3_4_reg /
@@ -1152,11 +1179,37 @@ bool jit_codegen_available(void) { return true; }
  * the machinery every uop uses
  * ------------------------------------------------------------------ */
 
+/* S3: A STORE INTO ONE OF THE WIDENED 64-BIT FIELDS.  `mov r/m32, imm32` writes four bytes
+ * of an eight-byte field and leaves the high half at whatever it happened to hold -- correct
+ * only while the high half is known zero, i.e. exactly the assumption S3 turned into an
+ * asserted invariant (cpu_state.h).  There is no `mov r/m64, imm32` emitter here, and x86's
+ * sign-extending form would be WRONG for a value whose bit 31 is set: a 32-bit-mode eip of
+ * 0xFFFFFFF0 must become 0x00000000FFFFFFF0, not 0xFFFFFFFFFFFFFFF0.  So the value is
+ * materialised through JC_TMP: a 32-bit `mov r32, imm32` ZERO-EXTENDS into the 64-bit host
+ * register, then one eight-byte store.
+ *
+ * STATED, not implied: the compiled code's READS of instruction_pointer (the page-crossing
+ * test, the iteration limit, the divergence compare, and the chain lookup's ip compare) stay
+ * 32-bit.  They are exact while the high half is zero, which outside long mode is the
+ * invariant -- and the long-mode JIT (S13's recipes, gated behind S5's mode entry) is what
+ * widens them.  S3's scope is the stores. */
+static void jitcg_store_u64(jx64_t *e, int32_t disp, uint64_t value)
+{
+	if (value <= 0xFFFFFFFFu) {
+		jx64_mov_r32_imm32(e, JC_TMP, (uint32_t)value); /* zero-extends into RCX..R11 */
+		jx64_mov_m64_r64(e, JX_RBP, disp, JC_TMP);
+	}
+	else {
+		jx64_mov_r64_imm64(e, JC_TMP, value);
+		jx64_mov_m64_r64(e, JX_RBP, disp, JC_TMP);
+	}
+}
+
 /* the stores the executor does before the body (step 2) */
 static void jitcg_emit_stores(jx64_t *e, const uop_t *u, bool any_pfx)
 {
-	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(previous_ip), u->eip);
-	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(instruction_pointer), u->body_ip);
+	jitcg_store_u64(e, JC_OFF(previous_ip), u->eip);
+	jitcg_store_u64(e, JC_OFF(instruction_pointer), u->body_ip);
 	if (any_pfx) jx64_mov_m8_imm8(e, JX_RBP, JC_OFF(prefixes), u->pfx);
 }
 
@@ -1690,8 +1743,12 @@ static void jitcg_emit_uop(jx64_t *e, const uop_t *u, const jc_entry_t *rec, boo
 				 * exactly as the un-elided emission would. */
 				jx64_add_m32_imm8(e, JX_RSP, JC_FRAME_EXEC, 1);
 				jx64_inc_r32(e, JC_PENDING);
-				jx64_mov_r32_imm32(e, JX_RSI, u->eip + u->len);
-				jx64_mov_r32_imm32(e, JX_R10, u->eip);
+				/* S3: the compiled code's eip values are 32-bit BY CONTRACT
+				 * (jit_compile_block's signature; the recipes compare against the low
+				 * half of instruction_pointer, exact while the high half is zero).  The
+				 * widening of the JIT is S13's. */
+				jx64_mov_r32_imm32(e, JX_RSI, (uint32_t)(u->eip + u->len));
+				jx64_mov_r32_imm32(e, JX_R10, (uint32_t)u->eip);
 				jx64_call_label(e, l_checks);
 				jx64_jmp_label(e, l_done);
 			}
@@ -1715,8 +1772,8 @@ static void jitcg_emit_uop(jx64_t *e, const uop_t *u, const jc_entry_t *rec, boo
 	/* steps 6-11, in the shared routine -- PERF-7 F1: skipped entirely for a provably
 	 * continuing recipe (the criterion above); the next uop's emission follows inline. */
 	if (!cont) {
-		jx64_mov_r32_imm32(e, JX_RSI, u->eip + u->len);
-		jx64_mov_r32_imm32(e, JX_R10, u->eip);
+		jx64_mov_r32_imm32(e, JX_RSI, (uint32_t)(u->eip + u->len));
+		jx64_mov_r32_imm32(e, JX_R10, (uint32_t)u->eip);
 		jx64_call_label(e, l_checks);
 	}
 	if (l_done >= 0) jx64_bind(e, l_done);
@@ -1924,13 +1981,16 @@ uint8_t *jit_compile_block(const uop_t *uops, uint32_t count, uint32_t phys, uin
 
 	if (getenv("JITCG_DUMP")) {
 		char pth[64]; FILE *f; snprintf(pth, sizeof pth, "/tmp/block-%08x-%u.bin", phys, len); f = fopen(pth, "wb");
+		/* S3: the JIT's own key stays 32-bit (jit_compile_block's signature; the recipes
+		 * are 32-bit-eip throughout and S13 widens them), so this diagnostic projects the
+		 * widened virtual address explicitly */
 		fprintf(stderr, "jitcg: block %u uops at %08x/%08x state %02x, %u bytes\n", count, phys,
-		        virt, state, len);
+		        (unsigned)virt, state, len);
 		if (f) { fwrite(jitcg_scratch, 1, len, f); fclose(f); }
 		for (uint32_t i = 0; i < count; i++) {
 			const char *nm = jit_recipe_name(uops[i].fn);
 			fprintf(stderr, "jitcg:   uop %u eip %08x shape %u addr %u base %u idx %u sc %u "
-			                "disp %08x modrm %02x g %u seg %u rec %s\n", i, uops[i].eip,
+			                "disp %08x modrm %02x g %u seg %u rec %s\n", i, (unsigned)uops[i].eip,
 			        uops[i].shape, uops[i].addr_kind, uops[i].base, uops[i].index,
 			        uops[i].scale, (unsigned)uops[i].disp, uops[i].modrm, uops[i].g, uops[i].seg, nm ? nm : "-");
 			fprintf(stderr, "jitcg:     flags %02x len %u\n", uops[i].flags, uops[i].len);

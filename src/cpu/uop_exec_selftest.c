@@ -250,7 +250,7 @@ static void test_smc(void)
 	uop_cache_enabled = true;
 	cpu->instruction_pointer = 0x1000;
 	cpu->previous_ip = 0x1000;
-	cpu->last_virt_eip = -1;
+	cpu->last_virt_eip = VIRT_EIP_NONE;
 	run_machine(100);
 	CHECK_EQ(ram32(0x3000), 0x2A);
 	CHECK(uop_stats.aborts >= 1);      /* the executing block WAS aborted (ss4.2) */
@@ -266,7 +266,7 @@ static void test_smc(void)
 	uop_cache_enabled = false;
 	cpu->instruction_pointer = 0x1000;
 	cpu->previous_ip = 0x1000;
-	cpu->last_virt_eip = -1;
+	cpu->last_virt_eip = VIRT_EIP_NONE;
 	run_machine(100);
 	uop_cache_enabled = true;
 	CHECK_EQ(ram32(0x3000), 0x2A);
@@ -319,7 +319,7 @@ static void test_smc_rmw(void)
 	cpu->instruction_counter = 0;
 	cpu->instruction_pointer = 0x1000;
 	cpu->previous_ip = 0x1000;
-	cpu->last_virt_eip = -1;
+	cpu->last_virt_eip = VIRT_EIP_NONE;
 	run_machine(100);
 	CHECK_EQ(ram32(0x3000), 0x2A);
 	CHECK(uop_stats.uops_executed > 0); /* the RMW ran as a UOP (not the interpreter) */
@@ -335,7 +335,7 @@ static void test_smc_rmw(void)
 	uop_cache_enabled = false;
 	cpu->instruction_pointer = 0x1000;
 	cpu->previous_ip = 0x1000;
-	cpu->last_virt_eip = -1;
+	cpu->last_virt_eip = VIRT_EIP_NONE;
 	run_machine(100);
 	uop_cache_enabled = true;
 	CHECK_EQ(ram32(0x3000), 0x2A);
@@ -382,7 +382,7 @@ static void straddle_case(bool wide)
 	cpu->instruction_counter = 0;
 	cpu->instruction_pointer = 0x1000;
 	cpu->previous_ip = 0x1000;
-	cpu->last_virt_eip = -1;
+	cpu->last_virt_eip = VIRT_EIP_NONE;
 	write_reg32(EAX, 0x11);
 	run_machine(50);
 	CHECK_EQ(ram32(0x3000), 0x11); /* run 1: the block ran and is now cached on page 0x1000 */
@@ -399,7 +399,7 @@ static void straddle_case(bool wide)
 	interpreted_unimplemented = false;
 	cpu->instruction_pointer = 0x1000;
 	cpu->previous_ip = 0x1000;
-	cpu->last_virt_eip = -1;
+	cpu->last_virt_eip = VIRT_EIP_NONE;
 	write_reg32(EAX, 0x22);
 	run_machine(50);
 	CHECK_EQ(ram32(0x3000), 0x11); /* NOT 0x22: the patched bytes were re-decoded */
@@ -518,7 +518,7 @@ static void test_guard_order(void)
 		cpu->instruction_counter = 0;
 		cpu->instruction_pointer = 0x1000;
 		cpu->previous_ip = 0x1000;
-		cpu->last_virt_eip = -1;
+		cpu->last_virt_eip = VIRT_EIP_NONE;
 		uops_before = uop_stats.uops_executed;
 		run_machine(50);
 		if (cache) {
@@ -620,7 +620,7 @@ static void test_faulted_flush(void)
 		cpu->instruction_counter = 0;
 		cpu->instruction_pointer = 0x1000;
 		cpu->previous_ip = 0x1000;
-		cpu->last_virt_eip = -1;
+		cpu->last_virt_eip = VIRT_EIP_NONE;
 		write_reg32(EAX, 0);
 		flushes_before = uop_stats.flushes;
 		run_machine(200);
@@ -686,7 +686,7 @@ static void warmup_tsc(void)
 	cpu->instruction_counter = 0;
 	cpu->instruction_pointer = 0x1000;
 	cpu->previous_ip = 0x1000;
-	cpu->last_virt_eip = -1;
+	cpu->last_virt_eip = VIRT_EIP_NONE;
 	run_machine(100);
 	uop_cache_enabled = true;
 
@@ -800,7 +800,7 @@ static void test_staircase(void)
 		cpu->instruction_counter = 0; /* so the two runs' decoded traces are comparable */
 		cpu->instruction_pointer = 0x1000;
 		cpu->previous_ip = 0x1000;
-		cpu->last_virt_eip = -1;
+		cpu->last_virt_eip = VIRT_EIP_NONE;
 		run_machine(1000);
 
 		uint32_t *trace = pass == 0 ? on : (pass == 1 ? off : nop);
@@ -938,7 +938,7 @@ static void test_state_key(void)
 	cpu->instruction_counter = 0;
 	cpu->instruction_pointer = 0x1000;
 	cpu->previous_ip = 0x1000;
-	cpu->last_virt_eip = -1;
+	cpu->last_virt_eip = VIRT_EIP_NONE;
 	run_machine(1000);
 
 	CHECK_EQ(ram32(0x3004), 0x00010001); /* the 32-BIT excursion at 0x1300 */
@@ -1086,7 +1086,7 @@ static void test_seg_base(void)
 			cpu->instruction_counter = 0;
 			cpu->instruction_pointer = 0x1000;
 			cpu->previous_ip = 0x1000;
-			cpu->last_virt_eip = -1;
+			cpu->last_virt_eip = VIRT_EIP_NONE;
 			uops[pass] = uop_stats.uops_executed;
 			run_machine(200);
 			uops[pass] = uop_stats.uops_executed - uops[pass];

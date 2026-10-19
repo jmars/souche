@@ -117,7 +117,9 @@
 
 typedef struct uop {
 	void (*fn)(void);      /* the semantic body, unchanged (instr_XX_mem/_reg/plain) */
-	uint32_t eip;          /* instruction start (virtual) -- the previous_ip source */
+	uint64_t eip;          /* instruction start (virtual) -- the previous_ip source.
+	                        * S3: widened with instruction_pointer (ss4); the decode walks a
+	                        * 4 KiB window, so every use of it is an offset or a page test. */
 	uint32_t disp;         /* displacement, or the absolute address (disp16/disp32 forms) */
 	int32_t imm, imm2;     /* the immediates, read ONCE at decode time */
 	uint8_t shape;         /* one of UOP_SHAPE_* */
@@ -138,7 +140,8 @@ typedef struct uop {
 	uint16_t pfx_len;      /* prefix-byte count */
 	uint16_t opcode_bytes; /* 1, or 2 when the 0F escape was consumed */
 	uint16_t off;          /* byte offset of the OPCODE within the block */
-	uint32_t body_ip;      /* PERF-5/M3: the instruction pointer the BODY must see at its
+	uint64_t body_ip;      /* PERF-5/M3: the instruction pointer the BODY must see at its
+	                        * (S3: widened with the fetch cursor, like `eip`)
 	                        * call -- `eip + len`, or `eip + pfx_len + opcode_bytes + 1` for
 	                        * a custom_modrm_resolve encoding (0x8D/0x8F), which is handed the
 	                        * raw modrm byte and reads the sib/disp itself.  Decode is the only
@@ -160,13 +163,14 @@ typedef struct uop {
 
 typedef struct uop_block {
 	uint32_t phys_start; /* physical address of the first instruction */
-	uint32_t virt_start; /* the virtual address it was decoded from */
+	uint64_t virt_start; /* the virtual address it was decoded from (S3: the block KEY's
+	                      * virtual half -- widened so a 64-bit eip keys its own block) */
 	uint16_t phys_len;   /* bytes covered -- never more than one virtual page */
 	uint8_t state;       /* cpu->state_flags & CACHED_MASK_ALL (the M2 lookup key half) */
 	uint8_t uop_count;
 	uint8_t stop;        /* UOP_STOP_* -- why the walk stopped where it did */
 	uint8_t pad;
-	uint32_t stop_eip;   /* the virtual eip the walk stopped at */
+	uint64_t stop_eip;   /* the virtual eip the walk stopped at (S3) */
 } uop_block_t;
 
 /* ------------------------------------------------------------------ *
@@ -279,7 +283,7 @@ extern const uint32_t uop_desc_count;
  * therefore not fault, not deliver anything, and not change cpu state: on success the only
  * cpu field it may touch is the eip_phys translation cache (through get_phys_eip, which is
  * what the caller uses anyway). */
-int uop_decode_block(uop_t *out, int cap, uint32_t virt_start, uint32_t phys_start,
+int uop_decode_block(uop_t *out, int cap, uint64_t virt_start, uint32_t phys_start,
                      uop_block_t *blk);
 
 /* Materialise a memory operand's linear address from the extracted fields: the execute-time
@@ -306,7 +310,7 @@ bool uop_exec_uop(const uop_t *u);
 
 /* the last decode's stopping evidence, for the selftest's report */
 extern int uop_last_stop;
-extern uint32_t uop_last_stop_eip;
+extern uint64_t uop_last_stop_eip;
 
 const char *uop_stop_name(int stop);
 

@@ -127,7 +127,9 @@ void switch_cs_real_mode(int32_t selector)
 
     cpu->sreg[CS] = (uint16_t)selector;
     cpu->segment_is_null[CS] = false;
-    cpu->segment_offsets[CS] = selector << 4;
+    /* S3: the slot is 64-bit and a selector<<4 is an ADDRESS; the shift is done in the
+     * address's own (unsigned) width so a large selector cannot sign-extend */
+    cpu->segment_offsets[CS] = (uint32_t)selector << 4;
     update_cs_size(false);
 }
 
@@ -146,7 +148,10 @@ static bool get_tss_ss_esp(uint8_t dpl, int32_t *ss_out, int32_t *esp_out)
             panic_stop("get_tss_ss_esp: #TS handler (upstream panic, cpu.rs:486)");
             return false;
         }
-        uint32_t addr = translate_address_system_read(cpu->segment_offsets[TR] + (int32_t)tss_stack_offset);
+        /* S3: the base and the offset are both unsigned now; adding them before the
+         * projection (translate_address, uint64_t) is exact where the old `(int32_t)` cast
+         * of an unsigned offset was already the same value */
+        uint32_t addr = translate_address_system_read(cpu->segment_offsets[TR] + tss_stack_offset);
         if (cpu->pagefault) {
             return false;
         }
@@ -159,7 +164,10 @@ static bool get_tss_ss_esp(uint8_t dpl, int32_t *ss_out, int32_t *esp_out)
             panic_stop("get_tss_ss_esp: #TS handler (upstream panic, cpu.rs:497)");
             return false;
         }
-        uint32_t addr = translate_address_system_read(cpu->segment_offsets[TR] + (int32_t)tss_stack_offset);
+        /* S3: the base and the offset are both unsigned now; adding them before the
+         * projection (translate_address, uint64_t) is exact where the old `(int32_t)` cast
+         * of an unsigned offset was already the same value */
+        uint32_t addr = translate_address_system_read(cpu->segment_offsets[TR] + tss_stack_offset);
         if (cpu->pagefault) {
             return false;
         }
@@ -211,7 +219,7 @@ static void iret(bool is_16)
         }
 
         switch_cs_real_mode(new_cs);
-        cpu->instruction_pointer = get_seg_cs() + new_eip;
+        set_instruction_pointer(get_seg_cs() + new_eip);
 
         if (is_16) {
             update_eflags(new_flags | (cpu->flags & ~0xFFFF));
@@ -236,7 +244,7 @@ static void iret(bool is_16)
     if ((cpu->flags & FLAG_NT) != 0) {
         /* nested task: return to the task linked through the back-link field of the
          * current tss */
-        int32_t tss_offset = cpu->segment_offsets[TR];
+        uint64_t tss_offset = cpu->segment_offsets[TR]; /* S3: widened with the array */
         int32_t backlink = safe_read16(tss_offset + TSR_BACKLINK);
         if (cpu->pagefault) return;
         do_task_switch(backlink, false, 0, TASK_SWITCH_IRET);
@@ -267,7 +275,7 @@ static void iret(bool is_16)
             cpu->flags |= FLAG_VM;
 
             switch_cs_real_mode(new_cs);
-            cpu->instruction_pointer = get_seg_cs() + (new_eip & 0xFFFF);
+            set_instruction_pointer(get_seg_cs() + (new_eip & 0xFFFF));
 
             if (!switch_seg(ES, new_es) || !switch_seg(DS, new_ds) || !switch_seg(FS, new_fs) ||
                 !switch_seg(GS, new_gs)) {
@@ -468,7 +476,7 @@ static void iret(bool is_16)
     cpu->segment_offsets[CS] = seg_descriptor_base(cs_descriptor);
     cpu->segment_access_bytes[CS] = seg_descriptor_access_byte(cs_descriptor);
 
-    cpu->instruction_pointer = new_eip + get_seg_cs();
+    set_instruction_pointer(new_eip + get_seg_cs());
 
     update_state_flags();
 
@@ -508,7 +516,8 @@ void call_interrupt_vector(int32_t interrupt, bool is_int, bool has_error_code, 
         }
 
         int32_t descriptor_address =
-            (int32_t)translate_address_system_read(cpu->idtr_offset + (interrupt << 3));
+            (int32_t)translate_address_system_read(
+                cpu->idtr_offset + (uint32_t)(interrupt << 3));
         if (cpu->pagefault) return;
 
         intr_descriptor_t descriptor = intr_descriptor_of_u64((uint64_t)read64s((uint32_t)descriptor_address));
@@ -743,7 +752,7 @@ void call_interrupt_vector(int32_t interrupt, bool is_int, bool has_error_code, 
         cpu->segment_offsets[CS] = seg_descriptor_base(cs_descriptor);
         cpu->segment_access_bytes[CS] = seg_descriptor_access_byte(cs_descriptor);
 
-        cpu->instruction_pointer = get_seg_cs() + offset;
+        set_instruction_pointer(get_seg_cs() + offset);
 
         cpu->flags &= ~FLAG_NT & ~FLAG_VM & ~FLAG_RF & ~FLAG_TRAP;
 
@@ -779,7 +788,7 @@ void call_interrupt_vector(int32_t interrupt, bool is_int, bool has_error_code, 
         cpu->flags &= ~FLAG_INTERRUPT & ~FLAG_AC & ~FLAG_TRAP;
 
         switch_cs_real_mode(new_cs);
-        cpu->instruction_pointer = get_seg_cs() + new_ip;
+        set_instruction_pointer(get_seg_cs() + new_ip);
         update_state_flags();
     }
 }
@@ -797,7 +806,7 @@ selector_lookup_t lookup_segment_selector(seg_selector_t selector, seg_descripto
     uint32_t table_offset;
     uint32_t table_limit;
     if (seg_selector_is_gdt(selector)) {
-        table_offset = (uint32_t)cpu->gdtr_offset;
+        table_offset = (uint32_t)cpu->gdtr_offset; /* S3: the 32-bit model's table base */
         table_limit = (uint32_t)cpu->gdtr_size;
     }
     else {
@@ -841,7 +850,7 @@ bool switch_seg(int32_t reg, int32_t selector_raw)
     if (!cpu->protected_mode || vm86_mode()) {
         cpu->sreg[reg] = (uint16_t)selector_raw;
         cpu->segment_is_null[reg] = false;
-        cpu->segment_offsets[reg] = selector_raw << 4;
+        cpu->segment_offsets[reg] = (uint32_t)selector_raw << 4;
 
         if (reg == SS) {
             cpu->stack_size_32 = false;
@@ -954,7 +963,7 @@ void far_jump(int32_t eip, int32_t selector, bool is_call, bool is_osize_32)
             }
         }
         switch_cs_real_mode(selector);
-        cpu->instruction_pointer = get_seg_cs() + eip;
+        set_instruction_pointer(get_seg_cs() + eip);
         update_state_flags();
         return;
     }
@@ -1178,7 +1187,7 @@ void far_jump(int32_t eip, int32_t selector, bool is_call, bool is_osize_32)
             cpu->segment_access_bytes[CS] = seg_descriptor_access_byte(cs_info);
             cpu->sreg[CS] = (uint16_t)(((uint16_t)target_cs_selector & ~3) | cpu->cpl);
 
-            cpu->instruction_pointer = get_seg_cs() + new_eip;
+            set_instruction_pointer(get_seg_cs() + new_eip);
 
             update_state_flags();
         }
@@ -1276,7 +1285,7 @@ void far_jump(int32_t eip, int32_t selector, bool is_call, bool is_osize_32)
         cpu->segment_offsets[CS] = seg_descriptor_base(info);
         cpu->sreg[CS] = (uint16_t)(((uint16_t)selector & ~3) | cpu->cpl);
 
-        cpu->instruction_pointer = get_seg_cs() + eip;
+        set_instruction_pointer(get_seg_cs() + eip);
 
         update_state_flags();
     }
@@ -1293,7 +1302,7 @@ void far_return(int32_t eip, int32_t selector, int32_t stack_adjust, bool is_osi
 
     if (!cpu->protected_mode || vm86_mode()) {
         switch_cs_real_mode(selector);
-        cpu->instruction_pointer = get_seg_cs() + eip;
+        set_instruction_pointer(get_seg_cs() + eip);
         adjust_stack_reg(2 * (is_osize_32 ? 4 : 2) + stack_adjust);
         update_state_flags();
         return;
@@ -1418,7 +1427,7 @@ void far_return(int32_t eip, int32_t selector, int32_t stack_adjust, bool is_osi
     cpu->segment_offsets[CS] = seg_descriptor_base(info);
     cpu->sreg[CS] = (uint16_t)selector;
 
-    cpu->instruction_pointer = get_seg_cs() + eip;
+    set_instruction_pointer(get_seg_cs() + eip);
 
     update_state_flags();
 }
@@ -1493,7 +1502,7 @@ void do_task_switch(int32_t selector_raw, bool has_error_code, int32_t error_cod
     }
 
     /* upstream's `let _tsr_size = *segment_limits.offset(TR)` is unused; dropped */
-    int32_t tsr_offset = cpu->segment_offsets[TR];
+    uint64_t tsr_offset = cpu->segment_offsets[TR]; /* S3: widened with the array */
 
     int32_t old_eflags = get_eflags();
 
@@ -1598,7 +1607,7 @@ void do_task_switch(int32_t selector_raw, bool has_error_code, int32_t error_cod
     int32_t new_cpl;
     if ((new_eflags & FLAG_VM) != 0) {
         cpu->segment_is_null[CS] = false;
-        cpu->segment_offsets[CS] = new_cs << 4;
+        cpu->segment_offsets[CS] = (uint32_t)new_cs << 4;
         cpu->sreg[CS] = (uint16_t)new_cs;
         update_cs_size(false);
         new_cpl = 3;
@@ -1704,8 +1713,8 @@ void do_task_switch(int32_t selector_raw, bool has_error_code, int32_t error_cod
         }
     }
 
-    cpu->instruction_pointer =
-        get_seg_cs() + ((new_eflags & FLAG_VM) != 0 ? (new_eip & 0xFFFF) : new_eip);
+    set_instruction_pointer(
+        get_seg_cs() + ((new_eflags & FLAG_VM) != 0 ? (new_eip & 0xFFFF) : new_eip));
 
     cpu->segment_offsets[TR] = seg_descriptor_base(descriptor);
     cpu->segment_limits[TR] = seg_descriptor_effective_limit(descriptor);
@@ -1866,7 +1875,7 @@ bool test_privileges_for_io(int32_t port, int32_t size)
         }
 
         uint32_t tsr_size = cpu->segment_limits[TR];
-        int32_t tsr_offset = cpu->segment_offsets[TR];
+        uint64_t tsr_offset = cpu->segment_offsets[TR]; /* S3: widened with the array */
 
         if (tsr_size >= 0x67) {
 

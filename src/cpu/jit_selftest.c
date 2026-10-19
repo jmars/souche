@@ -322,7 +322,7 @@ static void test_stale_block(void)
 	uint64_t invalidations_before = jit_stats.invalidations;
 	cpu->instruction_pointer = (int32_t)PATCHER;
 	cpu->previous_ip = (int32_t)PATCHER;
-	cpu->last_virt_eip = -1;
+	cpu->last_virt_eip = VIRT_EIP_NONE;
 	run_machine(100);
 	CHECK_EQ(ram32(0x1006), 0x22);              /* the patch landed (the premise) */
 	CHECK(jit_stats.invalidations >= invalidations_before + 1); /* the block WAS dropped */

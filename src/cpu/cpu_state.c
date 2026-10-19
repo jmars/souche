@@ -5,7 +5,10 @@
  * (reset_cpu) and global_pointers.rs (the layout).
  */
 
+#include <stdio.h> /* the invariant's named stop (S3) */
+
 #include "cpu_state.h"
+#include "cpu.h"   /* unimplemented_instruction -- S3's high-half stop */
 #include "paging.h" /* reset_cpu must flush the TLB (full_clear_tlb) */
 
 /* global_pointers.rs used absolute offsets into a shared wasm memory; the C port has
@@ -102,6 +105,56 @@ void write_xmm_reg128(int32_t r, reg128 data) { cpu->reg_xmm[r] = data; }
  * cached state byte -- state_flags.rs:3-26 + cpu.rs:3345-3363
  * ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ *
+ * S3: the widened address fields' high-half invariant -- see cpu_state.h for the claim
+ * being asserted and why it is a DETECTOR rather than a type fact.
+ * ------------------------------------------------------------------ */
+bool cpu_address_widening_check_enabled = true;
+
+const char *cpu_address_widening_leak(void)
+{
+    /* IN LONG MODE a linear address is 64 bits and there is nothing to assert: the high
+     * half is where the address lives.  (Before S5 nothing can set EFER.LMA, so this arm is
+     * unreachable today -- stated rather than implied; S5's mode transition is what makes it
+     * live, and the S2 selftest already exercises the predicate directly.) */
+    if ((cpu->efer & EFER_LMA) != 0) return NULL;
+
+    if (cpu->instruction_pointer >> 32) return "instruction_pointer";
+    if (cpu->previous_ip >> 32) return "previous_ip";
+    if (cpu->eip_phys >> 32) return "eip_phys";
+    /* last_virt_eip's sentinel is high-half clean by construction (VIRT_EIP_NONE) */
+    if (cpu->last_virt_eip >> 32) return "last_virt_eip";
+    if (cpu->idtr_offset >> 32) return "idtr_offset";
+    if (cpu->gdtr_offset >> 32) return "gdtr_offset";
+    for (int i = 0; i < 8; i++) {
+        if (cpu->segment_offsets[i] >> 32) {
+            /* one name per slot, so the report says WHICH base leaked */
+            static const char *const names[8] = {
+                "segment_offsets[ES]", "segment_offsets[CS]", "segment_offsets[SS]",
+                "segment_offsets[DS]", "segment_offsets[FS]", "segment_offsets[GS]",
+                "segment_offsets[TR]", "segment_offsets[LDTR]",
+            };
+            return names[i];
+        }
+    }
+    return NULL;
+}
+
+void cpu_assert_address_widening(const char *where)
+{
+    if (!cpu_address_widening_check_enabled) return;
+    const char *leak = cpu_address_widening_leak();
+    if (leak != NULL) {
+        /* NOT a silent mask and not a wrap: the field's high half is a value the 32-bit
+         * model cannot form, so the machine stops BY NAME (cpu.h's stop channel). */
+        char stop[160];
+        snprintf(stop, sizeof(stop),
+                 "widened address field %s has a non-zero high half outside long mode"
+                 " (at %s)", leak, where);
+        unimplemented_instruction(stop);
+    }
+}
+
 bool has_flat_segmentation(void)
 {
     /* cs/ss can't be null (cpu.rs:3355-3361) */
@@ -184,7 +237,14 @@ void reset_cpu(void)
     cpu->stack_size_32 = false;
     cpu->prefixes = 0;
 
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
+    /* S3: the OTHER half of the fetch-translation cache.  Upstream's reset leaves it alone
+     * (it is dead until last_virt_eip matches an eip, and VIRT_EIP_NONE never does), so this
+     * is unobservable -- but it is what makes the reset state canonically clean, which is
+     * the premise the mode boundary below asserts.  MEASURED: without it the invariant at
+     * reset_cpu names a stale eip_phys from a PREVIOUS machine in the same process (the
+     * selftest's per-arm reset is exactly that case). */
+    cpu->eip_phys = 0;
 
     cpu->instruction_counter = 0;
     cpu->previous_ip = 0;
@@ -230,6 +290,10 @@ void reset_cpu(void)
     /* jit::jit_clear_cache_js() -- dropped (interpreter-only port). */
 
     cpu->pagefault = false;
+
+    /* S3 mode boundary #1 (reset): the reset state must satisfy the high-half invariant, or
+     * RESET_EIP / the 0xF000<<4 base is itself a widened leak. */
+    cpu_assert_address_widening("reset_cpu");
 }
 
 /* Allocate the singleton and take it to the reset state.  The wasm reference gets

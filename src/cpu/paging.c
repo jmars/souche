@@ -12,6 +12,7 @@
 #include <stdlib.h>
 
 #include "paging.h"
+#include "cpu.h"         /* S3: unimplemented_instruction -- the long-mode stop below */
 #include "cpu_backend.h" /* S2: the long-mode refusal (plan ss3.5.2, C5) */
 #include "uop_cache.h"   /* PERF-4/M2: the write-path invalidation hook (plan ss4.1) */
 
@@ -39,7 +40,7 @@ static void fatal(const char *msg)
 void full_clear_tlb(void)
 {
     /* clear tlb including global pages */
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     for (int32_t i = 0; i < valid_tlb_entries_count; i++) {
         int32_t page = valid_tlb_entries[i];
         tlb_data[page] = 0;
@@ -52,7 +53,7 @@ void full_clear_tlb(void)
 void clear_tlb(void)
 {
     /* clear tlb excluding global pages */
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     int32_t global_page_offset = 0;
     for (int32_t i = 0; i < valid_tlb_entries_count; i++) {
         int32_t page = valid_tlb_entries[i];
@@ -69,8 +70,10 @@ void clear_tlb(void)
     valid_tlb_entries_count = global_page_offset;
 }
 
-void invlpg(int32_t addr)
+void invlpg(uint64_t addr)
 {
+    /* the TLB is indexed by the model's 32-bit physical/virtual page (plan ss4's PARTIAL
+     * verdict for tlb_data; the 64-bit-keyed table is S11's) */
     int32_t page = (int32_t)((uint32_t)addr >> 12);
     /* Note (cpu.rs:4469-4473): this does NOT remove the page from valid_tlb_entries.
      * It is not necessary, because a full list is emptied by clear_tlb, which drops
@@ -78,14 +81,14 @@ void invlpg(int32_t addr)
      * some already-invalid pages -- preserved here, because the bookkeeping is part of
      * what the plan ss3 asks to keep verbatim. */
     tlb_data[page] = 0;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
 }
 
 /* ------------------------------------------------------------------ *
  * page faults -- cpu.rs:2461-2512
  * ------------------------------------------------------------------ */
 
-void trigger_pagefault(int32_t addr,
+void trigger_pagefault(uint64_t addr,
                        bool present,
                        bool write,
                        bool user,
@@ -93,7 +96,10 @@ void trigger_pagefault(int32_t addr,
                        bool rsvd)
 {
     /* config::LOG_PAGE_FAULTS + dbg_trace dropped (no log channel in M1a) */
-    cpu->cr[2] = addr;
+    cpu->cr[2] = (int32_t)addr; /* CR2 is 32-bit in this model (ss5.1); long mode's 64-bit
+                                 * CR2 is S11's, and the projection is named here so a
+                                 * >4 GiB fault address is a reported gap, not a silent
+                                 * one (paging.h) */
     /* invalidate tlb entry */
     int32_t page = (int32_t)((uint32_t)addr >> 12);
     tlb_data[page] = 0;
@@ -333,16 +339,47 @@ static int32_t do_page_walk(int32_t addr,
  * translate_address -- cpu.rs:1955-2050
  * ------------------------------------------------------------------ */
 
-uint32_t translate_address(int32_t address,
+uint32_t translate_address(uint64_t address,
                            bool for_writing,
                            bool user,
                            bool side_effects,
                            bool is_instruction_fetch)
 {
-    int32_t entry = tlb_data[(uint32_t)address >> 12];
+    /* THE ONE PROJECTION POINT (paging.h; plan ss4's "the fetch machinery is already
+     * page-relative" generalises because of this and only this).  Outside long mode a
+     * linear address IS 32 bits, so `(uint32_t)` is the model's own width and not a
+     * truncation of a live address; it is also upstream's wraparound, exactly -- the low 32
+     * bits of a 64-bit sum are the sum mod 2^32, which is what the i32 field computes.  A
+     * 32-bit-mode address with a non-zero high half is a WIDENING LEAK, and cpu_state.h's
+     * cpu_assert_address_widening names the field that produced it at the batch boundary.
+     * The 4-level walk that makes the high half mean something is S11's. */
+    /* THE LONG-MODE STOP, and the guard the projection below actually needs.  S3's other
+     * instrument -- cpu_address_widening_leak() -- answers NULL when EFER.LMA is set, on
+     * purpose (in IA-32e the high half IS the address), so the mode-boundary invariant does
+     * NOT protect this cast in long mode: paging.h's signature note used to say it did, and
+     * that was wrong.  Until S11 lands the 4-level walk, a long-mode translation stops BY
+     * NAME instead of projecting, because returning the low 32 bits of a 64-bit linear
+     * address would be a silent wrong page -- the one outcome this tree refuses.  The abort
+     * flag is set as well, get_seg's precedent (modrm.c): the flag is this port's abort
+     * channel even when the cause is not a page fault, so the instruction does not act on
+     * the 0 returned here.
+     *
+     * UNREACHABLE TODAY, and shown so rather than assumed: S2 refuses the three writes that
+     * could enter IA-32e, and nothing sets LMA (cpu_selftest's S2 arm puts the state there by
+     * hand to exercise cpu_mode_of's arm). */
+    if ((cpu->efer & EFER_LMA) != 0) {
+        unimplemented_instruction(
+            "translate_address: long mode needs the 4-level walk (plan ss6 S11)");
+        cpu->pagefault = true;
+        return 0;
+    }
+
+    uint32_t va = (uint32_t)address;
+
+    int32_t entry = tlb_data[va >> 12];
     if ((entry & (TLB_VALID | (user ? TLB_NO_USER : 0) | (for_writing ? TLB_READONLY : 0) |
                   (is_instruction_fetch ? TLB_NO_EXEC : 0))) != TLB_VALID) {
-        entry = do_page_walk(address, for_writing, user, side_effects, is_instruction_fetch);
+        entry = do_page_walk((int32_t)va, for_writing, user, side_effects, is_instruction_fetch);
         if (cpu->pagefault) {
             return 0;
         }
@@ -350,57 +387,68 @@ uint32_t translate_address(int32_t address,
     /* upstream: `(entry & !0xFFF ^ address) as u32 - memory::mem8 as u32`.  The XOR
      * restores high|offset; the mem8 subtraction is the wasm host-address trick and
      * is dropped (the result is the guest physical address). */
-    return ((uint32_t)entry & ~0xFFFu) ^ (uint32_t)address;
+    return ((uint32_t)entry & ~0xFFFu) ^ va;
 }
 
-uint32_t translate_address_read_no_side_effects(int32_t address)
+uint32_t translate_address_read_no_side_effects(uint64_t address)
 {
     return translate_address(address, false, cpu->cpl == 3, false, false);
 }
 
-uint32_t translate_address_read(int32_t address)
+uint32_t translate_address_read(uint64_t address)
 {
     return translate_address(address, false, cpu->cpl == 3, true, false);
 }
 
-uint32_t translate_address_fetch(int32_t address)
+uint32_t translate_address_fetch(uint64_t address)
 {
     return translate_address(address, false, cpu->cpl == 3, true, true);
 }
 
-uint32_t translate_address_write(int32_t address)
+uint32_t translate_address_write(uint64_t address)
 {
     return translate_address(address, true, cpu->cpl == 3, true, false);
 }
 
-uint32_t translate_address_system_read(int32_t address)
+uint32_t translate_address_system_read(uint64_t address)
 {
     return translate_address(address, false, false, true, false);
 }
 
-uint32_t translate_address_system_write(int32_t address)
+uint32_t translate_address_system_write(uint64_t address)
 {
     return translate_address(address, true, false, true, false);
 }
 
-uint32_t translate_address_write_and_can_skip_dirty(int32_t address)
+uint32_t translate_address_write_and_can_skip_dirty(uint64_t address)
 {
-    int32_t entry = tlb_data[(uint32_t)address >> 12];
+    /* S3: the SAME long-mode stop as translate_address -- this is the twin the write paths
+     * use (paging.h), and a guard on only one of the two would leave the write half of the
+     * model projecting a 64-bit linear address.  See the note there. */
+    if ((cpu->efer & EFER_LMA) != 0) {
+        unimplemented_instruction(
+            "translate_address_write: long mode needs the 4-level walk (plan ss6 S11)");
+        cpu->pagefault = true;
+        return 0;
+    }
+
+    uint32_t va = (uint32_t)address; /* the projection: as in translate_address */
+    int32_t entry = tlb_data[va >> 12];
     bool user = cpu->cpl == 3;
     if ((entry & (TLB_VALID | (user ? TLB_NO_USER : 0) | TLB_READONLY)) != TLB_VALID) {
-        entry = do_page_walk(address, true, user, true, false);
+        entry = do_page_walk((int32_t)va, true, user, true, false);
         if (cpu->pagefault) {
             return 0;
         }
     }
-    return ((uint32_t)entry & ~0xFFFu) ^ (uint32_t)address;
+    return ((uint32_t)entry & ~0xFFFu) ^ va;
 }
 
 /* ------------------------------------------------------------------ *
  * readable/writable_or_pagefault -- cpu.rs:1921-1953
  * ------------------------------------------------------------------ */
 
-void readable_or_pagefault(int32_t addr, int32_t size)
+void readable_or_pagefault(uint64_t addr, int32_t size)
 {
     DBG_ASSERT(size < 0x1000);
     DBG_ASSERT(size > 0);
@@ -411,18 +459,21 @@ void readable_or_pagefault(int32_t addr, int32_t size)
         return;
     }
 
-    int32_t end = (addr + size - 1) & ~0xFFF;
-    if ((addr & ~0xFFF) != (end & ~0xFFF)) {
+    /* S3: the page test is on the address's own 64-bit value; a crossing test is a
+     * comparison, not an address, so nothing is projected here.  Outside long mode the two
+     * agree with upstream's i32 test for every address the machine can form. */
+    uint64_t end = (addr + (uint64_t)size - 1) & ~(uint64_t)0xFFF;
+    if ((addr & ~(uint64_t)0xFFF) != end) {
         translate_address(end, false, user, true, false);
     }
 }
 
-void writable_or_pagefault(int32_t addr, int32_t size)
+void writable_or_pagefault(uint64_t addr, int32_t size)
 {
     writable_or_pagefault_cpl(cpu->cpl, addr, size);
 }
 
-void writable_or_pagefault_cpl(uint8_t other_cpl, int32_t addr, int32_t size)
+void writable_or_pagefault_cpl(uint8_t other_cpl, uint64_t addr, int32_t size)
 {
     DBG_ASSERT(size < 0x1000);
     DBG_ASSERT(size > 0);
@@ -433,8 +484,8 @@ void writable_or_pagefault_cpl(uint8_t other_cpl, int32_t addr, int32_t size)
         return;
     }
 
-    int32_t end = (addr + size - 1) & ~0xFFF;
-    if ((addr & ~0xFFF) != (end & ~0xFFF)) {
+    uint64_t end = (addr + (uint64_t)size - 1) & ~(uint64_t)0xFFF;
+    if ((addr & ~(uint64_t)0xFFF) != end) {
         translate_address(end, true, user, true, false);
     }
 }
@@ -487,6 +538,16 @@ void set_cr0(int32_t cr0)
 
     cpu->protected_mode = (cpu->cr[0] & CR0_PE) == CR0_PE;
     cpu->segment_access_bytes[CS] = 0x80 | 0x10 | 0x08 | 0x02; /* P dpl0 S E RW */
+
+    /* S3 MODE BOUNDARY: CR0's write is the first of the three transitions that can change
+     * the mode (the SDM's IA-32e entry is CR0.PG set while EFER.LME && CR4.PAE, which is the
+     * transition S2 refuses by name above; a machine that CAN enter it -- S5 -- must have a
+     * clean 64-bit address state at the moment it does, or the widened fields carry a
+     * 32-bit-mode high half into the long-mode walk).  Checked AFTER the commit, on the state
+     * the write produced.  MEASURED absent until this round: the comment in cpu_state.h
+     * claimed these three call sites and only reset/batch had them -- a seat described but
+     * never called. */
+    cpu_assert_address_widening("set_cr0");
 }
 
 void set_cr3(int32_t cr3)

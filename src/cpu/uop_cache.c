@@ -59,26 +59,32 @@
 #include "paging.h"  /* cpu->segment_offsets and friends' declarations */
 
 int uop_last_stop = UOP_STOP_NONE;
-uint32_t uop_last_stop_eip = 0;
+uint64_t uop_last_stop_eip = 0;
 
 /* ------------------------------------------------------------------ *
  * the decode window: one virtual page, and nothing outside it
  * ------------------------------------------------------------------ */
 
-static uint32_t dec_base_virt; /* the virtual address the window was opened at */
+/* S3: the cursor and the window's edges are 64-bit (the addresses they come from are), while
+ * the PHYSICAL base stays 32-bit -- the model's bound (plan ss5.1).  The window is one
+ * virtual page, so every arithmetic below is an offset inside 4 KiB, which is why the
+ * projections to the mem8 index are exact rather than narrowings. */
+static uint64_t dec_base_virt; /* the virtual address the window was opened at */
 static uint32_t dec_base_phys; /* its physical address (translation is per page) */
-static uint32_t dec_end_virt;  /* one past the page's last byte */
-static uint32_t dec_eip;       /* the local decode cursor -- NEVER cpu->instruction_pointer */
+static uint64_t dec_end_virt;  /* one past the page's last byte */
+static uint64_t dec_eip;       /* the local decode cursor -- NEVER cpu->instruction_pointer */
 static uint8_t dec_pfx;        /* the prefixes accumulated for the instruction being decoded */
 static bool dec_overrun;       /* a read left the window: the instruction is dropped */
 
-static int dec_fetch(uint32_t virt)
+static int dec_fetch(uint64_t virt)
 {
 	if (virt < dec_base_virt || virt >= dec_end_virt) {
 		dec_overrun = true;
 		return 0;
 	}
-	return (int)mem8[dec_base_phys + (virt - dec_base_virt)];
+	/* the offset is inside the page (the window test above), so the sum is a 32-bit physical
+	 * address by construction: this is the projection, not a truncation */
+	return (int)mem8[dec_base_phys + (uint32_t)(virt - dec_base_virt)];
 }
 
 static int dec_read8(void)
@@ -391,7 +397,8 @@ static inline int32_t uop_seg_base(uint8_t seg)
 		cpu->pagefault = true;
 		return 0;
 	}
-	return cpu->segment_offsets[seg];
+	/* S3: as get_seg (modrm.c) -- the slot is 64-bit, the addressing form's base is 32 */
+	return (int32_t)(uint32_t)cpu->segment_offsets[seg];
 }
 
 int32_t uop_materialize_addr(const uop_t *u)
@@ -478,7 +485,7 @@ const char *uop_stop_name(int stop)
 #define DEC_PAGE_END 1 /* a read left the page: the instruction is dropped, the block ends */
 #define DEC_NODESC   2 /* no descriptor: the interpreter would stop by name / trigger_ud */
 
-static int dec_instruction(uop_t *u, uint32_t inst_start)
+static int dec_instruction(uop_t *u, uint64_t inst_start)
 {
 	bool osize32 = dec_osize_32();
 
@@ -617,7 +624,7 @@ static int dec_instruction(uop_t *u, uint32_t inst_start)
 	return 0;
 }
 
-int uop_decode_block(uop_t *out, int cap, uint32_t virt_start, uint32_t phys_start,
+int uop_decode_block(uop_t *out, int cap, uint64_t virt_start, uint32_t phys_start,
                      uop_block_t *blk)
 {
 	if (blk != NULL) {
@@ -643,10 +650,33 @@ int uop_decode_block(uop_t *out, int cap, uint32_t virt_start, uint32_t phys_sta
 
 	dec_base_virt = virt_start;
 	dec_base_phys = phys_start;
-	dec_end_virt = (virt_start | 0xFFFu) + 1;
+	/* S3: the page's end from the address's own width -- and THIS IS A DECLARED BEHAVIOUR
+	 * CHANGE, not a no-op spelling fix (round 2's review, S2).
+	 *
+	 * The old expression was `(virt_start | 0xFFF) + 1` into a uint32_t.  For every
+	 * `virt_start < 0xFFFFF000` that is this same number.  For `virt_start` in the LAST
+	 * virtual page (0xFFFFF000..0xFFFFFFFF) it WRAPPED TO 0, so `dec_fetch` failed its
+	 * `virt >= dec_end_virt` test on the FIRST byte, the walk overran, n == 0,
+	 * uop_block_decode() returned NULL and the interpreter ran the instruction instead --
+	 * every time, since the wrap was in the window's construction and not in the code.
+	 * With the masked form the window is real, so a block at the last page now DECODES
+	 * (and, with --jit on, compiles).
+	 *
+	 * WHY THAT IS A FIX AND WHAT IT COSTS.  The refused block was a fallback, and the
+	 * fallback is the reference's own loop, so nothing was ever WRONG there -- the change is
+	 * that a legal 32-bit guest which pages the last page into RAM and jumps to it now gets
+	 * the cached/compiled engine, where it previously always got the interpreter.  The two
+	 * engines are held byte-for-byte equal by the whole-state differentials, and the last
+	 * page is now IN that differential rather than outside it (jit_codegen_selftest's
+	 * test_last_page: three arms, a 4 KiB page table, and the decodes/compiles that show
+	 * which arm ran).  What it could change if the engines ever disagreed there: the guest
+	 * would now see the compiled arm's answer where it used to see the interpreter's --
+	 * which is exactly what the new test is for, and why it is a gate rather than a note.
+	 * The WINDOW itself did not widen: dec_fetch still refuses the byte past the page. */
+	dec_end_virt = (virt_start & ~(uint64_t)0xFFF) + 0x1000u;
 	dec_overrun = false;
 
-	uint32_t eip = virt_start;
+	uint64_t eip = virt_start;
 	int n = 0;
 	int stop = UOP_STOP_PAGE_END;
 
@@ -669,7 +699,7 @@ int uop_decode_block(uop_t *out, int cap, uint32_t virt_start, uint32_t phys_sta
 		 * this walk kept one accumulator across the block, and the checker's (a) caught it
 		 * on the `05 imm32` at a stream's 9th byte (interpreter 3, decoder 5). */
 		uint8_t pfx = 0;
-		uint32_t inst_start = eip;
+		uint64_t inst_start = eip;
 		int byte;
 		for (;;) {
 			byte = dec_fetch(eip);
@@ -796,7 +826,7 @@ uop_stats_t uop_stats;
 
 typedef struct uop_cblock {
 	uint32_t phys_start;
-	uint32_t virt_start;
+	uint64_t virt_start; /* S3: the block key's virtual half (uop_hash_pos folds both halves) */
 	uint32_t uop_begin;   /* index into the arena */
 	uint16_t phys_len;    /* bytes covered -- never crosses a page (the M1 block shape) */
 	uint16_t next_page;   /* the page registry's link: block id + 1, 0 = end of list */
@@ -892,9 +922,14 @@ bool uop_cache_init(void)
 	return true;
 }
 
-static inline uint32_t uop_hash_pos(uint32_t phys, uint32_t virt, uint8_t state)
+static inline uint32_t uop_hash_pos(uint32_t phys, uint64_t virt, uint8_t state)
 {
-	uint32_t h = phys * 0x9E3779B1u + virt * 0x85EBCA6Bu + ((uint32_t)state + 1u) * 0xC2B2AE35u;
+	/* S3: the virtual half is 64 bits now, so BOTH halves are mixed -- a hash that took only
+	 * the low half would put two blocks differing above 4 GiB in the same slot, which the
+	 * lookup's full-width compare would then treat as a MISS and re-decode every time (not
+	 * wrong, but a silent performance cliff and a cache that never hits). */
+	uint32_t h = phys * 0x9E3779B1u + (uint32_t)virt * 0x85EBCA6Bu +
+	             (uint32_t)(virt >> 32) * 0x27D4EB2Fu + ((uint32_t)state + 1u) * 0xC2B2AE35u;
 	h ^= h >> 15;
 	return h & (UOP_HASH_SLOTS - 1u);
 }
@@ -903,7 +938,7 @@ static inline uint32_t uop_hash_pos(uint32_t phys, uint32_t virt, uint8_t state)
  * probe (only an empty one does), and an insert reuses the first dead slot it saw -- which
  * keeps a live entry reachable from its own hash position while letting an invalidated page
  * give its slots back. */
-static uop_cblock_t *uop_block_lookup(uint32_t phys, uint32_t virt, uint8_t state)
+static uop_cblock_t *uop_block_lookup(uint32_t phys, uint64_t virt, uint8_t state)
 {
 	if (!uop_ready) return NULL;
 
@@ -942,7 +977,7 @@ static void uop_hash_insert(uop_cblock_t *b, uint32_t id)
 
 /* Decode and install a block at (phys, virt).  NULL means the decoder produced no block:
  * the caller must run the instruction through the reference's own path. */
-static uop_cblock_t *uop_block_decode(uint32_t phys, uint32_t virt, uint8_t state)
+static uop_cblock_t *uop_block_decode(uint32_t phys, uint64_t virt, uint8_t state)
 {
 	if (uop_block_used >= UOP_MAX_BLOCKS ||
 	    uop_arena_used + UOP_MAX_BLOCK_UOPS > UOP_ARENA_UOPS) {
@@ -993,7 +1028,14 @@ static uop_cblock_t *uop_block_decode(uint32_t phys, uint32_t virt, uint8_t stat
 	 * did before the JIT existed.  This is decode-time work, so it is off every run path. */
 	b->code = NULL;
 	if (jit_enabled) {
-		b->code = jit_compile_block(&uop_arena[b->uop_begin], (uint32_t)n, phys, virt, state);
+		/* S3: THE JIT'S OWN KEY STAYS 32-BIT.  jit_compile_block and every recipe take a
+		 * 32-bit eip (jit_codegen.h), and the compiled code's ip comparisons read the low
+		 * half of instruction_pointer -- exact while the high half is zero, which is the
+		 * invariant outside long mode.  The projection is NAMED here so that the widening
+		 * of the JIT (S13's recipes, reachable once S5 enters long mode) starts from a
+		 * stated boundary instead of an implicit narrowing. */
+		b->code = jit_compile_block(&uop_arena[b->uop_begin], (uint32_t)n, phys,
+		                            (uint32_t)virt, state);
 	}
 
 	uop_stats.decodes++;
@@ -1264,8 +1306,10 @@ void uop_run(uint32_t phys_addr)
 
 	for (;;) {
 		uint8_t state = (uint8_t)(cpu->state_flags & CACHED_MASK_ALL);
-		uop_cblock_t *blk = uop_block_lookup(phys, (uint32_t)cpu->instruction_pointer, state);
-		if (blk == NULL) blk = uop_block_decode(phys, (uint32_t)cpu->instruction_pointer, state);
+		/* S3: the key is (phys, the full virtual address, state) -- the virtual half is no
+		 * longer projected, so a 64-bit eip keys its own block */
+		uop_cblock_t *blk = uop_block_lookup(phys, cpu->instruction_pointer, state);
+		if (blk == NULL) blk = uop_block_decode(phys, cpu->instruction_pointer, state);
 
 		if (blk == NULL) {
 			/* THE CACHE CANNOT RUN THIS INSTRUCTION (plan ss5.1's fallback). */
@@ -1290,9 +1334,9 @@ void uop_run(uint32_t phys_addr)
 			 * the decoder refuses. */
 			uop_stats.fallback_steps++;
 			uop_pending += 1;
-			int32_t start_eip = cpu->instruction_pointer;
+			uint64_t start_eip = cpu->instruction_pointer;
 			int32_t opcode = (int32_t)mem8[phys];
-			cpu->instruction_pointer += 1;
+			set_instruction_pointer(cpu->instruction_pointer + 1);
 			cpu->pagefault = false;
 			DBG_ASSERT(cpu->prefixes == 0);
 			run_instruction(opcode | (cpu->is_32 ? 1 : 0) << 8);
@@ -1309,10 +1353,11 @@ void uop_run(uint32_t phys_addr)
 				uop_flush();
 				return;
 			}
+			/* S3: both tests at the field's own width (identical for any 32-bit eip) */
 			if (jit_block_boundary
-				|| ((uint32_t)start_eip >> 12) != ((uint32_t)cpu->instruction_pointer >> 12)
+				|| (start_eip >> 12) != (cpu->instruction_pointer >> 12)
 				|| (uop_pending >= INTERPRETER_ITERATION_LIMIT
-					&& (uint32_t)start_eip >= (uint32_t)cpu->instruction_pointer)) {
+					&& start_eip >= cpu->instruction_pointer)) {
 				jit_block_boundary = false;
 				uop_flush();
 				return;
@@ -1408,8 +1453,10 @@ void uop_run(uint32_t phys_addr)
 				 * fallback would compute a phys from the wrong page.  Do not widen it
 				 * without re-deriving the geometry from the actually-executing block. */
 				cpu->previous_ip = cpu->instruction_pointer;
+				/* the executed ip is inside the block's page, so the difference is a
+				 * page offset: the projection lands on the 32-bit physical model */
 				phys = blk->phys_start +
-				       ((uint32_t)cpu->instruction_pointer - blk->virt_start);
+				       (uint32_t)(cpu->instruction_pointer - blk->virt_start);
 				continue;
 			}
 
@@ -1454,7 +1501,7 @@ void uop_run(uint32_t phys_addr)
 			}
 
 			block_uops += 1;
-			cpu->previous_ip = (int32_t)u->eip;
+			cpu->previous_ip = u->eip;
 			cpu->prefixes = u->pfx;
 			/* THE INSTRUCTION POINTER AT THE BODY'S ENTRY is the reference's: the generated
 			 * dispatcher reads the opcode (and the modrm byte), modrm_resolve consumes the
@@ -1473,7 +1520,7 @@ void uop_run(uint32_t phys_addr)
 			 * misaligned-uop cascade the gate caught as 4 failing nasm tests (lea-nop,
 			 * leave16/32, push).  The plan's own ss2.3 skeleton (which has
 			 * `u->eip + u->pfx_len + u->opcode_bytes`) is the version that is wrong. */
-			cpu->instruction_pointer = (int32_t)u->body_ip;
+			set_instruction_pointer(u->body_ip);
 			cpu->pagefault = false; /* D1's dispatch-entry clear (cpu.c:118) */
 			bool ran = uop_exec(u);
 			cpu->pagefault = false; /* D1's post-dispatch clear (cpu.c:126) */
@@ -1506,13 +1553,13 @@ void uop_run(uint32_t phys_addr)
 					break;
 				}
 			}
-			if (((u->eip ^ (uint32_t)cpu->instruction_pointer) & ~0xFFFu) != 0) {
+			if (((u->eip ^ cpu->instruction_pointer) & ~(uint64_t)0xFFFu) != 0) {
 				uop_flush(); /* cpu.c:132's page-cross break */
 				why = UOP_LEFT_RETURN;
 				break;
 			}
 			if (uop_pending >= INTERPRETER_ITERATION_LIMIT
-				&& u->eip >= (uint32_t)cpu->instruction_pointer) {
+				&& u->eip >= cpu->instruction_pointer) {
 				uop_flush(); /* cpu.c:134-136 */
 				why = UOP_LEFT_RETURN;
 				break;
@@ -1526,7 +1573,7 @@ void uop_run(uint32_t phys_addr)
 				why = UOP_LEFT_RETURN;
 				break;
 			}
-			if (u->eip + u->len != (uint32_t)cpu->instruction_pointer) {
+			if (u->eip + u->len != cpu->instruction_pointer) {
 				/* control flow left the block (jcc taken, jmp, call, ret ...): the
 				 * reference's loop tail, then a fresh lookup at the new eip */
 				why = UOP_LEFT_TAIL;
@@ -1552,7 +1599,8 @@ void uop_run(uint32_t phys_addr)
 			 * lookup misses and re-decodes the CURRENT bytes -- but force it, because a
 			 * lookup that hit the dead block would re-run stale uops forever. */
 			cpu->previous_ip = cpu->instruction_pointer;
-			phys = blk->phys_start + ((uint32_t)cpu->instruction_pointer - blk->virt_start);
+			phys = blk->phys_start +
+			       (uint32_t)(cpu->instruction_pointer - blk->virt_start);
 			continue;
 		}
 

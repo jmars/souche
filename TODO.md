@@ -388,9 +388,41 @@ PAE-L3 both legs; `cpu_selftest` 3646 → 3846 checks.  NOT landed and named in 
 `EFER.LMA` transition (S5/S11), `CPU_MODE_COMPAT` (needs `CS.L`), `pdpe1gb` (deliberately not
 declared before 1 GiB pages exist), R8-R15 (no field yet).
 
-**S3-S13 REMAIN**: the address/IP widening, the host-corpus infrastructure, then the vertical
-slice, the ISA families, the system layer, the guest and the engines' long-mode arms.  The rest of
-this section is the reconnaissance record and is not made stale by S0-S2.
+**S3 IS LANDED (2026-10-19): THE ADDRESS AND IP WIDENING (INERT).**  `results/x86-64-s3.md` is its
+report.  `instruction_pointer`, `previous_ip`, `last_virt_eip`, `eip_phys`, `idtr_offset`,
+`gdtr_offset` and `segment_offsets[8]` are 64-bit in place; `translate_address*` take a 64-bit
+address and return the model's 32-bit physical one **at one named projection** (plan §5.1);
+`get_seg_cs`/`get_seg_ss` and `seg_descriptor_base` are unsigned; the uop block key carries a 64-bit
+virtual half (the hash folds both halves) and `uop_t.eip`/`body_ip` widened with it; the JIT's five
+`eip` stores are 8-byte (a 4-byte store into an 8-byte field leaves a stale high half, and the
+sign-extending `mov r/m64, imm32` is wrong for this value class).  The slice added the plan's **"the
+high half is zero outside long mode" invariant** — `cpu_address_widening_leak()` names the offending
+field, `cpu_assert_address_widening()` turns it into the machine's named stop, called at **all four mode
+boundaries** (reset, CR0, CR4, EFER — each exercised through its guest-reachable body) **and at both
+ends of every batch** — and extended the **poison probe** over the new fields (the two instruments are each other's control: the probe disarms the invariant, because it
+seeds on purpose what the invariant forbids).  Every producer of a new eip goes through
+`set_instruction_pointer()`, which projects outside long mode and does not in it; that is what keeps
+the invariant a detector rather than a tautology.  The gate: the whole battery **unmoved** —
+transcript `8bb8eca5…`, determinism 4,000,096,757 both runs, bench 200,095,214 with the JIT inlining
+pins, nasm 118/118, reboot 39/39, the five VGA gates, PAE-1 11/0, PAE-L3 both legs — plus the poison
+probe byte-identical and `cpu_selftest` 3846 → 3873 checks.  **THE WIDENING'S OWN FINDS, all caught
+by existing instruments and worth carrying**: a **4-byte stride on the widened `segment_offsets[]`**
+in the JIT's segment-base add (the compiled arm silently added the wrong segment's base — the prefix
+pin went red in one engine only); a **width change nobody wrote** in the JIT's ip arithmetic
+(all-`uint32` before, so a rel8 `-2` was two's complement, and widening `uop_t.eip` turned it into
+`+4294967294`); and `eip_phys` **missing from `reset_cpu`**, which the new invariant named.  NOT
+landed, named in the report: the JIT's ip *comparisons* and its own key stay 32-bit (S13), the
+decoder's addressing forms and the stack helpers stay 32-bit (S5/S7), the page walk stays 32-bit
+(S11), `prefixes`/`cr[2]`/`cr[3]` unchanged by decision.  THE ONE EXCEPTION TO "INERT", declared and
+tested: the decode window's end used to wrap to 0 at the top virtual page (0xFFFFF000..0xFFFFFFFF),
+so every block there was refused and the interpreter ran; it is now a real window, so a guest that
+pages the last page into RAM gets the cached/compiled engine — `uop_cache_selftest`'s top-page arms
+and `jit_codegen_selftest`'s three-arm `test_last_page` pin it (state identical, `decodes 0/1/1`,
+and with the pre-fix expression restored the counters go to 0 while the state still agrees).
+
+**S4-S13 REMAIN**: the host-corpus infrastructure, then the vertical slice, the ISA families, the
+system layer, the guest and the engines' long-mode arms.  The rest of this section is the
+reconnaissance record and is not made stale by S0-S3.
 
 Not implemented, and deliberately **not** listed as a non-goal: it is wanted one day. It is recorded
 here so the next reader inherits the reconnaissance instead of re-deriving it.

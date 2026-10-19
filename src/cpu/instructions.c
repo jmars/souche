@@ -1465,39 +1465,39 @@ void instr32_C1_7_reg(int32_t r1, int32_t imm) { write_reg32(r1, sar32(read_reg3
 void instr16_C2(int32_t imm16)
 {
     /* retn */
-    int32_t cs = get_seg_cs();
+    uint64_t cs = get_seg_cs();
     int32_t v = pop16();
     if (cpu->pagefault) return;
-    cpu->instruction_pointer = cs + v;
+    set_instruction_pointer(cs + v);
     /* no dbg_assert here: the 16-bit ip class -- see "THE 16-BIT ip CLASS" in this file's header */
     adjust_stack_reg(imm16);
 }
 void instr32_C2(int32_t imm16)
 {
     /* retn */
-    int32_t cs = get_seg_cs();
+    uint64_t cs = get_seg_cs();
     int32_t ip = pop32s();
     if (cpu->pagefault) return;
     /* no dbg_assert here: the 16-bit ip class -- see "THE 16-BIT ip CLASS" in this file's header */
-    cpu->instruction_pointer = cs + ip;
+    set_instruction_pointer(cs + ip);
     adjust_stack_reg(imm16);
 }
 void instr16_C3(void)
 {
     /* retn */
-    int32_t cs = get_seg_cs();
+    uint64_t cs = get_seg_cs();
     int32_t v = pop16();
     if (cpu->pagefault) return;
-    cpu->instruction_pointer = cs + v;
+    set_instruction_pointer(cs + v);
 }
 void instr32_C3(void)
 {
     /* retn */
-    int32_t cs = get_seg_cs();
+    uint64_t cs = get_seg_cs();
     int32_t ip = pop32s();
     if (cpu->pagefault) return;
     /* no dbg_assert here: the 16-bit ip class -- see "THE 16-BIT ip CLASS" in this file's header */
-    cpu->instruction_pointer = cs + ip;
+    set_instruction_pointer(cs + ip);
 }
 
 void instr16_C4_reg(int32_t _unused1, int32_t _unused2) { (void)_unused1; (void)_unused2; trigger_ud(); }
@@ -1828,7 +1828,7 @@ void instr32_E8(int32_t imm32s)
     /* call */
     push32(get_real_eip());
     if (cpu->pagefault) return;
-    cpu->instruction_pointer = cpu->instruction_pointer + imm32s;
+    set_instruction_pointer(cpu->instruction_pointer + imm32s);
     /* no dbg_assert here: the 16-bit ip class -- see "THE 16-BIT ip CLASS" in this file's header */
 }
 void instr16_E9(int32_t imm16)
@@ -1839,7 +1839,7 @@ void instr16_E9(int32_t imm16)
 void instr32_E9(int32_t imm32s)
 {
     /* jmp */
-    cpu->instruction_pointer = cpu->instruction_pointer + imm32s;
+    set_instruction_pointer(cpu->instruction_pointer + imm32s);
     /* no dbg_assert here: the 16-bit ip class -- see "THE 16-BIT ip CLASS" in this file's header */
 }
 
@@ -1863,7 +1863,7 @@ void instr16_EB(int32_t imm8)
 void instr32_EB(int32_t imm8)
 {
     /* jmp near */
-    cpu->instruction_pointer = cpu->instruction_pointer + imm8;
+    set_instruction_pointer(cpu->instruction_pointer + imm8);
     /* no dbg_assert here: the 16-bit ip class -- see "THE 16-BIT ip CLASS" in this file's header */
 }
 
@@ -2223,10 +2223,10 @@ void instr16_FF_1_reg(int32_t r1) { write_reg16(r1, dec16(read_reg16(r1))); }
 void instr16_FF_2_helper(int32_t data)
 {
     /* call near */
-    int32_t cs = get_seg_cs();
+    uint64_t cs = get_seg_cs();
     push16(get_real_eip());
     if (cpu->pagefault) return;
-    cpu->instruction_pointer = cs + data;
+    set_instruction_pointer(cs + data);
     /* no dbg_assert here: the 16-bit ip class -- see "THE 16-BIT ip CLASS" in this file's header */
 }
 void instr16_FF_2_mem(int32_t addr)
@@ -2256,7 +2256,7 @@ void instr16_FF_3_mem(int32_t addr)
 void instr16_FF_4_helper(int32_t data)
 {
     /* jmp near */
-    cpu->instruction_pointer = get_seg_cs() + data;
+    set_instruction_pointer(get_seg_cs() + data);
     /* no dbg_assert here: the 16-bit ip class -- see "THE 16-BIT ip CLASS" in this file's header */
 }
 void instr16_FF_4_mem(int32_t addr)
@@ -2303,11 +2303,11 @@ void instr32_FF_1_reg(int32_t r1) { write_reg32(r1, dec32(read_reg32(r1))); }
 void instr32_FF_2_helper(int32_t data)
 {
     /* call near */
-    int32_t cs = get_seg_cs();
+    uint64_t cs = get_seg_cs();
     push32(get_real_eip());
     if (cpu->pagefault) return;
     /* no dbg_assert here: the 16-bit ip class -- see "THE 16-BIT ip CLASS" in this file's header */
-    cpu->instruction_pointer = cs + data;
+    set_instruction_pointer(cs + data);
 }
 void instr32_FF_2_mem(int32_t addr)
 {
@@ -2340,7 +2340,7 @@ void instr32_FF_4_helper(int32_t data)
 {
     /* jmp near */
     /* no dbg_assert here: the 16-bit ip class -- see "THE 16-BIT ip CLASS" in this file's header */
-    cpu->instruction_pointer = get_seg_cs() + data;
+    set_instruction_pointer(get_seg_cs() + data);
 }
 void instr32_FF_4_mem(int32_t addr)
 {

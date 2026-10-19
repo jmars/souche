@@ -53,9 +53,10 @@ bool test_nle(void) { return !test_le(); }
 
 void jmp_rel16(int32_t rel16)
 {
-    int32_t cs_offset = get_seg_cs();
+    uint64_t cs_offset = get_seg_cs();
     /* limit ip to 16 bit */
-    cpu->instruction_pointer = cs_offset + ((cpu->instruction_pointer - cs_offset + rel16) & 0xFFFF);
+    set_instruction_pointer(cs_offset +
+                            ((cpu->instruction_pointer - cs_offset + rel16) & 0xFFFF));
 }
 
 void jmpcc16(bool condition, int32_t imm16)
@@ -68,7 +69,7 @@ void jmpcc16(bool condition, int32_t imm16)
 void jmpcc32(bool condition, int32_t imm32)
 {
     if (condition) {
-        cpu->instruction_pointer += imm32;
+        set_instruction_pointer(cpu->instruction_pointer + imm32);
     }
 }
 
@@ -111,11 +112,14 @@ void setcc_mem(bool condition, int32_t addr)
 
 int32_t get_stack_pointer(int32_t offset)
 {
+    /* S3: get_seg_ss() is 64-bit now; the stack address is a 32-bit linear address in every
+     * mode this port can run, so the sum is projected at the return type -- the same value
+     * upstream's i32 addition gives (the low 32 bits of the sum). */
     if (cpu->stack_size_32) {
-        return get_seg_ss() + read_reg32(ESP) + offset;
+        return (int32_t)(uint32_t)(get_seg_ss() + read_reg32(ESP) + offset);
     }
     else {
-        return get_seg_ss() + ((read_reg16(SP) + offset) & 0xFFFF);
+        return (int32_t)(uint32_t)(get_seg_ss() + ((read_reg16(SP) + offset) & 0xFFFF));
     }
 }
 
@@ -193,7 +197,10 @@ int32_t decr_ecx_asize(bool addr_size_32)
  * ret/ff-group and M1c's cpu.c (far_jump, call_interrupt_vector, do_task_switch). */
 int32_t get_real_eip(void)
 {
-    return cpu->instruction_pointer - get_seg_cs();
+    /* S3: the difference of two widened values, projected at the return type -- the eip
+     * WITHOUT its segment base is a 32-bit offset in every mode this port can run (a
+     * long-mode RIP-relative offset is still the difference, and S7 owns the 64-bit form). */
+    return (int32_t)(uint32_t)(cpu->instruction_pointer - get_seg_cs());
 }
 
 /* cpu.rs:4292-4300 */

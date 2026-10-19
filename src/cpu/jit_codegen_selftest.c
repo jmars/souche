@@ -630,6 +630,9 @@ static snap_t snap[3];
 static jit_codegen_stats_t arm_stats[3];
 static uint64_t exits_seen[8]; /* accumulated over every compiled arm's run */
 static uint64_t arm_invalidations[3];
+/* S3 (round 2): which arm DECODED is the evidence for the last-page test -- the window fix
+ * changed the engine a guest at the top page gets, so the counters have to be visible. */
+static uint64_t arm_decodes[3];
 static uint64_t arm_block_ends[3];
 static uint64_t arm_flushes[3];
 static bool jit_inited;
@@ -663,9 +666,12 @@ static void arm_run(int arm, uint32_t code, const uint8_t *prog, int len, uint32
 
 	tsc_warm();
 	cpu->instruction_counter = 0;
-	cpu->instruction_pointer = (int32_t)code;
-	cpu->previous_ip = (int32_t)code;
-	cpu->last_virt_eip = -1;
+	/* S3: through the fetch-cursor store -- `(int32_t)code` was a copy of the old int32 field
+	 * and would SIGN-EXTEND a code address above 0x7FFFFFFF into the 64-bit field, which is a
+	 * high half the machine's own invariant stops on (the last-page test sits exactly there) */
+	set_instruction_pointer(code);
+	cpu->previous_ip = (uint64_t)code;
+	cpu->last_virt_eip = VIRT_EIP_NONE;
 	run_machine(budget);
 
 	snap_t *s = &snap[arm];
@@ -678,6 +684,7 @@ static void arm_run(int arm, uint32_t code, const uint8_t *prog, int len, uint32
 		for (int k = 0; k < 8; k++) exits_seen[k] += jit_codegen_stats.exits[k];
 	}
 	arm_invalidations[arm] = jit_stats.invalidations;
+	arm_decodes[arm] = uop_stats.decodes;
 	arm_block_ends[arm] = uop_stats.block_ends;
 	arm_flushes[arm] = uop_stats.flushes;
 
@@ -1004,6 +1011,86 @@ static void test_prefix_and_previous_ip(void)
 	fprintf(stderr, "  prefix: fs:[0x1400] override honoured (0x%08x), previous_ip 0x%x in "
 	                "both engines\n", ram32(TRACE), (unsigned)snap[2].cpu.previous_ip);
 	arm_setup = NULL;
+}
+
+/* ==================================================================== *
+ * THE LAST VIRTUAL PAGE (S3 round 2, review S2)
+ *
+ * S3's decode-window fix made a block at 0xFFFFF000..0xFFFFFFFF DECODE where the old
+ * `(virt_start | 0xFFF) + 1` in a uint32_t wrapped to 0 and refused every block there.  That
+ * is a change in WHICH ENGINE runs a legal guest, so the claim to pin is not "the address
+ * arithmetic is tidier" but "the guest still gets the same answer, in all three engines, and
+ * the cached engines are the ones that now run it".
+ *
+ * The fixture: a 4 KiB page table mapping the LAST virtual page onto a physical page inside
+ * guest RAM (a 32-bit guest reaches the top page the same way -- through paging; without it the
+ * virtual address 0xFFFFFxxx is outside the model's 2 MiB of RAM and nothing can execute
+ * there).  The program is `mov eax, 0x1234; hlt`, entirely inside that one page.
+ *
+ *   0x00008000  the page directory, entry 1023 -> the page table
+ *   0x00009000  the page table, entry 0x3FF -> 0x00180000
+ *   0x00180000  the code
+ * ==================================================================== */
+#define LASTPAGE_VIRT 0xFFFFF000u
+#define LASTPAGE_PHYS 0x180000u
+#define LASTPAGE_PD   0x8000u
+#define LASTPAGE_PT   0x9000u
+
+static void setup_last_page(void)
+{
+	memset(mem8 + LASTPAGE_PD, 0, 0x2000); /* the PD and the PT, one 8 KiB block */
+	for (uint32_t i = 0; i < 0x2000; i += 4096) {
+		/* zeroed above; the entries below are the only mappings */
+	}
+
+	static const uint8_t prog[] = { 0xB8, 0x34, 0x12, 0x00, 0x00, 0xF4 }; /* mov eax,0x1234; hlt */
+	memcpy(mem8 + LASTPAGE_PHYS, prog, sizeof prog);
+
+	/* PD[1023] (the 4 MiB region 0xFFC00000..0xFFFFFFFF) -> the page table, present|rw */
+	uint32_t pde = LASTPAGE_PT | 3u;
+	memcpy(mem8 + LASTPAGE_PD + 1023u * 4u, &pde, 4);
+	/* PT[0x3FF] (the page 0xFFFFF000) -> the code page, present|rw */
+	uint32_t pte = LASTPAGE_PHYS | 3u;
+	memcpy(mem8 + LASTPAGE_PT + 0x3FFu * 4u, &pte, 4);
+
+	cpu->cr[4] = 0;                          /* the 2-level walk: PAE is a different one */
+	cpu->cr[3] = (int32_t)LASTPAGE_PD;
+	cpu->cr[0] = (int32_t)((uint32_t)cpu->cr[0] | 0x80000000u); /* CR0.PG */
+	full_clear_tlb();
+}
+
+static void test_last_page(void)
+{
+	fprintf(stderr, "  == test_last_page (S3: a block at the LAST virtual page)\n");
+
+	arm_setup = setup_last_page;
+	for (int arm = 0; arm < 3; arm++) arm_run(arm, LASTPAGE_VIRT, NULL, 0, 20);
+	arm_setup = NULL;
+
+	/* the program ran and the three engines agree -- on the WHOLE state and on RAM */
+	for (int arm = 0; arm < 3; arm++) CHECK_EQ(snap[arm].cpu.reg64[EAX], 0x1234ull);
+	CHECK_EQ(snap[0].cpu.instruction_pointer, LASTPAGE_VIRT + 6u);
+	cmp_state(0, 1, "last page: interp vs uop-cache");
+	cmp_state(1, 2, "last page: uop-cache vs compiled");
+	cmp_state(0, 2, "last page: interp vs compiled");
+
+	/* WHICH ENGINE RAN is the thing this slice changed: the interpreter arm has the cache
+	 * off (nothing decoded), and both cached arms must have DECODED a block at the top page
+	 * instead of falling back -- which is exactly what the old window refused.  The compiled
+	 * arm must also have COMPILED it, or `--jit on` at the last page would silently be the
+	 * uop arm. */
+	CHECK_EQ(arm_decodes[0], 0);
+	CHECK(arm_decodes[1] >= 1);
+	CHECK(arm_decodes[2] >= 1);
+	CHECK(arm_stats[2].blocks_compiled >= 1);
+	CHECK_EQ(uop_last_stop, UOP_STOP_BLOCK_END); /* the hlt ended the block, at the top page */
+
+	fprintf(stderr, "  last page: decodes interp=%llu uop=%llu compiled=%llu, blocks compiled %llu;"
+	                " eip 0x%llx in all three arms, whole-state compare clean\n",
+	        (unsigned long long)arm_decodes[0], (unsigned long long)arm_decodes[1],
+	        (unsigned long long)arm_decodes[2],
+	        (unsigned long long)arm_stats[2].blocks_compiled,
+	        (unsigned long long)snap[2].cpu.instruction_pointer);
 }
 
 /* ==================================================================== *
@@ -2273,6 +2360,7 @@ int main(void)
 	test_fault_early_return();
 	test_staircase();
 	test_prefix_and_previous_ip();
+	test_last_page();
 	test_smc_abort();
 	test_tail_exit();
 	test_cross_return();

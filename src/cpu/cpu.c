@@ -88,16 +88,26 @@ void after_block_boundary(void)
  * a guest physical address here -- paging.h). */
 uint32_t get_phys_eip(void)
 {
-	uint32_t eip = (uint32_t)cpu->instruction_pointer;
+	/* S3: the eip is 64 bits now and this function generalises UNCHANGED (plan ss4's entry
+	 * for instruction_pointer): the cache is still `translate_fetch(eip) ^ eip`, whose XOR
+	 * cancels the page bits, so one XOR of a later eip in the same page yields the physical
+	 * address.  The eip's page compare is done at the field's own width; the RESULT is a
+	 * `uint32_t` and is projected ONCE, at the mem8 boundary below (plan ss5.1). */
+	uint64_t eip = cpu->instruction_pointer;
 
-	if ((eip & ~0xFFFu) != (uint32_t)cpu->last_virt_eip) {
-		uint32_t phys = translate_address_fetch((int32_t)eip);
+	if ((eip & ~(uint64_t)0xFFFu) != cpu->last_virt_eip) {
+		uint32_t phys = translate_address_fetch(eip);
 		if (cpu->pagefault) return 0;
-		cpu->eip_phys = (int32_t)(phys ^ eip);
-		cpu->last_virt_eip = (int32_t)(eip & ~0xFFFu);
+		cpu->eip_phys = (uint64_t)phys ^ eip;
+		cpu->last_virt_eip = eip & ~(uint64_t)0xFFFu;
 	}
 
-	uint32_t phys_addr = (uint32_t)(cpu->eip_phys ^ (int32_t)eip);
+	/* THE PROJECTION (plan ss5.1): the physical model is 32 bits wide, so a fetch address
+	 * is the low half of the cache XOR.  In 32-bit mode the two are the same value by
+	 * construction -- the high half is asserted zero at the batch boundary (cpu_state.h's
+	 * cpu_assert_address_widening) -- so this cast is the model's bound made explicit, not a
+	 * truncation of a live 64-bit address (that case is S11's named refusal). */
+	uint32_t phys_addr = (uint32_t)(cpu->eip_phys ^ eip);
 	/* AUDIT-1 S1: the old DBG_ASSERT(!in_mapped_range(phys_addr)) was guest-reachable (a
 	 * guest points EIP at the VGA hole with one jmp; MEASURED rc 134 on the eip-hole
 	 * image) and it conflated two cases.  A fetch whose physical address is inside guest
@@ -144,9 +154,12 @@ void interpreted_run(uint32_t phys_addr)
 
 	for (;;) {
 		i += 1;
-		int32_t start_eip = cpu->instruction_pointer;
+		uint64_t start_eip = cpu->instruction_pointer;
 		int32_t opcode = (int32_t)mem8[phys_addr];
-		cpu->instruction_pointer += 1;
+		/* through the fetch-cursor store (cpu_state.h), like every other producer of an
+		 * eip: at 0xFFFFFFFF upstream's i32 wraps to 0 and a bare `+= 1` would instead
+		 * carry into bit 32, which the batch-end invariant would rightly stop on */
+		set_instruction_pointer(cpu->instruction_pointer + 1);
 		DBG_ASSERT(cpu->prefixes == 0);
 		/* the dispatch-entry clear: the instruction starts with the flag down (D1) */
 		cpu->pagefault = false;
@@ -166,11 +179,14 @@ void interpreted_run(uint32_t phys_addr)
 		 * reset vector, and the rest of this batch is not boot 1's stream. */
 		if (cpu->reboot_requested) break;
 
-		if (jit_block_boundary || ((uint32_t)start_eip >> 12) != ((uint32_t)cpu->instruction_pointer >> 12)
+		/* S3: the two eip tests are at the field's own width (they were `(uint32_t)` casts
+		 * of an i32 field).  For every 32-bit value the comparison is the same one; the
+		 * widening is what lets a 64-bit eip be tested without a projection. */
+		if (jit_block_boundary || (start_eip >> 12) != (cpu->instruction_pointer >> 12)
 			/* Limit the number of iterations, as jumps within the same page are not
 			 * counted as block boundaries for the interpreter, but only on the next
 			 * backwards jump */
-			|| (i >= (int32_t)INTERPRETER_ITERATION_LIMIT && (uint32_t)start_eip >= (uint32_t)cpu->instruction_pointer)) {
+			|| (i >= (int32_t)INTERPRETER_ITERATION_LIMIT && start_eip >= cpu->instruction_pointer)) {
 			break;
 		}
 
@@ -189,7 +205,15 @@ void interpreted_run(uint32_t phys_addr)
  * JIT lookup could have short-circuited does not exist in an interpreter-only port. */
 void cycle_internal(void)
 {
-	int32_t initial_eip = cpu->instruction_pointer;
+	/* S3's high-half invariant, ONCE PER BATCH (cpu_state.h): the batch boundary is the one
+	 * place every engine passes through, so a widened arithmetic that leaked bits above 32
+	 * -- in any instruction, in either engine -- stops the machine BY NAME here instead of
+	 * reaching a mem8 index as a wrong address.  Cost is one compare per batch: 7 fields
+	 * against zero, and the mode test short-circuits it entirely in long mode (nothing can
+	 * set EFER.LMA before S5, so nothing short-circuits today -- stated, not implied). */
+	cpu_assert_address_widening("cycle_internal");
+
+	uint64_t initial_eip = cpu->instruction_pointer;
 
 	cpu->pagefault = false;
 	cpu->previous_ip = initial_eip;
@@ -229,6 +253,15 @@ void cycle_internal(void)
 	 * reboot IS progress: upstream's own assert is debug-only (dbg.rs maps
 	 * dbg_assert! to debug_assert!) and its release build simply proceeds past the
 	 * reboot, which is the behaviour this keeps while the port ships asserts live. */
+	/* S3's high-half invariant, ALSO AT THE BATCH's END.  The entry call above sees the state
+	 * a previous batch left behind; this one sees what THIS batch produced, which is the
+	 * difference that matters for an engine whose leak is transient INSIDE a batch -- the
+	 * compiled arm's ip arithmetic, whose leak a later uop's own ip store can repair before
+	 * the batch ends.  MEASURED (the S3 unit's own falsifier): with the recipes' ip
+	 * arithmetic back at its pre-widening width, the entry call sees nothing and this one
+	 * names the field.  Two compares per batch: 7 fields against zero. */
+	cpu_assert_address_widening("cycle_internal (batch end)");
+
 	DBG_ASSERT(cpu->instruction_counter != initial_instruction_counter
 	           || uop_pending != 0
 	           || cpu->reboot_requested);

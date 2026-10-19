@@ -22,6 +22,7 @@
 
 #include "arith.h"
 #include "cpu_backend.h" /* S0: the engine seam's resolver, its instances and its dispatch */
+#include "cpu.h"   /* S3: the stop channel the high-half invariant reports through */
 #include "cpu_state.h"
 #include "exceptions.h" /* M1c: the segment-descriptor types the stand-ins use */
 #include "flags.h"
@@ -148,7 +149,14 @@ static void test_reset(void)
     CHECK_EQ(cpu->instruction_counter, 0);
     CHECK(!cpu->in_hlt);
     CHECK_EQ(cpu->prefixes, 0);
-    CHECK_EQ(cpu->last_virt_eip, -1);
+    /* S3: THE SENTINEL MOVED BY DESIGN.  It was `-1` (0xFFFFFFFF in an i32 field); with a
+     * 64-bit field that literal would sign-extend to 0xFFFFFFFFFFFFFFFF, which is itself a
+     * non-zero high half -- i.e. the very leak the S3 invariant exists to catch, written by
+     * the reset path.  VIRT_EIP_NONE keeps the meaning ("no page cached": its low 12 bits
+     * are set, which no page value can be) and the high half clean.  Every reader compares
+     * at page granularity or through (uint32_t), so the verdict at each of them is
+     * unchanged -- MEASURED by the M0 transcript unmoved. */
+    CHECK_EQ(cpu->last_virt_eip, VIRT_EIP_NONE);
     CHECK_EQ(cpu->pat, RESET_PAT);
     CHECK_EQ(cpu->efer, 0);
     CHECK_EQ(cpu->idtr_size, 0);
@@ -605,6 +613,177 @@ static void test_widened_flags(void)
 
     printf("PASS S1: the widened register file (byte/word/dword slot map + the zero-extended"
            " high half), the 64-bit flag cores and the high-half poison arm\n");
+}
+
+/* S2's named-stop recorder (defined with the stub further down, used by the mode/refusal
+ * test and by S3's invariant test below). */
+static int unimplemented_calls;
+static char unimplemented_last[160];
+static bool unimplemented_allowed;
+static void reset_unimplemented(void);
+
+/* ------------------------------------------------------------------ *
+ * S3 -- THE ADDRESS/IP WIDENING'S HIGH-HALF INVARIANT (plan ss6 S3, risk R2)
+ *
+ * The instrument's CLAIM is that outside long mode none of the widened address fields can
+ * hold a value above 2^32, and the shipped code establishes it by construction (every store
+ * of a fetch cursor goes through cpu_state.h's set_instruction_pointer, every projection is a
+ * named cast).  An invariant that holds by construction is worth exactly as much as its
+ * ability to FAIL, so this test does what S1's flag arm had to learn the hard way: it makes
+ * the invariant fail, field by field, and requires it to name the field it caught.  Each arm
+ * seeds ONE field's high half into an otherwise reset machine and demands its own name back;
+ * the clean machine must answer NULL; and the long-mode arm must answer NULL with the field
+ * still poisoned (in IA-32e the high half is where the address lives).
+ * ------------------------------------------------------------------ */
+static void test_address_widening_invariant(void)
+{
+    const uint64_t high = 0xA5A5A5A5ull << 32;
+
+    /* (1) the reset state is clean -- or RESET_EIP / the 0xF000<<4 base is itself a leak */
+    cpu_state_init();
+    CHECK(cpu_address_widening_leak() == NULL);
+    CHECK(!cpu->efer);
+
+    /* (2) ONE FIELD AT A TIME.  A detector that names the wrong field is worse than one
+     * that stays silent: it sends the reader to the wrong arithmetic. */
+    struct { const char *name; int which; } cases[] = {
+        { "instruction_pointer", 0 }, { "previous_ip", 1 }, { "eip_phys", 2 },
+        { "last_virt_eip", 3 }, { "idtr_offset", 4 }, { "gdtr_offset", 5 },
+    };
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        cpu_state_init();
+        switch (cases[i].which) {
+        case 0: cpu->instruction_pointer |= high; break;
+        case 1: cpu->previous_ip |= high; break;
+        case 2: cpu->eip_phys |= high; break;
+        case 3: cpu->last_virt_eip |= high; break;
+        case 4: cpu->idtr_offset |= high; break;
+        default: cpu->gdtr_offset |= high; break;
+        }
+        const char *leak = cpu_address_widening_leak();
+        if (leak == NULL || strcmp(leak, cases[i].name) != 0) {
+            fprintf(stderr, "FAIL S3 invariant arm %s: leak detector said %s (want that name)\n",
+                    cases[i].name, leak ? leak : "(clean)");
+        }
+        CHECK(leak != NULL);
+        CHECK(strcmp(leak ? leak : "", cases[i].name) == 0);
+    }
+
+    /* (3) all eight segment slots, each with its own name: the slot an off-by-one stride
+     * lands on is exactly what a widening gets wrong (the JIT's 4-byte stride caught this
+     * unit, jit_codegen.c) */
+    static const char *const seg_names[8] = {
+        "segment_offsets[ES]", "segment_offsets[CS]", "segment_offsets[SS]",
+        "segment_offsets[DS]", "segment_offsets[FS]", "segment_offsets[GS]",
+        "segment_offsets[TR]", "segment_offsets[LDTR]",
+    };
+    for (int i = 0; i < 8; i++) {
+        cpu_state_init();
+        cpu->segment_offsets[i] |= high;
+        const char *leak = cpu_address_widening_leak();
+        if (leak == NULL || strcmp(leak, seg_names[i]) != 0) {
+            fprintf(stderr, "FAIL S3 invariant segment slot %d: leak detector said %s (want %s)\n",
+                    i, leak ? leak : "(clean)", seg_names[i]);
+        }
+        CHECK(leak != NULL && strcmp(leak, seg_names[i]) == 0);
+    }
+
+    /* (4) THE LONG-MODE ARM: with EFER.LMA set the high half IS the address, so the same
+     * poisoned state must be accepted.  Before S5 nothing can SET LMA, so this arm puts the
+     * state there directly -- stated rather than implied, exactly as S2's cpu_mode_of arm
+     * does.  Without this arm, the invariant's first act in long mode (S5) would be a stop. */
+    cpu_state_init();
+    cpu->instruction_pointer |= high;
+    cpu->efer |= EFER_LMA;
+    CHECK(cpu_address_widening_leak() == NULL);
+
+    /* (5) the run-time form is a no-op when DISARMED: `--poison` seeds these very fields on
+     * purpose (src/main.c), and the probe's claim is the opposite direction -- that a present
+     * high half moves nothing.  The two instruments stay each other's control. */
+    cpu_state_init();
+    cpu->instruction_pointer |= high;
+    reset_unimplemented();
+    unimplemented_allowed = true;
+    cpu_address_widening_check_enabled = false;
+    CHECK(cpu_address_widening_leak() != NULL); /* the detector still sees it ... */
+    cpu_assert_address_widening("selftest");
+    CHECK_EQ(unimplemented_calls, 0);            /* ... but the run-time form was disarmed */
+    cpu_address_widening_check_enabled = true;
+
+    /* (6) and, ARMED, it reports through the machine's stop channel (cpu.h) -- with the
+     * field's name in the message, which is what the user reads.  The stop is what makes a
+     * leak a named stop instead of a wrong address in one guest. */
+    cpu_state_init();
+    cpu->gdtr_offset |= high;
+    reset_unimplemented();
+    unimplemented_allowed = true;
+    cpu_assert_address_widening("selftest");
+    unimplemented_allowed = false;
+    CHECK_EQ(unimplemented_calls, 1);
+    CHECK(strstr(unimplemented_last, "gdtr_offset") != NULL);
+    reset_unimplemented();
+
+    /* (7) THE THREE MODE-BOUNDARY SEATS ARE CALLED BY THE GUEST-REACHABLE PATHS, not merely
+     * written down (round 2's S1: the comment claimed them and only reset/batch had them, so
+     * they are exercised here through the same bodies a guest reaches).  Each arm poisons
+     * gdtr_offset, drives one transition, and requires the stop to name the field -- which can
+     * only happen if that function calls the invariant AFTER committing. */
+    /* (7a) WRMSR(EFER) -- the write that asks for (or leaves) IA-32e */
+    cpu_state_init();
+    cpu->cpl = 0;
+    cpu->gdtr_offset |= high;
+    write_reg32(ECX, (int32_t)MSR_EFER);
+    write_reg32(EAX, (int32_t)EFER_SCE);
+    write_reg32(EDX, 0);
+    reset_unimplemented();
+    unimplemented_allowed = true;
+    instr_0F30();
+    unimplemented_allowed = false;
+    CHECK_EQ(unimplemented_calls, 1);
+    CHECK(strstr(unimplemented_last, "gdtr_offset") != NULL);
+    CHECK(strstr(unimplemented_last, "WRMSR(EFER)") != NULL); /* and WHERE it was seen */
+    CHECK_EQ(cpu->efer, (uint64_t)EFER_SCE); /* the commit happened first: the check is on
+                                              * the state the write produced */
+    reset_unimplemented();
+
+    /* (7b) CR0's write */
+    cpu_state_init();
+    cpu->gdtr_offset |= high;
+    reset_unimplemented();
+    unimplemented_allowed = true;
+    set_cr0(CR0_PE | CR0_WP);
+    unimplemented_allowed = false;
+    CHECK_EQ(unimplemented_calls, 1);
+    CHECK(strstr(unimplemented_last, "gdtr_offset") != NULL);
+    CHECK(strstr(unimplemented_last, "set_cr0") != NULL);
+    CHECK_EQ(cpu->cr[0], CR0_PE | CR0_WP | CR0_ET);
+    reset_unimplemented();
+
+    /* (7c) CR4's write */
+    cpu_state_init();
+    cpu->cpl = 0;
+    cpu->cr[0] = CR0_PE;
+    cpu->gdtr_offset |= high;
+    write_reg32(EBX, CR4_PGE);
+    reset_unimplemented();
+    unimplemented_allowed = true;
+    instr_0F22(EBX, 4); /* mov cr4, ebx */
+    unimplemented_allowed = false;
+    CHECK_EQ(unimplemented_calls, 1);
+    CHECK(strstr(unimplemented_last, "gdtr_offset") != NULL);
+    CHECK(strstr(unimplemented_last, "MOV CR4") != NULL);
+    CHECK_EQ(cpu->cr[4], CR4_PGE);
+    reset_unimplemented();
+
+    /* the state is left POISONED above, and reset_cpu asserts the invariant: a test inserted
+     * after this one would abort the binary on the stale high half (round 2's N5).  Clear it
+     * here, not in the next test. */
+    cpu_state_init();
+
+    printf("PASS S3: the high-half invariant names each widened address field (6 scalars + 8"
+           " segment slots) and is reached through ALL FOUR mode boundaries (reset, CR0, CR4,"
+           " EFER -- each driven by its guest-reachable body), is clean at reset, is a no-op in"
+           " long mode and is the poison probe's opposite control\n");
 }
 
 /* ------------------------------------------------------------------ *
@@ -1268,7 +1447,7 @@ static void test_tlb(void)
      * (cpu.rs:4469-4473), and invalidates last_virt_eip */
     invlpg(0x400000);
     CHECK_EQ(tlb_data[0x400], 0);
-    CHECK_EQ(cpu->last_virt_eip, -1);
+    CHECK_EQ(cpu->last_virt_eip, VIRT_EIP_NONE); /* S3: the sentinel's new spelling */
     CHECK(valid_tlb_entries_count >= 1);
 
     /* set_cr3 -> clear_tlb: non-global entries go; cr3's low bits are masked off
@@ -1662,13 +1841,6 @@ void run_instruction0f(int32_t opcode)
  * which it does not have. */
 static int interpreted_run_calls = 0;
 static uint32_t interpreted_run_last_phys = 0;
-
-/* S2: the named-stop recorder (defined with the stub below, used by the mode/refusal test
- * that sits between the two). */
-static int unimplemented_calls;
-static char unimplemented_last[160];
-static bool unimplemented_allowed;
-static void reset_unimplemented(void);
 
 /* S0: ONE test (test_cpu_backend, below) drives the engine seam's dispatch end to end, and
  * the dispatch calls exactly what cycle_internal calls -- which for the `interp` instance IS
@@ -2991,56 +3163,56 @@ static void test_modrm_addressing(void)
 
     /* mod 00: [EAX] */
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(modrm_resolve(0x00), 0x11111111);
     CHECK(!cpu->pagefault);
     CHECK_EQ(cpu->instruction_pointer, 0x8000); /* no displacement consumed */
 
     /* mod 01: [EAX + disp8], disp read from the instruction stream */
     mem8[0x8000] = 0x10;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(modrm_resolve(0x40), 0x11111121);
     CHECK_EQ(cpu->instruction_pointer, 0x8001);
 
     /* mod 10: [EAX + disp32] */
     write32(0x8000, 0x00002345);
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(modrm_resolve(0x80), 0x11113456);
     CHECK_EQ(cpu->instruction_pointer, 0x8004);
 
     /* rm 101 selects [disp32] (DS) at mod 00 and [EBP + disp] (SS) at mod 01/10 */
     write32(0x8000, 0x00001234);
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(modrm_resolve(0x05), 0x1234); /* absolute, DS */
     CHECK_EQ(cpu->instruction_pointer, 0x8004);
     mem8[0x8000] = 0x34;
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(modrm_resolve(0x45), 0x1000 + 0x4000 + 0x34); /* [EBP + disp8], SS */
     write32(0x8000, 0x00002345);
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(modrm_resolve(0x85), 0x1000 + 0x4000 + 0x2345); /* [EBP + disp32], SS */
 
     /* SIB: rm 100, mod 00, sib 0x24 -> base ESP, index none (index==100), SS */
     mem8[0x8000] = 0x24;
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(modrm_resolve(0x04), 0x1000 + 0x3000);
 
     /* SIB with a scaled index: sib 0x91 -> scale 2, index EDX (<< 2), base ECX (DS) */
     mem8[0x8000] = 0x91;
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(modrm_resolve(0x04), 0x00000200 + (0x00000100 << 2));
 
     /* SIB, base 101 with mod 00 -> disp32 (DS), not EBP */
     mem8[0x8000] = 0x25; /* scale 0, index 100 (none), base 101 */
     write32(0x8001, 0x00007777);
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(modrm_resolve(0x04), 0x7777);
     CHECK_EQ(cpu->instruction_pointer, 0x8005);
 
@@ -3048,27 +3220,27 @@ static void test_modrm_addressing(void)
     mem8[0x8000] = 0x25;
     mem8[0x8001] = 0x08;
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(modrm_resolve(0x44), 0x1000 + 0x4000 + 0x08);
 
     /* sib 0x64: scale 1, index 100 (none), base 100 (ESP) -> SS + ESP, no index */
     mem8[0x8000] = 0x64;
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(modrm_resolve(0x04), 0x1000 + 0x3000);
 
     /* the segment-override prefix: ES (1), SS (2) and the "zero" encoding (7) */
     cpu->prefixes = ES + 1;
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(modrm_resolve(0x00), 0x2000 + 0x11111111);
     cpu->prefixes = SS + 1;
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(modrm_resolve(0x00), 0x1000 + 0x11111111);
     cpu->prefixes = SEG_PREFIX_ZERO;
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(modrm_resolve(0x00), 0x11111111); /* no segment base at all */
     cpu->prefixes = 0;
 
@@ -3086,32 +3258,32 @@ static void test_modrm_addressing(void)
     write_reg16(SI, 0x0030);
     write_reg16(DI, 0x0040);
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK(!is_asize_32());
     CHECK_EQ(modrm_resolve(0x00), 0x0130); /* [BX + SI] */
     CHECK_EQ(modrm_resolve(0x01), 0x0140); /* [BX + DI] */
     CHECK_EQ(modrm_resolve(0x02), 0x1000 + 0x0230); /* [BP + SI] is SS-relative */
     mem8[0x8000] = 0x10;
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(modrm_resolve(0x40), 0x0140); /* [BX + SI + disp8] */
     write16(0x8000, 0x2345);
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(modrm_resolve(0x80), 0x0130 + 0x2345); /* [BX + SI + disp16] */
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(modrm_resolve(0x87), 0x0100 + 0x2345); /* [BX + disp16] */
     mem8[0x8000] = 0xF0;
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(modrm_resolve(0x46), 0x1000 + 0x01F0); /* [BP + disp8] = BP-16, SS */
     CHECK_EQ(modrm_resolve(0x04), 0x0030);          /* [SI] */
     CHECK_EQ(modrm_resolve(0x05), 0x0040);          /* [DI] */
     CHECK_EQ(modrm_resolve(0x07), 0x0100);          /* [BX] */
     write16(0x8000, 0x1000);
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(modrm_resolve(0x06), 0x1000); /* [disp16] is DS-relative and absolute */
     CHECK_EQ(get_seg_cs(), cpu->segment_offsets[CS]);
     CHECK_EQ(get_seg_ss(), 0x1000);
@@ -3122,22 +3294,22 @@ static void test_modrm_addressing(void)
     write_reg32(EAX, 0x11111111);
     write_reg32(EBP, 0x4000); /* the 16-bit section overwrote BP */
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(resolve_modrm32_(0x00), 0x11111111);
     mem8[0x8000] = 0x10;
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(resolve_modrm32_(0x40), 0x11111121);
     mem8[0x8000] = 0x24;
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(resolve_modrm32_(0x04), 0x1000 + 0x3000);
     write32(0x8000, 0x00007777);
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(resolve_modrm32_(0x05), 0x7777);
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     mem8[0x8000] = 0x08;
     CHECK_EQ(resolve_modrm32_(0x45), 0x1000 + 0x4000 + 0x08);
 
@@ -3159,7 +3331,7 @@ static void test_modrm_fetch_and_faults(void)
     mem8[0x8003] = 0x12;
 
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK_EQ(read_imm8(), 0x78);
     CHECK_EQ(cpu->instruction_pointer, 0x8001);
     CHECK_EQ(cpu->eip_phys, (int32_t)((uint32_t)0x8000 ^ (uint32_t)0x8000));
@@ -3197,7 +3369,7 @@ static void test_modrm_fetch_and_faults(void)
     mem8[0x4000] = 0x22; /* the physical neighbour a stale cache would read */
     mem8[0x5000] = 0x33; /* the first byte of 0x9000's page */
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     cpu->pagefault = false;
     CHECK_EQ(read_imm8(), 0x5A); /* caches the translation of the 0x8000 page */
     cpu->instruction_pointer = 0x8FFF;
@@ -3214,12 +3386,12 @@ static void test_modrm_fetch_and_faults(void)
     cpu->prefixes = 0;
     write32(0x8000, 0x11223344);
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK(is_asize_32());
     CHECK_EQ(read_moffs(), 0x11223344);
     cpu->prefixes = PREFIX_67; /* address-size override: 16-bit form */
     cpu->instruction_pointer = 0x8000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     CHECK(!is_asize_32());
     CHECK_EQ(read_moffs(), 0x3344);
     cpu->prefixes = 0;
@@ -3240,19 +3412,19 @@ static void test_modrm_fetch_and_faults(void)
     map4k(1, 0, DATA_PHYS, PAGE_TABLE_RW_MASK, PAGE_TABLE_RW_MASK);
     mem8[DATA_PHYS] = 0x5A;
     cpu->instruction_pointer = 0x400000; /* mapped -> phys 0x3000 */
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     cpu->pagefault = false;
     CHECK_EQ(read_imm8(), 0x5A);
     CHECK(!cpu->pagefault);
     CHECK_EQ(cpu->instruction_pointer, 0x400001);
 
     cpu->instruction_pointer = 0x401000; /* unmapped */
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     cpu->pagefault = false;
     reset_delivery();
     CHECK_EQ(read_imm8(), 0);
     CHECK(cpu->pagefault);
-    CHECK_EQ(cpu->last_virt_eip, -1); /* not cached */
+    CHECK_EQ(cpu->last_virt_eip, VIRT_EIP_NONE); /* not cached (S3: the sentinel's spelling) */
     CHECK_EQ(delivered_interrupt, CPU_EXCEPTION_PF);
     /* trigger_pagefault rewrites eip to previous_ip (cpu.rs:2480-2484), so the fault
      * leaves the instruction pointer at previous_ip, NOT at 0x401000 */
@@ -3263,7 +3435,7 @@ static void test_modrm_fetch_and_faults(void)
     cpu->prefixes = 0;
     cpu->is_32 = true;
     cpu->instruction_pointer = 0x401000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     cpu->pagefault = false;
     reset_delivery();
     CHECK_EQ(resolve_modrm32(0x40), 0); /* [EAX + disp8] with the disp unmapped */
@@ -3720,7 +3892,7 @@ static void string_setup(void)
     cpu->pagefault = false;
     cpu->instruction_pointer = 0x9000;
     cpu->previous_ip = 0x9000;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     zero_memory(0x1000, 0x8000);
     reset_stubs();
 }
@@ -4533,7 +4705,7 @@ static void test_instr_control(void)
     reset_stubs();
     write8(0x9030, 0xB6);
     cpu->instruction_pointer = 0x9030;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     cpu->pagefault = false;
     instr16_0F();
     CHECK_EQ(dispatch0f_calls, 1);
@@ -4541,7 +4713,7 @@ static void test_instr_control(void)
     CHECK(!dispatch0f_last_is_32);
     write8(0x9034, 0xB7);
     cpu->instruction_pointer = 0x9034;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     cpu->pagefault = false;
     instr32_0F();
     CHECK_EQ(dispatch0f_calls, 2);
@@ -4661,7 +4833,7 @@ static void test_instr_flags_and_prefixes(void)
     reset_stubs();
     write8(0x9040, 0x90);
     cpu->instruction_pointer = 0x9040;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     cpu->flags = FLAGS_DEFAULT;
     cpu->flags_changed = 0;
     cpu->prefixes = PREFIX_MASK_OPSIZE;
@@ -4905,7 +5077,7 @@ static void test_instr_string_opcodes(void)
     reset_stubs();
     write8(0x9050, 0x40); /* inc ax/eax */
     cpu->instruction_pointer = 0x9050;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     cpu->prefixes = 0;
     cpu->pagefault = false;
     instr_66();
@@ -4917,7 +5089,7 @@ static void test_instr_string_opcodes(void)
 
     write8(0x9054, 0x40);
     cpu->instruction_pointer = 0x9054;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     cpu->pagefault = false;
     instr_67(); /* the address-size prefix does not change the operand size */
     CHECK_EQ(dispatch_last_opcode, 0x140);
@@ -4926,7 +5098,7 @@ static void test_instr_string_opcodes(void)
 
     write8(0x9058, 0x90);
     cpu->instruction_pointer = 0x9058;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     cpu->pagefault = false;
     instr_F3(); /* repz */
     CHECK_EQ(dispatch_last_opcode, 0x190);
@@ -4934,14 +5106,14 @@ static void test_instr_string_opcodes(void)
     CHECK_EQ(cpu->prefixes, 0);
     write8(0x905C, 0x90);
     cpu->instruction_pointer = 0x905C;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     cpu->pagefault = false;
     instr_F2(); /* repnz */
     CHECK_EQ(dispatch_last_prefixes, PREFIX_REPNZ);
     CHECK_EQ(cpu->prefixes, 0);
     write8(0x9060, 0x90);
     cpu->instruction_pointer = 0x9060;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     cpu->pagefault = false;
     instr_F0(); /* lock is a no-op prefix here */
     CHECK_EQ(dispatch_last_opcode, 0x190);
@@ -4951,7 +5123,7 @@ static void test_instr_string_opcodes(void)
     reset_stubs();
     write8(0x9064, 0x90);
     cpu->instruction_pointer = 0x9064;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     cpu->pagefault = false;
     instr_26(); /* ES prefix */
     CHECK_EQ(dispatch_calls, 1);
@@ -4959,7 +5131,7 @@ static void test_instr_string_opcodes(void)
     CHECK_EQ(cpu->prefixes, 0);
     write8(0x9068, 0x90);
     cpu->instruction_pointer = 0x9068;
-    cpu->last_virt_eip = -1;
+    cpu->last_virt_eip = VIRT_EIP_NONE;
     cpu->pagefault = false;
     instr_65(); /* GS prefix */
     CHECK_EQ(dispatch_last_prefixes, GS + 1);
@@ -6902,6 +7074,7 @@ int main(void)
     test_widened_register_file();
     test_widened_flags();
     test_cpu_mode_and_refusals();
+    test_address_widening_invariant();
     test_memory_router();
     test_paging_4k();
     test_paging_faults();

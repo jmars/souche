@@ -52,9 +52,17 @@
 bool is_osize_32(void);
 bool is_asize_32(void);
 
-/* cpu.rs:3083-3116 -- the segment offsets and the segment-override prefix */
-int32_t get_seg_cs(void);
-int32_t get_seg_ss(void);
+/* cpu.rs:3083-3116 -- the segment offsets and the segment-override prefix.
+ *
+ * S3: get_seg_cs/get_seg_ss return uint64_t because their callers ADD an offset to the base
+ * to form a FLAT LINEAR ADDRESS and store it in cpu->instruction_pointer (exceptions.c's
+ * sixteen `get_seg_cs() + ...` sites, instructions.c's far transfers).  Returned as int32_t
+ * a base of 0xFFFF0000 would sign-extend into the 64-bit field and produce an address the
+ * 32-bit model cannot represent.  The remaining accessors stay int32_t: they feed the 32-bit
+ * ADDRESSING FORMS (resolve_modrm32's base+index+disp), which is still 32-bit arithmetic --
+ * upstream's own i32 wrap -- and the long-mode address generation is S5/S7's. */
+uint64_t get_seg_cs(void);
+uint64_t get_seg_ss(void);
 int32_t segment_prefix(int32_t default_segment);
 int32_t get_seg_prefix(int32_t default_segment);
 int32_t get_seg_prefix_ds(int32_t offset);

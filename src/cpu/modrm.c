@@ -24,9 +24,9 @@ bool is_asize_32(void) { return cpu->is_32 != ((cpu->prefixes & PREFIX_MASK_ADDR
  * the segment offsets and the segment-override prefix -- cpu.rs:3083-3116, 2918-2931
  * ------------------------------------------------------------------ */
 
-int32_t get_seg_cs(void) { return cpu->segment_offsets[CS]; }
+uint64_t get_seg_cs(void) { return cpu->segment_offsets[CS]; }
 
-int32_t get_seg_ss(void) { return cpu->segment_offsets[SS]; }
+uint64_t get_seg_ss(void) { return cpu->segment_offsets[SS]; }
 
 /* cpu.rs:3088-3096.  Unlike get_seg_prefix this one asserts instead of returning 0 for
  * the "segment prefix zero" encoding; it is what instructions.rs calls for the string
@@ -99,7 +99,10 @@ int32_t get_seg(int32_t segment)
         cpu->pagefault = true;
         return 0;
     }
-    return cpu->segment_offsets[segment];
+    /* S3: the SLOT is uint64_t, the ACCESSOR stays int32_t (modrm.h): this is the base of a
+     * 32-bit ADDRESSING FORM, whose arithmetic is upstream's i32 and wraps.  The projection
+     * is stated here rather than left to an implicit narrowing. */
+    return (int32_t)(uint32_t)cpu->segment_offsets[segment];
 }
 
 /* ------------------------------------------------------------------ *
@@ -108,24 +111,29 @@ int32_t get_seg(int32_t segment)
 
 int32_t read_imm8(void)
 {
-    int32_t eip = cpu->instruction_pointer;
+    /* S3: the cursor is 64 bits now; the fetch is still the page-relative XOR trick, and the
+     * BOOKKEEPING value (`eip`) is kept at the field's width so a long-mode eip is not
+     * projected by a local's type. */
+    uint64_t eip = cpu->instruction_pointer;
     /* upstream's `0 != eip & !0xFFF ^ *last_virt_eip`: in Rust `&`/`^` bind TIGHTER than
      * `!=`, the reverse of C, hence the parentheses */
-    if (DISABLE_EIP_TRANSLATION_OPTIMISATION || (0 != ((eip & ~0xFFF) ^ cpu->last_virt_eip))) {
+    if (DISABLE_EIP_TRANSLATION_OPTIMISATION ||
+        (0 != ((eip & ~(uint64_t)0xFFF) ^ cpu->last_virt_eip))) {
         uint32_t phys = translate_address_fetch(eip);
         if (cpu->pagefault) {
             /* upstream's `?`: instruction_pointer, eip_phys and last_virt_eip are all
              * left untouched on a fault */
             return 0;
         }
-        cpu->eip_phys = (int32_t)(phys ^ (uint32_t)eip);
-        cpu->last_virt_eip = eip & ~0xFFF;
+        cpu->eip_phys = (uint64_t)phys ^ eip;
+        cpu->last_virt_eip = eip & ~(uint64_t)0xFFF;
     }
     /* AUDIT-1 S1: the same resolution as cpu.c's fetch (get_phys_eip) -- the old
      * DBG_ASSERT was a guest-reachable abort; an in-RAM physical address (the VGA hole
      * included) is one the release reference executes from the raw bytes, and the raw
      * mem8 read below stands.  Past the guest's RAM the port names the stop instead of
      * reading host memory (the release crashes there; nasm_skip's jump fixture). */
+    /* the projection at the mem8 boundary (paging.c's rule; plan ss5.1) */
     uint32_t phys = (uint32_t)(cpu->eip_phys ^ eip);
     if (phys >= cpu->memory_size) {
         char stop[160];
@@ -138,7 +146,7 @@ int32_t read_imm8(void)
     /* the physical address was translated above, so this is the raw mem8 read that
      * upstream does (memory::mem8.offset(..)), not the mmap-checked router */
     int32_t data8 = (int32_t)mem8[phys];
-    cpu->instruction_pointer = eip + 1;
+    set_instruction_pointer(eip + 1);
     return data8;
 }
 
@@ -155,8 +163,11 @@ int32_t read_imm16(void)
 {
     /* two checks in one comparison: did the high 20 bits of eip change, or do the low
      * 12 bits cross a page boundary (cpu.rs:2598-2602) */
+    /* S3: the test is at the field's width.  For every 32-bit eip the low 32 bits decide it
+     * exactly as the old `(uint32_t)` cast of the XOR did; the widening is what lets a 64-bit
+     * eip be tested without a projection. */
     if (DISABLE_EIP_TRANSLATION_OPTIMISATION ||
-        (uint32_t)(cpu->instruction_pointer ^ cpu->last_virt_eip) > 0xFFE) {
+        (cpu->instruction_pointer ^ cpu->last_virt_eip) > 0xFFE) {
         /* upstream `read_imm8()? | read_imm8()? << 8` -- sequenced explicitly, because
          * the order of `|`'s operands is unspecified in C and both calls advance eip */
         int32_t low = read_imm8();
@@ -171,7 +182,7 @@ int32_t read_imm16(void)
     }
     else {
         int32_t data16 = read16((uint32_t)(cpu->eip_phys ^ cpu->instruction_pointer));
-        cpu->instruction_pointer = cpu->instruction_pointer + 2;
+        set_instruction_pointer(cpu->instruction_pointer + 2);
         return data16;
     }
 }
@@ -179,7 +190,7 @@ int32_t read_imm16(void)
 int32_t read_imm32s(void)
 {
     if (DISABLE_EIP_TRANSLATION_OPTIMISATION ||
-        (uint32_t)(cpu->instruction_pointer ^ cpu->last_virt_eip) > 0xFFC) {
+        (cpu->instruction_pointer ^ cpu->last_virt_eip) > 0xFFC) {
         int32_t low = read_imm16();
         if (cpu->pagefault) {
             return 0;
@@ -192,7 +203,7 @@ int32_t read_imm32s(void)
     }
     else {
         int32_t data32 = read32s((uint32_t)(cpu->eip_phys ^ cpu->instruction_pointer));
-        cpu->instruction_pointer = cpu->instruction_pointer + 4;
+        set_instruction_pointer(cpu->instruction_pointer + 4);
         return data32;
     }
 }
