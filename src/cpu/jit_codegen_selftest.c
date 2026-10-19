@@ -690,8 +690,9 @@ static void cmp_state(int a, int b, const char *what)
 {
 	const cpu_state_t *x = &snap[a].cpu, *y = &snap[b].cpu;
 	for (int i = 0; i < 8; i++) {
-		if (x->reg32[i] != y->reg32[i]) {
-			fprintf(stderr, "  %s: reg32[%d] 0x%x vs 0x%x\n", what, i, x->reg32[i], y->reg32[i]);
+		if (x->reg64[i] != y->reg64[i]) {
+			fprintf(stderr, "  %s: reg64[%d] 0x%llx vs 0x%llx\n", what, i,
+			        (unsigned long long)x->reg64[i], (unsigned long long)y->reg64[i]);
 		}
 	}
 	CHECK_EQ(x->instruction_pointer, y->instruction_pointer);
@@ -765,9 +766,9 @@ static void test_recipe(void)
 
 	/* (a) THE PROGRAM'S OWN RESULT, in every arm */
 	for (int arm = 0; arm < 3; arm++) {
-		CHECK_EQ(snap[arm].cpu.reg32[EAX], 0x22222222);
-		CHECK_EQ(snap[arm].cpu.reg32[ECX], 0x22222222);
-		CHECK_EQ(snap[arm].cpu.reg32[EBX], 0x33333333);
+		CHECK_EQ(snap[arm].cpu.reg64[EAX], 0x22222222);
+		CHECK_EQ(snap[arm].cpu.reg64[ECX], 0x22222222);
+		CHECK_EQ(snap[arm].cpu.reg64[EBX], 0x33333333);
 		CHECK_EQ(ram32(TRACE), 0x22222222);
 	}
 
@@ -1069,7 +1070,7 @@ static void test_tail_exit(void)
 	for (int arm = 1; arm < 3; arm++) arm_run(arm, CODE, prog, (int)sizeof prog, 100);
 
 	CHECK_EQ(ram32(TRACE), 5);
-	CHECK_EQ(snap[2].cpu.reg32[EAX], 5);
+	CHECK_EQ(snap[2].cpu.reg64[EAX], 5);
 	CHECK(arm_stats[2].exits[JIT_EXIT_TAIL] >= 1);
 	cmp_state(1, 2, "tail: uop-cache vs compiled");
 	fprintf(stderr, "  tail: control left the block, TAIL exits %llu\n",
@@ -1206,9 +1207,9 @@ static void test_shape_matrix(void)
 	for (int arm = 0; arm < 3; arm++) {
 		/* the values, not only the agreement between arms */
 		/* compared as 32-BIT patterns: CHECK_EQ's long long cast would sign-extend them */
-		CHECK_EQ((uint32_t)snap[arm].cpu.reg32[ECX], 0xFFFF8000u); /* cwde then xchg */
-		CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 0xDEADBEEFu); /* the moffs load */
-		CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EDX], 0x22222223u); /* inc edx */
+		CHECK_EQ((uint32_t)snap[arm].cpu.reg64[ECX], 0xFFFF8000u); /* cwde then xchg */
+		CHECK_EQ((uint32_t)snap[arm].cpu.reg64[EAX], 0xDEADBEEFu); /* the moffs load */
+		CHECK_EQ((uint32_t)snap[arm].cpu.reg64[EDX], 0x22222223u); /* inc edx */
 		CHECK_EQ(ram32(TRACE + 4), 0xDEADBEEFu);                   /* the moffs store */
 	}
 	/* M2: the program is no longer the CALLED path end to end -- `83 C0 05` (add eax, 5) and
@@ -1224,15 +1225,15 @@ static void test_shape_matrix(void)
 	cmp_state(0, 2, "shapes A: interp vs compiled");
 	cmp_state(1, 2, "shapes A: uop-cache vs compiled");
 	fprintf(stderr, "  shapes A (PLAIN0/1, REG0 x2, REGF0/1): eax 0x%08x ecx 0x%08x edx 0x%08x, "
-	                "state identical to both other arms\n", (unsigned)snap[2].cpu.reg32[EAX],
-	        (unsigned)snap[2].cpu.reg32[ECX], (unsigned)snap[2].cpu.reg32[EDX]);
+	                "state identical to both other arms\n", (unsigned)snap[2].cpu.reg64[EAX],
+	        (unsigned)snap[2].cpu.reg64[ECX], (unsigned)snap[2].cpu.reg64[EDX]);
 
 	arm_setup = setup_shapes_b;
 	for (int arm = 0; arm < 3; arm++) arm_run(arm, CODE, prog_b, (int)sizeof prog_b, 100);
 	for (int arm = 0; arm < 3; arm++) {
-		CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 0xDEADBEEFu); /* MEM0 */
+		CHECK_EQ((uint32_t)snap[arm].cpu.reg64[EAX], 0xDEADBEEFu); /* MEM0 */
 		CHECK_EQ(ram32(TRACE + 4), 0x12345678u);                   /* MEMF1 */
-		CHECK_EQ((uint32_t)snap[arm].cpu.reg32[ECX], 0x3100u);     /* lea: the raw-modrm path */
+		CHECK_EQ((uint32_t)snap[arm].cpu.reg64[ECX], 0x3100u);     /* lea: the raw-modrm path */
 		CHECK_EQ(ram32(TRACE + 8), 42);                            /* MEMF0: the RMW store ran */
 	}
 	/* M2: `8B /r` (the load) and `8D /r` (the lea) are recipes now, so the compile-time split
@@ -1251,7 +1252,7 @@ static void test_shape_matrix(void)
 	cmp_state(1, 2, "shapes B: uop-cache vs compiled");
 	fprintf(stderr, "  shapes B (MEM0, MEMF1, lea/custom-modrm, MEMF0/RMW store): eax 0x%08x "
 	                "ecx 0x%x, [0x3104] 0x%08x [0x3108] %u, state identical\n",
-	        (unsigned)snap[2].cpu.reg32[EAX], (unsigned)snap[2].cpu.reg32[ECX],
+	        (unsigned)snap[2].cpu.reg64[EAX], (unsigned)snap[2].cpu.reg64[ECX],
 	        ram32(TRACE + 4), ram32(TRACE + 8));
 	arm_setup = NULL;
 }
@@ -1318,8 +1319,8 @@ static void test_tlb_fold_bits(void)
 	cmp_state(0, 2, "tlb fold: interp vs compiled");
 	cmp_state(1, 2, "tlb fold: uop-cache vs compiled");
 	for (int arm = 0; arm < 3; arm++) {
-		CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 0xDEADBEEFu); /* the first read */
-		CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EDX], 0xA5A5A5A5u); /* the third: after the write */
+		CHECK_EQ((uint32_t)snap[arm].cpu.reg64[EAX], 0xDEADBEEFu); /* the first read */
+		CHECK_EQ((uint32_t)snap[arm].cpu.reg64[EDX], 0xA5A5A5A5u); /* the third: after the write */
 	}
 	CHECK_EQ(ram32(TRACE), 0xA5A5A5A5u); /* the write landed, in every arm */
 	/* THE PIN: after a read AND a write of the same page the entry must be VALID and NOT
@@ -1361,7 +1362,8 @@ static void test_tlb_fold_bits(void)
  *      rather than about the TLB.  Register-only recipes are unaffected by repeating.
  *
  * WHAT IT FOUND: this matrix is what localised the AH/CH/DH/BH bug -- a 16-bit-mode `mov ah,al`
- * wrote reg32[4]'s high byte (ESP's) instead of reg32[0]'s, which corrupts the guest's stack
+ * wrote the fourth register slot's high byte (ESP's) instead of the first's, which corrupts
+ * the guest's stack
  * pointer and made the boot firmware print one message forever.  The M0 transcript and the
  * 1 M-instruction boot gate BOTH passed while it was live; only a case that uses a high-byte
  * register sees it.
@@ -1558,31 +1560,31 @@ static void test_recipe_matrix(void)
 
 		recipe_case("movzx r32,ah (high-byte read)", h1, sizeof h1, setup_matrix_highbyte, 1);
 		for (int arm = 0; arm < 3; arm++)
-			CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 0x000000C0u);
+			CHECK_EQ((uint32_t)snap[arm].cpu.reg64[EAX], 0x000000C0u);
 		recipe_case("movzx r32,bh (high-byte read)", h2, sizeof h2, setup_matrix_highbyte, 1);
 		for (int arm = 0; arm < 3; arm++)
-			CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EDI], 0x00000034u);
+			CHECK_EQ((uint32_t)snap[arm].cpu.reg64[EDI], 0x00000034u);
 		recipe_case("movzx r32,ch (high-byte read)", h3, sizeof h3, setup_matrix_highbyte, 1);
 		for (int arm = 0; arm < 3; arm++)
-			CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 0x000000A5u);
+			CHECK_EQ((uint32_t)snap[arm].cpu.reg64[EAX], 0x000000A5u);
 		recipe_case("movzx r32,dh (high-byte read)", h4, sizeof h4, setup_matrix_highbyte, 1);
 		for (int arm = 0; arm < 3; arm++)
-			CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 0x000000ABu);
+			CHECK_EQ((uint32_t)snap[arm].cpu.reg64[EAX], 0x000000ABu);
 		recipe_case("mov ah,bh (high-byte write)", h5, sizeof h5, setup_matrix_highbyte, 1);
 		for (int arm = 0; arm < 3; arm++)
-			CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 0x111134DEu);
+			CHECK_EQ((uint32_t)snap[arm].cpu.reg64[EAX], 0x111134DEu);
 		recipe_case("mov ah,ch (high-byte write)", h6, sizeof h6, setup_matrix_highbyte, 1);
 		for (int arm = 0; arm < 3; arm++)
-			CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 0x1111A5DEu);
+			CHECK_EQ((uint32_t)snap[arm].cpu.reg64[EAX], 0x1111A5DEu);
 		recipe_case("mov dh,ah (high-byte write)", h7, sizeof h7, setup_matrix_highbyte, 1);
 		for (int arm = 0; arm < 3; arm++)
-			CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EDX], 0x8888C012u);
+			CHECK_EQ((uint32_t)snap[arm].cpu.reg64[EDX], 0x8888C012u);
 		recipe_case("mov ah,bl (low src, high dst)", h8, sizeof h8, setup_matrix_highbyte, 1);
 		for (int arm = 0; arm < 3; arm++)
-			CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 0x111156DEu);
+			CHECK_EQ((uint32_t)snap[arm].cpu.reg64[EAX], 0x111156DEu);
 		recipe_case("mov ch,ah (8A entry, high dst)", h9, sizeof h9, setup_matrix_highbyte, 1);
 		for (int arm = 0; arm < 3; arm++)
-			CHECK_EQ((uint32_t)snap[arm].cpu.reg32[ECX], 0x4444C0B6u);
+			CHECK_EQ((uint32_t)snap[arm].cpu.reg64[ECX], 0x4444C0B6u);
 	}
 
 	/* --- the memory forms (repeat 2: the first access warms the TLB, the second must be
@@ -1714,11 +1716,11 @@ static void test_recipe_matrix(void)
 
 		recipe_case("shl eax,cl (count 5: CF=1 OF=1)", c1, sizeof c1, setup_matrix_shift, 1);
 		for (int arm = 0; arm < 3; arm++) {
-			CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 0x468ACF00u);
+			CHECK_EQ((uint32_t)snap[arm].cpu.reg64[EAX], 0x468ACF00u);
 		}
 		recipe_case("shr eax,cl (count 5: CF=1 OF=0)", c2, sizeof c2, setup_matrix_shift, 1);
 		for (int arm = 0; arm < 3; arm++) {
-			CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 0x00D1A2B3u);
+			CHECK_EQ((uint32_t)snap[arm].cpu.reg64[EAX], 0x00D1A2B3u);
 		}
 
 		/* THE MASK + COUNT-0 CASES.  CL = 0x20 is count 0 through the body's `& 31` -- a
@@ -1734,13 +1736,13 @@ static void test_recipe_matrix(void)
 			recipe_case("shl eax,cl (CL=0: NOTHING stored)", z0, sizeof z0,
 			            setup_matrix_shift, 1);
 			for (int arm = 0; arm < 3; arm++) {
-				CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 0x1A345678u);
+				CHECK_EQ((uint32_t)snap[arm].cpu.reg64[EAX], 0x1A345678u);
 				CHECK_EQ(snap[arm].cpu.flags_changed, 0);
 			}
 			recipe_case("shr eax,cl (CL=0x20 masked to 0)", z1, sizeof z1,
 			            setup_matrix_shift, 1);
 			for (int arm = 0; arm < 3; arm++) {
-				CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 0x1A345678u);
+				CHECK_EQ((uint32_t)snap[arm].cpu.reg64[EAX], 0x1A345678u);
 				CHECK_EQ(snap[arm].cpu.flags_changed, 0);
 			}
 		}
@@ -1757,7 +1759,7 @@ static void test_recipe_matrix(void)
 			recipe_case("shl eax,cl (CL=0xff -> count 31)", m1, sizeof m1,
 			            setup_matrix_shift, 1);
 			for (int arm = 0; arm < 3; arm++) {
-				CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 0x80000000u);
+				CHECK_EQ((uint32_t)snap[arm].cpu.reg64[EAX], 0x80000000u);
 			}
 		}
 
@@ -2130,7 +2132,7 @@ static void test_chain(void)
 	cmp_state(1, 2, "chain: uop-cache vs compiled");
 	CHECK_EQ(ram32(TRACE), 0x22222222u);
 	CHECK_EQ(ram32(TRACE + 4), 0x11111111u);
-	CHECK_EQ(snap[2].cpu.reg32[EAX], 0);
+	CHECK_EQ(snap[2].cpu.reg64[EAX], 0);
 	if (arm_stats[2].chains < 1) {
 		fprintf(stderr, "FAIL chain: the chain never engaged (links %llu, tails %llu)\n",
 		        (unsigned long long)arm_stats[2].chains,
@@ -2205,7 +2207,7 @@ static void test_continuation_elision(void)
 		CHECK_EQ(arm_stats[2].called_uops, 1);
 		/* and the answer is the composed arithmetic, in every arm */
 		for (int arm = 0; arm < 3; arm++)
-			CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 16u);
+			CHECK_EQ((uint32_t)snap[arm].cpu.reg64[EAX], 16u);
 	}
 
 	/* (b) the page-edge uop: `add eax, ecx` placed so it ENDS at CODE+0x1000 (eip
@@ -2243,7 +2245,7 @@ static void test_continuation_elision(void)
 		CHECK_EQ(arm_stats[2].uops_checks_elided, arm_stats[2].inlined_uops - 1);
 		CHECK(arm_stats[2].uops_checks_elided > 0xFF0);
 		for (int arm = 0; arm < 3; arm++)
-			CHECK_EQ((uint32_t)snap[arm].cpu.reg32[EAX], 6u); /* 1 + 5 */
+			CHECK_EQ((uint32_t)snap[arm].cpu.reg64[EAX], 6u); /* 1 + 5 */
 	}
 }
 

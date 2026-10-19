@@ -165,10 +165,10 @@ static void test_reset(void)
     CHECK(!has_flat_segmentation());
 
     for (int i = 0; i < 8; i++) {
-        /* reset_cpu leaves reg32[ESP]=0x100 (cpu.rs:4758), dreg[6]/dreg[7] and the
+        /* reset_cpu leaves reg64[ESP]=0x100 (cpu.rs:4758), dreg[6]/dreg[7] and the
          * CS/SS slots at their switch values -- those are checked separately */
         if (i != ESP) {
-            CHECK_EQ(cpu->reg32[i], 0);
+            CHECK_EQ(cpu->reg64[i], 0);
         }
         if (i != 6 && i != 7) {
             CHECK_EQ(cpu->dreg[i], 0);
@@ -403,6 +403,208 @@ static void test_flags(void)
     CHECK_EQ(cpu->flags & FLAG_INTERRUPT, 0);
 
     printf("PASS lazy flags: %zu (op,a,b,cf_in) cases + get_eflags/update_eflags\n", n);
+}
+
+/* ==================================================================== *
+ * S1 (results/x86-64-plan.md ss4, slice S1): THE REGISTER FILE AT 64 BITS
+ *
+ * The slice widens `int32_t reg32[8]` to `uint64_t reg64[8]` in place.  Two things can go
+ * wrong silently and neither is visible to the 32-bit battery, which is why this test
+ * exists:
+ *
+ *   1. THE BYTE/WORD INDEX FORMULA moves with the element size.  The old formula
+ *      (index << 2 & 12) | (index >> 2 & 1) indexes a flat 4-byte layout; applied to
+ *      8-byte slots it puts AH on RAX's 5th byte and CL on RAX's 5th.. the shape of the
+ *      bug the JIT's own register mapping hit once (jit_codegen.c:198-201) -- a corrupted
+ *      ESP and a boot that printed one message forever.  So the mapping is asserted
+ *      register by register, and a high-byte write is required to leave EVERY other slot
+ *      untouched;
+ *   2. a 32-bit write must leave a DEFINED high half.  write_reg32 zeroes it (x86-64's
+ *      own rule for a 32-bit destination), and the JIT's spill was changed to agree, so
+ *      the two engines cannot disagree about what a register holds.
+ * ==================================================================== */
+static void test_widened_register_file(void)
+{
+    cpu_state_init();
+
+    /* (1) the byte map: AL/CL/DL/BL are the low bytes, AH/CH/DH/BH the second bytes, of
+     * slots 0..3 -- and nothing else. */
+    write_reg32(EAX, (int32_t)0x11223344u);
+    write_reg32(ECX, (int32_t)0x55667788u);
+    write_reg32(EDX, (int32_t)0x99AABBCCu);
+    write_reg32(EBX, (int32_t)0xDDEEFF11u);
+    write_reg32(ESP, (int32_t)0xDEADBEEFu);
+    CHECK_EQ(read_reg8(AL), 0x44);
+    CHECK_EQ(read_reg8(AH), 0x33);
+    CHECK_EQ(read_reg8(CL), 0x88);
+    CHECK_EQ(read_reg8(CH), 0x77);
+    CHECK_EQ(read_reg8(DL), 0xCC);
+    CHECK_EQ(read_reg8(DH), 0xBB);
+    CHECK_EQ(read_reg8(BL), 0x11);
+    CHECK_EQ(read_reg8(BH), 0xFF);
+
+    write_reg8(AH, 0xAB);
+    CHECK_EQ(read_reg32(EAX), (int32_t)0x1122AB44u);
+    CHECK_EQ(read_reg32(ECX), (int32_t)0x55667788u);
+    CHECK_EQ(read_reg32(EDX), (int32_t)0x99AABBCCu);
+    CHECK_EQ(read_reg32(EBX), (int32_t)0xDDEEFF11u);
+    CHECK_EQ(read_reg32(ESP), (int32_t)0xDEADBEEFu); /* NOT 0x1122ABEF: the old-formula bug */
+    write_reg8(BH, 0x01);
+    CHECK_EQ(read_reg32(EBX), (int32_t)0xDDEE0111u);
+    CHECK_EQ(read_reg32(EAX), (int32_t)0x1122AB44u);
+    write_reg8(DL, 0x5A);
+    CHECK_EQ(read_reg32(EDX), (int32_t)0x99AABB5Au);
+    CHECK_EQ(read_reg8(DH), 0xBB);
+
+    /* (2) the 16-bit view is the slot's low half (`index << 2` in u16 units); a CX write
+     * must not alias DX (the failure the old comment names). */
+    write_reg32(ECX, (int32_t)0x11112222u);
+    write_reg32(EDX, (int32_t)0x33334444u);
+    write_reg16(CX, 0xBEEF);
+    CHECK_EQ(read_reg16(CX), 0xBEEF);
+    CHECK_EQ(read_reg32(ECX), (int32_t)0x1111BEEFu);
+    CHECK_EQ(read_reg32(EDX), (int32_t)0x33334444u);
+    write_reg16(DX, 0x1234);
+    CHECK_EQ(read_reg32(EDX), (int32_t)0x33331234u);
+    CHECK_EQ(read_reg32(ECX), (int32_t)0x1111BEEFu);
+
+    /* (3) the field is 64 bits, a 32-bit write ZEROES the high half, and the 32-bit reader
+     * returns the low half as a signed int32 */
+    CHECK_EQ(cpu->reg64[EAX], 0x1122AB44ull);
+    write_reg32(EAX, -1);
+    CHECK_EQ(cpu->reg64[EAX], 0xFFFFFFFFull); /* zero-extended, not sign-extended */
+    CHECK_EQ(read_reg32(EAX), -1);            /* ... and read back as the int32 it was */
+    cpu->reg64[ESI] = 0x0123456789ABCDEFull;
+    CHECK_EQ(read_reg32(ESI), (int32_t)0x89ABCDEFu);
+    CHECK_EQ(read_reg16(SI), 0xCDEF);
+    /* a byte write touches ONE byte of the widened field, high half included */
+    cpu->reg64[EAX] = 0x0123456789ABCDEFull;
+    write_reg8(AL, 0x77);
+    CHECK_EQ(cpu->reg64[EAX], 0x0123456789ABCD77ull);
+    write_reg8(AH, 0x66);
+    CHECK_EQ(cpu->reg64[EAX], 0x0123456789AB6677ull);
+}
+
+/* S1's flags half.  Two claims, and the second is the one the slice is worth having for:
+ *
+ *   - OPSIZE_64 exists and behaves: the mask is all ones (2ull << 63 wraps to 0, so
+ *     (2ull << 63) - 1 is all ones -- the same trick upstream plays one width down),
+ *     the 64-bit carry/overflow/sign bits are at 63, and the 32-bit behaviour at the
+ *     0xFFFFFFFF boundary is unchanged;
+ *   - EVERY GETTER IS BLIND TO THE HIGH HALF.  The operands are int64_t now, and a getter
+ *     that compared them as int64 without masking would answer CF differently for a
+ *     negative 32-bit operand (0xFFFF...FFFB vs 0x0000...FFFB).  So each case is computed,
+ *     the two operands are then OR'd with 0xA5A5A5A500000000, and all six getters are
+ *     required to answer EXACTLY as before.  That is what makes `make poison-probe`'s
+ *     negative result mean something where it can be checked directly.
+ */
+static void test_widened_flags(void)
+{
+    /* (1) the masks */
+    CHECK_EQ(opsize_to_mask(OPSIZE_8), 0xFF);
+    CHECK_EQ(opsize_to_mask(OPSIZE_16), 0xFFFF);
+    CHECK_EQ(opsize_to_mask(OPSIZE_32), (int64_t)(uint32_t)0xFFFFFFFFu);
+    CHECK_EQ(opsize_to_mask(OPSIZE_64), -1);
+
+    /* (2) hand-checked 64-bit cases.  The rule per case: res = (a op b) & mask64; CF for
+     * add is "the sum did not fit", for sub "a < b unsigned"; OF is the carry INTO the
+     * sign bit being different from the carry OUT; SF is bit 63 of the result. */
+    cpu_state_init();
+    CHECK_EQ(flags_add(0xFFFFFFFFll, 1, OPSIZE_64), 0x100000000ll); /* no 32-bit wrap */
+    CHECK(!getcf());
+    CHECK(!getzf());
+    CHECK(!getof());
+    cpu_state_init();
+    CHECK_EQ(flags_add(-1, 1, OPSIZE_64), 0); /* the 64-bit wrap */
+    CHECK(getcf());
+    CHECK(getzf());
+    CHECK(!getsf());
+    CHECK(!getof());
+    cpu_state_init();
+    CHECK_EQ(flags_add(0x7FFFFFFFFFFFFFFFll, 1, OPSIZE_64), (int64_t)0x8000000000000000ull);
+    CHECK(!getcf());
+    CHECK(getof()); /* positive + positive = negative */
+    CHECK(getsf()); /* bit 63 */
+    cpu_state_init();
+    CHECK_EQ(flags_sub(0, 1, OPSIZE_64), -1);
+    CHECK(getcf());
+    CHECK(getsf());
+    CHECK(!getof());
+    CHECK(getaf());
+    /* ... and the same boundary one width down is unchanged: 0xFFFFFFFF + 1 wraps at 32 */
+    cpu_state_init();
+    CHECK_EQ(flags_add(-1, 1, OPSIZE_32), 0);
+    CHECK(getcf());
+    CHECK(getzf());
+
+    /* (3) THE POISON ARM.  Two poison pattens, because they test DIFFERENT things: with the
+     * SAME high half in both operands a comparison that forgot to mask still ranks the low
+     * halves correctly (MEASURED: the first version of this arm passed against a getcf with
+     * its mask removed), so the second pattern gives the two operands' high halves
+     * DIFFERENT values -- which is the only manipulation that can expose a comparison
+     * happening at 64 bits instead of at the operand's width. */
+    static const struct {
+        int32_t a, b;
+        int32_t op_size;
+        bool sub;
+    } poison_cases[] = {
+        { 0, 1, OPSIZE_8, true },        { 0x7F, 1, OPSIZE_8, false },
+        { (int32_t)0xFFFFFFFFu, 1, OPSIZE_32, false },
+        { (int32_t)0x80000000u, 1, OPSIZE_32, false },
+        { 5, (int32_t)0xFFFFFFFBu, OPSIZE_32, true },
+        { (int32_t)0xFFFFFFFFu, (int32_t)0xFFFFFFFFu, OPSIZE_32, true },
+        { 0x7FFFFFFF, 1, OPSIZE_32, false },
+        { 0, 1, OPSIZE_16, true },
+    };
+    for (size_t i = 0; i < sizeof(poison_cases) / sizeof(poison_cases[0]); i++) {
+        int32_t os = poison_cases[i].op_size;
+        cpu_state_init();
+        if (poison_cases[i].sub) flags_sub(poison_cases[i].a, poison_cases[i].b, os);
+        else flags_add(poison_cases[i].a, poison_cases[i].b, os);
+
+        bool cf = getcf(), pf = getpf(), af = getaf(), zf = getzf(), sf = getsf(), of = getof();
+        int64_t saved_op1 = cpu->last_op1, saved_result = cpu->last_result;
+
+        static const struct {
+            uint64_t op1_high, result_high;
+            const char *what;
+        } poisons[] = {
+            { 0xA5A5A5A500000000ull, 0xA5A5A5A500000000ull, "the same high half in both" },
+            { 0xA5A5A5A500000000ull, 0x5A5A5A5A00000000ull, "the high halves differ" },
+        };
+        for (size_t p = 0; p < sizeof(poisons) / sizeof(poisons[0]); p++) {
+            cpu->last_op1 = saved_op1 | (int64_t)poisons[p].op1_high;
+            cpu->last_result = saved_result | (int64_t)poisons[p].result_high;
+
+            checks += 6;
+            if (getcf() != cf || getpf() != pf || getaf() != af || getzf() != zf ||
+                getsf() != sf || getof() != of) {
+                failures++;
+                fprintf(stderr,
+                        "FAIL S1 poison case %zu (os=%d a=0x%x b=0x%x sub=%d, %s): the high half"
+                        " moved a flag: CF %d->%d PF %d->%d AF %d->%d ZF %d->%d SF %d->%d"
+                        " OF %d->%d\n",
+                        i, os, (unsigned)poison_cases[i].a, (unsigned)poison_cases[i].b,
+                        poison_cases[i].sub, poisons[p].what, cf, getcf(), pf, getpf(), af,
+                        getaf(), zf, getzf(), sf, getsf(), of, getof());
+            }
+            cpu->last_op1 = saved_op1;
+            cpu->last_result = saved_result;
+        }
+    }
+
+    /* (4) dreg[] is 64 bits, and the debug-register moves are still 32-bit ones */
+    cpu_state_init();
+    cpu->dreg[0] = 0x0123456789ABCDEFll;
+    instr_0F21(EAX, 0); /* mov eax, dr0 */
+    CHECK_EQ(read_reg32(EAX), (int32_t)0x89ABCDEFu);
+    CHECK_EQ(cpu->dreg[0], 0x0123456789ABCDEFll); /* the read did not disturb it */
+    cpu->reg64[EBX] = 0xAAAA5555BBBB4444ull;
+    instr_0F23(EBX, 0); /* mov dr0, ebx */
+    CHECK_EQ(cpu->dreg[0], 0xBBBB4444ull); /* zero-extended, not sign-extended */
+
+    printf("PASS S1: the widened register file (byte/word/dword slot map + the zero-extended"
+           " high half), the 64-bit flag cores and the high-half poison arm\n");
 }
 
 /* ------------------------------------------------------------------ *
@@ -1461,6 +1663,13 @@ void run_instruction0f(int32_t opcode)
 static int interpreted_run_calls = 0;
 static uint32_t interpreted_run_last_phys = 0;
 
+/* S2: the named-stop recorder (defined with the stub below, used by the mode/refusal test
+ * that sits between the two). */
+static int unimplemented_calls;
+static char unimplemented_last[160];
+static bool unimplemented_allowed;
+static void reset_unimplemented(void);
+
 /* S0: ONE test (test_cpu_backend, below) drives the engine seam's dispatch end to end, and
  * the dispatch calls exactly what cycle_internal calls -- which for the `interp` instance IS
  * this function.  So the stub records and returns while that test runs, and stays the
@@ -1609,14 +1818,224 @@ static void test_cpu_backend(void)
     CHECK(cpu_backend_current() != NULL);
 }
 
+/* ==================================================================== *
+ * S2 (results/x86-64-plan.md ss3.5, slice S2): THE MODE PREDICATE AND THE REFUSALS
+ *
+ * This is the slice that closes the plan's C5 -- a LIVE defect: EFER_LME was defined
+ * nowhere, so a guest that wrote EFER.LME and then set CR0.PG with CR4.PAE had its PML4
+ * read as if it were a PDPT and a 3-level walk run over 4-level tables, with nothing in
+ * the machine naming which.  Four claims, each able to fail:
+ *
+ *   1. the mode predicate has its IA-32e arm (Appendix A), and EFER.LMA is what selects it;
+ *   2. S0's dispatcher seat now FIRES: with the machine in long mode and a 32-bit-only
+ *      engine selected, cpu_backend_dispatch() stops BY NAME and does NOT run a batch (S0
+ *      could not test this -- no engine declares a mode the machine could be in);
+ *   3. all three writes that can ENTER IA-32e refuse by name and COMMIT NOTHING -- WRMSR of
+ *      EFER carrying LME, CR0 setting PG, and CR4 setting PAE -- and the CR0 case is proved
+ *      to have stopped BEFORE the page-table read (the PDPTE cache is untouched, which a
+ *      validation-first load_pdpte would have refreshed);
+ *   4. CPUID's long-mode declaration is COUPLED to the capability word, bit for bit --
+ *      asserted as an invariant, because no engine declares long mode yet, so the arm that
+ *      returns the bits cannot be reached in this build (named as a gap in the report).
+ * ==================================================================== */
+static void test_cpu_mode_and_refusals(void)
+{
+    /* (1) THE MODE PREDICATE, arm by arm (plan Appendix A) */
+    cpu_state_init();
+    cpu->cr[0] = CR0_CD | CR0_NW | CR0_ET; /* PE clear */
+    CHECK_EQ(cpu_mode_of(cpu), CPU_MODE_REAL);
+    cpu->cr[0] = CR0_PE;
+    cpu->is_32 = false;
+    CHECK_EQ(cpu_mode_of(cpu), CPU_MODE_PROT16);
+    cpu->is_32 = true;
+    CHECK_EQ(cpu_mode_of(cpu), CPU_MODE_PROT32);
+    cpu->efer = EFER_LMA;
+    CHECK_EQ(cpu_mode_of(cpu), CPU_MODE_LONG); /* LMA outranks is_32: 64-bit and compat */
+    CHECK_EQ(cpu_mode_of(cpu) & CPU_MODES_32BIT, 0);
+
+    /* (2) S0's DISPATCH SEAT FIRES.  The mode refusal could not fire before this slice
+     * (no engine declares a mode the machine could be in), so it was an instrument that
+     * could not fail; the machine is put in long mode directly, which is exactly the state
+     * S2 makes unreachable through the guest's own writes. */
+    CHECK(cpu_backend_select("interp") == cpu_backend_by_index(0));
+    {
+        int run_before = interpreted_run_calls;
+        reset_unimplemented();
+        unimplemented_allowed = true;
+        cpu->cr[0] = CR0_PE | CR0_PG;
+        cpu->is_32 = true;
+        cpu->efer = EFER_LMA;
+        cpu_backend_dispatch(0x00012345u);
+        unimplemented_allowed = false;
+        CHECK_EQ(interpreted_run_calls, run_before); /* run_batch did NOT run */
+        CHECK_EQ(unimplemented_calls, 1);
+        CHECK(interpreted_unimplemented);
+        CHECK(strstr(unimplemented_last, "cannot run long mode") != NULL);
+        CHECK(strstr(unimplemented_last, "'interp'") != NULL);
+        reset_unimplemented();
+    }
+
+    /* (3a) WRMSR of EFER carrying LME: refused by name, EFER NOT written */
+    cpu_state_init();
+    cpu->cpl = 0;
+    cpu->efer = EFER_NXE; /* a state the guest legitimately reaches first */
+    write_reg32(ECX, (int32_t)MSR_EFER);
+    write_reg32(EAX, (int32_t)(EFER_SCE | EFER_LME | EFER_NXE));
+    write_reg32(EDX, 0);
+    reset_unimplemented();
+    unimplemented_allowed = true;
+    instr_0F30();
+    unimplemented_allowed = false;
+    CHECK_EQ(unimplemented_calls, 1);
+    CHECK(strstr(unimplemented_last, "EFER.LME") != NULL);
+    CHECK_EQ(cpu->efer, EFER_NXE); /* committed nothing, not even the SCE bit beside LME */
+    CHECK_EQ(cpu->pagefault, 0);   /* a refusal, not a fault */
+    reset_unimplemented();
+
+    /* ... and every OTHER EFER bit is still stored unchecked (the R5F regression, pinned in
+     * m1c_selftest too): a write without LME goes through, reserved bits and all */
+    write_reg32(EAX, (int32_t)(EFER_SCE | EFER_NXE));
+    write_reg32(EDX, 0);
+    unimplemented_allowed = true;
+    instr_0F30();
+    unimplemented_allowed = false;
+    CHECK_EQ(cpu->efer, (uint64_t)(EFER_SCE | EFER_NXE));
+    CHECK_EQ(unimplemented_calls, 0); /* no stop: nothing asked for IA-32e */
+
+    /* ... and a write that CLEARS LME is always allowed, even from a state that has LME
+     * (a checkpoint restored from a machine that could run it): the refusal is about
+     * ENTERING long mode, never about leaving it. */
+    cpu->efer = EFER_LME;
+    write_reg32(EAX, 0);
+    write_reg32(EDX, 0);
+    instr_0F30();
+    CHECK_EQ(cpu->efer, 0);
+    CHECK_EQ(unimplemented_calls, 0);
+
+    /* (3b) CR0.PG with EFER.LME and CR4.PAE: refused by name, BEFORE the walk, nothing
+     * committed.  The PDPTE cache is seeded with a sentinel; a validation-first load_pdpte
+     * (the path C5's guest took) would replace it, so "unchanged" is the assertion that the
+     * refusal came first -- and the PDPT at 0x5000 is VALID, so the load would have
+     * succeeded had it been reached. */
+    cpu_state_init();
+    cpu->cr[0] = CR0_PE;
+    cpu->cr[4] = CR4_PAE;
+    cpu->efer = EFER_LME;
+    cpu->cr[3] = 0x5000;
+    for (int i = 0; i < 4; i++) {
+        write32(0x5000 + 4 * i, 0);
+        write32(0x5000 + 4 * i + 4, 0);
+        cpu->reg_pdpte[i] = 0xDEADBEEF00000000ull | (uint64_t)i;
+    }
+    reset_unimplemented();
+    unimplemented_allowed = true;
+    set_cr0(CR0_PE | CR0_PG);
+    unimplemented_allowed = false;
+    CHECK_EQ(unimplemented_calls, 1);
+    CHECK(strstr(unimplemented_last, "CR0.PG") != NULL);
+    CHECK_EQ(cpu->cr[0], CR0_PE); /* PG not set */
+    CHECK(!cpu->protected_mode);  /* ... and the refused write never reached the derived flag */
+    for (int i = 0; i < 4; i++) {
+        CHECK_EQ(cpu->reg_pdpte[i], 0xDEADBEEF00000000ull | (uint64_t)i); /* no walk to 4 levels */
+    }
+    reset_unimplemented();
+
+    /* ... and the same CR0 write is ACCEPTED once the machine has no LME (the 32-bit PAE
+     * machine the port ships): the refusal is the transition, not paging */
+    cpu->efer = 0;
+    set_cr0(CR0_PE | CR0_PG);
+    CHECK_EQ(cpu->cr[0], CR0_PE | CR0_PG | CR0_ET);
+    CHECK_EQ(unimplemented_calls, 0);
+
+    /* (3c) CR4.PAE with PG already set and LME set -- the SDM's OTHER entry trigger, and
+     * the third load_pdpte() door C5 named two of */
+    cpu_state_init();
+    cpu->cr[0] = CR0_PE | CR0_PG;
+    cpu->cr[4] = 0;
+    cpu->efer = EFER_LME;
+    cpu->cpl = 0;
+    for (int i = 0; i < 4; i++) cpu->reg_pdpte[i] = 0xDEADBEEF00000000ull | (uint64_t)i;
+    write_reg32(EBX, CR4_PAE);
+    reset_unimplemented();
+    unimplemented_allowed = true;
+    instr_0F22(EBX, 4); /* mov cr4, ebx */
+    unimplemented_allowed = false;
+    CHECK_EQ(unimplemented_calls, 1);
+    CHECK(strstr(unimplemented_last, "CR4.PAE") != NULL);
+    CHECK_EQ(cpu->cr[4], 0); /* not committed */
+    for (int i = 0; i < 4; i++) {
+        CHECK_EQ(cpu->reg_pdpte[i], 0xDEADBEEF00000000ull | (uint64_t)i);
+    }
+    reset_unimplemented();
+
+    /* (4) THE CPUID DECLARATION IS COUPLED TO THE CAPABILITY -- an invariant, because no
+     * engine in this build declares long mode (S5 flips it), so the arm that RETURNS the
+     * bits cannot be reached here; what can be asserted is that the two can never disagree,
+     * which is what a false declaration would be. */
+    cpu_backend_select("uopjit");
+    {
+        bool can_long = cpu_backend_can(CPU_MODE_LONG);
+
+        write_reg32(EAX, (int32_t)0x80000001u);
+        instr_0FA2();
+        int32_t edx = read_reg32(EDX);
+        CHECK_EQ(((uint32_t)edx >> 29) & 1, can_long ? 1 : 0); /* lm */
+        CHECK_EQ(((uint32_t)edx >> 11) & 1, can_long ? 1 : 0); /* syscall */
+        /* MEASURED, and the pinned reference's own value: no lm, no syscall today */
+        if (!can_long) CHECK_EQ((uint32_t)edx, 0x0190A179u);
+
+        write_reg32(EAX, (int32_t)0x80000008u);
+        instr_0FA2();
+        int32_t eax = read_reg32(EAX);
+        CHECK_EQ((uint32_t)eax >> 8, can_long ? 48u : 32u); /* the LINEAR width */
+        CHECK_EQ((uint32_t)eax & 0xFF, 32u);                /* the port's physical bound */
+        if (!can_long) CHECK_EQ((uint32_t)eax, 0x2020u);
+    }
+
+    /* (5) the EFER bit POSITIONS are the SDM's (Vol 4, IA32_EFER) -- a guest's kernel reads
+     * and writes them by name, and a transposed bit would be a silent mode mismatch */
+    CHECK_EQ(EFER_SCE, 0x1);
+    CHECK_EQ(EFER_LME, 0x100);
+    CHECK_EQ(EFER_LMA, 0x400);
+    CHECK_EQ(EFER_NXE, 0x800);
+    CHECK_EQ(MSR_EFER, 0xC0000080u);
+
+    /* leave the machine as the other tests expect it */
+    cpu_state_init();
+    cpu_backend_select("auto");
+    reset_unimplemented();
+    printf("PASS S2: the mode predicate's IA-32e arm, the dispatcher's mode refusal FIRING,"
+           " the three IA-32e entry writes refused by name (EFER.LME, CR0.PG, CR4.PAE) with"
+           " nothing committed and no page-table read, and CPUID's declaration coupled to the"
+           " capability word\n");
+}
+
 /* AUDIT-1 S1: modrm.c's read_imm8 now names the run loop's stop for a fetch past guest
  * RAM; cpu.c is deliberately absent from this binary, so the stop gets the same
  * abort-if-reached seat as get_phys_eip's above -- no test here drives a fetch. */
+/* S2: THE MACHINE'S NAMED STOP CHANNEL, RECORDED.  The long-mode refusals and the
+ * dispatcher's mode refusal stop the machine through this function, so the suite has to be
+ * able to SEE a stop instead of aborting on one -- the same arrangement interpreted_run got
+ * in S0 (interpreted_run_allowed).  `unimplemented_allowed` is set only by the tests that
+ * expect a stop; from anywhere else the abort is still the finding.  The real cpu.c sets
+ * `interpreted_unimplemented`, which is the flag both run loops check, so this seat sets it
+ * too and the tests can assert against the same predicate the machine uses. */
 void unimplemented_instruction(const char *name)
 {
+    unimplemented_calls++;
+    snprintf(unimplemented_last, sizeof(unimplemented_last), "%s", name);
+    interpreted_unimplemented = true;
+    if (unimplemented_allowed) return;
     fprintf(stderr, "cpu_selftest: unimplemented_instruction(%s) called -- this binary has"
                     " no run loop\n", name);
     abort();
+}
+
+static void reset_unimplemented(void)
+{
+    unimplemented_calls = 0;
+    unimplemented_last[0] = 0;
+    interpreted_unimplemented = false;
 }
 
 static void reset_stubs(void)
@@ -2083,7 +2502,7 @@ static void test_arith_muldiv(void)
         const mul_case *c = &mul_cases[i];
         cpu_state_init();
         reset_exceptions();
-        cpu->reg32[EAX] = (int32_t)c->a;
+        cpu->reg64[EAX] = (int32_t)c->a;
 
         switch (c->op) {
         case MUL8:
@@ -2139,20 +2558,20 @@ static void test_arith_muldiv(void)
         switch (c->op) {
         case DIV8:
         case IDIV8:
-            cpu->reg32[EAX] = (int32_t)(c->target & 0xFFFF);
+            cpu->reg64[EAX] = (int32_t)(c->target & 0xFFFF);
             if (c->op == DIV8) div8(c->divisor);
             else idiv8((int32_t)(int8_t)c->divisor);
             break;
         case DIV16:
         case IDIV16:
-            cpu->reg32[EAX] = (int32_t)(c->target & 0xFFFF);
-            cpu->reg32[EDX] = (int32_t)((c->target >> 16) & 0xFFFF);
+            cpu->reg64[EAX] = (int32_t)(c->target & 0xFFFF);
+            cpu->reg64[EDX] = (int32_t)((c->target >> 16) & 0xFFFF);
             if (c->op == DIV16) div16(c->divisor);
             else idiv16((int32_t)(int16_t)c->divisor);
             break;
         default:
-            cpu->reg32[EAX] = (int32_t)(uint32_t)c->target;
-            cpu->reg32[EDX] = (int32_t)(uint32_t)(c->target >> 32);
+            cpu->reg64[EAX] = (int32_t)(uint32_t)c->target;
+            cpu->reg64[EDX] = (int32_t)(uint32_t)(c->target >> 32);
             if (c->op == DIV32) div32(c->divisor);
             else idiv32((int32_t)c->divisor);
             break;
@@ -2412,7 +2831,7 @@ static void test_arith_bcd(void)
         cpu->flags = FLAGS_DEFAULT | (c->cf_in ? FLAG_CARRY : 0) |
                      (c->af_in ? FLAG_ADJUST : 0);
         cpu->flags_changed = 0;
-        cpu->reg32[EAX] = ((int32_t)c->ah << 8) | c->al;
+        cpu->reg64[EAX] = ((int32_t)c->ah << 8) | c->al;
 
         switch (c->op) {
         case BCD_DAA: bcd_daa(); break;
@@ -6480,6 +6899,9 @@ int main(void)
 
     test_reset();
     test_flags();
+    test_widened_register_file();
+    test_widened_flags();
+    test_cpu_mode_and_refusals();
     test_memory_router();
     test_paging_4k();
     test_paging_faults();

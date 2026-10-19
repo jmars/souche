@@ -215,13 +215,60 @@ bool cpu_backend_can(uint32_t mode)
 }
 
 /* ------------------------------------------------------------------ *
- * the mode predicate (the 32-bit half of ss3.3's; S2 adds long/compat)
+ * the mode predicate (ss3.3's, S2 adds IA-32e)
+ *
+ * Appendix A of the plan states the whole predicate; the port has every field for it
+ * except one.  CS.L is a DESCRIPTOR bit (bit 21 of the type-specific dword, alongside D/B),
+ * and this tree does not decode it yet -- it arrives with the far-transfer work in S11 --
+ * so "long (64-bit)" and "long (compat)" are not distinguishable HERE.  The predicate
+ * therefore answers CPU_MODE_LONG for every IA-32e machine, and the gap is stated rather
+ * than papered over:
+ *
+ *   - it is CONSERVATIVE for the capability check, which is what this function feeds:
+ *     compat and 64-bit mode need the same backend capability (one implementation runs
+ *     both), so a backend that cannot run long mode is refused in either;
+ *   - the S2 selftest pins the arms that exist, including the LMA arm, and the arm that
+ *     cannot exist yet is named in results/x86-64-s1-s2.md.
+ *
+ * EFER.LMA is the machine's own state, not the guest's request: LME says "enter IA-32e when
+ * paging is enabled" and LMA says "we are in it".  Only LMA is read here (Appendix A).
  * ------------------------------------------------------------------ */
 
 uint32_t cpu_mode_of(const cpu_state_t *state)
 {
+	if ((state->efer & EFER_LMA) != 0) return CPU_MODE_LONG; /* 64-bit and compat alike */
 	if ((state->cr[0] & CR0_PE) == 0) return CPU_MODE_REAL;
 	return state->is_32 ? CPU_MODE_PROT32 : CPU_MODE_PROT16;
+}
+
+/* ------------------------------------------------------------------ *
+ * S2 (ss3.5.2): THE LONG-MODE REFUSAL, IN ONE PLACE
+ *
+ * C5's defect was that EFER.LME was dead data: a guest wrote it, set CR0.PG with CR4.PAE,
+ * and this port's load_pdpte read a PML4 as if it were a PDPT and walked 3 levels over
+ * 4-level tables -- a plausible-looking wrong translation or a reserved-bit #PF, with
+ * NOTHING in the machine naming which.  Three writes can start that transition, and all
+ * three call this: WRMSR of EFER with LME, CR0 with PG (the SDM's trigger), and CR4 with
+ * PAE (the same trigger when PG is already set).  Each caller passes the name of the write
+ * it is performing, so the stop says what the guest asked for.
+ *
+ * The stop is the machine's NAMED STOP channel (unimplemented_instruction), the same one
+ * the dispatcher's mode refusal uses -- not fatal(), which would abort the host instead of
+ * ending the run with a reason.
+ * ------------------------------------------------------------------ */
+
+bool cpu_backend_refuse_long_mode(const char *what)
+{
+	const cpu_backend_t *backend = cpu_backend_current();
+
+	if ((backend->modes & CPU_MODE_LONG) != 0) return false;
+
+	char stop[160]; /* the machine's stop channel holds 160 (cpu.c) */
+	snprintf(stop, sizeof(stop),
+	         "%s asks for IA-32e, and cpu backend '%s' cannot run long mode"
+	         " (no 4-level walk exists)", what, backend->name);
+	unimplemented_instruction(stop);
+	return true;
 }
 
 static const char *mode_name(uint32_t mode)

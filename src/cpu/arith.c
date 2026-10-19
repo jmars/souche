@@ -97,8 +97,7 @@ void mul8(int32_t source_operand)
 {
     int32_t result = source_operand * read_reg8(AL);
     write_reg16(AX, result);
-    cpu->last_result = result & 255;
-    cpu->last_op_size = OPSIZE_8;
+    set_last_result(result & 255, OPSIZE_8);
     /* upstream compares the SIGNED product against 256: a negative product (a source
      * with the high bit set) therefore takes the else arm and sets CF/OF */
     if (result < 256) {
@@ -114,8 +113,7 @@ void imul8(int32_t source_operand)
 {
     int32_t result = source_operand * (((int32_t)((uint32_t)read_reg8(AL) << 24)) >> 24);
     write_reg16(AX, result);
-    cpu->last_result = result & 255;
-    cpu->last_op_size = OPSIZE_8;
+    set_last_result(result & 255, OPSIZE_8);
     if (result > 127 || result < -128) {
         cpu->flags |= 1 | FLAG_OVERFLOW;
     }
@@ -131,8 +129,7 @@ void mul16(uint32_t source_operand)
     uint32_t high_result = result >> 16;
     write_reg16(AX, (int32_t)result);
     write_reg16(DX, (int32_t)high_result);
-    cpu->last_result = (int32_t)(result & 0xFFFF);
-    cpu->last_op_size = OPSIZE_16;
+    set_last_result((int32_t)(result & 0xFFFF), OPSIZE_16);
     if (high_result == 0) {
         cpu->flags &= ~1 & ~FLAG_OVERFLOW;
     }
@@ -147,8 +144,7 @@ void imul16(int32_t source_operand)
     int32_t result = source_operand * (((int32_t)((uint32_t)read_reg16(AX) << 16)) >> 16);
     write_reg16(AX, result);
     write_reg16(DX, result >> 16);
-    cpu->last_result = result & 0xFFFF;
-    cpu->last_op_size = OPSIZE_16;
+    set_last_result(result & 0xFFFF, OPSIZE_16);
     if (result > 32767 || result < -32768) {
         cpu->flags |= 1 | FLAG_OVERFLOW;
     }
@@ -163,8 +159,7 @@ int32_t imul_reg16(int32_t operand1, int32_t operand2)
     operand1 = ((int32_t)((uint32_t)operand1 << 16)) >> 16;
     operand2 = ((int32_t)((uint32_t)operand2 << 16)) >> 16;
     int32_t result = operand1 * operand2;
-    cpu->last_result = result & 0xFFFF;
-    cpu->last_op_size = OPSIZE_16;
+    set_last_result(result & 0xFFFF, OPSIZE_16);
     if (result > 32767 || result < -32768) {
         cpu->flags |= 1 | FLAG_OVERFLOW;
     }
@@ -183,8 +178,7 @@ void mul32(int32_t source_operand)
     int32_t result_high = (int32_t)(result >> 32);
     write_reg32(EAX, result_low);
     write_reg32(EDX, result_high);
-    cpu->last_result = result_low;
-    cpu->last_op_size = OPSIZE_32;
+    set_last_result(result_low, OPSIZE_32);
     if (result_high == 0) {
         cpu->flags &= ~1 & ~FLAG_OVERFLOW;
     }
@@ -202,8 +196,7 @@ void imul32(int32_t source_operand)
     int32_t result_high = (int32_t)((uint64_t)result >> 32);
     write_reg32(EAX, result_low);
     write_reg32(EDX, result_high);
-    cpu->last_result = result_low;
-    cpu->last_op_size = OPSIZE_32;
+    set_last_result(result_low, OPSIZE_32);
     if (result_high == result_low >> 31) {
         cpu->flags &= ~1 & ~FLAG_OVERFLOW;
     }
@@ -218,8 +211,7 @@ int32_t imul_reg32(int32_t operand1, int32_t operand2)
     int64_t result = (int64_t)operand1 * (int64_t)operand2;
     int32_t result_low = (int32_t)result;
     int32_t result_high = (int32_t)((uint64_t)result >> 32);
-    cpu->last_result = result_low;
-    cpu->last_op_size = OPSIZE_32;
+    set_last_result(result_low, OPSIZE_32);
     if (result_high == result_low >> 31) {
         cpu->flags &= ~1 & ~FLAG_OVERFLOW;
     }
@@ -301,8 +293,7 @@ void bcd_daa(void)
         write_reg8(AL, read_reg8(AL) + 96);
         cpu->flags |= 1;
     }
-    cpu->last_result = read_reg8(AL);
-    cpu->last_op_size = OPSIZE_8;
+    set_last_result(read_reg8(AL), OPSIZE_8);
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_ADJUST & ~FLAG_OVERFLOW;
 }
 
@@ -323,17 +314,15 @@ void bcd_das(void)
         write_reg8(AL, read_reg8(AL) - 96);
         cpu->flags |= 1;
     }
-    cpu->last_result = read_reg8(AL);
-    cpu->last_op_size = OPSIZE_8;
+    set_last_result(read_reg8(AL), OPSIZE_8);
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_ADJUST & ~FLAG_OVERFLOW;
 }
 
 void bcd_aad(int32_t imm8)
 {
     int32_t result = read_reg8(AL) + read_reg8(AH) * imm8;
-    cpu->last_result = result & 255;
+    set_last_result(result, OPSIZE_8); /* the same mask, in the canonical form */
     write_reg16(AX, cpu->last_result);
-    cpu->last_op_size = OPSIZE_8;
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_ADJUST & ~FLAG_OVERFLOW;
     cpu->flags &= ~1 & ~FLAG_ADJUST & ~FLAG_OVERFLOW;
     if (result > 0xFFFF) {
@@ -351,8 +340,7 @@ void bcd_aam(int32_t imm8)
         int32_t temp = read_reg8(AL);
         write_reg8(AH, temp / imm8);
         write_reg8(AL, temp % imm8);
-        cpu->last_result = read_reg8(AL);
-        cpu->last_op_size = OPSIZE_8;
+        set_last_result(read_reg8(AL), OPSIZE_8);
         cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_ADJUST & ~FLAG_OVERFLOW;
         cpu->flags &= ~1 & ~FLAG_ADJUST & ~FLAG_OVERFLOW;
     }
@@ -396,8 +384,7 @@ void bcd_aas(void)
 static int32_t arith_and(int32_t dest_operand, int32_t source_operand, int32_t op_size)
 {
     int32_t result = dest_operand & source_operand;
-    cpu->last_result = result;
-    cpu->last_op_size = op_size;
+    set_last_result(result, op_size);
     cpu->flags &= ~1 & ~FLAG_OVERFLOW & ~FLAG_ADJUST;
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW & ~FLAG_ADJUST;
     return result;
@@ -405,8 +392,7 @@ static int32_t arith_and(int32_t dest_operand, int32_t source_operand, int32_t o
 static int32_t arith_or(int32_t dest_operand, int32_t source_operand, int32_t op_size)
 {
     int32_t result = dest_operand | source_operand;
-    cpu->last_result = result;
-    cpu->last_op_size = op_size;
+    set_last_result(result, op_size);
     cpu->flags &= ~1 & ~FLAG_OVERFLOW & ~FLAG_ADJUST;
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW & ~FLAG_ADJUST;
     return result;
@@ -414,8 +400,7 @@ static int32_t arith_or(int32_t dest_operand, int32_t source_operand, int32_t op
 static int32_t arith_xor(int32_t dest_operand, int32_t source_operand, int32_t op_size)
 {
     int32_t result = dest_operand ^ source_operand;
-    cpu->last_result = result;
-    cpu->last_op_size = op_size;
+    set_last_result(result, op_size);
     cpu->flags &= ~1 & ~FLAG_OVERFLOW & ~FLAG_ADJUST;
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW & ~FLAG_ADJUST;
     return result;
@@ -777,8 +762,7 @@ int32_t shl8(int32_t dest_operand, int32_t count)
         return dest_operand;
     }
     int32_t result = (int32_t)((uint32_t)dest_operand << count);
-    cpu->last_result = result;
-    cpu->last_op_size = OPSIZE_8;
+    set_last_result(result, OPSIZE_8);
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
     cpu->flags = (cpu->flags & ~1 & ~FLAG_OVERFLOW) | (result >> 8 & 1) |
                  ((((uint32_t)result << 3) ^ ((uint32_t)result << 4)) & FLAG_OVERFLOW);
@@ -792,8 +776,7 @@ int32_t shl16(int32_t dest_operand, int32_t count)
         return dest_operand;
     }
     int32_t result = (int32_t)((uint32_t)dest_operand << count);
-    cpu->last_result = result;
-    cpu->last_op_size = OPSIZE_16;
+    set_last_result(result, OPSIZE_16);
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
     cpu->flags = (cpu->flags & ~1 & ~FLAG_OVERFLOW) | (result >> 16 & 1) |
                  (((uint32_t)(result >> 5) ^ (uint32_t)(result >> 4)) & FLAG_OVERFLOW);
@@ -807,8 +790,7 @@ int32_t shl32(int32_t dest_operand, int32_t count)
         return dest_operand;
     }
     int32_t result = (int32_t)((uint32_t)dest_operand << count);
-    cpu->last_result = result;
-    cpu->last_op_size = OPSIZE_32;
+    set_last_result(result, OPSIZE_32);
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
     int32_t b = dest_operand >> (32 - count) & 1;
     cpu->flags = (cpu->flags & ~1 & ~FLAG_OVERFLOW) | b |
@@ -823,8 +805,7 @@ int32_t shr8(int32_t dest_operand, int32_t count)
         return dest_operand;
     }
     int32_t result = dest_operand >> count;
-    cpu->last_result = result;
-    cpu->last_op_size = OPSIZE_8;
+    set_last_result(result, OPSIZE_8);
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
     cpu->flags = (cpu->flags & ~1 & ~FLAG_OVERFLOW) | (dest_operand >> (count - 1) & 1) |
                  (((dest_operand >> 7 & 1) << 11) & FLAG_OVERFLOW);
@@ -838,8 +819,7 @@ int32_t shr16(int32_t dest_operand, int32_t count)
         return dest_operand;
     }
     int32_t result = dest_operand >> count;
-    cpu->last_result = result;
-    cpu->last_op_size = OPSIZE_16;
+    set_last_result(result, OPSIZE_16);
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
     cpu->flags = (cpu->flags & ~1 & ~FLAG_OVERFLOW) | (dest_operand >> (count - 1) & 1) |
                  (dest_operand >> 4 & FLAG_OVERFLOW);
@@ -853,8 +833,7 @@ int32_t shr32(int32_t dest_operand, int32_t count)
         return dest_operand;
     }
     int32_t result = (int32_t)((uint32_t)dest_operand >> count);
-    cpu->last_result = result;
-    cpu->last_op_size = OPSIZE_32;
+    set_last_result(result, OPSIZE_32);
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
     cpu->flags = (cpu->flags & ~1 & ~FLAG_OVERFLOW) |
                  (int32_t)(((uint32_t)dest_operand >> (count - 1)) & 1) |
@@ -878,8 +857,7 @@ int32_t sar8(int32_t dest_operand, int32_t count)
         result = ((int32_t)((uint32_t)dest_operand << 24)) >> 31;
         cpu->flags = (cpu->flags & ~1 & ~FLAG_OVERFLOW) | (result & 1);
     }
-    cpu->last_result = result;
-    cpu->last_op_size = OPSIZE_8;
+    set_last_result(result, OPSIZE_8);
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
     return result & 0xFF;
 }
@@ -899,8 +877,7 @@ int32_t sar16(int32_t dest_operand, int32_t count)
         result = ((int32_t)((uint32_t)dest_operand << 16)) >> 31;
         cpu->flags = (cpu->flags & ~1 & ~FLAG_OVERFLOW) | (result & 1);
     }
-    cpu->last_result = result;
-    cpu->last_op_size = OPSIZE_16;
+    set_last_result(result, OPSIZE_16);
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
     return result & 0xFFFF;
 }
@@ -912,8 +889,7 @@ int32_t sar32(int32_t dest_operand, int32_t count)
         return dest_operand;
     }
     int32_t result = dest_operand >> count;
-    cpu->last_result = result;
-    cpu->last_op_size = OPSIZE_32;
+    set_last_result(result, OPSIZE_32);
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
     cpu->flags =
         (cpu->flags & ~1 & ~FLAG_OVERFLOW) | (int32_t)(((uint32_t)dest_operand >> (count - 1)) & 1);
@@ -937,8 +913,7 @@ int32_t shrd16(int32_t dest_operand, int32_t source_operand, int32_t count)
                            (uint32_t)(source_operand >> (count - 16)));
         cpu->flags = (cpu->flags & ~1) | (source_operand >> (count - 17) & 1);
     }
-    cpu->last_result = result;
-    cpu->last_op_size = OPSIZE_16;
+    set_last_result(result, OPSIZE_16);
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
     cpu->flags = (cpu->flags & ~FLAG_OVERFLOW) |
                  (((uint32_t)(result ^ dest_operand) >> 4) & FLAG_OVERFLOW);
@@ -953,8 +928,7 @@ int32_t shrd32(int32_t dest_operand, int32_t source_operand, int32_t count)
     }
     int32_t result = (int32_t)(((uint32_t)dest_operand >> count) |
                                ((uint32_t)source_operand << (32 - count)));
-    cpu->last_result = result;
-    cpu->last_op_size = OPSIZE_32;
+    set_last_result(result, OPSIZE_32);
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
     cpu->flags = ((cpu->flags & ~1 & ~FLAG_OVERFLOW) |
                   (int32_t)(((uint32_t)dest_operand >> (count - 1)) & 1)) |
@@ -981,8 +955,7 @@ int32_t shld16(int32_t dest_operand, int32_t source_operand, int32_t count)
         cpu->flags =
             (cpu->flags & ~1) | (int32_t)(((uint32_t)source_operand >> (32 - count)) & 1);
     }
-    cpu->last_result = result;
-    cpu->last_op_size = OPSIZE_16;
+    set_last_result(result, OPSIZE_16);
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
     cpu->flags = (cpu->flags & ~FLAG_OVERFLOW) | (((cpu->flags & 1) ^ (result >> 15 & 1)) << 11);
     return result & 0xFFFF;
@@ -996,8 +969,7 @@ int32_t shld32(int32_t dest_operand, int32_t source_operand, int32_t count)
     }
     int32_t result = (int32_t)(((uint32_t)dest_operand << count) |
                                ((uint32_t)source_operand >> (32 - count)));
-    cpu->last_result = result;
-    cpu->last_op_size = OPSIZE_32;
+    set_last_result(result, OPSIZE_32);
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
     cpu->flags = (cpu->flags & ~1) | (int32_t)(((uint32_t)dest_operand >> (32 - count)) & 1);
     if (count == 1) {
@@ -1097,13 +1069,13 @@ int32_t bsf16(int32_t old, int32_t bit_base)
     cpu->last_op_size = OPSIZE_16;
     if (bit_base == 0) {
         cpu->flags |= FLAG_ZERO;
-        cpu->last_result = bit_base;
+        set_last_result(bit_base, cpu->last_op_size);
         /* not defined in the docs, but the value doesn't change on my intel machine */
         return old;
     }
     else {
         cpu->flags &= ~FLAG_ZERO;
-        cpu->last_result = int_log2(-bit_base & bit_base);
+        set_last_result(int_log2(-bit_base & bit_base), cpu->last_op_size);
         return cpu->last_result;
     }
 }
@@ -1114,12 +1086,12 @@ int32_t bsf32(int32_t old, int32_t bit_base)
     cpu->last_op_size = OPSIZE_32;
     if (bit_base == 0) {
         cpu->flags |= FLAG_ZERO;
-        cpu->last_result = bit_base;
+        set_last_result(bit_base, cpu->last_op_size);
         return old;
     }
     else {
         cpu->flags &= ~FLAG_ZERO;
-        cpu->last_result = int_log2(-bit_base & bit_base);
+        set_last_result(int_log2(-bit_base & bit_base), cpu->last_op_size);
         return cpu->last_result;
     }
 }
@@ -1130,12 +1102,12 @@ int32_t bsr16(int32_t old, int32_t bit_base)
     cpu->last_op_size = OPSIZE_16;
     if (bit_base == 0) {
         cpu->flags |= FLAG_ZERO;
-        cpu->last_result = bit_base;
+        set_last_result(bit_base, cpu->last_op_size);
         return old;
     }
     else {
         cpu->flags &= ~FLAG_ZERO;
-        cpu->last_result = int_log2(bit_base);
+        set_last_result(int_log2(bit_base), cpu->last_op_size);
         return cpu->last_result;
     }
 }
@@ -1146,12 +1118,12 @@ int32_t bsr32(int32_t old, int32_t bit_base)
     cpu->last_op_size = OPSIZE_32;
     if (bit_base == 0) {
         cpu->flags |= FLAG_ZERO;
-        cpu->last_result = bit_base;
+        set_last_result(bit_base, cpu->last_op_size);
         return old;
     }
     else {
         cpu->flags &= ~FLAG_ZERO;
-        cpu->last_result = int_log2(bit_base);
+        set_last_result(int_log2(bit_base), cpu->last_op_size);
         return cpu->last_result;
     }
 }

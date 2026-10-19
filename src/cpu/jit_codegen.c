@@ -63,8 +63,8 @@
  * THE SPILL RULE: before ANY C call the eight guest registers AND the pending count are stored
  * into cpu_state/the global, and after the call they are reloaded.  It is uniform (a per-call
  * cost, and calls are the fallback path) and it is what makes the C bodies work unchanged:
- * every `instr_XX_*` body reads and writes `cpu->reg32[]`, so the register file it sees must be
- * the live one.  A recipe needs no spill -- it operates on the host registers directly, and any
+ * every `instr_XX_*` body reads and writes the register file through read_reg32/write_reg32, so
+ * the file it sees must be the live one.  A recipe needs no spill -- it operates on the host registers directly, and any
  * LATER call in the same block spills its result.
  *
  * THE STATE OF RECORD IS MEMORY, not the host registers: lazy-flag state, the segment bases,
@@ -193,12 +193,13 @@ static bool jc_mem_shape(uint8_t shape)
 /* THE BYTE VIEW OF THE REGISTER FILE (cpu_state.c:19-30), which is NOT "the byte register
  * of the same index":
  *
- *     get_reg8_index(i) = (i << 2 & 12) | (i >> 2 & 1)      ->     0,4,8,12,1,5,9,13
+ *     get_reg8_index(i) = (i & 3) * 8 + (i >> 2 & 1)       ->     0,8,16,24,1,9,17,25
  *
- * so register i's byte lives in reg32[i & 3] at byte (i >> 2 & 1) -- AL/CL/DL/BL for 0..3 and
+ * (the S1 formula; before the register file widened it was `(i << 2 & 12) | (i >> 2 & 1)`)
+ * so register i's byte lives in reg64[i & 3] at byte (i >> 2 & 1) -- AL/CL/DL/BL for 0..3 and
  * AH/CH/DH/BH for 4..7, i.e. the HIGH byte of EAX/ECX/EDX/EBX.  MEASURED, and it cost a 16 KiB
- * serial flood rather than a wrong digit: writing AH into reg32[4]'s high byte (ESP's) instead
- * of reg32[0]'s corrupted the guest's stack pointer, and the boot firmware then printed one
+ * serial flood rather than a wrong digit: writing AH into the fourth register slot's high byte
+ * (ESP's) instead of the first's corrupted the guest's stack pointer, and the boot firmware then printed one
  * message forever. */
 static inline int jc_reg8_host(int guest) { return jitcg_greg[guest & 3]; }
 static inline bool jc_reg8_high(int guest) { return guest >= 4; }
@@ -428,6 +429,12 @@ static void jitcg_emit_op_store(jx64_t *e, const uop_t *u, int src, int width, i
  * flags.c:97-178 and arith.c:396-422, transcribed.  The STATE IS MEMORY (cpu->flags_changed /
  * last_op1 / last_result / last_op_size), which is what makes the two engines unable to
  * disagree about it: nothing is cached in a host register across a uop.
+ *
+ * S1: last_op1/last_result are EIGHT-BYTE stores of the zero-extended 32-bit host register --
+ * the canonical form flags.h's last_value produces on the C side.  A 32-bit store would leave
+ * the field's high half as it found it, and the two engines would then disagree about the
+ * whole state (jit_codegen_selftest's memcmp is what caught it when the fields were widened;
+ * the READ below stays 32-bit, which is correct under the canonical form).
  * ------------------------------------------------------------------ */
 
 /* flags_add / flags_sub (flags.c:97-136): last_op1 is the DESTINATION's value and must be
@@ -435,9 +442,9 @@ static void jitcg_emit_op_store(jx64_t *e, const uop_t *u, int src, int width, i
  * write-back); cmp and sub differ only in the caller's use of the result. */
 static void jitcg_emit_flags_addsub_reg(jx64_t *e, int digit, int dst, int src)
 {
-	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(last_op1), dst);
+	jx64_mov_m64_r64(e, JX_RBP, JC_OFF(last_op1), dst);
 	jx64_alu_rm_r32(e, digit, jc_reg(dst), src);
-	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(last_result), dst);
+	jx64_mov_m64_r64(e, JX_RBP, JC_OFF(last_result), dst);
 	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(last_op_size), OPSIZE_32);
 	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(flags_changed),
 	                   (uint32_t)(int32_t)(FLAGS_ALL | (digit == 0 ? 0 : FLAG_SUB)));
@@ -445,9 +452,9 @@ static void jitcg_emit_flags_addsub_reg(jx64_t *e, int digit, int dst, int src)
 
 static void jitcg_emit_flags_addsub_imm(jx64_t *e, int digit, int dst, int32_t imm, bool imm8)
 {
-	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(last_op1), dst);
+	jx64_mov_m64_r64(e, JX_RBP, JC_OFF(last_op1), dst);
 	jx64_alu_rm_imm(e, digit, jc_reg(dst), imm, imm8);
-	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(last_result), dst);
+	jx64_mov_m64_r64(e, JX_RBP, JC_OFF(last_result), dst);
 	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(last_op_size), OPSIZE_32);
 	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(flags_changed),
 	                   (uint32_t)(int32_t)(FLAGS_ALL | (digit == 0 ? 0 : FLAG_SUB)));
@@ -472,7 +479,7 @@ static void jitcg_emit_flags_logic_reg(jx64_t *e, int digit, int dst, int src)
  * `mem8 + (the flags word)` -- a wild write that the RAM comparison caught. */
 static void jitcg_emit_flags_logic_tail(jx64_t *e, int dst)
 {
-	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(last_result), dst);
+	jx64_mov_m64_r64(e, JX_RBP, JC_OFF(last_result), dst);
 	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(last_op_size), OPSIZE_32);
 	jx64_mov_r32_rm(e, JX_RDI, jc_state(JC_OFF(flags)));
 	jx64_alu_rm_imm(e, 4, jc_reg(JX_RDI), JC_LOGIC_MASK, false);
@@ -496,10 +503,10 @@ static void jitcg_emit_flags_incdec(jx64_t *e, int dst, bool dec)
 	jx64_or_r32_r32(e, JC_TMP2, JX_RDI);
 	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(flags), JC_TMP2);
 
-	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(last_op1), dst);
+	jx64_mov_m64_r64(e, JX_RBP, JC_OFF(last_op1), dst);
 	if (dec) jx64_dec_r32(e, dst);
 	else jx64_inc_r32(e, dst);
-	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(last_result), dst);
+	jx64_mov_m64_r64(e, JX_RBP, JC_OFF(last_result), dst);
 	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(last_op_size), OPSIZE_32);
 	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(flags_changed),
 	                   (uint32_t)(int32_t)((FLAGS_ALL & ~1) | (dec ? FLAG_SUB : 0)));
@@ -664,7 +671,7 @@ static void rec_test_rm8_imm8(jx64_t *e, const uop_t *u, int l_slow)
 {
 	jitcg_emit_op_load(e, u, JC_VAL, JC_W8, l_slow);
 	jx64_alu_rm_imm(e, 4, jc_reg(JC_VAL), u->imm & 0xFF, true);
-	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(last_result), JC_VAL);
+	jx64_mov_m64_r64(e, JX_RBP, JC_OFF(last_result), JC_VAL);
 	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(last_op_size), OPSIZE_8);
 	jx64_mov_r32_rm(e, JC_TMP2, jc_state(JC_OFF(flags)));
 	jx64_alu_rm_imm(e, 4, jc_reg(JC_TMP2), JC_LOGIC_MASK, false);
@@ -812,7 +819,7 @@ static void rec_shift_r32_cl(jx64_t *e, const uop_t *u, int l_slow, bool left)
 		jx64_alu_rm_imm(e, 4, jc_reg(JC_TMP2), FLAG_OVERFLOW, false);
 	}
 
-	jx64_mov_m32_r32(e, JX_RBP, JC_OFF(last_result), dst);
+	jx64_mov_m64_r64(e, JX_RBP, JC_OFF(last_result), dst);
 	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(last_op_size), OPSIZE_32);
 	jx64_mov_m32_imm32(e, JX_RBP, JC_OFF(flags_changed),
 	                   (uint32_t)(int32_t)(FLAGS_ALL & ~1 & ~FLAG_OVERFLOW));
@@ -1159,7 +1166,14 @@ static void jitcg_emit_stores(jx64_t *e, const uop_t *u, bool any_pfx)
 static void jitcg_emit_spill(jx64_t *e)
 {
 	for (int i = 0; i < 8; i++) {
-		jx64_mov_m32_r32(e, JX_RBP, JC_OFF(reg32) + 4 * i, jitcg_greg[i]);
+		/* S1: an EIGHT-BYTE store of the zero-extended host register, so the file the C
+		 * bodies then see is exactly what write_reg32 (cpu_state.c) writes -- the same
+		 * low 32 bits and a ZEROED high half.  A 32-bit store would leave whatever the
+		 * field held before in the high half, and the two engines would then disagree
+		 * about the value of a register (invisible today, wrong the day a 64-bit body
+		 * reads it).  The host register's high half is zero by construction: every write
+		 * to a jitcg_greg[] is a 32-bit operation (x86-64 zeroes the upper half). */
+		jx64_mov_m64_r64(e, JX_RBP, JC_OFF(reg64) + 8 * i, jitcg_greg[i]);
 	}
 	jx64_mov_r64_imm64(e, JC_TMP, (uint64_t)(uintptr_t)&uop_pending);
 	jx64_mov_m32_r32(e, JC_TMP, 0, JC_PENDING);
@@ -1168,7 +1182,7 @@ static void jitcg_emit_spill(jx64_t *e)
 static void jitcg_emit_reload(jx64_t *e)
 {
 	for (int i = 0; i < 8; i++) {
-		jx64_mov_r32_m32(e, jitcg_greg[i], JX_RBP, JC_OFF(reg32) + 4 * i);
+		jx64_mov_r32_m32(e, jitcg_greg[i], JX_RBP, JC_OFF(reg64) + 8 * i);
 	}
 	jx64_mov_r64_imm64(e, JC_TMP, (uint64_t)(uintptr_t)&uop_pending);
 	jx64_mov_r32_m32(e, JC_PENDING, JC_TMP, 0);
@@ -1469,7 +1483,7 @@ static void jitcg_emit_prologue(jx64_t *e, bool need_slots, bool need_code)
 
 	jx64_mov_r64_imm64(e, JX_RBP, (uint64_t)(uintptr_t)cpu);
 	for (int i = 0; i < 8; i++) {
-		jx64_mov_r32_m32(e, jitcg_greg[i], JX_RBP, JC_OFF(reg32) + 4 * i);
+		jx64_mov_r32_m32(e, jitcg_greg[i], JX_RBP, JC_OFF(reg64) + 8 * i);
 	}
 	jx64_mov_r64_imm64(e, JC_TMP, (uint64_t)(uintptr_t)&uop_pending);
 	jx64_mov_r32_m32(e, JC_PENDING, JC_TMP, 0);
@@ -1494,9 +1508,10 @@ static void jitcg_emit_epilogue(jx64_t *e)
 	jx64_mov_r64_imm64(e, JC_TMP, (uint64_t)(uintptr_t)&uop_pending);
 	jx64_mov_m32_r32(e, JC_TMP, 0, JC_PENDING);
 
-	/* ... the guest registers go back to cpu->reg32[] ... */
+	/* ... the guest registers go back to cpu->reg64[] (8-byte stores of the zero-extended
+	 * host registers, as in jitcg_emit_spill) ... */
 	for (int i = 0; i < 8; i++) {
-		jx64_mov_m32_r32(e, JX_RBP, JC_OFF(reg32) + 4 * i, jitcg_greg[i]);
+		jx64_mov_m64_r64(e, JX_RBP, JC_OFF(reg64) + 8 * i, jitcg_greg[i]);
 	}
 
 	/* ... and the counters are folded in ONCE per block run (the executor's PERF-5 hoist):

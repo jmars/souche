@@ -1159,13 +1159,22 @@ static void test_m1c_opcodes(void)
      * guest's value unchecked (instructions_0f.rs:1195-1205).  This port kept it live
      * until R5F (R5's S2), so a guest write here ABORTED the machine.  R5F dropped it at
      * its own site, so the checks below are the regression: MEASURED, re-adding the assert
-     * aborts this binary here (results/r5f-mut.txt, mutC). */
+     * aborts this binary here (results/r5f-mut.txt, mutC).
+     *
+     * S2 CHANGED THE VALUE THIS WRITES, and the reason is new semantics rather than a
+     * re-pin: EFER.LME and EFER.LMA are no longer "reserved bits" -- they are the IA-32e
+     * request and state, and a write carrying LME is now a NAMED REFUSAL on a backend that
+     * cannot run long mode (results/x86-64-plan.md ss3.5.2, the plan's C5).  So the value
+     * below keeps every reserved bit set EXCEPT those two, which is the set this check was
+     * always about; the refusal itself is pinned in cpu_selftest.c's
+     * test_cpu_mode_and_refusals, where the state around it can be asserted too. */
     write_reg32(ECX, (int32_t)MSR_EFER);
-    write_reg32(EAX, (int32_t)0xFFFFFFFFu); /* every low reserved bit set */
+    write_reg32(EAX, (int32_t)(0xFFFFFFFFu & ~(0x100u | 0x400u))); /* LME (bit 8) and LMA
+                                                                    * (bit 10) excluded */
     write_reg32(EDX, 0x1);
     cpu->pagefault = false;
     instr_0F30();
-    CHECK_EQ(cpu->efer, ((uint64_t)1 << 32) | 0xFFFFFFFFull); /* stored unchecked */
+    CHECK_EQ(cpu->efer, ((uint64_t)1 << 32) | 0xFFFFFAFFull); /* stored unchecked */
     CHECK_EQ(cpu->pagefault, 0);
 
     /* IA32_APIC_BASE (0x1B) with a nonzero high word AND a relocated address AND the EXTD

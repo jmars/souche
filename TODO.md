@@ -369,11 +369,28 @@ unmoved — transcript `8bb8eca5…`, determinism 4,000,096,757 both runs, bench
 118/118, reboot 39/39, the five VGA gates, PAE-1 11/0, PAE-L3 both legs — and a 3G-instruction PAE
 kernel boot is byte-identical across all four selections.
 
-**S1-S13 REMAIN**: the register file and flags at 64 bits (inert + poison probe), **the mode
-predicate and the two refusals (S2 — it also closes the live C5 defect below)**, the address/IP
-widening, the host-corpus infrastructure, then the vertical slice, the ISA families, the system
-layer, the guest and the engines' long-mode arms.  Nothing below in this section is stale; S0 was
-the seam only, and none of long mode's own work has started.
+**S1 AND S2 ARE LANDED (2026-10-19): THE WIDENING (INERT) AND THE REFUSALS.**
+`results/x86-64-s1-s2.md` is their report.  S1: the register file is `uint64_t reg64[8]`, the lazy
+operands `int64_t`, `OPSIZE_64`/`CACHED_MASK_LONG` exist, the byte/word index formulas moved with
+the element size, and `write_reg32` zeroes the high half (the JIT's spill agrees).  The lazy
+operands gained a **canonical storage form** (masked to the operand width) because the JIT and the
+interpreter are compared byte for byte and do not sign-extend alike.  Its gate is the whole battery
+**plus a new poison probe** (`--poison`, `make poison-probe`): seed every widened field's high half
+with `0xA5A5A5A5` and the M0 transcript must be byte-identical — it is.  S2: `cpu_mode_of` gained
+its IA-32e arm, `EFER_LME`/`LMA`/`SCE` are defined, and the plan's **C5 is CLOSED**: all THREE
+writes that can enter IA-32e (`WRMSR(EFER)` with LME, `CR0.PG`, `CR4.PAE` — the plan names two,
+`MOV CR4` reaches the same `load_pdpte()`) now stop **by name** and commit nothing, and
+`CPUID.80000001h:EDX`'s `lm`/`syscall` bits and `80000008h`'s linear width are gated on
+`cpu_backend_can(CPU_MODE_LONG)` (today: clear, 32 — the pinned reference's own values).  Both
+slices moved nothing else: transcript `8bb8eca5…`, determinism 4,000,096,757 both runs, bench
+200,095,214 with the JIT inlining pins, nasm 118/118, reboot 39/39, the five VGA gates, PAE-1 11/0,
+PAE-L3 both legs; `cpu_selftest` 3646 → 3846 checks.  NOT landed and named in the report: the
+`EFER.LMA` transition (S5/S11), `CPU_MODE_COMPAT` (needs `CS.L`), `pdpe1gb` (deliberately not
+declared before 1 GiB pages exist), R8-R15 (no field yet).
+
+**S3-S13 REMAIN**: the address/IP widening, the host-corpus infrastructure, then the vertical
+slice, the ISA families, the system layer, the guest and the engines' long-mode arms.  The rest of
+this section is the reconnaissance record and is not made stale by S0-S2.
 
 Not implemented, and deliberately **not** listed as a non-goal: it is wanted one day. It is recorded
 here so the next reader inherits the reconnaissance instead of re-deriving it.

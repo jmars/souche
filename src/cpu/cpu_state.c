@@ -16,33 +16,46 @@ cpu_state_t *cpu;
  * register accessors -- cpu.rs:4128-4196, ported verbatim
  * ------------------------------------------------------------------ */
 
-/* reg8 is the byte view of reg32 (global_pointers.rs:8): index -> byte offset
- * mapping "index << 2 & 12 | index >> 2 & 1" (cpu.rs:4128). */
-static int32_t get_reg8_index(int32_t index) { return (index << 2 & 12) | (index >> 2 & 1); }
+/* reg8 is the byte view of the register file: index -> byte offset mapping.  S1 CHANGED
+ * THE FORMULA (results/x86-64-plan.md ss4) because the element is now 8 bytes:
+ *
+ *     (index << 2 & 12) | (index >> 2 & 1)   -- the old, flat 4-byte layout
+ *     (index & 3) * 8 + (index >> 2 & 1)     -- the widened one
+ *
+ * AL/CL/DL/BL (indices 0-3) are the first byte of reg64[0..3] and AH/CH/DH/BH (4-7) the
+ * SECOND byte of the same slots.  A formula left unchanged here would put AH on ESP's
+ * first byte -- the port made exactly that mistake once already in the JIT's register
+ * mapping (jit_codegen.c:198-201) and the guest's stack pointer came out corrupted. */
+static int32_t get_reg8_index(int32_t index) { return (index & 3) * 8 + (index >> 2 & 1); }
 
 int32_t read_reg8(int32_t index)
 {
-    return ((const uint8_t *)cpu->reg32)[get_reg8_index(index)];
+    return ((const uint8_t *)cpu->reg64)[get_reg8_index(index)];
 }
 
 void write_reg8(int32_t index, int32_t value)
 {
-    ((uint8_t *)cpu->reg32)[get_reg8_index(index)] = (uint8_t)value;
+    ((uint8_t *)cpu->reg64)[get_reg8_index(index)] = (uint8_t)value;
 }
 
-/* get_reg16_index(index) == index << 1 (cpu.rs:4142) -- and the pointer arithmetic in
- * upstream is in u16 UNITS, so the element index is 2*index (reg32[1]'s low half is
- * u16[2], i.e. CX).  Getting this wrong silently aliases DX to CX. */
-int32_t read_reg16(int32_t index) { return ((const uint16_t *)cpu->reg32)[index << 1]; }
+/* get_reg16_index(index) == index << 1 in upstream's u16 UNITS (cpu.rs:4142); with 8-byte
+ * elements the element index is 2*index in U32 units, i.e. index << 2 in u16 units, and
+ * the fill order inside a slot is unchanged.  Getting this wrong silently aliases DX to CX,
+ * which is why the S1 selftest pins a 16-bit write against a neighbouring slot. */
+int32_t read_reg16(int32_t index) { return ((const uint16_t *)cpu->reg64)[index << 2]; }
 
 void write_reg16(int32_t index, int32_t value)
 {
-    ((uint16_t *)cpu->reg32)[index << 1] = (uint16_t)value;
+    ((uint16_t *)cpu->reg64)[index << 2] = (uint16_t)value;
 }
 
-int32_t read_reg32(int32_t index) { return cpu->reg32[index]; }
+/* THE 32-BIT ACCESSORS KEEP THEIR WIDTH (ss4's "81 references, all mechanical"): a read
+ * returns the low half, and a write ZEROES the high half -- x86-64's own rule for a
+ * 32-bit destination register, so the file is long-mode-correct in advance and the
+ * interpreter and the JIT agree about what a register holds. */
+int32_t read_reg32(int32_t index) { return (int32_t)(uint32_t)cpu->reg64[index]; }
 
-void write_reg32(int32_t index, int32_t value) { cpu->reg32[index] = value; }
+void write_reg32(int32_t index, int32_t value) { cpu->reg64[index] = (uint32_t)value; }
 
 /* mmx registers are the low 64 bits of the fpu_st slots (cpu.rs:4162-4173). */
 int32_t read_mmx32s(int32_t r) { return (int32_t)cpu->fpu_st[r].mantissa; }
@@ -123,7 +136,7 @@ void reset_cpu(void)
         cpu->segment_offsets[i] = 0;
         cpu->segment_access_bytes[i] = 0x80 | (0 << 5) | 0x10 | 0x02; /* P dpl0 S RW */
 
-        cpu->reg32[i] = 0;
+        cpu->reg64[i] = 0;
         cpu->sreg[i] = 0;
         cpu->dreg[i] = 0;
 
@@ -163,8 +176,8 @@ void reset_cpu(void)
     cpu->cr[2] = 0;
     cpu->cr[3] = 0;
     cpu->cr[4] = 0;
-    cpu->dreg[6] = (int32_t)0xFFFF0FF0u;
-    cpu->dreg[7] = 0x400;
+    cpu->dreg[6] = RESET_DREG6;
+    cpu->dreg[7] = RESET_DREG7;
     cpu->cpl = 0;
 
     cpu->is_32 = false;

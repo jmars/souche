@@ -73,10 +73,17 @@
 #define FLAGS_ALL       (FLAG_CARRY | FLAG_PARITY | FLAG_ADJUST | FLAG_ZERO | FLAG_SIGN | \
                          FLAG_OVERFLOW)
 
-/* the three "op size" encodings (cpu.rs:120-123): a bit position, not a byte count */
+/* the "op size" encodings (cpu.rs:120-123): a bit position, not a byte count.
+ *
+ * OPSIZE_64 is the port's own (S1, results/x86-64-plan.md ss4): long mode's 64-bit
+ * operand.  It is 63 for the same reason the others are 7/15/31 -- the getters extract
+ * the sign/carry bit with `>> last_op_size & 1`, and the mask is `(2ull << op_size) - 1`
+ * (flags.h).  It is UNUSED until the first 64-bit semantic body lands (S6); the state
+ * it names is defined and tested now so the flag cores are not widened twice. */
 #define OPSIZE_8  7
 #define OPSIZE_16 15
 #define OPSIZE_32 31
+#define OPSIZE_64 63
 
 /* register indices (v86/src/rust/regs.rs:1-30 and cpu.rs:98-147) */
 #define EAX 0
@@ -148,6 +155,15 @@
 #define CR4_SMEP (1 << 20)
 #define MSR_EFER        0xC0000080u /* as int32 this is negative: keep unsigned */
 #define EFER_NXE        ((uint64_t)1 << 11)
+/* S2 (results/x86-64-plan.md ss3.5.2, C5): the three long-mode control bits of the SAME
+ * register.  EFER_NXE was the only defined bit, which is why a guest's EFER.LME was dead
+ * data: nothing read it, and the machine walked a 4-level table as if it were 3-level.
+ * LME is the guest's REQUEST (WRMSR), LMA is the machine's state (set on the CR0.PG edge
+ * once a backend can run long mode -- S5/S11) and SCE enables SYSCALL/SYSRET (S11).  The
+ * bit positions are the SDM's (Vol 4, IA32_EFER). */
+#define EFER_SCE        ((uint64_t)1 << 0)
+#define EFER_LME        ((uint64_t)1 << 8)
+#define EFER_LMA        ((uint64_t)1 << 10)
 
 /* exception vectors (cpu.rs:276-295) */
 #define IVT_SIZE            0x400
@@ -246,13 +262,24 @@ _Static_assert(offsetof(f80_t, sign_exponent) == 8, "f80_t layout must match ext
 /* global_pointers.rs:3-112, in order.  `bool` members are upstream `*mut bool`
  * (an i32 slot in the wasm block); the C type is `bool` since the offsets are gone. */
 typedef struct cpu_state {
-    int32_t reg32[8]; /* 64 */
+    /* S1 (results/x86-64-plan.md ss4): WIDENED IN PLACE from `int32_t reg32[8]`.  The
+     * name is the point -- a field called reg32 holding a 64-bit value is a comment that
+     * lies.  The READERS are still 32-bit: read_reg32/write_reg32 are the accessors every
+     * 32-bit body uses, and they keep their names and their width (a 32-bit read returns
+     * the low half; a 32-bit WRITE ZEROES the high half, which is what x86-64 hardware
+     * does and what the JIT's spill/reload pair was made to agree with).  The byte/word
+     * accessors' index formulas changed with the element size -- see cpu_state.c. */
+    uint64_t reg64[8]; /* 64 -- was reg32 */
 
     int32_t last_op_size;  /* 96  */
-    int32_t flags_changed; /* 100 */
-    int32_t last_op1;      /* 104 */
+    int32_t flags_changed; /* 100 -- stays 32-bit: bit 31 IS FLAG_SUB (flags.h) */
+    /* S1: WIDENED to int64_t (ss4's "widen the two operands to int64_t").  The getters
+     * read them with `>> last_op_size`, so the shift is in the operand's own width; the
+     * value may be stored zero- or sign-extended by the setter, which is why getcf masks
+     * before comparing (flags.c). */
+    int64_t last_op1;      /* 104 */
     uint8_t state_flags;   /* 108 -- CachedStateFlags, state_flags.rs:3-26 */
-    int32_t last_result;   /* 112 */
+    int64_t last_result;   /* 112 */
     int32_t flags;         /* 120 */
 
     uint8_t segment_access_bytes[8]; /* 512 */
@@ -284,7 +311,9 @@ typedef struct cpu_state {
     uint64_t instruction_counter; /* 664 */
 
     uint16_t sreg[8]; /* 668 -- selector registers ES..GS, TR, LDTR */
-    int32_t dreg[8];  /* 684 */
+    /* S1: WIDENED to int64_t (ss4): DR0-DR7 are 64-bit in long mode.  The debug-register
+     * moves (0F 21/0F 23) still read and write 32 bits, zero-extended. */
+    int64_t dreg[8];  /* 684 */
 
     uint32_t svga_dirty_bitmap_min_offset; /* 716 -- VGA-only, kept for state parity */
     uint32_t svga_dirty_bitmap_max_offset; /* 720 */
@@ -440,8 +469,15 @@ void write_xmm_reg128(int32_t r, reg128 data);
 #define CACHED_MASK_SS32       (1 << 1)
 #define CACHED_MASK_CPL3       (1 << 2)
 #define CACHED_MASK_FLAT_SEGS  (1 << 3)
+/* S1 (ss4): the fifth bit, defined and NOT SET YET.  `state_flags` is half of the
+ * decoded-block cache's key (uop_cache.h's block key), so a bit that distinguishes
+ * long/compat mode invalidates any cross-mode reuse FOR FREE -- which is the whole
+ * reason it exists.  Nothing enters long mode in this tree yet (EFER_LMA is defined in
+ * S2 and set by S5's mode transition), so update_state_flags composes the same four
+ * bits it always did and every cached-block key is unchanged. */
+#define CACHED_MASK_LONG       (1 << 4)
 #define CACHED_MASK_ALL        (CACHED_MASK_IS_32 | CACHED_MASK_SS32 | CACHED_MASK_CPL3 | \
-                                CACHED_MASK_FLAT_SEGS)
+                                CACHED_MASK_FLAT_SEGS | CACHED_MASK_LONG)
 
 static inline bool cached_state_is_32(void) { return (cpu->state_flags & CACHED_MASK_IS_32) != 0; }
 static inline bool cached_state_ssize_32(void) { return (cpu->state_flags & CACHED_MASK_SS32) != 0; }
@@ -470,8 +506,8 @@ void cpu_state_init(void);
 /* The reset values as literal constants so the selftest (and a reader) can name
  * them without re-deriving them from the code under test. */
 #define RESET_CR0        ((int32_t)((1u << 30) | (1u << 29) | (1u << 4))) /* cpu.rs:4751 */
-#define RESET_DREG6      ((int32_t)0xFFFF0FF0u)
-#define RESET_DREG7      0x400
+#define RESET_DREG6      ((int64_t)0xFFFF0FF0u)
+#define RESET_DREG7      ((int64_t)0x400)
 #define RESET_EIP        0xFFFF0
 #define RESET_CS_SHIFT   0xF000 /* switch_cs_real_mode(0xF000), cpu.rs:4755 */
 #define RESET_SS_SEL     0x30   /* switch_seg(SS, 0x30), cpu.rs:4757 */

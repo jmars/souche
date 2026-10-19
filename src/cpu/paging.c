@@ -12,7 +12,8 @@
 #include <stdlib.h>
 
 #include "paging.h"
-#include "uop_cache.h" /* PERF-4/M2: the write-path invalidation hook (plan ss4.1) */
+#include "cpu_backend.h" /* S2: the long-mode refusal (plan ss3.5.2, C5) */
+#include "uop_cache.h"   /* PERF-4/M2: the write-path invalidation hook (plan ss4.1) */
 
 int32_t tlb_data[0x100000];
 int32_t valid_tlb_entries[VALID_TLB_ENTRY_MAX];
@@ -452,6 +453,18 @@ void set_cr0(int32_t cr0)
     }
     if ((cr0 & (CR0_PE | CR0_PG)) == CR0_PG) {
         fatal("cannot load PG without PE");
+    }
+
+    /* S2 (plan ss3.5.2, C5): THE PG TRANSITION.  This is the SDM's trigger for entering
+     * IA-32e mode -- CR0.PG set while EFER.LME and CR4.PAE are -- and before S2 a guest
+     * that arranged those three bits got load_pdpte() below reading a PML4 as a PDPT and a
+     * 3-level walk over 4-level tables, with nothing in the machine saying so.  Refused BY
+     * NAME, and BEFORE the load_pdpte validation below (which would otherwise be the first
+     * wrong-table read), with CR0 left exactly as it was: a refused write commits nothing. */
+    if ((cr0 & CR0_PG) != 0 && (old_cr0 & CR0_PG) == 0 &&
+        (cpu->efer & EFER_LME) != 0 && (cpu->cr[4] & CR4_PAE) != 0 &&
+        cpu_backend_refuse_long_mode("CR0.PG")) {
+        return;
     }
 
     /* validation BEFORE commit: a #GP from load_pdpte must leave CR0 (and the TLB)

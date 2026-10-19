@@ -12,19 +12,50 @@
  * getters -- misc_instr.rs:8-66
  * ------------------------------------------------------------------ */
 
+/* S1: the operands are int64_t now, and no setter writes a value that needed more than
+ * its own width before -- but a WIDER field means the high 32 bits exist and somebody will
+ * one day put something in them (the S1 poison probe does it on purpose).  Two helpers are
+ * the whole of the discipline that keeps them out of the flags:
+ *
+ *   op_masked   the operand as the unsigned value of its own width.  This is the port of
+ *               the `(uint32_t)` casts the 32-bit getcf carried, and it is what makes the
+ *               comparison happen in the OPERAND's width rather than the field's.  The S1
+ *               selftest's poison arm fails without it.
+ *   op_fits_width  upstream's dbg_assert!((uint32_t)last_op1 <= (uint32_t)m)
+ *               (misc_instr.rs:10-11, "a carry into the flags from beyond the operand is
+ *               a porting bug") ported EXACTLY: the low 32 bits must fit the operand
+ *               width.  Bits 32..63 are deliberately not examined -- a 32-bit setter never
+ *               wrote them, and requiring them to be zero would make the poison probe
+ *               impossible to run.
+ */
+static inline uint64_t op_masked(int64_t value, int64_t mask)
+{
+    return (uint64_t)value & (uint64_t)mask;
+}
+
+static inline bool op_fits_width(int64_t value, int64_t mask)
+{
+    return ((uint64_t)value & 0xFFFFFFFFull) <= ((uint64_t)mask & 0xFFFFFFFFull);
+}
+
 bool getcf(void)
 {
     if (cpu->flags_changed & 1) {
-        int32_t m = opsize_to_mask(cpu->last_op_size);
+        int64_t m = opsize_to_mask(cpu->last_op_size);
         /* misc_instr.rs:10-11: last_op1/last_result must fit the last op size, i.e.
          * "a carry into the flags from beyond the operand" is a porting bug. */
-        DBG_ASSERT((uint32_t)cpu->last_op1 <= (uint32_t)m);
-        DBG_ASSERT((uint32_t)cpu->last_result <= (uint32_t)m);
+        DBG_ASSERT(op_fits_width(cpu->last_op1, m));
+        DBG_ASSERT(op_fits_width(cpu->last_result, m));
 
-        int32_t sub_mask = cpu->flags_changed >> 31;
+        uint64_t op1 = op_masked(cpu->last_op1, m);
+        uint64_t result = op_masked(cpu->last_result, m);
+        uint64_t sub_mask = (uint64_t)(int64_t)(cpu->flags_changed >> 31);
 
-        /* sub: last_op1 < last_result;  add: last_result < last_op1 (misc_instr.rs:16-21) */
-        return (uint32_t)(cpu->last_result ^ sub_mask) < (uint32_t)(cpu->last_op1 ^ sub_mask);
+        /* sub: last_op1 < last_result;  add: last_result < last_op1 (misc_instr.rs:16-21).
+         * Both operands are masked to their own width first, so the comparison is the
+         * operand-width comparison the 32-bit getter made -- and for OPSIZE_64 the mask
+         * is all ones, i.e. the comparison the 64-bit hardware makes. */
+        return (result ^ sub_mask) < (op1 ^ sub_mask);
     }
     else {
         return (cpu->flags & 1) != 0;
@@ -46,7 +77,9 @@ bool getaf(void)
 {
     if (cpu->flags_changed & FLAG_ADJUST) {
         bool is_sub = (cpu->flags_changed & FLAG_SUB) != 0;
-        int32_t last_op2 = (cpu->last_result - cpu->last_op1) * (is_sub ? -1 : 1);
+        int64_t last_op2 = (cpu->last_result - cpu->last_op1) * (is_sub ? -1 : 1);
+        /* only bit 4 is examined, so the widened subtraction's high bits cannot reach
+         * the answer (the same argument the OF getter's bit extraction makes) */
         return ((cpu->last_op1 ^ last_op2 ^ cpu->last_result) & FLAG_ADJUST) != 0;
     }
     else {
@@ -79,8 +112,9 @@ bool getof(void)
     if (cpu->flags_changed & FLAG_OVERFLOW) {
         int32_t is_sub = (uint32_t)cpu->flags_changed >> 31;
 
-        /* add: (a ^ result) & (b ^ result);  sub: the b-xor-1 variant (misc_instr.rs:58-62) */
-        int32_t b_xor_1_if_sub = (cpu->last_result - cpu->last_op1) - is_sub;
+        /* add: (a ^ result) & (b ^ result);  sub: the b-xor-1 variant (misc_instr.rs:58-62).
+         * Both sides are examined at bit `last_op_size` only. */
+        int64_t b_xor_1_if_sub = (cpu->last_result - cpu->last_op1) - is_sub;
         return (((cpu->last_op1 ^ cpu->last_result) & (b_xor_1_if_sub ^ cpu->last_result)) >>
                 cpu->last_op_size) &
                1;
@@ -94,85 +128,83 @@ bool getof(void)
  * setters -- arith.rs:12-103
  * ------------------------------------------------------------------ */
 
-int32_t flags_add(int32_t dest_operand, int32_t source_operand, int32_t op_size)
+int64_t flags_add(int64_t dest_operand, int64_t source_operand, int32_t op_size)
 {
-    int32_t res = (dest_operand + source_operand) & opsize_to_mask(op_size);
-    cpu->last_op1 = dest_operand;
-    cpu->last_result = res;
-    cpu->last_op_size = op_size;
+    int64_t res = last_value(dest_operand + source_operand, op_size);
+    set_last_result(res, op_size);
+    cpu->last_op1 = last_value(dest_operand, op_size);
     cpu->flags_changed = FLAGS_ALL;
     return res;
 }
 
-int32_t flags_adc(int32_t dest_operand, int32_t source_operand, int32_t op_size)
+int64_t flags_adc(int64_t dest_operand, int64_t source_operand, int32_t op_size)
 {
     /* the incoming carry is read FIRST: it comes from the previous operation's
      * lazy state, which this call is about to overwrite (arith.rs:23) */
-    int32_t cf = getcf() ? 1 : 0;
-    int32_t res = (dest_operand + source_operand + cf) & opsize_to_mask(op_size);
-    cpu->last_op1 = dest_operand;
-    cpu->last_result = res;
-    cpu->last_op_size = op_size;
+    int64_t cf = getcf() ? 1 : 0;
+    int64_t res = last_value(dest_operand + source_operand + cf, op_size);
+    set_last_result(res, op_size);
+    cpu->last_op1 = last_value(dest_operand, op_size);
     cpu->flags_changed = FLAGS_ALL & ~FLAG_CARRY & ~FLAG_ADJUST & ~FLAG_OVERFLOW;
     /* the parenthesisation below is upstream's precedence, spelled out because C's
-     * -Wparentheses flags a bare mix of & and | */
+     * -Wparentheses flags a bare mix of & and |.  The left shifts go through uint64_t (the
+     * arith.h `<<` convention): the shifted value can be negative and signed left shift is
+     * undefined behaviour, while only bits 0/4/11 of the shifted result are kept. */
     cpu->flags = (cpu->flags & ~FLAG_CARRY & ~FLAG_ADJUST & ~FLAG_OVERFLOW) |
-                 ((dest_operand ^ ((dest_operand ^ source_operand) & (source_operand ^ res))) >>
-                  op_size & FLAG_CARRY) |
-                 ((dest_operand ^ source_operand ^ res) & FLAG_ADJUST) |
-                 (((source_operand ^ res) & (dest_operand ^ res)) >> op_size << 11 &
-                  FLAG_OVERFLOW);
+                 (int32_t)((uint64_t)(dest_operand ^
+                                      ((dest_operand ^ source_operand) & (source_operand ^ res))) >>
+                           op_size & FLAG_CARRY) |
+                 (int32_t)((dest_operand ^ source_operand ^ res) & FLAG_ADJUST) |
+                 (int32_t)((uint64_t)(((source_operand ^ res) & (dest_operand ^ res))) >>
+                           op_size << 11 & FLAG_OVERFLOW);
     return res;
 }
 
-int32_t flags_sub(int32_t dest_operand, int32_t source_operand, int32_t op_size)
+int64_t flags_sub(int64_t dest_operand, int64_t source_operand, int32_t op_size)
 {
-    int32_t res = (dest_operand - source_operand) & opsize_to_mask(op_size);
-    cpu->last_op1 = dest_operand;
-    cpu->last_result = res;
-    cpu->last_op_size = op_size;
+    int64_t res = last_value(dest_operand - source_operand, op_size);
+    set_last_result(res, op_size);
+    cpu->last_op1 = last_value(dest_operand, op_size);
     cpu->flags_changed = FLAGS_ALL | FLAG_SUB; /* bit 31 selects sub in the getters */
     return res;
 }
 
-int32_t flags_sbb(int32_t dest_operand, int32_t source_operand, int32_t op_size)
+int64_t flags_sbb(int64_t dest_operand, int64_t source_operand, int32_t op_size)
 {
-    int32_t cf = getcf() ? 1 : 0;
-    int32_t res = (dest_operand - source_operand - cf) & opsize_to_mask(op_size);
-    cpu->last_op1 = dest_operand;
-    cpu->last_result = res;
-    cpu->last_op_size = op_size;
+    int64_t cf = getcf() ? 1 : 0;
+    int64_t res = last_value(dest_operand - source_operand - cf, op_size);
+    set_last_result(res, op_size);
+    cpu->last_op1 = last_value(dest_operand, op_size);
     cpu->flags_changed =
         (FLAGS_ALL & ~FLAG_CARRY & ~FLAG_ADJUST & ~FLAG_OVERFLOW) | FLAG_SUB;
     cpu->flags = (cpu->flags & ~FLAG_CARRY & ~FLAG_ADJUST & ~FLAG_OVERFLOW) |
-                 ((res ^ ((res ^ source_operand) & (source_operand ^ dest_operand))) >>
-                  op_size & FLAG_CARRY) |
-                 ((dest_operand ^ source_operand ^ res) & FLAG_ADJUST) |
-                 (((source_operand ^ dest_operand) & (res ^ dest_operand)) >> op_size << 11 &
-                  FLAG_OVERFLOW);
+                 (int32_t)((uint64_t)(res ^
+                                      ((res ^ source_operand) & (source_operand ^ dest_operand))) >>
+                           op_size & FLAG_CARRY) |
+                 (int32_t)((dest_operand ^ source_operand ^ res) & FLAG_ADJUST) |
+                 (int32_t)((uint64_t)(((source_operand ^ dest_operand) & (res ^ dest_operand))) >>
+                           op_size << 11 & FLAG_OVERFLOW);
     return res;
 }
 
-int32_t flags_inc(int32_t dest_operand, int32_t op_size)
+int64_t flags_inc(int64_t dest_operand, int32_t op_size)
 {
     /* inc/dec preserve CF (arith.rs:115): materialize it, then mark everything but
      * bit 0 stale */
     cpu->flags = (cpu->flags & ~1) | (getcf() ? 1 : 0);
-    int32_t res = (dest_operand + 1) & opsize_to_mask(op_size);
-    cpu->last_op1 = dest_operand;
-    cpu->last_result = res;
-    cpu->last_op_size = op_size;
+    int64_t res = last_value(dest_operand + 1, op_size);
+    set_last_result(res, op_size);
+    cpu->last_op1 = last_value(dest_operand, op_size);
     cpu->flags_changed = FLAGS_ALL & ~1;
     return res;
 }
 
-int32_t flags_dec(int32_t dest_operand, int32_t op_size)
+int64_t flags_dec(int64_t dest_operand, int32_t op_size)
 {
     cpu->flags = (cpu->flags & ~1) | (getcf() ? 1 : 0);
-    int32_t res = (dest_operand - 1) & opsize_to_mask(op_size);
-    cpu->last_op1 = dest_operand;
-    cpu->last_result = res;
-    cpu->last_op_size = op_size;
+    int64_t res = last_value(dest_operand - 1, op_size);
+    set_last_result(res, op_size);
+    cpu->last_op1 = last_value(dest_operand, op_size);
     cpu->flags_changed = (FLAGS_ALL & ~1) | FLAG_SUB;
     return res;
 }

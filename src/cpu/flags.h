@@ -37,16 +37,23 @@ bool getof(void);
  * `sub`, `sbb`, `inc`, `dec` (private) with per-size public wrappers add8/16/32
  * etc.  The `flags_` prefix marks the core: the wrappers are arith.c's (M1a step 7),
  * which will call these; the names differ only to satisfy C's single namespace.
- * `op_size` is one of OPSIZE_8/16/32 (a bit position, see cpu_state.h).
+ * `op_size` is one of OPSIZE_8/16/32/64 (a bit position, see cpu_state.h).
+ *
+ * S1 (results/x86-64-plan.md ss4): THE OPERANDS AND THE RESULT ARE int64_t.  The 32-bit
+ * wrappers in arith.c pass int32_t and truncate the result on the way back -- bit-exact,
+ * because every core masks its result to `opsize_to_mask(op_size)`.  Widening the
+ * PARAMETERS rather than adding a second set of `flags_add64` is what keeps ONE
+ * implementation of the flag rules: a second copy is where a 64-bit carry would one day
+ * be fixed and a 32-bit one broken.
  */
-int32_t flags_add(int32_t dest_operand, int32_t source_operand, int32_t op_size);
-int32_t flags_adc(int32_t dest_operand, int32_t source_operand, int32_t op_size);
-int32_t flags_sub(int32_t dest_operand, int32_t source_operand, int32_t op_size);
-int32_t flags_sbb(int32_t dest_operand, int32_t source_operand, int32_t op_size);
-int32_t flags_inc(int32_t dest_operand, int32_t op_size);
-int32_t flags_dec(int32_t dest_operand, int32_t op_size);
+int64_t flags_add(int64_t dest_operand, int64_t source_operand, int32_t op_size);
+int64_t flags_adc(int64_t dest_operand, int64_t source_operand, int32_t op_size);
+int64_t flags_sub(int64_t dest_operand, int64_t source_operand, int32_t op_size);
+int64_t flags_sbb(int64_t dest_operand, int64_t source_operand, int32_t op_size);
+int64_t flags_inc(int64_t dest_operand, int32_t op_size);
+int64_t flags_dec(int64_t dest_operand, int32_t op_size);
 /* arith.rs:98: `neg` is literally sub(0, x, op_size). */
-static inline int32_t flags_neg(int32_t dest_operand, int32_t op_size)
+static inline int64_t flags_neg(int64_t dest_operand, int32_t op_size)
 {
     return flags_sub(0, dest_operand, op_size);
 }
@@ -59,11 +66,42 @@ int32_t get_eflags(void);
 void update_eflags(int32_t new_flags);
 
 /* arith.rs:7 -- (2 << op_size) - 1.  Written unsigned because upstream relies on
- * i32 shift-out-then-wrap for OPSIZE_32 (2 << 31 == 0, so the mask is -1); C's signed
- * << at the width is undefined behaviour, u32's is not. */
-static inline int32_t opsize_to_mask(int32_t op_size)
+ * shift-out-then-wrap for OPSIZE_32 (2 << 31 == 0, so the mask is -1); C's signed
+ * << at the width is undefined behaviour, unsigned's is not.
+ *
+ * S1: SAME TRICK, ONE WIDTH UP.  2u << 64 would be undefined (a shift count equal to the
+ * width) and is why OPSIZE_64 is 63 and this returns int64_t: 2ull << 63 discards the
+ * shifted-out bit and gives 0, so the -1 makes all 64 bits, exactly as 2u << 31 gives the
+ * 32-bit mask.  For OPSIZE_8/16/32 the value is unchanged (0x7F/0x7FFF/0xFFFFFFFF). */
+static inline int64_t opsize_to_mask(int32_t op_size)
 {
-    return (int32_t)((2u << op_size) - 1u);
+    return (int64_t)((2ull << op_size) - 1ull);
+}
+
+/* S1: THE LAZY OPERANDS' CANONICAL FORM.  last_op1/last_result are int64_t now, and every
+ * writer stores the value MASKED TO ITS OPERAND WIDTH -- i.e. zero-extended, the same form
+ * the (masked) cores produce and the same form the JIT's spill writes (an 8-byte store of
+ * a zero-extended 32-bit host register).  Canonicalising matters for exactly one reason
+ * that is not cosmetic: the JIT and the interpreter must agree BYTE FOR BYTE about the
+ * state, and jit_codegen_selftest's whole-struct memcmp is what enforces it -- the first
+ * widening failed there with 40 differences, every one of them a negative int32 that the C
+ * path had sign-extended and the JIT had not.
+ *
+ * The canonical form changes no flag: every getter examines bits at or below
+ * `last_op_size` (and getcf masks both operands to the width itself), so the two
+ * representations are indistinguishable to them -- which is why this is a storage rule and
+ * not a semantic one. */
+static inline int64_t last_value(int64_t value, int32_t op_size)
+{
+    return value & opsize_to_mask(op_size);
+}
+
+/* store a lazy result AND its size, in one place, so a setter cannot store one without
+ * the other. */
+static inline void set_last_result(int64_t value, int32_t op_size)
+{
+    cpu->last_result = last_value(value, op_size);
+    cpu->last_op_size = op_size;
 }
 
 #endif /* V86C_FLAGS_H */

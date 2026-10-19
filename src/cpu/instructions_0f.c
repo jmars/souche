@@ -42,6 +42,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "cpu_backend.h" /* S2: CPUID's long-mode declaration follows the capability (ss3.5.1) */
 #include "instructions_0f.h"
 
 #include "arith.h"
@@ -476,7 +477,9 @@ void instr_0F21(int32_t r, int32_t dreg_index)
 			dreg_index += 2;
 		}
 	}
-	write_reg32(r, cpu->dreg[dreg_index]);
+	/* S1: dreg[] is int64_t; the move is still a 32-bit one, so the low half is what the
+	 * guest sees (read_reg32 of a wider field would truncate anyway -- this spells it). */
+	write_reg32(r, (int32_t)(uint32_t)cpu->dreg[dreg_index]);
 }
 
 /* instructions_0f.rs:781-829 -- mov crN, r32 */
@@ -511,6 +514,16 @@ void instr_0F22(int32_t r, int32_t creg)
 			 * TLB) uncommitted -- the guest's #GP handler sees the state hardware
 			 * would (MOV CR4 never re-reads PDPTEs on hardware; this is the
 			 * emulator's reg_pdpte refresh). */
+			/* S2 (plan ss3.5.2, C5): the SDM's OTHER trigger for IA-32e -- CR4.PAE
+			 * set while CR0.PG and EFER.LME are -- reaches the same load_pdpte() with
+			 * the same PML4-as-PDPT mistake.  Refused by name before the validation
+			 * read, and CR4 is left uncommitted.  (The plan names two sites, this is
+			 * the third; refusing at two of three would leave the class open.) */
+			if ((data & CR4_PAE) != 0 && (old_cr4 & CR4_PAE) == 0 &&
+			    (cpu->cr[0] & CR0_PG) != 0 && (cpu->efer & EFER_LME) != 0 &&
+			    cpu_backend_refuse_long_mode("CR4.PAE")) {
+				return;
+			}
 			if ((data & CR4_PAE) != 0 &&
 			    ((old_cr4 ^ data) & (CR4_PAE | CR4_PGE | CR4_PSE | CR4_SMEP)) != 0 &&
 			    (cpu->cr[0] & CR0_PG) != 0 && !load_pdpte(cpu->cr[3])) {
@@ -547,7 +560,7 @@ void instr_0F23(int32_t r, int32_t dreg_index)
 			dreg_index += 2;
 		}
 	}
-	cpu->dreg[dreg_index] = read_reg32(r);
+	cpu->dreg[dreg_index] = (uint32_t)read_reg32(r); /* zero-extended (S1) */
 }
 
 void instr_0F24(void) { undefined_instruction(); }
@@ -1215,6 +1228,23 @@ void instr_0FA2(void)
 		      vme | 1 << 3 | 1 << 4 | 1 << 5 | 1 << 6 | /* vme, pse, tsc, msr, pae */
 		      1 << 8 | 1 << 13 | 1 << 15 | 1 << 20 |   /* cx8, pge, cmov, nx */
 		      1 << 23 | 1 << 24;                       /* mmx, fxsr */
+		/* S2 (plan ss3.5.1): THE DECLARATION FOLLOWS THE CAPABILITY.  CPUID's long-mode
+		 * bits are returned only by a backend that can RUN long mode, so the bits and
+		 * the refusal cannot disagree -- which is what makes a guest kernel's own CPUID
+		 * check a gate on the SEAM rather than on the decoder.  Today every engine
+		 * declares CPU_MODES_32BIT, so this adds nothing: EDX stays 0x0190A179, exactly
+		 * as the pinned reference has it, and the battery does not move.
+		 *
+		 * bit 29 lm, bit 11 syscall.  DELIBERATELY NOT bit 26 pdpe1gb, which the plan's
+		 * ss3.5.1 list includes: that bit declares 1 GiB PAGES, and this port does not
+		 * have them (they are S11's).  Coupling it to "long mode is available" instead of
+		 * to "1 GiB pages work" is exactly the false-declaration class (an ACPI-FADT
+		 * table describing a device that is not there) the same plan paragraph is
+		 * arguing against; it goes in with the code that implements it. */
+		if (cpu_backend_can(CPU_MODE_LONG)) {
+			edx |= 1 << 29; /* lm */
+			edx |= 1 << 11; /* syscall */
+		}
 		break;
 	}
 
@@ -1228,7 +1258,12 @@ void instr_0FA2(void)
 		break;
 
 	case 0x80000008:
-		eax = 32 | 32 << 8; /* physical and linear address widths */
+		/* S2 (plan ss3.5.1): the LINEAR width is 48 only for a backend that can run long
+		 * mode; the PHYSICAL width is the port's own 32-bit bound (plan ss5.1) either
+		 * way and is not a function of the backend.  A 32-bit machine reporting a 36-bit
+		 * linear width here would be the same false declaration as `lm` with no long
+		 * mode: 80000008h is the leaf a 64-bit kernel reads to size its page tables. */
+		eax = 32 | ((cpu_backend_can(CPU_MODE_LONG) ? 48 : 32) << 8);
 		ebx = 0;
 		ecx = 0;
 		edx = 0;
@@ -6291,7 +6326,20 @@ void instr_0F30(void)
 	case (int32_t)MSR_EFER: {
 		uint64_t value = ((uint64_t)(uint32_t)high << 32) | (uint64_t)(uint32_t)low;
 		/* upstream: dbg_assert!(value & !EFER_NXE == 0, "Unimplemented EFER bits") --
-		 * dropped (S2): the release reference stores the guest's value unchecked. */
+		 * dropped (R5's S2): the release reference stores the guest's value unchecked,
+		 * and that is still what happens to every OTHER bit here.
+		 *
+		 * ... EXCEPT EFER.LME, which S2 makes a NAMED REFUSAL when the selected backend
+		 * cannot run long mode (plan ss3.5.2, C5).  That is not a re-added dbg_assert:
+		 * upstream's was compiled out of the shipped reference and would have aborted the
+		 * host; this refuses the GUEST's transition by name and leaves EFER unwritten, so
+		 * a guest that then sets CR0.PG cannot reach a 4-level table with a 3-level walk.
+		 * The bit is read as the GUEST asked for it -- a write that clears LME is always
+		 * allowed, on any backend (LMA is cleared by hardware when LME goes away, and this
+		 * port never sets LMA on a backend that cannot run long mode at all). */
+		if ((value & EFER_LME) != 0 && cpu_backend_refuse_long_mode("EFER.LME")) {
+			return;
+		}
 		if (value != cpu->efer) {
 			full_clear_tlb();
 		}

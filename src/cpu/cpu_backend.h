@@ -159,10 +159,22 @@ const cpu_backend_t *cpu_backend_current(void);
 /* Can the SELECTED backend run every mode in `mode`?  (The mode-refusal query.) */
 bool cpu_backend_can(uint32_t mode);
 
-/* The mode the machine is IN, as one CPU_MODE_* bit.  Deliberately NOT the full SS3.3
- * predicate: CPU_MODE_LONG and CPU_MODE_COMPAT are absent because nothing in this tree can
- * enter them yet (EFER_LME is undefined -- plan finding 5, S2's). */
+/* The mode the machine is IN, as one CPU_MODE_* bit (plan Appendix A).  REAL / PROT16 /
+ * PROT32, plus -- from S2 -- LONG for any IA-32e machine: EFER.LMA is the machine's state
+ * and it is set only once a backend can run long mode, but the 64-bit vs compat split
+ * needs CS.L, which this tree does not decode yet (cpu_backend.c names the gap). */
 uint32_t cpu_mode_of(const cpu_state_t *state);
+
+/* S2 (plan ss3.5.2, C5): THE LONG-MODE REFUSAL, in the place the three transition writes
+ * share.  Returns false when the selected backend can run long mode; otherwise records the
+ * machine's NAMED STOP ("<what> asks for IA-32e, and cpu backend '<name>' cannot run long
+ * mode") and returns true, which every caller must treat as "do not commit the write".
+ *
+ * The three call sites are the whole class: WRMSR of EFER carrying LME, a CR0 write setting
+ * PG while LME is set, and a CR4 write setting PAE while PG and LME are.  Before S2 the
+ * first was dead data and the other two reached load_pdpte() with a PML4 where a PDPT
+ * belongs -- silently. */
+bool cpu_backend_refuse_long_mode(const char *what);
 
 /* THE ROUTING, IN ONE PLACE.  cycle_internal's engine half: the mode refusal, then the
  * selected backend's ->run_batch.  It is a FUNCTION rather than three lines inline in

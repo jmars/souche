@@ -44,6 +44,7 @@
 #include <unistd.h> /* _exit: the host-fault handler's exit (cosmocc pulls it in anyway) */
 
 #include "cpu/cpu.h"
+#include "cpu/cpu_backend.h" /* S0: the engine seam -- --cpu-engine, the init, the stats seat */
 #include "cpu/cpu_state.h"
 #include "cpu/exceptions.h" /* guest_exception: the vector a stopped delivery recorded */
 #include "cpu/exec_boundary.h"
@@ -263,8 +264,8 @@ static void multiboot_set_state(uint32_t entrypoint)
 {
 	write32(MULTIBOOT_INFO_ADDR, 0); /* flags bit 1/0: no memory map, no cmdline, no initrd */
 
-	cpu->reg32[EBX] = (int32_t)MULTIBOOT_INFO_ADDR;
-	cpu->reg32[EAX] = (int32_t)MULTIBOOT_BOOTLOADER_MAGIC; /* cpu.js:1283-1284 (port 0xF4) */
+	write_reg32(EBX, (int32_t)MULTIBOOT_INFO_ADDR);
+	write_reg32(EAX, (int32_t)MULTIBOOT_BOOTLOADER_MAGIC); /* cpu.js:1283-1284 (port 0xF4) */
 	cpu->cr[0] = 1;
 	cpu->protected_mode = true;
 	cpu->flags = FLAGS_DEFAULT;
@@ -432,8 +433,11 @@ typedef struct run_result {
  * inside machine_reboot because the executor holds arena pointers mid-block. */
 static void reboot_prepare_reentry(void)
 {
-	uop_cache_clear();  /* drops the compiled blocks too (uop_cache.c) */
-	jit_abort_flag = 0; /* the abort's consumer may never have run */
+	/* S0: the clear is the selected ENGINE's (the contract's clear_caches), not a call into
+	 * one engine's internals -- a second backend owes the same clear, and this is the call
+	 * site the seam names.  All three instances do the same two things today: the caches are
+	 * the machine's and every engine's guest writes invalidate them through the same hooks. */
+	cpu_backend_current()->clear_caches();
 	cpu->reboot_requested = false;
 }
 
@@ -504,7 +508,7 @@ static void print_transcript(const uint8_t *image, size_t image_size, uint64_t l
 	};
 	for (unsigned i = 0; i < 8; i++) {
 		printf("      \"%s\": ", gprs[i].name);
-		hx((uint32_t)cpu->reg32[gprs[i].index], 8);
+		hx((uint32_t)cpu->reg64[gprs[i].index], 8);
 		printf("%s\n", i == 7 ? "" : ",");
 	}
 	printf("    },\n");
@@ -603,7 +607,10 @@ static void print_fixture(void)
 	}
 
 	printf("---BEGIN JSON---\n[\n");
-	for (int i = 0; i < 8; i++) printf("    %d,\n", cpu->reg32[i]);
+	/* S1: the register file is 64-bit now; the fixture document is a 32-bit document
+	 * (tests/mkfixture.c's `reg32[8]`), so the value printed is the low half, exactly as
+	 * before -- (int32_t)(uint32_t) reproduces both the %d width AND the sign. */
+	for (int i = 0; i < 8; i++) printf("    %d,\n", (int32_t)(uint32_t)cpu->reg64[i]);
 	printf("    %d,\n", cpu->instruction_pointer);
 
 	for (int i = 0; i < 8; i++) {
@@ -738,9 +745,10 @@ static void boot_host_fault(int signal, siginfo_t *info, void *context)
 	        cpu->protected_mode ? 1 : 0, cpu->is_32 ? 1 : 0, cpu->cpl);
 	fprintf(stderr, "v86c: eax=0x%08x ebx=0x%08x ecx=0x%08x edx=0x%08x esi=0x%08x edi=0x%08x"
 	                " ebp=0x%08x esp=0x%08x\n",
-	        (unsigned)cpu->reg32[EAX], (unsigned)cpu->reg32[EBX], (unsigned)cpu->reg32[ECX],
-	        (unsigned)cpu->reg32[EDX], (unsigned)cpu->reg32[ESI], (unsigned)cpu->reg32[EDI],
-	        (unsigned)cpu->reg32[EBP], (unsigned)cpu->reg32[ESP]);
+	        (unsigned)(uint32_t)cpu->reg64[EAX], (unsigned)(uint32_t)cpu->reg64[EBX],
+	        (unsigned)(uint32_t)cpu->reg64[ECX], (unsigned)(uint32_t)cpu->reg64[EDX],
+	        (unsigned)(uint32_t)cpu->reg64[ESI], (unsigned)(uint32_t)cpu->reg64[EDI],
+	        (unsigned)(uint32_t)cpu->reg64[EBP], (unsigned)(uint32_t)cpu->reg64[ESP]);
 	_exit(128 + signal);
 }
 
@@ -901,10 +909,17 @@ static int parse_jit_flag(int argc, char *argv[], int i)
 }
 
 /* The exit handler the two stats switches share.  A flag that was not given prints NOTHING, so
- * every pre-existing invocation's stderr is unchanged. */
+ * every pre-existing invocation's stderr is unchanged.
+ *
+ * S0: the engine's OWN counters are the selected backend's (`--uop-cache-stats` asks the
+ * engine, and an engine with no counters of its own answers NULL).  The compiled path's
+ * counters are not the engine's -- they are the JIT's, and `--jit-stats` is the flag that
+ * names them, which is why they keep their own line here. */
 static void v86c_stats_print(void)
 {
-	if (uop_cache_stats) uop_stats_print();
+	const cpu_backend_t *engine = cpu_backend_current();
+
+	if (uop_cache_stats && engine->print_stats != NULL) engine->print_stats();
 	if (jit_stats_flag || jit_enabled) {
 		jit_stats_print();
 		/* JIT-PLAN (unit JIT-1): the block compiler's own numbers -- how many blocks were
@@ -914,21 +929,37 @@ static void v86c_stats_print(void)
 	}
 }
 
-/* Called after the arguments are parsed, in both modes.  Returns false when the JIT was asked
- * for and could not be built -- the flag is accepted and the reason is on stderr; the machine
- * then runs exactly as it does with --jit off rather than failing to start. */
-static bool jit_init_if_enabled(void)
+/* S0: THE ENGINE'S INIT, THROUGH THE SEAM, at the site jit_init_if_enabled occupied.
+ *
+ * Called after the arguments are parsed and the machine's memory exists (both backends that
+ * allocate anything need the guest RAM: the cache's dirty-page bitmap and the JIT's pool are
+ * sized from mem8_alloc_size()), in both modes.
+ *
+ * THE CONTRACT'S OTHER HALF IS THE REFUSAL: a backend whose init returns false is REFUSED BY
+ * NAME, the machine adopts the previous backend in the cascade and SAYS SO -- it does not
+ * fail to start and it does not silently run something else.  On this host the refusal path
+ * is the JIT's platform probe failing (jit_mem.h's caveats), which pre-seam printed only the
+ * caps line; the run's behaviour is unchanged (it continues on the uop cache, exactly as
+ * `--jit off` would) and the ENGINE is now named as well. */
+static bool engine_init_if_needed(void)
 {
-	if (!jit_enabled) return true;
-	if (!jit_mem_init()) {
-		jit_enabled = false;
-		/* JIT-6: the failure is reported by the same caps line -- it says WHY the JIT is
-		 * off for this run (the platform probe), not just that init failed. */
-		fprintf(stderr, "v86c: %s\n", jit_mem_caps());
-		return false;
+	const cpu_backend_t *engine = cpu_backend_current();
+	/* WHETHER THE COMPILED PATH WAS ASKED FOR, read before init may clear it: it decides the
+	 * caps line's presence, and that line is stderr the pre-seam machine printed. */
+	bool compiled_path_requested = jit_enabled;
+	bool ready = engine->init();
+
+	if (!ready) {
+		const cpu_backend_t *fallback = cpu_backend_fallback(engine);
+		if (fallback != NULL) cpu_backend_adopt(fallback);
+		else jit_enabled = false;
 	}
-	fprintf(stderr, "v86c: %s\n", jit_mem_caps());
-	return true;
+	if (compiled_path_requested) fprintf(stderr, "v86c: %s\n", jit_mem_caps());
+	if (!ready) {
+		fprintf(stderr, "v86c: cpu engine '%s' could not initialise; running the '%s'"
+		                " engine\n", engine->name, cpu_backend_current()->name);
+	}
+	return ready;
 }
 
 static int parse_uop_cache_flag(int argc, char *argv[], int i)
@@ -950,6 +981,55 @@ static int parse_uop_cache_flag(int argc, char *argv[], int i)
 	fprintf(stderr, "v86c: --uop-cache needs on|off\n");
 	exit(2);
 	return i;
+}
+
+/* ------------------------------------------------------------------ *
+ * S0: THE ENGINE SEAM'S USER-VISIBLE SPELLING (results/x86-64-plan.md ss3.4)
+ *
+ * The seam this slice lands has three instances -- `interp`, `uop`, `uopjit` -- and the two
+ * existing flags already SELECT two of their three things: `--uop-cache off` is the
+ * interpreter, `--jit off` is uop_run with the compiled path held down, and the default is
+ * uop_run with it on.  `--cpu-engine <name>` is the NEW spelling that names the engine
+ * directly, so the seam is reachable and testable at all: a seat that cannot be selected is
+ * a seat nobody calls.
+ *
+ * `auto` is the default and derives from the two flags, which is why no gate script changes.
+ * An explicit name WINS over them (whatever their order on the command line): naming the
+ * engine is naming the configuration, and a machine whose engine and flags disagree is a
+ * machine whose stderr lies about what is running.
+ * ------------------------------------------------------------------ */
+static const char *cpu_engine_name = "auto";
+
+static int parse_cpu_engine_flag(int argc, char *argv[], int i)
+{
+	if (i + 1 >= argc) {
+		fprintf(stderr, "v86c: --cpu-engine needs a name (auto|interp|uop|uopjit)\n");
+		exit(2);
+	}
+	cpu_engine_name = argv[i + 1];
+	return i + 1;
+}
+
+/* Resolve and select, after the whole command line has been parsed (both parsers call this
+ * once, at the end, before the machine is built).  An unknown name is refused BY NAME and
+ * the process exits: the contract's "refuses an unknown name by name" is the resolver's
+ * NULL, and this is the caller's half of it. */
+static bool cpu_engine_select_from_args(void)
+{
+	const cpu_backend_t *engine = cpu_backend_select(cpu_engine_name);
+
+	if (engine == NULL) {
+		fprintf(stderr, "v86c: --cpu-engine: unknown engine '%s' (have: auto, interp, uop,"
+		                " uopjit)\n", cpu_engine_name);
+		return false;
+	}
+	/* Printed only when the flag was GIVEN: every pre-seam invocation's stderr is unchanged,
+	 * and a run that names an engine can see what it got. */
+	if (strcmp(cpu_engine_name, "auto") != 0) {
+		fprintf(stderr, "v86c: cpu engine: '%s' (--cpu-engine %s)\n", engine->name,
+		        cpu_engine_name);
+	}
+	return true;
 }
 
 static int boot_main(int argc, char *argv[])
@@ -1005,6 +1085,7 @@ static int boot_main(int argc, char *argv[])
 			i = parse_uop_cache_flag(argc, argv, i);
 		else if (strcmp(argv[i], "--jit") == 0 || strcmp(argv[i], "--jit-stats") == 0)
 			i = parse_jit_flag(argc, argv, i);
+		else if (strcmp(argv[i], "--cpu-engine") == 0) i = parse_cpu_engine_flag(argc, argv, i);
 		else if (kernel_path == NULL) kernel_path = argv[i];
 		else if (limit_text == NULL) limit_text = argv[i];
 		else {
@@ -1018,9 +1099,12 @@ static int boot_main(int argc, char *argv[])
 		                " [--initrd FILE] [--bios FILE] [--serial FILE] [--hda FILE]"
 		                " [--memory MIB] [--virtio-console FILE] [--virtio-console-in FILE]"
 		                " [--uart1] [--acpi] [--vga-ansi] [--uop-cache on|off]"
-		                " [--uop-cache-stats] [--jit on|off]\n", argv[0]);
+		                " [--uop-cache-stats] [--jit on|off] [--cpu-engine NAME]\n", argv[0]);
 		return 2;
 	}
+	/* S0: resolve the ENGINE once, now that the whole command line is known (an explicit
+	 * --cpu-engine forces the two flags; `auto` derives from them). */
+	if (!cpu_engine_select_from_args()) return 2;
 	if (uop_cache_stats || jit_stats_flag) atexit(v86c_stats_print);
 
 	uint64_t limit;
@@ -1098,8 +1182,8 @@ static int boot_main(int argc, char *argv[])
 	 * unit first put it) it always failed with "the uop cache could not be initialized" and
 	 * `--jit on` was a no-op in BOTH modes; the flag's smoke test caught it.  Both halves of
 	 * the switch are parsed long before this point, so the ordering the deferral was for is
-	 * still solved. */
-	jit_init_if_enabled();
+	 * still solved.  S0: the INIT is the selected engine's, through the seam. */
+	engine_init_if_needed();
 
 	if (uart1) {
 		/* the reference's `settings.uart1` arm (cpu.js:1203-1206).  The default is COM1
@@ -1319,6 +1403,43 @@ static int boot_main(int argc, char *argv[])
 }
 
 /* ------------------------------------------------------------------ *
+ * S1 (results/x86-64-s1-s2.md): THE POISON PROBE
+ *
+ * The register file and the lazy-flag operands were WIDENED IN PLACE from 32 to 64 bits
+ * (results/x86-64-plan.md ss4).  The slice's whole claim is that nothing 32-bit reads the
+ * high half, and the way to test that claim is to FILL the high half with a value that
+ * would be visible if anything did: 0xA5A5A5A5 in every widened field's upper 32 bits,
+ * seeded AFTER the boot state is established (so the low halves are exactly the ones the
+ * run would have had) and BEFORE the first guest instruction.
+ *
+ * `make poison-probe` runs the M0 image twice -- once plain, once with this seed -- and
+ * requires a BYTE-IDENTICAL transcript.  If the transcript moves, a widened field leaked
+ * into a 32-bit path: that is the finding, not a re-pin (results/x86-64-s1-s2.md ss3).
+ *
+ * WHAT IT CANNOT SHOW, stated so its silence is not read as a proof: it seeds the fields
+ * that EXIST.  reg64[] has eight slots until the high registers (R8-R15) arrive with the
+ * 64-bit model itself (plan ss6's $S5), so there is no R8-R15 to seed here; and for
+ * last_op1/last_result the seed is inert BY CONSTRUCTION while flags_changed is clear
+ * (every getter recomputes them from the operation that set the bit), so what the run
+ * exercises there is only that the seed itself does not move the machine.  The flag cores'
+ * high-half discipline is pinned where it can actually fail: cpu_selftest.c's
+ * test_widened_state_poison, which poisons the operands of a live lazy flag word and
+ * requires every getter to answer the same.
+ * ------------------------------------------------------------------ */
+static void poison_widened_state(void)
+{
+	const uint64_t poison = 0xA5A5A5A5A5A5A5A5ull;
+
+	for (int i = 0; i < 8; i++) {
+		cpu->reg64[i] |= poison; /* the low half keeps the boot's value */
+		cpu->dreg[i] |= poison;
+	}
+	cpu->last_op1 = (int64_t)poison;
+	cpu->last_result = (int64_t)poison;
+	fprintf(stderr, "v86c: --poison: the widened state's high halves are 0xA5A5A5A5\n");
+}
+
+/* ------------------------------------------------------------------ *
  * main
  * ------------------------------------------------------------------ */
 int main(int argc, char *argv[])
@@ -1330,6 +1451,7 @@ int main(int argc, char *argv[])
 	}
 
 	bool fixture_mode = false;
+	bool poison_mode = false;
 	const char *image_path = NULL;
 	const char *limit_text = NULL;
 
@@ -1341,6 +1463,9 @@ int main(int argc, char *argv[])
 
 	for (int i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "--fixture") == 0) fixture_mode = true;
+		/* S1: the poison probe (see poison_widened_state).  A diagnostic flag, never a
+		 * default: nothing in the shipped invocations changes. */
+		else if (strcmp(argv[i], "--poison") == 0) poison_mode = true;
 		/* VGA-U0: the adapter selection (the device itself is always installed -- vga.h).
 		 * --vga-doc FILE selects the recording adapter AND names the document's path, the
 		 * shape --serial FILE and --virtio-console FILE already have. */
@@ -1353,6 +1478,7 @@ int main(int argc, char *argv[])
 			i = parse_uop_cache_flag(argc, argv, i);
 		else if (strcmp(argv[i], "--jit") == 0 || strcmp(argv[i], "--jit-stats") == 0)
 			i = parse_jit_flag(argc, argv, i);
+		else if (strcmp(argv[i], "--cpu-engine") == 0) i = parse_cpu_engine_flag(argc, argv, i);
 		else if (image_path == NULL) image_path = argv[i];
 		else if (limit_text == NULL) limit_text = argv[i];
 		else die("too many arguments");
@@ -1361,9 +1487,12 @@ int main(int argc, char *argv[])
 	if (image_path == NULL || limit_text == NULL) {
 		fprintf(stderr, "usage: %s <image> <instruction-limit> [--fixture]"
 		                " [--vga-ansi] [--vga-doc FILE] [--uop-cache on|off]"
-		                " [--uop-cache-stats] [--jit on|off]\n", argv[0]);
+		                " [--uop-cache-stats] [--jit on|off] [--cpu-engine NAME] [--poison]\n",
+		        argv[0]);
 		return 2;
 	}
+	/* S0: resolve the ENGINE once, now that the whole command line is known. */
+	if (!cpu_engine_select_from_args()) return 2;
 	if (uop_cache_stats || jit_stats_flag) atexit(v86c_stats_print);
 
 	uint64_t limit;
@@ -1401,8 +1530,8 @@ int main(int argc, char *argv[])
 	 * this unit first put it) it always failed with "the uop cache could not be initialized" and
 	 * `--jit on` was a no-op everywhere; the flag's smoke test caught it.  Both halves of the
 	 * switch have been parsed long before this point, so the ordering problem it was deferred
-	 * for is still solved. */
-	jit_init_if_enabled();
+	 * for is still solved.  S0: the INIT is the selected engine's, through the seam. */
+	engine_init_if_needed();
 
 	if (!fixture_mode) {
 		/* README.md ss1: the transcript's image fields are the FIXED load/entry
@@ -1427,6 +1556,10 @@ int main(int argc, char *argv[])
 	 * is touched (memory survives -- the property the two-boot gate image proves).
 	 * What IS rebuilt is the bootloader's own handoff: EAX/EBX and the info word
 	 * at 0x7C00 -- a re-running bootloader re-writes those. */
+	/* S1: AFTER multiboot_set_state (so the low halves are the boot's) and BEFORE the first
+	 * guest instruction (so the run is the thing under test). */
+	if (poison_mode) poison_widened_state();
+
 	uint32_t reboots = 0;
 	run_result_t result;
 	for (;;) {

@@ -284,7 +284,8 @@ SELFTEST_SRC := src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/pag
 
 .PHONY: all oracle determinism expected image run selftest clean generator \
         transcript-diff nasm nasm-js nasm-translate nasm-fixtures minibios unity unity-src bench \
-        unity-symbols uop-gen uop-unity jit-selftest jit-codegen-selftest engine-identity
+        unity-symbols uop-gen uop-unity jit-selftest jit-codegen-selftest engine-identity \
+        poison-probe
 
 all: $(BUILD)/v86c
 
@@ -405,6 +406,19 @@ engine-identity: $(BUILD)/v86c tests/test.img
 	[ "$${j_c:-0}" -gt 0 ] || { echo "engine-identity: 'uopjit' compiled no block -- the compiled path is not on"; exit 1; }; \
 	echo "engine-identity: the three selections are observably different (gate passed)"
 
+# --- S1 (results/x86-64-s1-s2.md): THE POISON PROBE ------------------------------
+# S1 widens the register file and the lazy-flag operands to 64 bits IN PLACE, and its claim
+# is that nothing 32-bit reads the high half.  The probe is the negative control for that
+# claim: the shipped binary seeds every widened field's high half (and the debug registers
+# and the two lazy operands) with 0xA5A5A5A5 and runs the M0 image, and the transcript must
+# be BYTE-IDENTICAL to the unseeded run.  If it moves, a widened field leaked into a 32-bit
+# path -- that is the finding, not a re-pin.
+#
+# The M0 pin is checked by transcript-diff; this target checks the SEED's invisibility, and
+# both numbers are printed so a reader can see they are the same document.
+poison-probe: $(BUILD)/v86c $(IMAGE)
+	@set -e; 	./$(BUILD)/v86c $(IMAGE) $(INSTRUCTION_LIMIT) > $(BUILD)/poison-clean.txt; 	./$(BUILD)/v86c $(IMAGE) $(INSTRUCTION_LIMIT) --poison > $(BUILD)/poison-seeded.txt 2>/dev/null; 	cmp $(BUILD)/poison-clean.txt $(BUILD)/poison-seeded.txt; 	a=$$(sha256sum < $(BUILD)/poison-clean.txt | cut -c1-16); 	b=$$(sha256sum < $(BUILD)/poison-seeded.txt | cut -c1-16); 	echo "poison-probe: the widened fields' high halves do not reach the M0 transcript ($$a == $$b)"
+
 # PERF-1: the core is linked from $(UNITY_OBJ); $(GEN_OBJ) is still a prerequisite (it is
 # the object the results/*-mut-rig.sh scripts link by path, and the selftest links take it
 # too) but is INSIDE the unity object, so it is not on the command line.
@@ -463,7 +477,7 @@ minibios-mem: $(MINIBIOS_80_BIN)
 
 # M1a's gate G1/G2: the unit tests.  Assertions are ON (no -DNDEBUG), which is what
 # makes the flags invariants checkable.
-selftest: $(BUILD)/cpu_selftest $(BUILD)/cpu_m1c_selftest $(BUILD)/hw_selftest $(BUILD)/cpu_uop_selftest $(BUILD)/cpu_uop_exec_selftest $(BUILD)/cpu_jit_selftest $(BUILD)/cpu_jit_codegen_selftest uop-unity $(UNITY_SYM_OK) engine-identity
+selftest: $(BUILD)/cpu_selftest $(BUILD)/cpu_m1c_selftest $(BUILD)/hw_selftest $(BUILD)/cpu_uop_selftest $(BUILD)/cpu_uop_exec_selftest $(BUILD)/cpu_jit_selftest $(BUILD)/cpu_jit_codegen_selftest uop-unity $(UNITY_SYM_OK) engine-identity poison-probe
 	./$(BUILD)/cpu_selftest
 	./$(BUILD)/cpu_m1c_selftest
 	./$(BUILD)/hw_selftest
