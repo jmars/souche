@@ -50,6 +50,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "cpu_backend.h" /* S0: the engine seam -- cycle_internal's engine half routes here */
 #include "cpu_state.h"
 #include "instructions.h"
 #include "memory.h"
@@ -198,16 +199,17 @@ void cycle_internal(void)
 
 	uint64_t initial_instruction_counter = cpu->instruction_counter;
 
-	/* PERF-4/M2 (plan ss8 step 5): the uop cache is a REPLACEMENT for interpreted_run, not
-	 * a filter in front of it -- it reproduces the reference's batch structure internally
-	 * (see src/cpu/uop_cache.c's header) and falls back to interpreted_run for a batch it
-	 * cannot decode.  With --uop-cache off this is the pre-M2 code exactly. */
-	if (uop_cache_enabled) {
-		uop_run(phys_addr);
-	}
-	else {
-		interpreted_run(phys_addr);
-	}
+	/* S0 (results/x86-64-plan.md ss3.4): THE ENGINE HALF, THROUGH THE SEAM.
+	 * cpu_backend_dispatch() is this call and nothing else: it asks whether the selected
+	 * backend can run the machine's mode (a named stop if not -- inert in S0, because no
+	 * engine declares a mode the machine can be in), then calls that backend's ->run_batch.
+	 *
+	 * The three instances are today's two functions plus one flag discipline (cpu_backend.c):
+	 * `interp` IS interpreted_run, `uop` is uop_run with the compiled path held down,
+	 * `uopjit` IS uop_run.  With the shipped default the dispatch therefore calls uop_run
+	 * exactly where this line used to, and `--uop-cache off` reaches interpreted_run exactly
+	 * where the old `else` did -- the seam is INERT, and its gate is the whole battery. */
+	cpu_backend_dispatch(phys_addr);
 
 	/* upstream's dbg_assert!(*instruction_counter != initial_instruction_counter) --
 	 * the interpreted loop always executes at least one instruction, so this is the

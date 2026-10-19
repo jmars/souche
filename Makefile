@@ -95,7 +95,7 @@ CPU_SRC := src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/paging.c
            src/cpu/softfloat.c src/cpu/fpu.c \
            src/cpu/exceptions.c src/cpu/pic.c \
            src/cpu/apic.c src/cpu/ioapic.c \
-           src/cpu/cpu.c src/cpu/exec_boundary.c \
+           src/cpu/cpu.c src/cpu/cpu_backend.c src/cpu/exec_boundary.c \
            src/cpu/uop_cache.c \
            src/cpu/jit_mem.c \
            src/cpu/jit_x64.c \
@@ -107,7 +107,7 @@ CPU_HDR := src/cpu/cpu_state.h src/cpu/flags.h src/cpu/memory.h src/cpu/paging.h
            src/cpu/softfloat.h src/cpu/fpu.h \
            src/cpu/exceptions.h src/cpu/pic.h \
            src/cpu/apic.h src/cpu/ioapic.h \
-           src/cpu/cpu.h src/cpu/exec_boundary.h \
+           src/cpu/cpu.h src/cpu/cpu_backend.h src/cpu/exec_boundary.h \
            src/cpu/jit_mem.h src/cpu/jit_x64.h src/cpu/jit_codegen.h
 CPU_CFLAGS := $(CFLAGS) $(PERF_CFLAGS) -Werror
 
@@ -284,7 +284,7 @@ SELFTEST_SRC := src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/pag
 
 .PHONY: all oracle determinism expected image run selftest clean generator \
         transcript-diff nasm nasm-js nasm-translate nasm-fixtures minibios unity unity-src bench \
-        unity-symbols uop-gen uop-unity jit-selftest jit-codegen-selftest
+        unity-symbols uop-gen uop-unity jit-selftest jit-codegen-selftest engine-identity
 
 all: $(BUILD)/v86c
 
@@ -372,6 +372,39 @@ unity-src:
 bench: $(BUILD)/v86c
 	tests/perf_bench.sh --runs 7 --bin $(BUILD)/v86c --label "make bench"
 
+# --- S0 (results/x86-64-s0.md): THE ENGINE IDENTITY GATE --------------------------
+# The seam's whole claim is that cycle_internal's engine half is the SELECTED backend's
+# ->run_batch.  The C selftest (src/cpu/cpu_selftest.c's test_cpu_backend) pins the
+# resolver, the name and the run_batch SYMBOL by pointer identity; what it CANNOT reach is
+# the routing, because that suite has no run loop.  This target is the second instrument:
+# the shipped binary is run once per engine and the ENGINES' OWN counters must separate the
+# three, which they can only do if the selection really chose the engine:
+#
+#   interp   the decoded-block cache never ran          uop lookups 0
+#   uop      it ran, compiled path held down for it     uop lookups > 0, jit compiled 0
+#   uopjit   it ran, compiled path on                   uop lookups > 0, jit compiled > 0
+#
+# NOT three pinned numbers: those counts belong to the guest image, and a change to them is
+# another unit's finding.  What is asserted is the SHAPE -- zero / positive-and-uncompiled /
+# positive-and-compiled -- which is exactly what a dispatch hard-wired to one engine (or a
+# selection that resolves everything to one instance) destroys.
+engine-identity: $(BUILD)/v86c tests/test.img
+	@set -e; \
+	run() { ./$(BUILD)/v86c tests/test.img 200000 --cpu-engine "$$1" --uop-cache-stats --jit-stats 2>&1 >/dev/null; }; \
+	lookups() { run "$$1" | sed -n 's/^uop-cache: lookups \([0-9][0-9]*\).*/\1/p'; }; \
+	compiled() { run "$$1" | sed -n 's/^jit: pages alloc [0-9][0-9]*, blocks compiled \([0-9][0-9]*\).*/\1/p'; }; \
+	i_l=$$(lookups interp); u_l=$$(lookups uop); j_l=$$(lookups uopjit); \
+	i_c=$$(compiled interp); u_c=$$(compiled uop); j_c=$$(compiled uopjit); \
+	echo "engine-identity: lookups interp=$${i_l:-?} uop=$${u_l:-?} uopjit=$${j_l:-?};" \
+	     "compiled interp=$${i_c:-?} uop=$${u_c:-?} uopjit=$${j_c:-?}"; \
+	[ "$$i_l" = 0 ] || { echo "engine-identity: 'interp' ran the decoded-block cache (lookups $$i_l)"; exit 1; }; \
+	[ "$$i_c" = 0 ] || { echo "engine-identity: 'interp' compiled blocks ($$i_c)"; exit 1; }; \
+	[ "$${u_l:-0}" -gt 0 ] || { echo "engine-identity: 'uop' did not run the decoded-block cache"; exit 1; }; \
+	[ "$$u_c" = 0 ] || { echo "engine-identity: 'uop' compiled $$u_c blocks -- the compiled path is not held down"; exit 1; }; \
+	[ "$${j_l:-0}" -gt 0 ] || { echo "engine-identity: 'uopjit' did not run the decoded-block cache"; exit 1; }; \
+	[ "$${j_c:-0}" -gt 0 ] || { echo "engine-identity: 'uopjit' compiled no block -- the compiled path is not on"; exit 1; }; \
+	echo "engine-identity: the three selections are observably different (gate passed)"
+
 # PERF-1: the core is linked from $(UNITY_OBJ); $(GEN_OBJ) is still a prerequisite (it is
 # the object the results/*-mut-rig.sh scripts link by path, and the selftest links take it
 # too) but is INSIDE the unity object, so it is not on the command line.
@@ -430,7 +463,7 @@ minibios-mem: $(MINIBIOS_80_BIN)
 
 # M1a's gate G1/G2: the unit tests.  Assertions are ON (no -DNDEBUG), which is what
 # makes the flags invariants checkable.
-selftest: $(BUILD)/cpu_selftest $(BUILD)/cpu_m1c_selftest $(BUILD)/hw_selftest $(BUILD)/cpu_uop_selftest $(BUILD)/cpu_uop_exec_selftest $(BUILD)/cpu_jit_selftest $(BUILD)/cpu_jit_codegen_selftest uop-unity $(UNITY_SYM_OK)
+selftest: $(BUILD)/cpu_selftest $(BUILD)/cpu_m1c_selftest $(BUILD)/hw_selftest $(BUILD)/cpu_uop_selftest $(BUILD)/cpu_uop_exec_selftest $(BUILD)/cpu_jit_selftest $(BUILD)/cpu_jit_codegen_selftest uop-unity $(UNITY_SYM_OK) engine-identity
 	./$(BUILD)/cpu_selftest
 	./$(BUILD)/cpu_m1c_selftest
 	./$(BUILD)/hw_selftest
@@ -443,9 +476,9 @@ selftest: $(BUILD)/cpu_selftest $(BUILD)/cpu_m1c_selftest $(BUILD)/hw_selftest $
 # Each binary is its own file target since M2-1: the asymmetry rig (results/m2-1-mut-rig.sh)
 # rebuilds ONE of them after a single-line mutation, which needs a real rule rather than a
 # recipe inside the phony target.
-$(BUILD)/cpu_selftest: src/cpu/cpu_selftest.c $(SELFTEST_SRC) src/cpu/*.h $(SF_OBJ) $(UOP_C_OBJ) $(UOP_OBJ) $(JIT_OBJ) $(JIT_CG_SRC)
+$(BUILD)/cpu_selftest: src/cpu/cpu_selftest.c src/cpu/cpu_backend.c $(SELFTEST_SRC) src/cpu/*.h $(SF_OBJ) $(UOP_C_OBJ) $(UOP_OBJ) $(JIT_OBJ) $(JIT_CG_SRC)
 	@mkdir -p $(BUILD)
-	$(CC) $(CPU_CFLAGS) $(GC_LDFLAGS) -o $@ src/cpu/cpu_selftest.c $(SELFTEST_SRC) $(UOP_C_OBJ) $(UOP_OBJ) $(JIT_OBJ) $(JIT_CG_SRC) $(SF_OBJ)
+	$(CC) $(CPU_CFLAGS) $(GC_LDFLAGS) -o $@ src/cpu/cpu_selftest.c $(SELFTEST_SRC) src/cpu/cpu_backend.c $(UOP_C_OBJ) $(UOP_OBJ) $(JIT_OBJ) $(JIT_CG_SRC) $(SF_OBJ)
 
 $(BUILD)/cpu_m1c_selftest: src/cpu/m1c_selftest.c $(CPU_SRC) $(HW_SRC) src/cpu/*.h $(HW_HDR) $(GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
 	@mkdir -p $(BUILD)

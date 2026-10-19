@@ -354,6 +354,27 @@ or pack in normal use has to carry it.
 
 ## 8. Long mode (64-bit guests) — **one day**, not a non-goal
 
+**S0 IS LANDED (2026-10-19): THE BACKEND SEAM, INERT.** `results/x86-64-plan.md` is the plan of
+record (fourteen slices, S0-S13); `results/x86-64-s0.md` is S0's report.  What exists now: the
+engine contract (`src/cpu/cpu_backend.h`: name, `modes`, init/run_batch/clear_caches/print_stats),
+`cycle_internal` routing through the selected backend's `->run_batch`, the three existing engines
+behind it as three INSTANCES of one axis (`interp` = `interpreted_run`, `uop` = `uop_run` with the
+compiled path held down for that instance, `uopjit` = `uop_run` — the JIT is a property of a block
+record, not a third peer), `--cpu-engine auto|interp|uop|uopjit` with `--uop-cache`/`--jit` kept as
+ALIASES (every pre-seam invocation's behaviour and stderr unchanged), and the engine's identity
+gated two ways: `cpu_selftest`'s `test_cpu_backend` (resolver, `run_batch` symbol by pointer
+identity, the flags round trip, the dispatch actually called) and `make engine-identity` (the
+binary's own counters: `lookups 0 / 130 / 133`, `compiled 0 / 0 / 4`).  The whole battery was
+unmoved — transcript `8bb8eca5…`, determinism 4,000,096,757 both runs, bench 200,095,214, nasm
+118/118, reboot 39/39, the five VGA gates, PAE-1 11/0, PAE-L3 both legs — and a 3G-instruction PAE
+kernel boot is byte-identical across all four selections.
+
+**S1-S13 REMAIN**: the register file and flags at 64 bits (inert + poison probe), **the mode
+predicate and the two refusals (S2 — it also closes the live C5 defect below)**, the address/IP
+widening, the host-corpus infrastructure, then the vertical slice, the ISA families, the system
+layer, the guest and the engines' long-mode arms.  Nothing below in this section is stale; S0 was
+the seam only, and none of long mode's own work has started.
+
 Not implemented, and deliberately **not** listed as a non-goal: it is wanted one day. It is recorded
 here so the next reader inherits the reconnaissance instead of re-deriving it.
 

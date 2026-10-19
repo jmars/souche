@@ -21,6 +21,7 @@
 #include <string.h>
 
 #include "arith.h"
+#include "cpu_backend.h" /* S0: the engine seam's resolver, its instances and its dispatch */
 #include "cpu_state.h"
 #include "exceptions.h" /* M1c: the segment-descriptor types the stand-ins use */
 #include "flags.h"
@@ -32,6 +33,8 @@
 #include "modrm.h"
 #include "paging.h"
 #include "string.h"
+#include "uop_cache.h" /* S0: uop_run -- the symbol `uopjit`'s run_batch must BE */
+#include "jit_mem.h"   /* S0: jit_enabled -- the compiled path's half of an engine's identity */
 
 static int checks = 0;
 static int failures = 0;
@@ -1456,11 +1459,20 @@ void run_instruction0f(int32_t opcode)
  * the abort is the finding: it means this suite started executing the machine's run loop,
  * which it does not have. */
 static int interpreted_run_calls = 0;
+static uint32_t interpreted_run_last_phys = 0;
+
+/* S0: ONE test (test_cpu_backend, below) drives the engine seam's dispatch end to end, and
+ * the dispatch calls exactly what cycle_internal calls -- which for the `interp` instance IS
+ * this function.  So the stub records and returns while that test runs, and stays the
+ * abort-if-reached seat it has always been for everything else: this binary still has no run
+ * loop, and a call from anywhere else is still the finding. */
+static bool interpreted_run_allowed = false;
 
 void interpreted_run(uint32_t phys_addr)
 {
-    (void)phys_addr;
     interpreted_run_calls++;
+    interpreted_run_last_phys = phys_addr;
+    if (interpreted_run_allowed) return;
     fprintf(stderr, "cpu_selftest: interpreted_run called (%d) -- this binary has no run loop\n",
             interpreted_run_calls);
     abort();
@@ -1482,6 +1494,119 @@ uint32_t get_phys_eip(void)
 {
     fprintf(stderr, "cpu_selftest: get_phys_eip called -- this binary has no fetch path\n");
     abort();
+}
+
+/* ==================================================================== *
+ * S0 (results/x86-64-plan.md ss3.4, slice S0): THE ENGINE SEAM
+ *
+ * WHAT THIS PROVES, and what it cannot.  The seam's whole job is that
+ * cycle_internal's engine half is the SELECTED backend's ->run_batch.  A
+ * selftest that only compared the `name` string would pass with all three
+ * instances pointing at one function, so it asserts the things that would
+ * have to change for a selection to be a no-op:
+ *
+ *   1. the resolver: each of the three names selects an instance whose
+ *      ->name is that name, and cpu_backend_current() agrees;
+ *   2. the RUN_BATCH SYMBOL, by POINTER IDENTITY against the real symbols
+ *      (interpreted_run, uop_run) -- not against a table of strings:
+ *      interp IS interpreted_run and uopjit IS uop_run, so "the dispatcher
+ *      calls uop_run" is a fact about the pointer, not a claim;
+ *   3. THE ROUND TRIP, both directions: instance -> the two flags (what an
+ *      explicit selection forces) -> cpu_backend_select("auto") -> the same
+ *      instance.  A selection that resolved to a fixed instance fails here;
+ *   4. THE DISPATCH IS CALLED: the same cpu_backend_dispatch() cycle_internal
+ *      calls is invoked with the interpreter selected and the address
+ *      asserted to arrive at interpreted_run.  A seat that is never called
+ *      is indistinguishable from an absent seat;
+ *   5. the modes capability, including that NO instance claims long mode --
+ *      EFER_LME does not exist in this tree yet (plan finding 5), so an
+ *      engine that grew the bit before S2 would be a finding, not a feature.
+ *
+ * WHAT IT CANNOT PROVE: that the uop and uopjit instances EXECUTE here.  This
+ * binary has no run loop (SELFTEST_SRC's premise), so their ->run_batch is
+ * identified by pointer (2) and exercised by the shipped binary's own runs --
+ * `--cpu-engine interp|uop|uopjit` with --uop-cache-stats/--jit-stats move the
+ * counters in exactly the three ways results/x86-64-s0.md records.  The mode
+ * REFUSAL is likewise inert in S0 by construction (no engine declares a mode
+ * the machine can be in): S2 owns the probe that makes it fire.
+ * ==================================================================== */
+static void test_cpu_backend(void)
+{
+    static const char *const names[3] = { "interp", "uop", "uopjit" };
+    const cpu_backend_t *instance[3];
+
+    for (int i = 0; i < 3; i++) {
+        instance[i] = cpu_backend_select(names[i]);
+        CHECK(instance[i] != NULL);
+        if (instance[i] == NULL) return;
+        CHECK(cpu_backend_current() == instance[i]);
+        CHECK(strcmp(instance[i]->name, names[i]) == 0);
+        CHECK_EQ(instance[i]->modes, CPU_MODES_32BIT);
+        CHECK(instance[i]->run_batch != NULL);
+        CHECK(instance[i]->clear_caches != NULL);
+    }
+
+    /* (2) the run_batch SYMBOL, by pointer identity */
+    CHECK(instance[0]->run_batch == interpreted_run);   /* `interp` IS the interpreter */
+    CHECK(instance[2]->run_batch == uop_run);           /* `uopjit` IS uop_run, compiled path on */
+    CHECK(instance[1]->run_batch != uop_run);           /* `uop` holds the compiled path down */
+    CHECK(instance[1]->run_batch != interpreted_run);
+    CHECK(instance[0]->run_batch != instance[1]->run_batch);
+    CHECK(instance[1]->run_batch != instance[2]->run_batch);
+    CHECK(instance[0]->run_batch != instance[2]->run_batch);
+
+    /* the cascade the refusal path walks (ss3.4) */
+    CHECK(cpu_backend_fallback(instance[2]) == instance[1]);
+    CHECK(cpu_backend_fallback(instance[1]) == instance[0]);
+    CHECK(cpu_backend_fallback(instance[0]) == NULL);
+
+    /* (3) THE ROUND TRIP: instance -> the two flags -> `auto` -> the same instance */
+    for (int i = 0; i < 3; i++) {
+        cpu_backend_adopt(instance[i]);
+        CHECK_EQ(uop_cache_enabled, i != 0);
+        CHECK_EQ(jit_enabled, i == 2);
+        CHECK(cpu_backend_current() == instance[i]);
+        CHECK(cpu_backend_select("auto") == instance[i]);
+    }
+    /* an unknown name is refused by name (the resolver's NULL), and it does not half-select */
+    {
+        const cpu_backend_t *before = cpu_backend_current();
+        CHECK(cpu_backend_select("kvm") == NULL);
+        CHECK(cpu_backend_current() == before);
+    }
+
+    /* (5) the capability word: the three 32-bit modes, and NO long mode anywhere */
+    cpu_backend_select("uopjit");
+    CHECK(cpu_backend_can(CPU_MODE_REAL));
+    CHECK(cpu_backend_can(CPU_MODE_PROT16));
+    CHECK(cpu_backend_can(CPU_MODE_PROT32));
+    CHECK(cpu_backend_can(CPU_MODES_32BIT));
+    CHECK(!cpu_backend_can(CPU_MODE_LONG));
+    CHECK(!cpu_backend_can(CPU_MODE_COMPAT));
+    if (cpu->cr[0] & CR0_PE) CHECK(cpu_mode_of(cpu) == (cpu->is_32 ? CPU_MODE_PROT32
+                                                                  : CPU_MODE_PROT16));
+    else CHECK(cpu_mode_of(cpu) == CPU_MODE_REAL);
+    CHECK(cpu_backend_can(cpu_mode_of(cpu)));
+
+    /* (4) THE DISPATCH, CALLED -- the function cycle_internal calls, with the address
+     * arriving at the interpreter.  This is the end-to-end half of the seam. */
+    CHECK(cpu_backend_select("interp") == instance[0]);
+    {
+        int calls_before = interpreted_run_calls;
+        interpreted_run_allowed = true;
+        cpu_backend_dispatch(0x00012345u);
+        interpreted_run_allowed = false;
+        CHECK_EQ(interpreted_run_calls, calls_before + 1);
+        CHECK_EQ(interpreted_run_last_phys, 0x00012345u);
+    }
+
+    /* the enumeration the loop above did not use */
+    for (uint32_t i = 0; i < 3; i++) CHECK(cpu_backend_by_index(i) == instance[i]);
+    CHECK(cpu_backend_by_index(3) == NULL);
+
+    /* leave the binary as it found it: the shipped default, and no engine named */
+    cpu_backend_select("auto");
+    CHECK(cpu_backend_current() != NULL);
 }
 
 /* AUDIT-1 S1: modrm.c's read_imm8 now names the run loop's stop for a fetch past guest
@@ -6392,6 +6517,8 @@ int main(void)
     test_instr_rmw_and_faults();
     test_instr_0f_nonsse();
     test_instr_0f_mmxsse();
+
+    test_cpu_backend();
 
     test_fpu_words_and_stack();
     test_fpu_softfloat_roundtrip();
