@@ -183,6 +183,21 @@ bool cpu_backend_refuse_long_mode(const char *what);
  * untested seat is indistinguishable from an absent one (the plan's own warning). */
 void cpu_backend_dispatch(uint32_t phys_addr);
 
+/* S5a (plan ss6 S5): DECLARE LONG MODE ON THE ONE BACKEND THAT HAS IT, AND SELECT IT.
+ *
+ * Called once, from the argument parser, when the guest's image is allowed to enter IA-32e
+ * (`--long-mode on`).  It ORs CPU_MODE_LONG | CPU_MODE_COMPAT into the interpreter's
+ * capability word and adopts that engine, because a capability the running engine does not
+ * have would be a false declaration (the ACPI-FADT lesson, made structural in ss3.5).  The
+ * uop cache and the JIT deliberately do NOT gain the bits: their long-mode arms are S13's,
+ * and their refusal is the correct current answer.
+ *
+ * It returns true today for every engine (there is nothing that can fail: no allocation, no
+ * platform probe), so the seat is honest about being a declaration.  The query beside it is
+ * what the gate asserts with. */
+bool cpu_backend_enable_long_mode(void);
+bool cpu_backend_long_mode_available(void);
+
 /* The backend a refused one falls back to: uopjit -> uop -> interp -> NULL.  The chain is
  * the cascade's (ss3.4), not a preference list. */
 const cpu_backend_t *cpu_backend_fallback(const cpu_backend_t *backend);

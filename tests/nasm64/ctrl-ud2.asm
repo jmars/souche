@@ -32,23 +32,42 @@ stub_start:
     xor eax, eax
     mov ecx, (0x10b000 - 0x104000) / 4
     rep stosd
-    # PML4[0] -> PDPT, PDPT[0] -> PD, PD[0..3] -> the four page tables
+    # PML4[0] -> PDPT, PDPT[0] -> PD, PD[0..1] -> the first two page tables.  S5a FINDING:
+    # A 4-LEVEL (and a PAE) PAGE TABLE HAS EIGHT-BYTE ENTRIES, and this stub used to fill
+    # FOUR-BYTE ones -- 4096 consecutive dwords, so every 8-byte entry the walk reads had a
+    # neighbouring entry's value in its HIGH half.  MEASURED on the first run that could
+    # execute the stub at all: PT[0x80] read back 0x10100300100003 (two entries interleaved)
+    # and the walk stopped with "physical page 0x100300100000 is above the port's 32-bit
+    # physical model".  S4 could not see this: neither leg ran the stub (its report names
+    # that blind spot).  The geometry below is the same four tables, filled as 2048 eight-byte
+    # entries -- which identity-maps the first 4 MiB through PD[0] and PD[1] (512 entries x
+    # 4 KiB = 2 MiB each).
     mov dword ptr [0x104000], 0x105000 + 3
     mov dword ptr [0x105000], 0x106000 + 3
     mov dword ptr [0x106000], 0x107000 + 3
     mov dword ptr [0x106000 + 8], 0x107000 + 0x1000 + 3
-    mov dword ptr [0x106000 + 16], 0x107000 + 0x2000 + 3
-    mov dword ptr [0x106000 + 24], 0x107000 + 0x3000 + 3
-    # identity-map the first 4 MiB, 4 KiB pages, present + writable (4 x 1024 entries)
+    # identity-map the first 4 MiB, 4 KiB pages, present + writable, as 2048 8-byte entries
     mov edi, 0x107000
     mov eax, 3
-    mov ecx, 4096
+    mov ecx, 2048
 .fill_pt:
     mov dword ptr [edi], eax
-    add edi, 4
+    mov dword ptr [edi + 4], 0
+    add edi, 8
     add eax, 0x1000
     dec ecx
     jnz .fill_pt
+    # S5a FINDING: CR3 WAS NEVER LOADED.  The stub builds a PML4 at 0x104000 and then enables
+    # paging with CR3 = 0 (the reset value), so the 4-level walk read a PML4 out of physical
+    # zero -- an empty one -- and the very next fetch after `mov cr0` took a #PF at the far
+    # jump's own address (MEASURED: cr2 = 0x800b1 = the `ea` byte, on the first run that could
+    # execute the stub at all).  S4 named this blind spot in its own report ("the stub is
+    # executed by NEITHER leg ... its page tables, GDT and far jump are unverified until S5");
+    # S5 is where it stopped being invisible.  CR3 must be loaded BEFORE CR0.PG because the
+    # SDM's entry condition is CR0.PG set while EFER.LME && CR4.PAE, and the walk starts from
+    # CR3 on that edge.
+    mov eax, 0x104000
+    mov cr3, eax
     lgdt [gdt_descriptor]
     mov eax, cr4
     or eax, 0x20                    # CR4.PAE

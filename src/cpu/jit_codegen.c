@@ -1210,7 +1210,12 @@ static void jitcg_emit_stores(jx64_t *e, const uop_t *u, bool any_pfx)
 {
 	jitcg_store_u64(e, JC_OFF(previous_ip), u->eip);
 	jitcg_store_u64(e, JC_OFF(instruction_pointer), u->body_ip);
-	if (any_pfx) jx64_mov_m8_imm8(e, JX_RBP, JC_OFF(prefixes), u->pfx);
+	/* S5a: a 16-BIT store, not a byte one -- `cpu->prefixes` widened to uint16 for the REX
+	 * nibble, and a byte store would leave the high byte holding whatever the last
+	 * long-mode instruction left there.  `u->pfx` is the decoder's own 8-bit value, so the
+	 * high byte is a literal zero: the field becomes canonical again, which is the
+	 * invariant every 32-bit consumer of `prefixes` assumes. */
+	if (any_pfx) jx64_mov_m16_imm16(e, JX_RBP, JC_OFF(prefixes), u->pfx);
 }
 
 /* THE SPILL / RELOAD PAIR (jit_codegen.h's comment): the eight guest registers and the pending
@@ -1724,7 +1729,7 @@ static void jitcg_emit_uop(jx64_t *e, const uop_t *u, const jc_entry_t *rec, boo
 		 * fired on the next decode.  MEASURED: the 200 M boot aborted at eip 0x21972f7 after
 		 * 876,568 instructions.  The CALLED path gets this from jitcg_emit_post in the shared
 		 * stub; the fast path has to emit it. */
-		if (any_pfx) jx64_mov_m8_imm8(e, JX_RBP, JC_OFF(prefixes), 0);
+		if (any_pfx) jx64_mov_m16_imm16(e, JX_RBP, JC_OFF(prefixes), 0); /* S5a: 16-bit, as above */
 		/* RDI carries the flags word l_checks' steps 7/10 test -- needed only when the
 		 * checks will actually run (the slow arm's shared stub builds its own RDI). */
 		if (!cont) jx64_mov_r32_imm32(e, JX_RDI, (uint32_t)(flags | JC_F_RAN));

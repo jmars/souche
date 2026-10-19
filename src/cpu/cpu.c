@@ -66,6 +66,14 @@ static char unimplemented_name[160];
 
 void unimplemented_instruction(const char *name)
 {
+	/* S5a: THE FIRST STOP WINS.  A stop is raised as the CAUSE of an abort, and the abort's
+	 * CONSEQUENCE can raise a second one -- a long-mode walk stops by name ("a 1 GiB page is
+	 * S11's"), aborts the instruction through cpu->pagefault, and the page-fault DELIVERY then
+	 * stops too ("idtr_size too small for the vector").  Before this guard the second stop
+	 * overwrote the first and the machine reported the SYMPTOM: MEASURED on gate-long-mode.sh's
+	 * 1 GiB / 2 MiB mutation probes, which found no walk stop at all.  The machine stops either
+	 * way; what changes is that the reason a reader gets is the first one. */
+	if (interpreted_unimplemented) return;
 	interpreted_unimplemented = true;
 	snprintf(unimplemented_name, sizeof(unimplemented_name), "%s", name);
 }
@@ -147,6 +155,14 @@ void interpreted_run(uint32_t phys_addr)
 		         " (0x%x) -- the release reference crashes here",
 		         (unsigned)phys_addr, (unsigned)cpu->memory_size);
 		unimplemented_instruction(stop);
+		/* S5a: AND STOP.  Naming the fetch and then falling into the loop below reads
+		 * `mem8[phys_addr]` at an address PAST the guest's RAM -- a HOST out-of-bounds read,
+		 * i.e. the port crashing where it has just said the reference crashes.  MEASURED: with
+		 * a guest image whose page tables map the fetched page above RAM (the walk's own
+		 * mutation probe, gate-long-mode.sh), this was a SIGSEGV of the HOST with no output at
+		 * all.  `jit_block_boundary` and the rest of the entry are irrelevant once the machine
+		 * is stopping, so the return is the whole fix. */
+		return;
 	}
 
 	jit_block_boundary = false;
@@ -163,7 +179,13 @@ void interpreted_run(uint32_t phys_addr)
 		DBG_ASSERT(cpu->prefixes == 0);
 		/* the dispatch-entry clear: the instruction starts with the flag down (D1) */
 		cpu->pagefault = false;
-		run_instruction(opcode | (cpu->is_32 ? 1 : 0) << 8);
+		/* S5a: THE THREE-VALUED KEY (plan ss3.6.1).  dispatch_os_index(opcode) is 0/1/2 for a
+		 * 16/32/64-bit operand size and is a function of the OPCODE as well as the prefixes,
+		 * because long mode's push/pop/pushf/popf/jmp default to a 64-bit operand size with no
+		 * REX byte at all (modrm.c's note).  Outside 64-bit mode it is `is_osize_32() ? 1 : 0`
+		 * -- the expression this line used to carry, so the 32-bit dispatch key is unchanged
+		 * byte for byte. */
+		run_instruction(opcode | dispatch_os_index(opcode) << 8);
 		/* and the SECOND clear, which ends the dispatch's fault window (D1 above): from
 		 * here the only reader is the loop tail's fetch check, which must see only the
 		 * fetch's own fault.  A DELIVERED fault -- flag set, handler entered, eip left at
@@ -196,6 +218,12 @@ void interpreted_run(uint32_t phys_addr)
 		 * flag can only be the FETCH's own: the dispatch's window ended above at the
 		 * second clear, and get_phys_eip's own translate_address_fetch sets it here. */
 		if (cpu->pagefault) return;
+		/* S5a: the same host-OOB door as the entry's, one iteration later: get_phys_eip raises
+		 * the named stop for a fetch PAST guest RAM and returns the address anyway, and the
+		 * next iteration would index mem8 with it.  `break` (not `return`) so the batch's
+		 * instruction count is kept -- the counter update below is upstream's and the
+		 * instructions already executed are real. */
+		if (interpreted_unimplemented) break;
 	}
 
 	cpu->instruction_counter += (uint32_t)i;
@@ -262,9 +290,15 @@ void cycle_internal(void)
 	 * names the field.  Two compares per batch: 7 fields against zero. */
 	cpu_assert_address_widening("cycle_internal (batch end)");
 
+	/* S5a: THE NAMED STOP IS PROGRESS TOO.  A BATCH can now end with nothing executed and no
+	 * counter movement -- `interpreted_run` returns immediately when the fetch is past guest
+	 * RAM, which it must (that path used to read `mem8[phys]` out of bounds; cpu.c's entry
+	 * note has the measurement) -- and the machine is stopping, not spinning.  Without the
+	 * fourth conjunct that legitimate stop ABORTED THE HOST in this assert. */
 	DBG_ASSERT(cpu->instruction_counter != initial_instruction_counter
 	           || uop_pending != 0
-	           || cpu->reboot_requested);
+	           || cpu->reboot_requested
+	           || interpreted_unimplemented);
 	(void)initial_eip;
 }
 

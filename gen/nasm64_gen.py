@@ -42,6 +42,7 @@ with no witness raises InventoryError instead of being written.
 """
 
 import argparse
+import os
 import pathlib
 import sys
 
@@ -118,23 +119,42 @@ stub_start:
     xor eax, eax
     mov ecx, ({pt_end} - {pml4}) / 4
     rep stosd
-    # PML4[0] -> PDPT, PDPT[0] -> PD, PD[0..3] -> the four page tables
+    # PML4[0] -> PDPT, PDPT[0] -> PD, PD[0..1] -> the first two page tables.  S5a FINDING:
+    # A 4-LEVEL (and a PAE) PAGE TABLE HAS EIGHT-BYTE ENTRIES, and this stub used to fill
+    # FOUR-BYTE ones -- 4096 consecutive dwords, so every 8-byte entry the walk reads had a
+    # neighbouring entry's value in its HIGH half.  MEASURED on the first run that could
+    # execute the stub at all: PT[0x80] read back 0x10100300100003 (two entries interleaved)
+    # and the walk stopped with "physical page 0x100300100000 is above the port's 32-bit
+    # physical model".  S4 could not see this: neither leg ran the stub (its report names
+    # that blind spot).  The geometry below is the same four tables, filled as 2048 eight-byte
+    # entries -- which identity-maps the first 4 MiB through PD[0] and PD[1] (512 entries x
+    # 4 KiB = 2 MiB each).
     mov dword ptr [{pml4}], {pdpt} + 3
     mov dword ptr [{pdpt}], {pd} + 3
     mov dword ptr [{pd}], {pt0} + 3
     mov dword ptr [{pd} + 8], {pt0} + 0x1000 + 3
-    mov dword ptr [{pd} + 16], {pt0} + 0x2000 + 3
-    mov dword ptr [{pd} + 24], {pt0} + 0x3000 + 3
-    # identity-map the first 4 MiB, 4 KiB pages, present + writable (4 x 1024 entries)
+    # identity-map the first 4 MiB, 4 KiB pages, present + writable, as 2048 8-byte entries
     mov edi, {pt0}
     mov eax, 3
-    mov ecx, 4096
+    mov ecx, 2048
 .fill_pt:
     mov dword ptr [edi], eax
-    add edi, 4
+    mov dword ptr [edi + 4], 0
+    add edi, 8
     add eax, 0x1000
     dec ecx
     jnz .fill_pt
+    # S5a FINDING: CR3 WAS NEVER LOADED.  The stub builds a PML4 at {pml4} and then enables
+    # paging with CR3 = 0 (the reset value), so the 4-level walk read a PML4 out of physical
+    # zero -- an empty one -- and the very next fetch after `mov cr0` took a #PF at the far
+    # jump's own address (MEASURED: cr2 = 0x800b1 = the `ea` byte, on the first run that could
+    # execute the stub at all).  S4 named this blind spot in its own report ("the stub is
+    # executed by NEITHER leg ... its page tables, GDT and far jump are unverified until S5");
+    # S5 is where it stopped being invisible.  CR3 must be loaded BEFORE CR0.PG because the
+    # SDM's entry condition is CR0.PG set while EFER.LME && CR4.PAE, and the walk starts from
+    # CR3 on that edge.
+    mov eax, {pml4}
+    mov cr3, eax
     lgdt [gdt_descriptor]
     mov eax, cr4
     or eax, 0x20                    # CR4.PAE
@@ -1079,10 +1099,23 @@ def census():
     out.append("[+] %d faulting case(s) (%s); the comparison for them is the exception "
                "kind and the faulting rip" %
                (len(faults), ", ".join(sorted({c.fault for c in faults}))))
-    out.append("[+] the PORT-TABLE census (how many of the 873-encoding dispatch table's "
-               "entries have a long-mode arm, and how many of those have a case here) is "
-               "the later slices': gen/x86_table64.js does not exist yet (S5), so 0 "
-               "encodings have an arm and every case below is RED by construction")
+    # S5a: the overlay EXISTS now, so the census has a real first number.  It is counted
+    # TEXTUALLY from the authored table (this generator is Python and the overlay is an ES
+    # module) and says so: the authoritative count -- which of the 873 dispatch-table entries
+    # have an arm, and how many of those bodies exist -- is printed by the EMITTER
+    # (gen/interpreter_c.js) on every build, because that is the file where an arm either
+    # exists or does not.
+    overlay = os.path.join(os.path.dirname(os.path.abspath(__file__)), "x86_table64.js")
+    arms = 0
+    if os.path.exists(overlay):
+        with open(overlay) as f:
+            text = f.read()
+        # only the table body: stop at the closing `];` so the comments' examples do not count
+        body = text.split("const x86_table64 = [", 1)[-1].split("\n];", 1)[0]
+        arms = body.count("{ opcode:")
+    out.append("[+] the 64-bit overlay (gen/x86_table64.js): %d entries, counted textually "
+               "from the authored table; the authoritative routed/implemented census is the "
+               "emitter's (gen/interpreter_c.js prints it on every build)" % arms)
     return "\n".join(out)
 
 

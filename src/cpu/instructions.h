@@ -53,6 +53,9 @@ void run_instruction0f_32(int32_t opcode);
 /* --- the prefix re-dispatch (cpu.rs:3366-3376).  DEFINED in instructions.c: their only
  * callers are this file's prefix instructions and instr_98.. -- see the definitions. */
 void run_prefix_instruction(void);
+/* S5a: the SDM's pushf/popf VM86-with-IOPL<3 #GP rule, shared with the 64-bit bodies
+ * (instr64_9C/instr64_9D in instructions_64.c). */
+bool instr_pushf_popf_check(void);
 void segment_prefix_op(int32_t seg);
 
 /* --- exceptions.c, M1c (plan ss7 step 17): far control transfers and iret. */

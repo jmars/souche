@@ -471,8 +471,62 @@ is executed by NEITHER leg until S5, R8-R15 are the seat and print zero, the cor
 plan's ~250 arrives family by family), and non-canonical `#GP` is deferred to S7 where a case can
 express it.
 
-**S5-S13 REMAIN**: the vertical slice, the ISA families, the system layer, the guest and the engines'
-long-mode arms.  The rest of this section is the reconnaissance record and is not made stale by S0-S4.
+**S5 IS LANDED (2026-10-19): THE FIRST LONG-MODE VERTICAL SLICE.**  `results/x86-64-s5.md` is its
+report; it split the plan's S5 row into **S5a** (the mode, the walk, the dispatch, the refusals —
+`tests/gate-long-mode.sh`, 23 passed / 0 failed) and **S5b** (the bodies — family 1 green).
+`--long-mode on|off` (**default off**) declares `CPU_MODE_LONG|COMPAT` on the interpreter only and
+adopts it when no engine was named; with it, the machine enters IA-32e through the corpus's own
+stub, fetches 64-bit instructions, decodes REX, runs a 4 KiB 4-level page walk through a
+64-bit-keyed TLB, and reproduces the **host CPU** for **12/12** of the corpus's `mov` family
+(`green=12 red_unimplemented=0 mismatch=0 error=0`) — while the default machine is byte-identical
+to S4's (transcript `8bb8eca5…`, and `make nasm64`'s census is still `green=0
+red_unimplemented=57` **because the flag is off**, which is the requirement, not an oversight).
+Whole corpus with the flag: `green=17 red_unimplemented=40 mismatch=0 error=0` — every case is
+either host-verified or a NAMED stop naming the encoding or the slice that owns it.  What landed:
+`reg64[16]` (S4's r8-r15 seat), `prefixes` → `uint16_t` + the REX nibble, the REX-aware byte
+mapping (SPL/BPL/SIL/DIL vs AH/CH/DH/BH), `CS.L` + `CPU_MODE_COMPAT` (so the stub's compat-mode
+`0xEA` far jump decodes and the 64-bit fetch begins after it), `EFER.LMA` on the `CR0.PG` edge,
+the 4 KiB PML4 walk with **named stops** for 1 GiB / 2 MiB / a frame at or above 4 GiB (plan §5.1),
+the generated **0x2NN overlay** (`gen/x86_table64.js`, 79 entries; an encoding with no arm is a
+named stop, and a `REX.W` on one would otherwise have hit the switch's `DBG_ASSERT` — MEASURED as
+39 host aborts), `dispatch_os_index` at all **four** call sites (the plan says three;
+`instructions.c:2196` is the fourth), `read_imm64`/`read_moffs64`, the third resolver
+`modrm_resolve64` with the widened `safe_*_addr` accessors, and `src/cpu/instructions_64.c` with
+the 62 bodies the arms call.  The 23 remaining unimplemented call sites are the **default-64
+encodings with no body yet** (ret/call rel32/jmp rel32/pop r/m/retf/iretq/the 0xFF group), which
+stop **by name** rather than pushing four bytes where hardware pushes eight.  **PLAN CORRECTIONS
+THIS SLICE OWES, all three found before the code**: `reg64[8]` could never hold r8-r15 (§4's
+inventory is wrong about which slice widens the register file); `CS.L`/compatibility mode is
+**S5's, not S11's** (after `CR0.PG` the machine is IA-32e with `CS.L=0`, and the `.byte 0xEA` far
+jump is what loads the 64-bit CS — treating LMA as 64-bit immediately turns it into the overlay's
+`#UD`); and the dispatch key has **four** call sites.  **THE 64-BIT ENGINE DIFFERENTIAL IS VACUOUS
+AT S5 and this is asserted, not implied**: only `interp` declares the mode, and `uop`/`uopjit`
+refuse it by name — S13 is where the differential becomes a real instrument.  **THE CORPUS IS THE
+WHOLE PROOF FOR THE ISA LAYER** (v86 has no long mode, so green means "the tests we thought of
+pass"), which is why the report's census line is the measurement and why family 1's gate uses the
+**ACTUAL count (12)**, not the plan's projected "≥ 25".  SIX DEFECTS FOUND AND FIXED, each with
+its arm: `imm64` is not a property of the 64-bit operand size (`C7 /0` and `0x68` are imm32 —
+MEASURED as `rsp = 0x489d006a00102000` and 28 mismatches); a 64-bit body truncated into an
+`int32_t` accessor is a wrong page (the `safe_*_addr` twins, and a mode-aware `modrm_resolve`);
+the 4-level reserved mask is bits 52-62, not the PAE mask (a wrong FAULT is its own silent class);
+a **host OOB read** on a fetch past guest RAM (`interpreted_run` named the stop and indexed
+`mem8` anyway — a SIGSEGV of the host); a named stop overwritten by its own consequence (the first
+name now wins); and a page-table read past guest RAM (bounded and named; the 32-bit PAE walk's
+identical exposure is **pre-existing and named for S11**).  And four defects in S4's own
+instruments, which the first executable run exposed (S4 had named the blind spot): the stub never
+loaded **CR3**; it filled **four-byte** page-table entries where the walk reads eight; the native
+leg inherited the parent's **x87 data** (`fninit` does not clear the slots, so a constant
+`mm7.int32[1]` failed every case); and the generator's census line still claimed the overlay did
+not exist.  The battery was unmoved — determinism 4,000,096,757 both runs, bench 200,095,214,
+nasm 118/118, reboot 39/39, the five VGA gates, PAE-1 11/0, PAE-L3 both legs, transcript
+`8bb8eca5…` — with `cpu_selftest` 3885 → 3889 and `uop_cache_selftest` 7934363 → 7934367 (S2's
+predicate gained its COMPAT/LONG arms and the decoder gained its refusal arm).  NOT landed and
+named in the report: the REX **cancel** rule is implemented and no corpus case measures it
+(S6's), the `0F` space has no 64-bit arms (11 of the 40 red cases stop there), non-canonical
+`#GP` is S7's, and the system layer is S11's.
+
+**S6-S13 REMAIN**: the ISA families, the system layer, the guest and the engines' long-mode arms.
+The rest of this section is the reconnaissance record and is not made stale by S0-S5.
 
 Not implemented, and deliberately **not** listed as a non-goal: it is wanted one day. It is recorded
 here so the next reader inherits the reconnaissance instead of re-deriving it.

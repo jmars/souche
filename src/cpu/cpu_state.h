@@ -268,8 +268,21 @@ typedef struct cpu_state {
      * 32-bit body uses, and they keep their names and their width (a 32-bit read returns
      * the low half; a 32-bit WRITE ZEROES the high half, which is what x86-64 hardware
      * does and what the JIT's spill/reload pair was made to agree with).  The byte/word
-     * accessors' index formulas changed with the element size -- see cpu_state.c. */
-    uint64_t reg64[8]; /* 64 -- was reg32 */
+     * accessors' index formulas changed with the element size -- see cpu_state.c.
+     *
+     * S5a (plan correction GAP 1, results/x86-64-s5.md ss2.1): SIXTEEN SLOTS, not eight.
+     * ss4's inventory said `reg64[8]`, and S4's report read that as "r8-r15 do not exist
+     * yet, so the wide document's slots 8-15 print zero until S5".  That seat cannot be
+     * filled by S5 while it is eight slots: the corpus's SHARED PROLOGUE -- which every
+     * one of the 57 images executes -- zeroes r8d..r15d (`45 31 c0`-class, MEASURED), and
+     * the v2 document's sixteen register slots are compared against the native leg's real
+     * r8-r15.  So the array widens to 16 and NOTHING else changes: indices 0-7 keep their
+     * meaning byte for byte, and an index of 8-15 is only ever produced by a REX.R/REX.B
+     * bit, which cannot be set outside long mode (prefixes' REX bits are written only by
+     * the long-mode REX prefix handler).  The last eight slots are therefore ZERO for the
+     * whole 32-bit battery -- the poison probe's claim, and the reason the M0 transcript
+     * does not move. */
+    uint64_t reg64[16]; /* 64 -- was reg32[8]; 8-15 are r8-r15 (S5a) */
 
     int32_t last_op_size;  /* 96  */
     int32_t flags_changed; /* 100 -- stays 32-bit: bit 31 IS FLAG_SUB (flags.h) */
@@ -328,7 +341,12 @@ typedef struct cpu_state {
     int32_t sysenter_cs;  /* 636 */
     int32_t sysenter_esp; /* 640 */
     int32_t sysenter_eip; /* 644 */
-    uint8_t prefixes;     /* 648 */
+    /* S5a (plan ss3.6.5): WIDENED from `uint8_t`.  The legacy prefix bits keep their
+     * positions (0x07 segment, 0x08/0x10 rep, 0x20 operand size, 0x40 address size) and the
+     * REX nibble lives in bits 8-11 with a PRESENT bit at 12 -- see modrm.h's PREFIX_REX_*.
+     * The REX bits are written by exactly one place (the long-mode REX prefix handler,
+     * instructions_64.c) so every 32-bit path sees the same 8-bit value it always did. */
+    uint16_t prefixes;    /* 648 */
     /* upstream is a u32 at wasm offset 664 (global_pointers.rs:39) and WRAPS at
      * 4,294,967,296; the port widens it to u64 so the virtual clock (microtick, TSC, PIT,
      * PM timer) and the instruction limit do not jump backwards mid-run.  The `664` in the
@@ -355,6 +373,19 @@ typedef struct cpu_state {
 
     bool protected_mode;   /* 800 */
     bool is_32;            /* 804 */
+    /* S5a (plan correction GAP 2): CS.L, THE BIT THAT MAKES IA-32e's TWO MODES.  The plan
+     * placed CS.L's decode in S11 ("it arrives with the far-transfer work in S11",
+     * cpu_backend.c's note), but S5 cannot do "stub -> LMA -> 64-bit fetch" without it:
+     * after the stub's `mov cr0` sets CR0.PG the machine IS in IA-32e with CS.L still 0 --
+     * COMPATIBILITY mode -- and the very next instruction is the legacy `.byte 0xEA` far
+     * jump that loads the 64-bit CS.  Treating LMA as 64-bit on the instant it is set would
+     * turn that far jump into the overlay's #UD and no case would ever reach its body.
+     *
+     * It is a property of the CS DESCRIPTOR (Appendix A's `efer.LMA && CS.L`), so it is set
+     * wherever a CS descriptor is loaded (update_cs_size's two call shapes, exceptions.h)
+     * and cleared by switch_cs_real_mode.  Outside long mode it stays false, which is what
+     * keeps every 32-bit path's behaviour identical. */
+    bool is_64;            /* CS.L: 1 in IA-32e 64-bit mode, 0 in compat */
     bool stack_size_32;    /* 808 */
     uint32_t memory_size;  /* 812 */
     uint8_t fpu_stack_empty; /* 816 */
@@ -476,6 +507,11 @@ int32_t read_reg16(int32_t index);
 void write_reg16(int32_t index, int32_t value);
 int32_t read_reg32(int32_t index);
 void write_reg32(int32_t index, int32_t value);
+/* S5a: the 64-bit half of the register file.  In long mode a 64-bit operand read/write is
+ * the whole slot; outside it nothing calls these (the 64-bit bodies are only reachable
+ * through the overlay's 0x2NN arms, which only a long-mode dispatch key selects). */
+uint64_t read_reg64(int32_t index);
+void write_reg64(int32_t index, uint64_t value);
 
 int32_t read_mmx32s(int32_t r);
 uint64_t read_mmx64s(int32_t r);

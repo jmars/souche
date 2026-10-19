@@ -33,8 +33,14 @@ static void backend_clear_caches(void);
 
 /* interp: the generated switch, one instruction at a time (cpu.c:126).  Its init only has to
  * settle the compiled-path question, which is a REFUSAL this engine inherits rather than an
- * allocation it makes -- see backend_interp_init. */
-static const cpu_backend_t backend_interp = {
+ * allocation it makes -- see backend_interp_init.
+ *
+ * S5a: NOT `const` ANY MORE.  This is the one backend that gains a capability at run time
+ * (`--long-mode`, cpu_backend_enable_long_mode below): the capability word is the CONTRACT
+ * (ss3.3), so it is the contract's own field that changes rather than a second global that
+ * every reader would have to consult.  The other two stay const -- an engine that cannot run
+ * a mode must not be able to claim it by accident. */
+static cpu_backend_t backend_interp = {
 	"interp",
 	CPU_MODES_32BIT,
 	backend_interp_init,
@@ -182,6 +188,42 @@ const cpu_backend_t *cpu_backend_select(const char *name)
 	return backend;
 }
 
+/* ------------------------------------------------------------------ *
+ * S5a: --long-mode, THE ONE CAPABILITY THAT IS SWITCHED AT RUN TIME
+ *
+ * Plan ss6 S5's flag.  It exists because long mode is a property of the CPU MODEL but a
+ * BACKEND CAPABILITY (ss3.3), and the two must be able to disagree: `--long-mode off` (the
+ * default, and the shipped machine) is the 32-bit CPU, and a guest that asks for IA-32e is
+ * refused by name.  `--long-mode on` declares the capability on the ONE backend that has an
+ * implementation -- the interpreter -- which is also why turning it on SELECTS that engine:
+ * a machine whose capability word says long mode and whose decoder is the 32-bit uop cache
+ * would be a false declaration, the exact defect class ACPI-FADT cost this tree.
+ *
+ * The uop cache and the JIT do NOT get the bit.  Their long-mode arms are S13's, and until
+ * then the refusal they produce is correct rather than a limitation to work around
+ * (uop_cache.c's uop_run carries the same refusal a second time, at the decoder).
+ *
+ * IT DOES NOT SELECT THE ENGINE, and that is the seam's own asymmetry (cpu_backend.h): an
+ * explicit `--cpu-engine` WINS over the flags whatever the argument order.  The caller
+ * declares the capability here and adopts the interpreter only if no engine was NAMED; if one
+ * was, it stands and the S2 transition refusal names it.  MEASURED as the defect that made
+ * this split necessary: with the adopt inside this function, `--long-mode on --cpu-engine
+ * uopjit` silently ran the INTERPRETER and never refused -- the flag moved the machine to an
+ * engine the user did not ask for, which is the seam's false-declaration class.
+ *
+ * Returns false for an engine that has no long-mode implementation, so a caller can say so.
+ * ------------------------------------------------------------------ */
+bool cpu_backend_enable_long_mode(void)
+{
+	backend_interp.modes |= (CPU_MODE_LONG | CPU_MODE_COMPAT);
+	return true;
+}
+
+bool cpu_backend_long_mode_available(void)
+{
+	return (backend_interp.modes & CPU_MODE_LONG) != 0;
+}
+
 const cpu_backend_t *cpu_backend_current(void)
 {
 	if (backend_selected == NULL) return engine_for_flags();
@@ -232,11 +274,21 @@ bool cpu_backend_can(uint32_t mode)
  *
  * EFER.LMA is the machine's own state, not the guest's request: LME says "enter IA-32e when
  * paging is enabled" and LMA says "we are in it".  Only LMA is read here (Appendix A).
+ *
+ * S5a UPDATED THE SPLIT ABOVE: CS.L arrives in this slice (plan correction GAP 2 -- the
+ * corpus's entry path cannot be decoded without it), so the predicate now answers LONG or
+ * COMPAT from `is_64` and the "cannot distinguish" gap is closed.  What remains S11's is the
+ * rest of the system layer, not the predicate.
  * ------------------------------------------------------------------ */
 
 uint32_t cpu_mode_of(const cpu_state_t *state)
 {
-	if ((state->efer & EFER_LMA) != 0) return CPU_MODE_LONG; /* 64-bit and compat alike */
+	/* S5a: the split the S2 note below said was impossible -- CS.L is decoded now
+	 * (`state->is_64`), so the two IA-32e modes are told apart instead of both answering
+	 * CPU_MODE_LONG.  The capability check still treats them as one capability (both bits
+	 * are declared together by cpu_backend_enable_long_mode): one implementation runs both,
+	 * and a backend that cannot run IA-32e is refused in either. */
+	if ((state->efer & EFER_LMA) != 0) return state->is_64 ? CPU_MODE_LONG : CPU_MODE_COMPAT;
 	if ((state->cr[0] & CR0_PE) == 0) return CPU_MODE_REAL;
 	return state->is_32 ? CPU_MODE_PROT32 : CPU_MODE_PROT16;
 }

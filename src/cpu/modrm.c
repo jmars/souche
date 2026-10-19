@@ -593,10 +593,202 @@ int32_t resolve_modrm32_(int32_t modrm_byte)
 /* cpu.rs:3122-3130 */
 int32_t modrm_resolve(int32_t modrm_byte)
 {
+    /* S5a: THE 32-BIT-ARM ENTRY POINT IS MODE-AWARE, and it has to be.  Every modrm-bearing
+     * instruction in long mode generates its address with 64-BIT rules (RIP-relative, a 64-bit
+     * SIB base, a full-width displacement) -- INCLUDING the instructions with no REX.W, which
+     * dispatch to the 0x1NN/0xNN arms.  `movdqa xmm0, [rip+disp]` (66 0F 6F, no REX) or `push
+     * qword [mem]` (FF /6 with REX, whose arm is S7's) land here, and computing their address
+     * with the 32-bit resolver turns RIP-relative into DISP32-ABSOLUTE: a valid-looking address
+     * in the wrong page, i.e. the silent-wrong class again.
+     *
+     * MEASURED as the reason this exists: before it, four corpus cases that use only
+     * no-REX.W encodings (`simd-movdqa-64`, `simd-fpu-mmx-64`, `simd-fild-fistp64`,
+     * `ctrl-push-pop-64`) reported MISMATCHES instead of the named stops their slices should
+     * produce -- the bodies ran and read the wrong addresses.
+     *
+     * THE BOUND, stated: this returns int32_t because every 32-bit-arm body takes an int32_t
+     * address.  In long mode the resolver's answer is 64-bit, so a linear address above 4 GiB
+     * STOPS BY NAME instead of being truncated (S7/S10 widen the bodies; the port's physical
+     * model is 32 bits, so the address bound is the model's own -- plan ss5.1).  The 0x2NN
+     * arms call modrm_resolve64 directly and are not affected by the bound. */
+    if (long_mode_64()) {
+        int64_t a = modrm_resolve64(modrm_byte);
+        if (cpu->pagefault) return 0;
+        if ((uint64_t)a > 0xFFFFFFFFull) {
+            unimplemented_instruction(
+                "modrm: a 64-bit effective address above 4 GiB in a 32-bit-operand form"
+                " (S6-S10 widen the bodies; results/x86-64-plan.md ss5.1)");
+            return 0;
+        }
+        return (int32_t)(uint32_t)a;
+    }
     if (is_asize_32()) {
         return resolve_modrm32(modrm_byte);
     }
     else {
         return resolve_modrm16(modrm_byte);
     }
+}
+
+/* ================================================================== *
+ * S5a -- THE 64-BIT DECODE SIDE (plan ss3.6.1's three-valued key, ss3.6.5's
+ * read_imm64, and plan correction W1's 64-bit address generator)
+ *
+ * Everything in this section is reachable ONLY when the machine is in IA-32e 64-BIT mode
+ * (`long_mode_64()`: EFER.LMA and CS.L), which outside `--long-mode on` never happens, and
+ * each function keeps its 32-bit twin untouched beside it.  That is the S5a staging rule: the
+ * 32-bit machine dispatches to exactly the cases it always did.
+ * ================================================================== */
+
+/* ------------------------------------------------------------------ *
+ * the three-valued dispatch key
+ * ------------------------------------------------------------------ */
+
+int32_t dispatch_os_index(int32_t opcode)
+{
+    if (long_mode_64()) {
+        /* 0x40-0x4F ARE REX IN 64-BIT MODE.  They are dispatched as OPCODES -- the fetch loop
+         * takes one byte at a time and the prefix is only recognised when its own byte comes
+         * up -- so the byte must reach its own case, and it must reach it whichever legacy
+         * prefix preceded it.  The overlay emits exactly that one arm (16 REX cases), and this
+         * rule is what selects it.  Without this line the byte would be an INC/DEC at
+         * os_index 0 or 1 and the instruction LENGTH of everything after it would be wrong. */
+        if (opcode >= 0x40 && opcode <= 0x4F) return 2;
+        /* the operand size: REX.W wins, then the 0x66 override (16-bit), then the encodings
+         * whose long-mode default is 64, then the 32-bit default */
+        if ((cpu->prefixes & PREFIX_REX_W) != 0) return 2;
+        if ((cpu->prefixes & PREFIX_MASK_OPSIZE) != 0) return 0;
+        if (long_mode_default64(opcode)) return 2;
+        return 1;
+    }
+    /* compatibility mode and every 32-bit mode: the two arms the machine has always had.  Note
+     * that `is_osize_32()` is deliberately NOT used in the long-mode branch above -- in a
+     * 64-bit code segment CS.D is 0, so is_osize_32() answers `true` there and would route
+     * every instruction to the 32-bit arm. */
+    return is_osize_32() ? 1 : 0;
+}
+
+/* ------------------------------------------------------------------ *
+ * the 8-byte immediate and the moffs offset
+ * ------------------------------------------------------------------ */
+
+int64_t read_imm64(void)
+{
+    /* LOW HALF FIRST: the stream's byte order is semantic (gen/interpreter_c.js's note on the
+     * hoisted immediate).  Each half goes through read_imm32s, so the page-crossing handling is
+     * the one the port already has. */
+    uint32_t low = (uint32_t)read_imm32s();
+    if (cpu->pagefault) return 0;
+    uint32_t high = (uint32_t)read_imm32s();
+    return (int64_t)((uint64_t)low | ((uint64_t)high << 32));
+}
+
+int64_t read_moffs64(void)
+{
+    /* an moffs OFFSET is unsigned and 8 bytes wide in 64-bit mode whatever the operand size
+     * is; the operand (AL/AX/EAX/RAX) is chosen by the ARM, not by this read */
+    uint64_t low = (uint32_t)read_imm32s();
+    if (cpu->pagefault) return 0;
+    uint64_t high = (uint32_t)read_imm32s();
+    return (int64_t)(low | (high << 32));
+}
+
+/* ------------------------------------------------------------------ *
+ * the 64-bit effective address -- see modrm.h for what it adds
+ * ------------------------------------------------------------------ */
+
+int64_t modrm_resolve64(int32_t modrm_byte)
+{
+    /* 0x67 ADDRESS-SIZE OVERRIDE: a 32-bit effective address, ZERO-EXTENDED.  Computed by the
+     * 32-bit resolver so the wrap is the model's own (not a truncation of a 64-bit sum), which
+     * is what the hardware does. */
+    if ((cpu->prefixes & PREFIX_MASK_ADDRSIZE) != 0) {
+        int32_t a = resolve_modrm32(modrm_byte);
+        if (cpu->pagefault) return 0;
+        return (int64_t)(uint64_t)(uint32_t)a;
+    }
+
+    int32_t mod = modrm_byte >> 6 & 3;
+    int32_t r = modrm_byte & 7;
+    int32_t default_segment = DS;
+    int64_t offset = 0;
+    bool rip_relative = false;
+
+    DBG_ASSERT(mod != 3); /* the caller's `modrm_byte < 0xC0` test; a register form has no address */
+
+    if (r == 4) {
+        /* SIB */
+        int32_t sib_byte = read_imm8();
+        if (cpu->pagefault) return 0;
+        int32_t base_i = sib_byte & 7;
+        int32_t index_i = (sib_byte >> 3) & 7;
+        int32_t scale = (sib_byte >> 6) & 3;
+
+        if (mod == 0 && base_i == 5) {
+            /* no base register: a sign-extended disp32 */
+            int32_t d = read_imm32s();
+            if (cpu->pagefault) return 0;
+            offset = (int64_t)d;
+        }
+        else {
+            offset = (int64_t)read_reg64(reg_index_b(base_i));
+            /* a base of (E/R)SP or (E/R)BP selects SS in the reference's table; segment bases
+             * are 0 in 64-bit mode except FS/GS, so this only decides which override applies */
+            if (base_i == 4 || base_i == 5) default_segment = SS;
+        }
+
+        /* index 100b is "no index" ONLY without REX.X: with it, the index register is R12 */
+        if (!(index_i == 4 && (cpu->prefixes & PREFIX_REX_X) == 0)) {
+            offset += (int64_t)read_reg64(reg_index_x(index_i)) << scale;
+        }
+
+        if (mod == 1) {
+            int32_t d = read_imm8s();
+            if (cpu->pagefault) return 0;
+            offset += (int64_t)d;
+        }
+        else if (mod == 2) {
+            int32_t d = read_imm32s();
+            if (cpu->pagefault) return 0;
+            offset += (int64_t)d;
+        }
+    }
+    else if (mod == 0 && r == 5) {
+        /* RIP-RELATIVE: the base is the address of the NEXT instruction, i.e. the cursor AFTER
+         * the displacement has been consumed -- which is why the read comes first. */
+        int32_t d = read_imm32s();
+        if (cpu->pagefault) return 0;
+        offset = (int64_t)cpu->instruction_pointer + (int64_t)d;
+        rip_relative = true;
+    }
+    else {
+        offset = (int64_t)read_reg64(reg_index_b(r));
+        if (mod == 0) {
+            /* nothing to add */
+        }
+        else if (mod == 1) {
+            int32_t d = read_imm8s();
+            if (cpu->pagefault) return 0;
+            offset += (int64_t)d;
+        }
+        else {
+            int32_t d = read_imm32s();
+            if (cpu->pagefault) return 0;
+            offset += (int64_t)d;
+        }
+        if (r == 5) default_segment = SS; /* (E/R)BP-based */
+    }
+
+    if (rip_relative) {
+        /* RIP-relative addresses do not take a segment base (DS is implied) */
+        return offset;
+    }
+
+    /* THE SEGMENT BASE, at 64 bits.  In 64-bit mode CS/DS/ES/SS bases are 0; FS/GS keep real
+     * 64-bit bases, which the port reads out of segment_offsets[] here (the MSRs that WRITE
+     * them are S11's, so a base above 4 GiB is that slice's gap rather than a silent wrap of
+     * this add). */
+    int32_t seg = segment_prefix(default_segment);
+    int64_t base = (int64_t)cpu->segment_offsets[seg];
+    return base + offset;
 }

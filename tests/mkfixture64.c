@@ -146,8 +146,36 @@ static void jump_to_body(unsigned long entry)
 	     * the body runs: there is no exec here, so the child inherits the parent's x87
 	     * and SSE registers -- and the parent used memcpy, which leaves the xmm registers
 	     * holding junk (MEASURED: the first version of this file reported a body's
-	     * xmm0-15 as the memcpy's leftovers).  fninit gives the all-empty x87 stack v86
-	     * starts from; the pxors give the zero xmm file it starts from. */
+	     * xmm0-15 as the memcpy's leftovers).
+	     *
+	     * S5a FINDING (the second half of the same defect): `fninit` ALONE IS NOT ENOUGH,
+	     * because it only sets the TAG to empty -- it does NOT clear the eight 80-bit
+	     * register slots.  The document prints mm0-mm7 as the low 64 bits of the PHYSICAL
+	     * stack slots and the comparison's MMX branch fires whenever the tag says
+	     * all-invalid, so the native leg was reporting the PARENT'S x87 residue as the
+	     * body's MMX result.  MEASURED: the first family-1 comparison failed on exactly one
+	     * field per case -- mm7.int32[1] = 0xFFFFFFFF80000000 on the native side against the
+	     * model's 0 -- for all twelve cases, i.e. a constant that had nothing to do with any
+	     * body.  The fix is to zero the DATA as well: FXSAVE the area, zero st_space and
+	     * xmm_space (offsets 0x20..0x1A0), FXRSTOR it back.  The scratch area is 512 bytes
+	     * just below BSS_END, which is OUTSIDE the compared 8 KiB window (0x100000..
+	     * 0x101FFF) and inside the harness's own mapping.
+	     *
+	     * v86's initial state is exactly this: every fpu_st slot is F80_ZERO and the tag is
+	     * all-empty (cpu_state.c reset_cpu), so the zeroed data is the MODEL's state, not a
+	     * convenience. */
+	    /* the FXSAVE scratch: 16-byte aligned, inside the harness's mapping (which ends at
+	     * 0x103000) and ABOVE the compared window (which ends at the stack top, 0x102000) --
+	     * a scratch at rsp-512 lands INSIDE the window and changes the document (MEASURED:
+	     * the window then carried MXCSR at 0x101E18) */
+	    "movl $0x102400, %%edi\n\t"
+	    "fxsave (%%rdi)\n\t"
+	    "leaq 32(%%rdi), %%rdi\n\t"
+	    "xorl %%eax, %%eax\n\t"
+	    "movl $48, %%ecx\n\t"          /* 48 quadwords = 0x180 bytes: 0x20..0x1A0 */
+	    "rep stosq\n\t"
+	    "movl $0x102400, %%edi\n\t"
+	    "fxrstor (%%rdi)\n\t"
 	    "fninit\n\t"
 	    "pxor %%xmm0, %%xmm0\n\tpxor %%xmm1, %%xmm1\n\t"
 	    "pxor %%xmm2, %%xmm2\n\tpxor %%xmm3, %%xmm3\n\t"

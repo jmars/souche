@@ -39,6 +39,14 @@
 #      UnboundLocalError at the first case that stopped being red -- which is exactly the
 #      form step D has -- so the harness would have been dead on arrival for S5.
 #
+# S5 UPDATE (results/x86-64-s5.md), and this gate's numbers DELIBERATELY DID NOT MOVE.  The
+# port can now execute these images (`--long-mode on`), but that flag is DEFAULT OFF and this
+# gate runs the shipped default -- so step D's census is still green=0 red_unimplemented=57,
+# word for word what S4 measured.  That is the byte-identical-32-bit-machine requirement
+# holding, not a missing edit.  The SAME corpus with the flag ON is measured by
+# tests/gate-long-mode.sh: family 1 green 12/12 (the ACTUAL count; the plan's ">= 25" is
+# reconciled in the report), the whole corpus green=17 red_unimplemented=40 mismatch=0 error=0.
+#
 # EVERY STEP'S EXIT CODE IS THE GATE (the tree's rule).  A step's tail is not read.
 set -e
 cd "$(dirname "$0")/.."

@@ -130,7 +130,8 @@ void switch_cs_real_mode(int32_t selector)
     /* S3: the slot is 64-bit and a selector<<4 is an ADDRESS; the shift is done in the
      * address's own (unsigned) width so a large selector cannot sign-extend */
     cpu->segment_offsets[CS] = (uint32_t)selector << 4;
-    update_cs_size(false);
+    /* S5a: a real-mode CS is never 64-bit (and this is also the reset path) */
+    update_cs_size_long(false, false);
 }
 
 /* ------------------------------------------------------------------ *
@@ -293,7 +294,7 @@ static void iret(bool is_16)
             cpu->cpl = 3;
             cpl_changed();
 
-            update_cs_size(false);
+            update_cs_size_long(false, false); /* S5a: an iret's 16-bit CS is not 64-bit */
             update_state_flags();
 
             /* iret end */
@@ -470,7 +471,7 @@ static void iret(bool is_16)
 
     cpu->sreg[CS] = (uint16_t)new_cs;
 
-    update_cs_size(seg_descriptor_is_32(cs_descriptor));
+    update_cs_size_long(seg_descriptor_is_32(cs_descriptor), seg_descriptor_is_long(cs_descriptor));
 
     cpu->segment_limits[CS] = seg_descriptor_effective_limit(cs_descriptor);
     cpu->segment_offsets[CS] = seg_descriptor_base(cs_descriptor);
@@ -645,7 +646,7 @@ void call_interrupt_vector(int32_t interrupt, bool is_int, bool has_error_code, 
             cpu->cpl = cs_dpl;
             cpl_changed();
 
-            update_cs_size(seg_descriptor_is_32(cs_descriptor));
+            update_cs_size_long(seg_descriptor_is_32(cs_descriptor), seg_descriptor_is_long(cs_descriptor));
 
             cpu->flags &= ~FLAG_VM & ~FLAG_RF;
 
@@ -746,7 +747,7 @@ void call_interrupt_vector(int32_t interrupt, bool is_int, bool has_error_code, 
 
         cpu->sreg[CS] = (uint16_t)(((uint16_t)selector & ~3) | cpu->cpl);
 
-        update_cs_size(seg_descriptor_is_32(cs_descriptor));
+        update_cs_size_long(seg_descriptor_is_32(cs_descriptor), seg_descriptor_is_long(cs_descriptor));
 
         cpu->segment_limits[CS] = seg_descriptor_effective_limit(cs_descriptor);
         cpu->segment_offsets[CS] = seg_descriptor_base(cs_descriptor);
@@ -1098,7 +1099,7 @@ void far_jump(int32_t eip, int32_t selector, bool is_call, bool is_osize_32)
                 cpu->cpl = seg_descriptor_dpl(cs_info);
                 cpl_changed();
 
-                update_cs_size(seg_descriptor_is_32(cs_info));
+                update_cs_size_long(seg_descriptor_is_32(cs_info), seg_descriptor_is_long(cs_info));
 
                 /* XXX: Should be checked before side effects (upstream dbg_assert(false)) */
                 if (!switch_seg(SS, new_ss)) {
@@ -1179,7 +1180,7 @@ void far_jump(int32_t eip, int32_t selector, bool is_call, bool is_osize_32)
             }
 
 
-            update_cs_size(seg_descriptor_is_32(cs_info));
+            update_cs_size_long(seg_descriptor_is_32(cs_info), seg_descriptor_is_long(cs_info));
 
             cpu->segment_is_null[CS] = false;
             cpu->segment_limits[CS] = seg_descriptor_effective_limit(cs_info);
@@ -1276,7 +1277,7 @@ void far_jump(int32_t eip, int32_t selector, bool is_call, bool is_osize_32)
         }
 
 
-        update_cs_size(seg_descriptor_is_32(info));
+        update_cs_size_long(seg_descriptor_is_32(info), seg_descriptor_is_long(info));
 
         cpu->segment_is_null[CS] = false;
         cpu->segment_limits[CS] = seg_descriptor_effective_limit(info);
@@ -1418,7 +1419,7 @@ void far_return(int32_t eip, int32_t selector, int32_t stack_adjust, bool is_osi
 
     /* upstream dbg_assert(*cpl == info.dpl) dropped */
 
-    update_cs_size(seg_descriptor_is_32(info));
+    update_cs_size_long(seg_descriptor_is_32(info), seg_descriptor_is_long(info));
 
     cpu->segment_is_null[CS] = false;
     cpu->segment_limits[CS] = seg_descriptor_effective_limit(info);
@@ -1609,7 +1610,7 @@ void do_task_switch(int32_t selector_raw, bool has_error_code, int32_t error_cod
         cpu->segment_is_null[CS] = false;
         cpu->segment_offsets[CS] = (uint32_t)new_cs << 4;
         cpu->sreg[CS] = (uint16_t)new_cs;
-        update_cs_size(false);
+        update_cs_size_long(false, false); /* S5a: a VM86 task switch's CS is not 64-bit */
         new_cpl = 3;
     }
     else {
@@ -1659,7 +1660,7 @@ void do_task_switch(int32_t selector_raw, bool has_error_code, int32_t error_cod
         cpu->segment_access_bytes[CS] = seg_descriptor_access_byte(new_cs_descriptor);
         cpu->sreg[CS] = (uint16_t)new_cs;
 
-        update_cs_size(seg_descriptor_is_32(new_cs_descriptor));
+        update_cs_size_long(seg_descriptor_is_32(new_cs_descriptor), seg_descriptor_is_long(new_cs_descriptor));
 
         new_cpl = seg_selector_rpl(new_cs_selector);
     }

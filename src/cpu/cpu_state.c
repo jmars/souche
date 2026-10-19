@@ -9,6 +9,7 @@
 
 #include "cpu_state.h"
 #include "cpu.h"   /* unimplemented_instruction -- S3's high-half stop */
+#include "modrm.h" /* S5a: the PREFIX_REX_* bits the byte-register mapping tests */
 #include "paging.h" /* reset_cpu must flush the TLB (full_clear_tlb) */
 
 /* global_pointers.rs used absolute offsets into a shared wasm memory; the C port has
@@ -28,8 +29,26 @@ cpu_state_t *cpu;
  * AL/CL/DL/BL (indices 0-3) are the first byte of reg64[0..3] and AH/CH/DH/BH (4-7) the
  * SECOND byte of the same slots.  A formula left unchanged here would put AH on ESP's
  * first byte -- the port made exactly that mistake once already in the JIT's register
- * mapping (jit_codegen.c:198-201) and the guest's stack pointer came out corrupted. */
-static int32_t get_reg8_index(int32_t index) { return (index & 3) * 8 + (index >> 2 & 1); }
+ * mapping (jit_codegen.c:198-201) and the guest's stack pointer came out corrupted.
+ *
+ * S5a ADDED THE THIRD AND FOURTH CASES, and they are the ones the SDM's REX rule is about:
+ *
+ *   index 8-15            -> the first byte of reg64[index]      (SPL/BPL/SIL/DIL and
+ *                                                                  R8B-R15B)
+ *   4-7 WITH A REX BYTE   -> the first byte of reg64[index]      (SPL/BPL/SIL/DIL instead of
+ *                                                                  AH/CH/DH/BH)
+ *   4-7 WITHOUT ONE       -> the second byte of reg64[index-4]   (AH/CH/DH/BH, unchanged)
+ *
+ * "WITH A REX BYTE" is PREFIX_REX_PRESENT, not PREFIX_REX_W: `40 B4 xx` is `mov spl, imm8`,
+ * MEASURED against the host; testing W there would read AH and silently corrupt the byte the
+ * corpus's mov-rex-byte-regs case compares.  Nothing outside long mode sets the bit, so the
+ * first two arms are unreachable from the 32-bit battery. */
+static int32_t get_reg8_index(int32_t index)
+{
+    if (index >= 8) return index * 8;
+    if (index >= 4 && (cpu->prefixes & PREFIX_REX_PRESENT) != 0) return index * 8;
+    return (index & 3) * 8 + (index >> 2 & 1);
+}
 
 int32_t read_reg8(int32_t index)
 {
@@ -59,6 +78,14 @@ void write_reg16(int32_t index, int32_t value)
 int32_t read_reg32(int32_t index) { return (int32_t)(uint32_t)cpu->reg64[index]; }
 
 void write_reg32(int32_t index, int32_t value) { cpu->reg64[index] = (uint32_t)value; }
+
+/* S5a: the 64-bit operand form.  There is nothing to extend or mask -- in long mode a
+ * 64-bit operand IS the whole slot -- but the pair exists so a 64-bit body never indexes
+ * reg64[] directly (the 32-bit write above zeroes the high half, and a body that bypassed
+ * the accessor would be the one place that rule could be forgotten). */
+uint64_t read_reg64(int32_t index) { return cpu->reg64[index]; }
+
+void write_reg64(int32_t index, uint64_t value) { cpu->reg64[index] = value; }
 
 /* mmx registers are the low 64 bits of the fpu_st slots (cpu.rs:4162-4173). */
 int32_t read_mmx32s(int32_t r) { return (int32_t)cpu->fpu_st[r].mantissa; }
@@ -170,7 +197,15 @@ void update_state_flags(void)
     cpu->state_flags = (uint8_t)(((uint32_t)(cpu->is_32 != 0) << 0) |
                                  ((uint32_t)(cpu->stack_size_32 != 0) << 1) |
                                  ((uint32_t)(cpu->cpl == 3) << 2) |
-                                 ((uint32_t)(has_flat_segmentation() != 0) << 3));
+                                 ((uint32_t)(has_flat_segmentation() != 0) << 3) |
+                                 /* S5a: CACHED_MASK_LONG is now COMPOSED, not just
+                                  * defined -- it is the fifth bit of the decoded-block key,
+                                  * so a block decoded in long mode can never be reused in a
+                                  * 32-bit one (or vice versa) even if the physical address
+                                  * and the other four bits agree.  False in every 32-bit
+                                  * mode, so the four-bit value the key has always been is
+                                  * unchanged there (pinned by the M0 transcript). */
+                                 ((uint32_t)(cpu->is_64 != 0) << 4));
 }
 
 int32_t getiopl(void) { return cpu->flags >> 12 & 3; } /* cpu.rs:4415 */
@@ -195,6 +230,13 @@ void reset_cpu(void)
 
         write_xmm128_2(i, 0, 0);
         cpu->fpu_st[i] = F80_ZERO;
+    }
+    /* S5a: the eight REX-only slots.  reset's own loop above is indexed by the SEGMENT set
+     * (8 entries) and used to be the only zeroing of reg64; r8-r15 need their own, or a
+     * second machine in the same process inherits the first one's high registers (the
+     * selftest's per-arm cpu_state_init is exactly that case). */
+    for (int i = 8; i < 16; i++) {
+        cpu->reg64[i] = 0;
     }
     cpu->segment_access_bytes[CS] = 0x80 | (0 << 5) | 0x10 | 0x08 | 0x02; /* P dpl0 S E RW */
 
@@ -234,6 +276,7 @@ void reset_cpu(void)
     cpu->cpl = 0;
 
     cpu->is_32 = false;
+    cpu->is_64 = false;
     cpu->stack_size_32 = false;
     cpu->prefixes = 0;
 

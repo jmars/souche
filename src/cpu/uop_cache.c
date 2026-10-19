@@ -1294,6 +1294,33 @@ void uop_run(uint32_t phys_addr)
 {
 	uint32_t phys = phys_addr;
 
+	/* S5a (results/x86-64-plan.md ss6 S5, risk R1): THE DECODER'S LONG-MODE REFUSAL.
+	 *
+	 * This decoder reads the instruction stream with 32-BIT RULES: `0x40`-`0x4F` are
+	 * INC/DEC (dec_prefix has no case for them), so a REX byte is consumed as a whole
+	 * instruction and the LENGTH of everything after it is wrong from there on -- a
+	 * desynchronised stream that still "runs", which is the silent channel the plan names
+	 * as R1 and the reason this seat lands BEFORE any 64-bit byte can execute.
+	 *
+	 * THREE LAYERS, and this is the one that is a REFUSAL rather than a capability:
+	 *   1. the capability word -- no engine but `interp` declares CPU_MODE_LONG, so the
+	 *      seam's per-batch check (cpu_backend_dispatch) refuses the mode by name;
+	 *   2. the transition -- cpu_backend_refuse_long_mode (S2) refuses the three writes
+	 *      that would ENTER IA-32e when the selected engine cannot run it, so a machine
+	 *      with the cache on never gets here at all;
+	 *   3. THIS: the decoder refuses by name even if it is entered with EFER.LMA set
+	 *      (a direct call, a future engine whose capability word is wrong, or a batch
+	 *      that spans a mode change).  A seat that cannot be reached through today's
+	 *      dispatch is still a seat that must not silently decode 64-bit bytes with
+	 *      32-bit rules; cpu_selftest's S5 arm puts LMA there by hand and requires this
+	 *      stop (the plan's "an untested seat is indistinguishable from an absent one").
+	 * The 64-bit decode is S13's, and its gate is the engine differential. */
+	if ((cpu->efer & EFER_LMA) != 0) {
+		unimplemented_instruction(
+			"uop cache: the 64-bit decoder is S13's; long mode runs on the interpreter only");
+		return;
+	}
+
 	if (!uop_ready && !uop_cache_init()) {
 		interpreted_run(phys);
 		return;
@@ -1339,7 +1366,11 @@ void uop_run(uint32_t phys_addr)
 			set_instruction_pointer(cpu->instruction_pointer + 1);
 			cpu->pagefault = false;
 			DBG_ASSERT(cpu->prefixes == 0);
-			run_instruction(opcode | (cpu->is_32 ? 1 : 0) << 8);
+			/* S5a: the same three-valued key as the interpreter's loop (modrm.c).  This path
+			 * is unreachable in long mode -- uop_run refuses the mode at its entry -- so the
+			 * call is the 32-bit answer here; it is the SAME FUNCTION so the two loops cannot
+			 * disagree about the key's shape when S13 gives this decoder its arms. */
+			run_instruction(opcode | dispatch_os_index(opcode) << 8);
 			cpu->pagefault = false;
 
 			if (interpreted_unimplemented) {

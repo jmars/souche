@@ -21,6 +21,38 @@ int32_t valid_tlb_entries[VALID_TLB_ENTRY_MAX];
 int32_t valid_tlb_entries_count = 0;
 
 /* ------------------------------------------------------------------ *
+ * S5a (plan ss4's PARTIAL verdict for tlb_data): THE 64-BIT-KEYED TLB.
+ *
+ * `tlb_data[0x100000]` is indexed by `addr >> 12` and therefore cannot key a 48-bit virtual
+ * page -- the index alone needs 36 bits.  The plan's verdict is a SECOND, small,
+ * direct-mapped table used ONLY under EFER.LMA, with the big one left exactly as it is so
+ * the 32-bit path's invalidation semantics do not move by one entry.
+ *
+ * SHAPE, and why it is not the 32-bit one: the 32-bit entry packs `physical_page ^
+ * (page << 12)` and translate_address recovers the address by XORing the linear address back
+ * in.  That trick needs the virtual page number to fit in 32 bits, which is exactly what long
+ * mode ends.  Here the tag is the 64-bit VIRTUAL PAGE NUMBER and the entry is
+ * `physical_page_base | info_bits` (the same TLB_* bits, bits 0-6), so the physical address
+ * is `(entry & 0xFFFFF000) | (addr & 0xFFF)` -- no XOR, and the port's 32-bit physical bound
+ * is enforced where the walk composes it (a PTE above 4 GiB stops by name, plan ss5.1).
+ *
+ * `entry != 0` is the validity test: a successful walk always sets TLB_VALID.
+ * ------------------------------------------------------------------ */
+#define TLB64_ENTRIES 4096 /* power of two; a 32 KiB table, no allocation */
+static uint64_t tlb64_tag[TLB64_ENTRIES];
+static int32_t tlb64_data[TLB64_ENTRIES];
+
+static inline uint32_t tlb64_slot(uint64_t page) { return (uint32_t)page & (TLB64_ENTRIES - 1u); }
+
+static void tlb64_clear_all(void)
+{
+    for (int i = 0; i < TLB64_ENTRIES; i++) {
+        tlb64_tag[i] = 0;
+        tlb64_data[i] = 0;
+    }
+}
+
+/* ------------------------------------------------------------------ *
  * loud unimplemented paths
  * ------------------------------------------------------------------ */
 
@@ -40,6 +72,7 @@ static void fatal(const char *msg)
 void full_clear_tlb(void)
 {
     /* clear tlb including global pages */
+    tlb64_clear_all(); /* S5a: the long-mode table is flushed from the same four entries */
     cpu->last_virt_eip = VIRT_EIP_NONE;
     for (int32_t i = 0; i < valid_tlb_entries_count; i++) {
         int32_t page = valid_tlb_entries[i];
@@ -53,6 +86,11 @@ void full_clear_tlb(void)
 void clear_tlb(void)
 {
     /* clear tlb excluding global pages */
+    /* S5a: the 64-bit table has no GLOBAL filtering yet (no long-mode page in this slice's
+     * corpus carries PGE, and holding a stale non-global entry is the silent-wrong
+     * direction), so a "clear the non-global entries" request clears it whole.  S11 owns
+     * the page-flags split here; the sentence is the gap, not a claim. */
+    tlb64_clear_all();
     cpu->last_virt_eip = VIRT_EIP_NONE;
     int32_t global_page_offset = 0;
     for (int32_t i = 0; i < valid_tlb_entries_count; i++) {
@@ -82,6 +120,15 @@ void invlpg(uint64_t addr)
      * what the plan ss3 asks to keep verbatim. */
     tlb_data[page] = 0;
     cpu->last_virt_eip = VIRT_EIP_NONE;
+
+    /* S5a: and the long-mode entry for THIS page (the same four entry points the plan names). */
+    {
+        uint64_t vpage = addr >> 12;
+        uint32_t slot = tlb64_slot(vpage);
+        if (tlb64_data[slot] != 0 && tlb64_tag[slot] == vpage) {
+            tlb64_data[slot] = 0;
+        }
+    }
 }
 
 /* ------------------------------------------------------------------ *
@@ -336,6 +383,228 @@ static int32_t do_page_walk(int32_t addr,
 }
 
 /* ------------------------------------------------------------------ *
+ * S5a: THE 4-LEVEL WALK, 4 KiB PAGES ONLY (plan ss6 S5, ss2.2.1)
+ *
+ * The plan's payoff argument, made concrete: this is NOT a second pager.  It is
+ * `do_page_walk` above with ONE more level in front (PML4), a 64-bit base arithmetic and a
+ * canonicality-free linear address; every per-entry rule -- present, RW, US, the reserved
+ * high half, NX, the accessed/dirty update, the fault's error-code composition -- is the same
+ * code shape, and the shared bits (PAGE_TABLE_*, TLB_*) are literally the same macros.
+ *
+ * WHAT IT DELIBERATELY DOES NOT DO, each a NAMED STOP rather than a silent answer, because a
+ * wrong answer here is a wrong PAGE (the silent-wrong class this tree refuses):
+ *   - a 1 GiB page (PDPTE.PS) and a 2 MiB page (PDE.PS): S11's.  The PAE walk above already
+ *     composes 2 MiB pages at 32 bits; composing them under a 4-level walk needs the 1 GiB
+ *     case beside it and its own mutation probe, and this slice's corpus uses 4 KiB pages
+ *     throughout.  Falling back to 4 KiB here would read the entry as a page-table pointer
+ *     and translate to a page nobody mapped -- the exact "return a wrong page" outcome.
+ *   - a page frame at or above 4 GiB: the port's physical model is 32 bits (plan ss5.1).  A
+ *     PTE that names one STOPS BY NAME rather than truncating, because truncating would turn
+ *     a guest's perfectly legal mapping into a device read.
+ *   - the canonicality check (bits 63:48 != bit 47): S7/S11.  Stated so the gap is a gap; the
+ *     corpus cannot express a non-canonical load until S7 owns control flow, and the check
+ *     without a #GP instrument would be an untested rule (plan ss2.2's rule).
+ *
+ * Returns `physical_page_base | info_bits` (see the 64-bit TLB above); 0 with cpu->pagefault
+ * set on every fault.
+ * ------------------------------------------------------------------ */
+
+#define PAGE_TABLE_PML4E_PRESENT 0x1ull  /* a PML4E uses the same present bit; named for the walk */
+
+static int32_t do_page_walk64(uint64_t addr,
+                              bool for_writing,
+                              bool user,
+                              bool side_effects,
+                              bool is_instruction_fetch)
+{
+    int32_t cr0 = cpu->cr[0];
+    int32_t cr4 = cpu->cr[4];
+    bool nxe = (cpu->efer & EFER_NXE) != 0;
+    bool no_exec = false;
+    bool allow_user = true;
+    bool allow_write = true;
+    bool global = false;
+    uint32_t high = 0;
+
+    /* THE 4-LEVEL RESERVED MASK, and it is NOT the PAE one (paging.c:152 above uses
+     * 0x7FFFFFFF00000000, which is right for a PAE entry whose frame is 32 bits).  In a
+     * 4-level entry the frame is bits 12-51, so bits 52-62 are the reserved ones and NX is
+     * writable only when EFER.NXE is set.  Getting this wrong in the PAE direction would
+     * #PF on a perfectly legal frame above 4 GiB with a reserved-bit error code -- the wrong
+     * FAULT, which is its own silent class.  A frame above 4 GiB is legal here and the port
+     * cannot represent it, so it is the NAMED BOUND below that answers, not this mask. */
+    uint64_t reserved_mask = 0x7FF0000000000000ull | (nxe ? 0ull : PAGE_TABLE_NX_MASK);
+
+    /* A TABLE READ, BOUNDED BY GUEST RAM.  `read64s` indexes mem8 with a uint32_t and has no
+     * bound of its own, so a table base that is under 4 GiB but PAST the guest's RAM is a HOST
+     * OUT-OF-BOUNDS READ -- the port reading its own heap (or dying) where it should name the
+     * problem.  MEASURED: a mutation that pointed a PDPTE at 0x83106000 (2.2 GB, in a 2 MiB
+     * machine) read garbage and turned a table error into a bare #PF with the wrong reason.
+     * Page tables must live in guest RAM, so anything else is a named stop.  The 32-bit/PAE
+     * walk above has the same exposure through its own read64s calls and is NOT fixed here:
+     * it is pre-existing and reachable only with paging tables outside RAM, and S11 owns the
+     * whole walk's system layer (results/x86-64-s5.md ss7 names it). */
+    #define WALK64_TABLE(addr_)                                                            \
+        do {                                                                               \
+            if ((uint64_t)(addr_) >= (uint64_t)cpu->memory_size) {                          \
+                char stop_[160];                                                             \
+                snprintf(stop_, sizeof(stop_),                                              \
+                         "page walk: a page-table read at physical 0x%x is outside guest"   \
+                         " RAM (0x%x)", (unsigned)(addr_), (unsigned)cpu->memory_size);      \
+                unimplemented_instruction(stop_);                                            \
+                cpu->pagefault = true;                                                       \
+                return 0;                                                                    \
+            }                                                                                \
+        } while (0)
+
+    /* THE PHYSICAL BOUND, at every level (plan ss5.1): a table base or a page frame at or
+     * above 4 GiB is a legal 4-level entry and an unrepresentable address here, so the walk
+     * STOPS BY NAME rather than truncating it into a different table or page. */
+    #define WALK64_BOUND(entry, what)                                                       \
+        do {                                                                                \
+            if (((entry) & 0x000FFFFFFFFFF000ull) >= 0x100000000ull) {                       \
+                char stop_[160];                                                            \
+                snprintf(stop_, sizeof(stop_),                                              \
+                         "page walk: %s 0x%llx is above the port's 32-bit physical model"   \
+                         " (plan ss5.1)", (what),                                           \
+                         (unsigned long long)((entry) & 0x000FFFFFFFFFF000ull));             \
+                unimplemented_instruction(stop_);                                            \
+                cpu->pagefault = true;                                                       \
+                return 0;                                                                    \
+            }                                                                                \
+        } while (0)
+
+    DBG_ASSERT((cr0 & CR0_PG) != 0); /* long mode implies paging */
+    DBG_ASSERT((cr4 & CR4_PAE) != 0); /* ... and PAE: CR4.PAE is the IA-32e entry condition */
+
+    /* LEVEL 4 -- the PML4, whose base is CR3 */
+    uint32_t pml4_addr = ((uint32_t)cpu->cr[3] & 0xFFFFF000u) +
+                         (uint32_t)(((addr >> 39) & 0x1FFu) * 8u);
+    WALK64_TABLE(pml4_addr);
+    uint64_t pml4e = (uint64_t)read64s(pml4_addr);
+    if ((pml4e & PAGE_TABLE_PML4E_PRESENT) == 0) {
+        if (side_effects) trigger_pagefault(addr, false, for_writing, user, is_instruction_fetch, false);
+        cpu->pagefault = true;
+        return 0;
+    }
+    if ((pml4e & reserved_mask) != 0) {
+        if (side_effects) trigger_pagefault(addr, true, for_writing, user, is_instruction_fetch, true);
+        cpu->pagefault = true;
+        return 0;
+    }
+
+    WALK64_BOUND(pml4e, "the PML4 entry's PDPT base");
+
+    /* LEVEL 3 -- the PDPT */
+    uint32_t pdpt_addr = ((uint32_t)pml4e & 0xFFFFF000u) +
+                         (uint32_t)(((addr >> 30) & 0x1FFu) * 8u);
+    WALK64_TABLE(pdpt_addr);
+    uint64_t pdpte = (uint64_t)read64s(pdpt_addr);
+    if ((pdpte & PAGE_TABLE_PRESENT_MASK) == 0) {
+        if (side_effects) trigger_pagefault(addr, false, for_writing, user, is_instruction_fetch, false);
+        cpu->pagefault = true;
+        return 0;
+    }
+    if ((pdpte & reserved_mask) != 0) {
+        if (side_effects) trigger_pagefault(addr, true, for_writing, user, is_instruction_fetch, true);
+        cpu->pagefault = true;
+        return 0;
+    }
+    if ((pdpte & PAGE_TABLE_PSE_MASK) != 0) {
+        unimplemented_instruction(
+            "page walk: a 1 GiB page (PDPTE.PS) in long mode is S11's (plan ss6 S5 says"
+            " 4 KiB pages only)");
+        cpu->pagefault = true;
+        return 0;
+    }
+    no_exec = (pdpte & PAGE_TABLE_NX_MASK) != 0;
+
+    WALK64_BOUND(pdpte, "the PDPTE's PD base");
+
+    /* LEVEL 2 -- the PD */
+    uint32_t pd_addr = ((uint32_t)pdpte & 0xFFFFF000u) +
+                       (uint32_t)(((addr >> 21) & 0x1FFu) * 8u);
+    WALK64_TABLE(pd_addr);
+    uint64_t pde = (uint64_t)read64s(pd_addr);
+    if ((pde & PAGE_TABLE_PRESENT_MASK) == 0) {
+        if (side_effects) trigger_pagefault(addr, false, for_writing, user, is_instruction_fetch, false);
+        cpu->pagefault = true;
+        return 0;
+    }
+    if ((pde & reserved_mask) != 0) {
+        if (side_effects) trigger_pagefault(addr, true, for_writing, user, is_instruction_fetch, true);
+        cpu->pagefault = true;
+        return 0;
+    }
+    if ((pde & PAGE_TABLE_PSE_MASK) != 0) {
+        unimplemented_instruction(
+            "page walk: a 2 MiB page (PDE.PS) in long mode is S11's (plan ss6 S5 says"
+            " 4 KiB pages only)");
+        cpu->pagefault = true;
+        return 0;
+    }
+    no_exec |= (pde & PAGE_TABLE_NX_MASK) != 0;
+    global = (pde & PAGE_TABLE_GLOBAL_MASK) != 0;
+    allow_write = (pde & PAGE_TABLE_RW_MASK) != 0;
+    allow_user = allow_user && (pde & PAGE_TABLE_USER_MASK) != 0;
+
+    WALK64_BOUND(pde, "the PDE's PT base");
+
+    /* LEVEL 1 -- the PT */
+    uint32_t pt_addr = ((uint32_t)pde & 0xFFFFF000u) +
+                       (uint32_t)(((addr >> 12) & 0x1FFu) * 8u);
+    WALK64_TABLE(pt_addr);
+    uint64_t pte_64 = (uint64_t)read64s(pt_addr);
+    int32_t pte = (int32_t)pte_64;
+    bool present = (pte & PAGE_TABLE_PRESENT_MASK) != 0;
+    no_exec |= (pte_64 & PAGE_TABLE_NX_MASK) != 0;
+    global = (pte & PAGE_TABLE_GLOBAL_MASK) != 0;
+    allow_write = allow_write && (pte & PAGE_TABLE_RW_MASK) != 0;
+    allow_user = allow_user && (pte & PAGE_TABLE_USER_MASK) != 0;
+
+    if ((pte_64 & reserved_mask) != 0) {
+        if (side_effects) trigger_pagefault(addr, true, for_writing, user, is_instruction_fetch, true);
+        cpu->pagefault = true;
+        return 0;
+    }
+    /* the frame's own bound: a PTE at or above 4 GiB is a legal mapping on hardware and an
+     * unrepresentable one here, so the machine stops BY NAME -- truncating it would translate
+     * the guest's page to a different, mapped page, silently (plan ss5.1). */
+    WALK64_BOUND(pte_64, "the page frame");
+
+    bool kernel_write_override = !user && (cr0 & CR0_WP) == 0;
+    if (!present || (for_writing && !allow_write && !kernel_write_override) ||
+        (user && !allow_user) || (is_instruction_fetch && no_exec)) {
+        if (side_effects) trigger_pagefault(addr, present, for_writing, user, is_instruction_fetch, false);
+        cpu->pagefault = true;
+        return 0;
+    }
+
+    /* THE ACCESSED/DIRTY UPDATE, on the same two entries the reference updates and in the
+     * same shape (paging.c:274-285 above): the PDE gets A, the PTE gets A|D, and the store is
+     * a BYTE store of the entry's low byte -- which is where A and D live (bits 5 and 6).
+     * That is upstream's own idiom and it is kept verbatim rather than "cleaned up", because
+     * the uop cache's invalidation hook and the dirty-page bitmap both ride these stores. */
+    if (side_effects) {
+        uint64_t new_pde = pde | PAGE_TABLE_ACCESSED_MASK;
+        if (new_pde != pde) write8(pd_addr, (int32_t)(uint32_t)(new_pde & 0xFFu));
+        uint64_t new_pte = pte_64 | PAGE_TABLE_ACCESSED_MASK |
+                          (for_writing ? PAGE_TABLE_DIRTY_MASK : 0u);
+        if (new_pte != pte_64) write8(pt_addr, (int32_t)(uint32_t)(new_pte & 0xFFu));
+    }
+
+    high = (uint32_t)pte & 0xFFFFF000u;
+
+    int32_t info_bits = TLB_VALID | (for_writing ? 0 : TLB_READONLY) |
+                        (allow_user ? 0 : TLB_NO_USER) |
+                        (in_mapped_range(high) ? TLB_IN_MAPPED_RANGE : 0) |
+                        ((global && (cr4 & CR4_PGE) != 0) ? TLB_GLOBAL : 0) |
+                        (no_exec ? TLB_NO_EXEC : 0);
+
+    return (int32_t)(high | (uint32_t)info_bits);
+}
+
+/* ------------------------------------------------------------------ *
  * translate_address -- cpu.rs:1955-2050
  * ------------------------------------------------------------------ */
 
@@ -367,11 +636,33 @@ uint32_t translate_address(uint64_t address,
      * UNREACHABLE TODAY, and shown so rather than assumed: S2 refuses the three writes that
      * could enter IA-32e, and nothing sets LMA (cpu_selftest's S2 arm puts the state there by
      * hand to exercise cpu_mode_of's arm). */
+    /* S5a: THE LONG-MODE ARM -- the 4-level walk of plan ss6 S5, through the 64-bit-keyed
+     * TLB.  Before this slice the same condition STOPPED BY NAME ("long mode needs the
+     * 4-level walk"); the stop's own note said the projection below would be a silent wrong
+     * page in long mode, which is why the stop and this arm are the same `if`. */
     if ((cpu->efer & EFER_LMA) != 0) {
-        unimplemented_instruction(
-            "translate_address: long mode needs the 4-level walk (plan ss6 S11)");
-        cpu->pagefault = true;
-        return 0;
+        uint64_t vpage = address >> 12;
+        uint32_t slot = tlb64_slot(vpage);
+        int32_t entry64 = tlb64_data[slot];
+
+        if (tlb64_tag[slot] != vpage ||
+            (entry64 & (TLB_VALID | (user ? TLB_NO_USER : 0) |
+                        (for_writing ? TLB_READONLY : 0) |
+                        (is_instruction_fetch ? TLB_NO_EXEC : 0))) != TLB_VALID) {
+            entry64 = do_page_walk64(address, for_writing, user, side_effects,
+                                     is_instruction_fetch);
+            if (cpu->pagefault) return 0;
+            /* the physical frame is 32 bits by the walk's own bound check (ss5.1), so the
+             * 64-bit linear address never reaches the mem8 index -- the address that does is
+             * the projection of the MODEL's width, not of the guest's. */
+            tlb64_tag[slot] = vpage;
+            tlb64_data[slot] = entry64;
+        }
+        else if (side_effects && (entry64 & TLB_GLOBAL) == 0) {
+            /* a hit: nothing to do, the A/D bits were updated by the walk */
+        }
+
+        return (uint32_t)(entry64 & 0xFFFFF000u) | (uint32_t)(address & 0xFFFu);
     }
 
     uint32_t va = (uint32_t)address;
@@ -422,19 +713,19 @@ uint32_t translate_address_system_write(uint64_t address)
 
 uint32_t translate_address_write_and_can_skip_dirty(uint64_t address)
 {
-    /* S3: the SAME long-mode stop as translate_address -- this is the twin the write paths
-     * use (paging.h), and a guard on only one of the two would leave the write half of the
-     * model projecting a 64-bit linear address.  See the note there. */
+    /* S5a: the long-mode arm, TWINNED with translate_address's.  This is the half the write
+     * paths use (paging.h), and a guard on only one of the two would leave every 64-bit store
+     * projecting a 64-bit linear address into a 32-bit one -- which was the S3 note here
+     * before the arm existed.  Delegating keeps ONE 4-level walk: the dirty-bit-skip variant
+     * is an optimisation of the same translation, and S5a has no measurement that would
+     * justify a second copy of it. */
+    bool user = cpu->cpl == 3;
     if ((cpu->efer & EFER_LMA) != 0) {
-        unimplemented_instruction(
-            "translate_address_write: long mode needs the 4-level walk (plan ss6 S11)");
-        cpu->pagefault = true;
-        return 0;
+        return translate_address(address, true, user, true, false);
     }
 
     uint32_t va = (uint32_t)address; /* the projection: as in translate_address */
     int32_t entry = tlb_data[va >> 12];
-    bool user = cpu->cpl == 3;
     if ((entry & (TLB_VALID | (user ? TLB_NO_USER : 0) | TLB_READONLY)) != TLB_VALID) {
         entry = do_page_walk((int32_t)va, true, user, true, false);
         if (cpu->pagefault) {
@@ -518,12 +809,34 @@ void set_cr0(int32_t cr0)
         return;
     }
 
+    /* S5a: THE ENTRY ITSELF, and the exit.  The refusal above is the arm for a backend that
+     * cannot run IA-32e; when the selected backend CAN (S5a's `--long-mode`), the same edge
+     * must SET EFER.LMA -- otherwise the guest has asked for IA-32e, been allowed, and the
+     * machine silently stays 32-bit, which is C5's defect wearing the opposite sign.
+     *
+     * WHAT LMA DOES *NOT* DO ON THIS EDGE: it does not make the machine 64-bit.  Per the SDM
+     * the machine enters IA-32e in COMPATIBILITY mode, because CS.L is still whatever the
+     * current code segment's descriptor says (here: 0, the stub's 32-bit CS), and it is the
+     * subsequent far jump to a 64-bit descriptor that sets CS.L and puts the CPU in 64-bit
+     * mode.  cpu->is_64 is that bit (cpu_state.h), and cpu_mode_of reports LONG or COMPAT
+     * from it -- which is plan correction GAP 2 in results/x86-64-s5.md.
+     *
+     * The 1->0 edge clears LMA (SDM: leaving IA-32e by clearing CR0.PG) and leaves LME
+     * alone, so re-enabling paging re-enters with the same request.  Nothing here runs
+     * unless the machine already has LME, so no 32-bit path's state moves. */
+    bool lme_enter = (cr0 & CR0_PG) != 0 && (old_cr0 & CR0_PG) == 0 &&
+                     (cpu->efer & EFER_LME) != 0 && (cpu->cr[4] & CR4_PAE) != 0;
+    bool pg_leave = (cr0 & CR0_PG) == 0 && (old_cr0 & CR0_PG) != 0;
+
     /* validation BEFORE commit: a #GP from load_pdpte must leave CR0 (and the TLB)
      * untouched -- the guest's #GP handler must see the register state hardware would
      * (MOV CR0 never re-reads PDPTEs on hardware; this is the emulator's refresh of
      * the reg_pdpte cache, and #GP is the safest defined behaviour when it faults). */
-    if ((cpu->cr[4] & CR4_PAE) != 0 && (cr0 & CR0_PG) != 0 &&
+    if (!lme_enter && (cpu->cr[4] & CR4_PAE) != 0 && (cr0 & CR0_PG) != 0 &&
         (old_cr0 & (CR0_CD | CR0_NW | CR0_PG)) != (cr0 & (CR0_CD | CR0_NW | CR0_PG))) {
+        /* S5a: `!lme_enter` -- on the IA-32e ENTRY edge there is no PDPT to load (CR3 is a
+         * PML4 from that instant), and reading one would #GP on tables that are perfectly
+         * valid as 4-level tables. */
         if (!load_pdpte(cpu->cr[3])) {
             return;
         }
@@ -539,6 +852,23 @@ void set_cr0(int32_t cr0)
     cpu->protected_mode = (cpu->cr[0] & CR0_PE) == CR0_PE;
     cpu->segment_access_bytes[CS] = 0x80 | 0x10 | 0x08 | 0x02; /* P dpl0 S E RW */
 
+    /* S5a: the two edges, AFTER the commit (so a write that #GP'd above committed neither
+     * CR0 nor LMA) and BEFORE the boundary check below (which is a no-op in long mode and
+     * must not see a half-landed state). */
+    if (lme_enter && !cpu_backend_refuse_long_mode("CR0.PG")) {
+        cpu->efer |= EFER_LMA;
+        /* The 4-level walk reads CR3 as a PML4, not as a PDPT: the reg_pdpte cache the PAE
+         * path keeps is meaningless under EFER.LMA, so it is invalidated rather than left
+         * holding a PDPT read out of what is now a PML4 (the exact confusion C5 was). */
+        for (int i = 0; i < 4; i++) cpu->reg_pdpte[i] = 0;
+        full_clear_tlb();
+    }
+    if (pg_leave && (cpu->efer & EFER_LMA) != 0) {
+        cpu->efer &= ~EFER_LMA;
+        cpu->is_64 = false;
+        full_clear_tlb();
+    }
+
     /* S3 MODE BOUNDARY: CR0's write is the first of the three transitions that can change
      * the mode (the SDM's IA-32e entry is CR0.PG set while EFER.LME && CR4.PAE, which is the
      * transition S2 refuses by name above; a machine that CAN enter it -- S5 -- must have a
@@ -552,11 +882,20 @@ void set_cr0(int32_t cr0)
 
 void set_cr3(int32_t cr3)
 {
-    if ((cpu->cr[4] & CR4_PAE) != 0) {
+    if ((cpu->cr[4] & CR4_PAE) != 0 && (cpu->efer & EFER_LMA) == 0) {
         cr3 &= ~0xF;
         if ((cpu->cr[0] & CR0_PG) != 0 && !load_pdpte(cr3)) {
             return; /* #GP delivered: CR3 stays unwritten and the TLB is not cleared */
         }
+    }
+    else if ((cpu->cr[4] & CR4_PAE) != 0) {
+        /* S5a: UNDER EFER.LMA CR3 IS A PML4, NOT A PDPT.  read_pdpt would interpret the
+         * PML4's first four entries as the PDPTE cache -- the very confusion C5 was, one
+         * level down -- so it is skipped entirely: the 4-level walk
+         * (do_page_walk64) reads the PML4 from cr[3] on every miss, and reg_pdpte holds
+         * nothing it reads.  CR3's low bits are masked per the SDM (PWT/PCD kept). */
+        cr3 &= ~0x1F;
+        for (int i = 0; i < 4; i++) cpu->reg_pdpte[i] = 0;
     }
     else {
         cr3 &= ~0xFE7; /* upstream !0b111111100111: keep PWT/PCD (bits 3/4 -- real
@@ -960,4 +1299,82 @@ void safe_write128(int32_t addr, reg128 value)
             write128_no_mmap_or_dirty_check(phys_addr, value);
         }
     }
+}
+
+/* ------------------------------------------------------------------ *
+ * S5a: THE 64-BIT-ADDRESS ACCESSORS (paging.h)
+ *
+ * Deliberately thin: the translation is the SAME translate_address* the 32-bit forms call
+ * (which dispatches on the mode itself), and the only new logic is the page-straddle split,
+ * because a quadword can cross a page boundary and the two halves then translate separately.
+ * Everything else -- the fault channel, the abort discipline, the mmio/device routing -- is
+ * reached through the existing physical accessors, unchanged.
+ * ------------------------------------------------------------------ */
+
+int32_t safe_read8_addr(int64_t addr)
+{
+    uint32_t p = translate_address_read((uint64_t)addr);
+    if (cpu->pagefault) return 0;
+    return read8(p);
+}
+
+void safe_write8_addr(int64_t addr, int32_t value)
+{
+    uint32_t p = translate_address_write((uint64_t)addr);
+    if (cpu->pagefault) return;
+    write8(p, value);
+}
+
+static int32_t safe_read32_addr_local(int64_t addr)
+{
+    uint32_t p = translate_address_read((uint64_t)addr);
+    if (cpu->pagefault) return 0;
+    return read32s(p);
+}
+
+static void safe_write32_addr_local(int64_t addr, int32_t value)
+{
+    /* the write half translates through the write path, which is also where the uop cache's
+     * dirty-page hook lives (write8/32 below reach it) */
+    if (((uint64_t)addr & 0xFFF) > 0x1000 - 4) {
+        uint32_t p = translate_address_write_and_can_skip_dirty((uint64_t)addr);
+        if (cpu->pagefault) return;
+        (void)p;
+    }
+    uint32_t p = translate_address_write((uint64_t)addr);
+    if (cpu->pagefault) return;
+    write32(p, value);
+}
+
+uint64_t safe_read64_addr(int64_t addr)
+{
+    /* a quadword whose page offset leaves fewer than eight bytes is split into two 32-bit
+     * halves, each translated on its own page -- the reference's straddle rule, reused */
+    if (((uint64_t)addr & 0xFFF) > 0x1000 - 8) {
+        uint64_t low = (uint32_t)safe_read32_addr_local(addr);
+        if (cpu->pagefault) return 0;
+        uint64_t high = (uint32_t)safe_read32_addr_local(addr + 4);
+        if (cpu->pagefault) return 0;
+        return low | (high << 32);
+    }
+    uint32_t p = translate_address_read((uint64_t)addr);
+    if (cpu->pagefault) return 0;
+    /* inside one page: eight physical bytes, read as the machine reads them */
+    uint64_t low = (uint32_t)read32s(p);
+    uint64_t high = (uint32_t)read32s(p + 4);
+    return low | (high << 32);
+}
+
+void safe_write64_addr(int64_t addr, uint64_t value)
+{
+    if (((uint64_t)addr & 0xFFF) > 0x1000 - 8) {
+        safe_write32_addr_local(addr, (int32_t)value);
+        if (cpu->pagefault) return;
+        safe_write32_addr_local(addr + 4, (int32_t)(value >> 32));
+        return;
+    }
+    uint32_t p = translate_address_write((uint64_t)addr);
+    if (cpu->pagefault) return;
+    write32(p, (int32_t)value);
+    write32(p + 4, (int32_t)(value >> 32));
 }

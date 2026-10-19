@@ -93,13 +93,26 @@ void run_prefix_instruction(void)
 {
     int32_t opcode = read_imm8();
     if (cpu->pagefault) return;
-    run_instruction(opcode | (is_osize_32() ? 1 : 0) << 8);
+    /* S5a: the three-valued key (modrm.c's dispatch_os_index).  This is the site where the
+     * REX prefix's own re-dispatch happens, so it MUST use the same rule as the loops: the
+     * byte after a REX.W dispatches to the 0x2NN arm, and the byte after a legacy prefix that
+     * cancelled the REX dispatches to the 16/32-bit arm. */
+    run_instruction(opcode | dispatch_os_index(opcode) << 8);
 }
+
+/* S5a (plan ss3.6.5): THE SDM'S CANCEL RULE -- "a legacy prefix after a REX prefix cancels
+ * the REX" (SDM Vol 2, 2.2.1: a REX must be the LAST prefix before the opcode).  Every legacy
+ * prefix handler calls this before re-dispatching, so `48 66 89` runs a 16-bit mov and
+ * `66 48 89` a 64-bit one -- exactly what the host does (MEASURED: the corpus cannot tell the
+ * difference unless a case writes one, which is why the rule lives here rather than in a
+ * comment).  Outside long mode the mask clears bits that are already clear. */
+static void prefixes_cancel_rex(void) { cpu->prefixes &= (uint16_t)~PREFIX_REX_MASK; }
 
 void segment_prefix_op(int32_t seg)
 {
     DBG_ASSERT(seg <= 5 && seg >= 0);
-    cpu->prefixes = (uint8_t)((cpu->prefixes & ~PREFIX_MASK_SEGMENT) | (uint8_t)(seg + 1));
+    prefixes_cancel_rex();
+    cpu->prefixes = (uint16_t)((cpu->prefixes & ~PREFIX_MASK_SEGMENT) | (uint16_t)(seg + 1));
     run_prefix_instruction();
     cpu->prefixes = 0;
 }
@@ -642,6 +655,7 @@ void instr_65(void) { segment_prefix_op(GS); }
 void instr_66(void)
 {
     /* Operand-size override prefix */
+    prefixes_cancel_rex();
     cpu->prefixes |= PREFIX_MASK_OPSIZE;
     run_prefix_instruction();
     cpu->prefixes = 0;
@@ -649,6 +663,7 @@ void instr_66(void)
 void instr_67(void)
 {
     /* Address-size override prefix */
+    prefixes_cancel_rex();
     cpu->prefixes |= PREFIX_MASK_ADDRSIZE;
     run_prefix_instruction();
     cpu->prefixes = 0;
@@ -1185,7 +1200,11 @@ void instr_9B(void)
     }
 }
 
-static bool instr_pushf_popf_check(void)
+/* S5a: NOT STATIC -- instructions_64.c's pushfq/popfq share it.  It is the SDM's rule (a
+ * pushf/popf in VM86 with IOPL < 3 is a #GP), i.e. machine semantics rather than this file's
+ * own business, and the alternative -- a second copy in the 64-bit file -- is the duplication
+ * that lets two modes disagree about one rule. */
+bool instr_pushf_popf_check(void)
 {
     return (cpu->flags & FLAG_VM) != 0 && getiopl() < 3;
 }
@@ -1921,6 +1940,7 @@ void instr_F0(void)
     /* TODO
      * This triggers UD when used with
      * some instructions that don't write to memory */
+    prefixes_cancel_rex(); /* S5a: a lock after a REX cancels it (the cancel rule above) */
     run_prefix_instruction();
 }
 
@@ -1935,6 +1955,7 @@ void instr_F2(void)
 {
     /* repnz */
     DBG_ASSERT((cpu->prefixes & PREFIX_MASK_REP) == 0);
+    prefixes_cancel_rex();
     cpu->prefixes |= PREFIX_REPNZ;
     run_prefix_instruction();
     cpu->prefixes = 0;
@@ -1943,6 +1964,7 @@ void instr_F3(void)
 {
     /* repz */
     DBG_ASSERT((cpu->prefixes & PREFIX_MASK_REP) == 0);
+    prefixes_cancel_rex();
     cpu->prefixes |= PREFIX_REPZ;
     run_prefix_instruction();
     cpu->prefixes = 0;
@@ -2193,7 +2215,7 @@ void instr_FB(void)
         cpu->instruction_counter += 1;
         int32_t opcode = read_imm8();
         if (cpu->pagefault) return;
-        run_instruction(opcode | (is_osize_32() ? 1 : 0) << 8);
+        run_instruction(opcode | dispatch_os_index(opcode) << 8); /* S5a: three-valued key */
 
         handle_irqs();
     }

@@ -2021,9 +2021,19 @@ static void test_cpu_mode_and_refusals(void)
     CHECK_EQ(cpu_mode_of(cpu), CPU_MODE_PROT16);
     cpu->is_32 = true;
     CHECK_EQ(cpu_mode_of(cpu), CPU_MODE_PROT32);
+    /* S5a CLOSED THE SPLIT THIS ARM USED TO COLLAPSE.  Until CS.L was decoded, both IA-32e
+     * modes answered CPU_MODE_LONG and the predicate could not tell them apart (the S2 report
+     * named that as the arm that could not exist).  It exists now, and it is asserted in BOTH
+     * directions -- because the distinction is what makes the corpus's entry path decodable:
+     * the machine is in COMPATIBILITY mode from the CR0.PG edge until the far jump loads a
+     * 64-bit CS (plan correction GAP 2). */
     cpu->efer = EFER_LMA;
-    CHECK_EQ(cpu_mode_of(cpu), CPU_MODE_LONG); /* LMA outranks is_32: 64-bit and compat */
+    cpu->is_64 = false;
+    CHECK_EQ(cpu_mode_of(cpu), CPU_MODE_COMPAT);
+    cpu->is_64 = true;
+    CHECK_EQ(cpu_mode_of(cpu), CPU_MODE_LONG);
     CHECK_EQ(cpu_mode_of(cpu) & CPU_MODES_32BIT, 0);
+    cpu->is_64 = false;
 
     /* (2) S0's DISPATCH SEAT FIRES.  The mode refusal could not fire before this slice
      * (no engine declares a mode the machine could be in), so it was an instrument that
@@ -2037,6 +2047,7 @@ static void test_cpu_mode_and_refusals(void)
         cpu->cr[0] = CR0_PE | CR0_PG;
         cpu->is_32 = true;
         cpu->efer = EFER_LMA;
+        cpu->is_64 = true; /* the 64-bit arm: the refusal must name long mode */
         cpu_backend_dispatch(0x00012345u);
         unimplemented_allowed = false;
         CHECK_EQ(interpreted_run_calls, run_before); /* run_batch did NOT run */
@@ -2044,6 +2055,18 @@ static void test_cpu_mode_and_refusals(void)
         CHECK(interpreted_unimplemented);
         CHECK(strstr(unimplemented_last, "cannot run long mode") != NULL);
         CHECK(strstr(unimplemented_last, "'interp'") != NULL);
+        reset_unimplemented();
+
+        /* S5a: and the COMPATIBILITY arm, which the predicate can name now -- a backend that
+         * cannot run IA-32e is refused in either mode, and the message says WHICH (a refusal
+         * that only knew "long mode" would misname the mode the machine was actually in). */
+        cpu->is_64 = false;
+        unimplemented_allowed = true;
+        cpu_backend_dispatch(0x00012345u);
+        unimplemented_allowed = false;
+        CHECK_EQ(interpreted_run_calls, run_before);
+        CHECK_EQ(unimplemented_calls, 1);
+        CHECK(strstr(unimplemented_last, "cannot run compatibility mode") != NULL);
         reset_unimplemented();
     }
 

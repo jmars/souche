@@ -140,6 +140,26 @@ void safe_write64(int32_t addr, uint64_t value);
 void safe_write128(int32_t addr, reg128 value);
 
 /* ------------------------------------------------------------------ *
+ * S5a: THE SAME FOUR ACCESSORS WITH A 64-BIT LINEAR ADDRESS (plan correction W1)
+ *
+ * The pair above takes an `int32_t addr` because a 32-bit effective address IS 32 bits.  In
+ * long mode the address is 64 and passing it to those functions would silently truncate it --
+ * a wrong page, with the page walk having been consulted about the wrong address, which is the
+ * silent-wrong class this tree refuses.  So the 64-bit bodies call THESE, and the truncation
+ * exists nowhere.
+ *
+ * Only the four the S5 bodies need exist: an 8-bit byte and a 64-bit quadword, read and write.
+ * The 16/32-bit forms at a 64-bit address arrive with S7 (their bodies are S7's on the same
+ * rule: a body that has no caller is a seat nobody sits in).  The page-straddle handling is
+ * the reference's, reused rather than re-derived: a quadword whose page offset leaves less
+ * than eight bytes is split into two 32-bit halves through the 64-bit address, and a
+ * non-straddling quadword is one physical read inside the page the translation named. */
+int32_t safe_read8_addr(int64_t addr);
+uint64_t safe_read64_addr(int64_t addr);
+void safe_write8_addr(int64_t addr, int32_t value);
+void safe_write64_addr(int64_t addr, uint64_t value);
+
+/* ------------------------------------------------------------------ *
  * safe_read_write* -- the READ-MODIFY-WRITE helpers (cpu.rs:4052, 4073, 4101).
  *
  * Upstream takes a closure `&dyn Fn(i32) -> i32`; C has no closures, and every one of

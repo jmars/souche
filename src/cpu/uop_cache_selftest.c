@@ -1183,6 +1183,51 @@ static void last_page_tests(void)
 }
 
 /* ------------------------------------------------------------------ *
+ * S5a: THE UOP DECODER'S LONG-MODE REFUSAL (results/x86-64-plan.md ss6 S5, risk R1)
+ *
+ * THE CLAIM: this decoder reads the instruction stream with 32-bit rules, so in IA-32e it must
+ * STOP BY NAME rather than decode `0x40`-`0x4F` as INC/DEC (which gets every following
+ * instruction's LENGTH wrong while the stream still "runs" -- the silent channel the plan names
+ * as R1 and the reason this seat is the first thing S5a landed).
+ *
+ * WHY IT NEEDS THIS ARM AT ALL: through the shipped dispatch the seat cannot fire, because no
+ * backend but the interpreter declares CPU_MODE_LONG and the S2 refusal stops the three writes
+ * that would enter IA-32e before this decoder is ever entered.  "An untested seat is
+ * indistinguishable from an absent one" -- so the state is put there BY HAND, the way S2's own
+ * selftest exercises the mode predicate, and the stop is required by name.
+ *
+ * THE ABLE-TO-FAIL ARM is the second half: the SAME call with EFER.LMA clear must not produce
+ * the stop.  Without it, a refusal that fired unconditionally would pass this test.
+ * ------------------------------------------------------------------ */
+static void long_mode_refusal_tests(void)
+{
+    static const uint8_t bytes[4] = { 0x48, 0x89, 0xC1, 0x90 }; /* REX.W; mov rcx, rax; nop */
+    uint32_t start = put_stream(bytes, 4, 0);
+
+    /* (1) the refusal, by name */
+    interpreted_unimplemented = false;
+    cpu->efer = EFER_LMA;
+    cpu->is_64 = true;
+    uop_run(start);
+    CHECK(interpreted_unimplemented);
+    CHECK(strstr(unimplemented_instruction_name(), "uop cache") != NULL);
+    CHECK(strstr(unimplemented_instruction_name(), "S13") != NULL);
+
+    /* (2) the able-to-fail arm: with LMA clear the decoder RUNS (and decodes the REX byte as
+     * INC/DEC, which is exactly the 32-bit behaviour this refusal exists to stop in long mode) */
+    interpreted_unimplemented = false;
+    cpu->efer = 0;
+    cpu->is_64 = false;
+    uop_run(start);
+    CHECK(!interpreted_unimplemented);
+
+    cpu->efer = 0;
+    cpu->is_64 = false;
+    interpreted_unimplemented = false;
+    printf("PASS S5: the uop decoder refuses long mode by name (and runs in 32-bit mode)\n");
+}
+
+/* ------------------------------------------------------------------ *
  * (c) the block framing, asserted explicitly
  * ------------------------------------------------------------------ */
 
@@ -1404,6 +1449,7 @@ int main(int argc, char **argv)
     const char *corpus = argc > 1 ? argv[1] : "build/nasm_corpus.bin";
 
     RUN(framing_tests, "(c) the block framing: page end, block end, no_bib, cap, no descriptor");
+    RUN(long_mode_refusal_tests, "S5: the uop decoder's long-mode REFUSAL (risk R1)");
     RUN(last_page_tests, "(d) the LAST virtual page: the block decodes there, the window ends at 2^32");
     RUN(hand_table, "(a)/(b) the hand table: forms, both operand sizes, sib, prefixes");
     RUN(sweep_opcode_forms, "(a)/(b) every base and 0F opcode x {reg,mem,sib} forms x {16,32}");

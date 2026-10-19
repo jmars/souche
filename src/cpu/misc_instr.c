@@ -23,7 +23,9 @@
 
 #include "exceptions.h" /* the segment-descriptor API + lookup_segment_selector (lar/lsl/verr/verw) */
 #include "flags.h" /* the lazy-flag getters the test_* predicates use */
+#include "cpu.h"   /* S5a: unimplemented_instruction -- the moffs bound's named stop */
 #include "memory.h"
+#include "modrm.h"  /* S5a: long_mode_64 / read_moffs64 / PREFIX_MASK_ADDRSIZE */
 #include "paging.h"
 
 /* ------------------------------------------------------------------ *
@@ -206,6 +208,30 @@ int32_t get_real_eip(void)
 /* cpu.rs:4292-4300 */
 int32_t read_moffs(void)
 {
+    /* S5a: THE TWO LONG-MODE ARMS, and they are NOT the ones the 32-bit test would pick.
+     * In 64-bit mode an moffs OFFSET is EIGHT bytes wide (MEASURED: `A3` + 8 offset bytes is
+     * `movabs ds:0x100230,eax` -- the operand is 32-bit, the OFFSET is not); a 0x67
+     * address-size override narrows it to a zero-extended 32.  `is_asize_32()` answers
+     * `true` for a 64-bit segment WITHOUT 0x67 (CS.D is 0 there), so reusing it would read a
+     * 2-byte offset and desynchronise.  The truncation guard is the port's physical bound
+     * (plan ss5.1) applied to the RETURN TYPE: this function returns int32_t because every
+     * 32-bit caller is an int32_t address, and a 64-bit offset that does not fit is a NAMED
+     * STOP here rather than a silent wrap -- the 0x2NN arms read the full 64 bits through
+     * read_moffs64() and never come through this function. */
+    if (long_mode_64()) {
+        if ((cpu->prefixes & PREFIX_MASK_ADDRSIZE) != 0) {
+            return read_imm32s();
+        }
+        int64_t off = read_moffs64();
+        if (cpu->pagefault) return 0;
+        if ((uint64_t)off > 0xFFFFFFFFull) {
+            unimplemented_instruction(
+                "moffs: a 64-bit offset above the port's 32-bit physical model in a 32-bit"
+                " operand form (results/x86-64-plan.md ss5.1)");
+            return 0;
+        }
+        return (int32_t)(uint32_t)off;
+    }
     /* read 2 or 4 bytes from ip, depending on the address-size attribute */
     if (is_asize_32()) {
         return read_imm32s();

@@ -137,6 +137,7 @@ void jx64_mov_m32_r32(jx64_t *e, int base, int32_t disp, int src);
 void jx64_mov_r32_imm32(jx64_t *e, int dst, uint32_t imm);
 void jx64_mov_r64_imm64(jx64_t *e, int dst, uint64_t imm); /* MOVABS */
 void jx64_mov_m8_imm8(jx64_t *e, int base, int32_t disp, uint8_t imm);
+void jx64_mov_m16_imm16(jx64_t *e, int base, int32_t disp, uint16_t imm); /* S5a */
 void jx64_mov_m32_imm32(jx64_t *e, int base, int32_t disp, uint32_t imm);
 
 /* ALU, 32-bit.  `add_m32_r32`/`add_m64_r64` are the memory-destination forms (the stats

@@ -237,6 +237,20 @@ void jx64_mov_m8_imm8(jx64_t *e, int base, int32_t disp, uint8_t imm)
 	put(e, imm);
 }
 
+/* S5a: the 16-bit immediate store.  `cpu->prefixes` widened to uint16 (the REX nibble needs
+ * four more bits), and a byte store into it would leave the HIGH byte holding whatever the
+ * last long-mode instruction put there -- so the JIT's prefix re-materialisation must write
+ * the whole field.  Same encoding as the pair above with 0x66 and 0xC7 /0. */
+void jx64_mov_m16_imm16(jx64_t *e, int base, int32_t disp, uint16_t imm)
+{
+	put(e, 0x66);
+	rex(e, 0, 0, 0, base, false);
+	put(e, 0xC7);
+	mem_operand(e, 0, base, disp);
+	put(e, (uint8_t)imm);
+	put(e, (uint8_t)(imm >> 8));
+}
+
 void jx64_mov_m32_imm32(jx64_t *e, int base, int32_t disp, uint32_t imm)
 {
 	rex(e, 0, 0, 0, base, false);

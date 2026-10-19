@@ -662,12 +662,12 @@ static void print_state_tail(void)
  * because the M0 transcript and the nasm differential's 2116-check are contracts, not
  * conventions.
  *
- * WHAT THE WIDE DOCUMENT CANNOT YET SHOW, stated so its silence is not read as a proof:
- * R8-R15 DO NOT EXIST IN THE MODEL (plan ss4's inventory -- reg64[8] is eight slots; the
- * high registers arrive with the 64-bit model in S5), so the sixteen-element register
- * block prints their eight slots as ZERO.  The seat is built and the honest current value
- * is in it: an emulated run and a native run of a case that USES r8-r15 must disagree on
- * those slots until S5, which is one of the ways a family cannot go green early. */
+ * WHAT THE WIDE DOCUMENT COULD NOT SHOW UNTIL S5a, kept here because it was the reason the
+ * instrument existed before the machine could fill it: R8-R15 DID NOT EXIST IN THE MODEL
+ * (reg64[] was eight slots), so the sixteen-element register block printed their eight slots
+ * as ZERO and an emulated run of a case that USED r8-r15 had to disagree with the native leg
+ * -- one of the mechanical ways a corpus family stays RED.  S5a widens the array to sixteen
+ * (plan correction GAP 1) and prints all of them from the register file. */
 static void print_fixture(bool wide)
 {
 	int32_t fpu_tag = fpu_load_tag_word();
@@ -703,9 +703,13 @@ static void print_fixture(bool wide)
 		/* format v2: the 16 GPRs of the native document (tests/mkfixture64.c), in
 		 * reg64[]'s order, as SIGNED decimal of the 64-bit value -- the same
 		 * convention on both sides, so the comparison never has to guess a width.
-		 * Slots 8-15 are the seat described above: zero until S5. */
-		for (int i = 0; i < 8; i++) printf("    %lld,\n", (long long)cpu->reg64[i]);
-		for (int i = 8; i < 16; i++) printf("    0,\n");
+		 * S5a FILLS THE SEAT S4 PRINTED AS ZERO: reg64[] is sixteen slots now, so
+		 * slots 8-15 are r8-r15 and are printed from the register file like the other
+		 * eight.  A machine that has not entered long mode still prints ZERO there
+		 * (nothing outside long mode can write slots 8-15 -- the REX bits that index
+		 * them are only set by the long-mode prefix handler), which is why this line
+		 * moves no 32-bit document. */
+		for (int i = 0; i < 16; i++) printf("    %lld,\n", (long long)cpu->reg64[i]);
 		printf("    %lld,\n", (long long)cpu->instruction_pointer);
 	} else {
 		/* S1: the register file is 64-bit now; the fixture document is a 32-bit
@@ -1107,6 +1111,40 @@ static int parse_uop_cache_flag(int argc, char *argv[], int i)
  * engine is naming the configuration, and a machine whose engine and flags disagree is a
  * machine whose stderr lies about what is running.
  * ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------ *
+ * S5a: `--long-mode on|off` (results/x86-64-plan.md ss6 S5's flag)
+ *
+ * DEFAULT OFF, and that is the shipped machine: with the flag absent nothing about the
+ * 32-bit CPU changes -- no backend declares CPU_MODE_LONG, so the S2 refusal still stops a
+ * guest at the three writes that would enter IA-32e, by name, exactly as S4's RED census
+ * pinned.  `on` declares the capability on the interpreter and selects it (a capability the
+ * running engine does not have would be a false declaration -- cpu_backend_enable_long_mode).
+ *
+ * WHY A GUEST NEEDS TO BE TOLD: the flag is the MACHINE's declaration, not the guest's
+ * request.  A real x86-64 kernel decides whether to enter long mode from CPUID (which stays
+ * honest: lm/syscall/pdpe1gb are returned only when the backend declares the mode), so from
+ * S12 the flag is what makes an amd64 bzImage boot instead of printing its refusal.
+ *
+ * It is parsed in BOTH modes deliberately: the transcript mode cannot reach long mode (plan
+ * ss5.3: the M0 document is a 32-bit document), but it must not silently ACCEPT a flag it
+ * does not honour -- so it parses it, and says on stderr that this mode will not use it.
+ * ------------------------------------------------------------------ */
+static bool long_mode_requested = false;
+
+static int parse_long_mode_flag(int argc, char *argv[], int i)
+{
+	if (i + 1 < argc && strcmp(argv[i + 1], "on") == 0) {
+		long_mode_requested = true;
+		return i + 1;
+	}
+	if (i + 1 < argc && strcmp(argv[i + 1], "off") == 0) {
+		long_mode_requested = false;
+		return i + 1;
+	}
+	fprintf(stderr, "v86c: --long-mode needs on|off\n");
+	exit(2);
+}
+
 static const char *cpu_engine_name = "auto";
 
 static int parse_cpu_engine_flag(int argc, char *argv[], int i)
@@ -1195,6 +1233,7 @@ static int boot_main(int argc, char *argv[])
 		else if (strcmp(argv[i], "--jit") == 0 || strcmp(argv[i], "--jit-stats") == 0)
 			i = parse_jit_flag(argc, argv, i);
 		else if (strcmp(argv[i], "--cpu-engine") == 0) i = parse_cpu_engine_flag(argc, argv, i);
+		else if (strcmp(argv[i], "--long-mode") == 0) i = parse_long_mode_flag(argc, argv, i);
 		else if (kernel_path == NULL) kernel_path = argv[i];
 		else if (limit_text == NULL) limit_text = argv[i];
 		else {
@@ -1208,12 +1247,22 @@ static int boot_main(int argc, char *argv[])
 		                " [--initrd FILE] [--bios FILE] [--serial FILE] [--hda FILE]"
 		                " [--memory MIB] [--virtio-console FILE] [--virtio-console-in FILE]"
 		                " [--uart1] [--acpi] [--vga-ansi] [--uop-cache on|off]"
-		                " [--uop-cache-stats] [--jit on|off] [--cpu-engine NAME]\n", argv[0]);
+		                " [--uop-cache-stats] [--jit on|off] [--cpu-engine NAME] [--long-mode on|off]\n",
+		                argv[0]);
 		return 2;
 	}
 	/* S0: resolve the ENGINE once, now that the whole command line is known (an explicit
 	 * --cpu-engine forces the two flags; `auto` derives from them). */
 	if (!cpu_engine_select_from_args()) return 2;
+	/* S5a: the capability, AFTER the engine resolution, and the ENGINE only when none was
+	 * NAMED: `--long-mode on` alone must run the interpreter (the only backend that can), and
+	 * `--long-mode on --cpu-engine uopjit` must be REFUSED BY NAME at the transition instead of
+	 * silently moved to another engine -- cpu_backend_enable_long_mode's note has the
+	 * measurement. */
+	if (long_mode_requested) {
+		if (!cpu_backend_enable_long_mode()) return 2;
+		if (strcmp(cpu_engine_name, "auto") == 0) cpu_backend_adopt(cpu_backend_by_index(0));
+	}
 	if (uop_cache_stats || jit_stats_flag) atexit(v86c_stats_print);
 
 	uint64_t limit;
@@ -1541,8 +1590,11 @@ static int boot_main(int argc, char *argv[])
  * once present, changes nothing.
  *
  * WHAT IT STILL CANNOT SHOW, stated so its silence is not read as a proof: it seeds the fields
- * that EXIST.  reg64[] has eight slots until the high registers (R8-R15) arrive with the
- * 64-bit model itself (plan ss6's $S5), so there is no R8-R15 to seed here; for
+ * that EXIST -- and S5a is where the SECOND HALF of S1's promise became executable.  S1's
+ * claim was "seed every widened field's high half and R8-R15"; until the register file had
+ * sixteen slots there was no R8-R15 to seed, so half of that sentence had no arm.  It has one
+ * now (below), and what it proves is the strongest form: a poisoned 64-bit value in slots 8-15
+ * changes nothing about the 32-bit machine.  For
  * last_op1/last_result the seed is inert BY CONSTRUCTION while flags_changed is clear (every
  * getter recomputes them from the operation that set the bit), so what the run exercises there
  * is only that the seed itself does not move the machine; and the ADDRESS fields are seeded
@@ -1566,6 +1618,10 @@ static void poison_widened_state(void)
 		 * LOW half must keep the boot's value or the very first data access moves. */
 		cpu->segment_offsets[i] |= high;
 	}
+	/* S5a: r8-r15 (the REX-only slots).  The WHOLE value, not `|=`: nothing in a 32-bit mode
+	 * may read them, so the probe's claim is that a poisoned 64-bit value changes nothing --
+	 * a leaked index would move the transcript on the first instruction that touched it. */
+	for (int i = 8; i < 16; i++) cpu->reg64[i] = poison;
 	cpu->last_op1 = (int64_t)poison;
 	cpu->last_result = (int64_t)poison;
 	/* S3: the address fields.  last_virt_eip's boot value is VIRT_EIP_NONE, whose low 12
@@ -1628,6 +1684,7 @@ int main(int argc, char *argv[])
 		else if (strcmp(argv[i], "--jit") == 0 || strcmp(argv[i], "--jit-stats") == 0)
 			i = parse_jit_flag(argc, argv, i);
 		else if (strcmp(argv[i], "--cpu-engine") == 0) i = parse_cpu_engine_flag(argc, argv, i);
+		else if (strcmp(argv[i], "--long-mode") == 0) i = parse_long_mode_flag(argc, argv, i);
 		else if (image_path == NULL) image_path = argv[i];
 		else if (limit_text == NULL) limit_text = argv[i];
 		else die("too many arguments");
@@ -1636,12 +1693,26 @@ int main(int argc, char *argv[])
 	if (image_path == NULL || limit_text == NULL) {
 		fprintf(stderr, "usage: %s <image> <instruction-limit> [--fixture] [--fixture64]"
 		                " [--vga-ansi] [--vga-doc FILE] [--uop-cache on|off]"
-		                " [--uop-cache-stats] [--jit on|off] [--cpu-engine NAME] [--poison]\n",
+		                " [--uop-cache-stats] [--jit on|off] [--cpu-engine NAME] [--long-mode on|off]"
+		                " [--poison]\n",
 		        argv[0]);
 		return 2;
 	}
 	/* S0: resolve the ENGINE once, now that the whole command line is known. */
 	if (!cpu_engine_select_from_args()) return 2;
+	/* S5a: the capability, in THIS mode too -- it is the one the x86-64 corpus runs in
+	 * (`build/v86c-nasm64 {img} {limit} --fixture64 --long-mode on`), because the corpus
+	 * images are the only 64-bit guests this slice has.
+	 *
+	 * PLAN ss5.3's "the transcript stays a 32-bit document" is kept BY CONSTRUCTION rather
+	 * than by refusing the flag here: the transcript printer is reached only without
+	 * --fixture/--fixture64, its own image is a 32-bit one that never enters IA-32e, and the
+	 * flag only grants a CAPABILITY -- no byte of any 32-bit run changes with it absent
+	 * (`--long-mode` off is the default and the shipped machine). */
+	if (long_mode_requested) {
+		if (!cpu_backend_enable_long_mode()) return 2;
+		if (strcmp(cpu_engine_name, "auto") == 0) cpu_backend_adopt(cpu_backend_by_index(0));
+	}
 	if (uop_cache_stats || jit_stats_flag) atexit(v86c_stats_print);
 
 	uint64_t limit;
@@ -1742,6 +1813,14 @@ int main(int argc, char *argv[])
 		 * and by nothing else -- the port stops AT the fault instead of patching a hlt
 		 * over it and running on, so "did not halt" is not observable here.  Stated
 		 * because the runner's `no_halt` path is therefore unusable for the C leg. */
+		/* S5a: THE NAMED STOP OUTRANKS THE GUEST EXCEPTION, and the order is the fix, not a
+		 * preference.  A long-mode walk that stops BY NAME ("a 1 GiB page is S11's") must also
+		 * abort the instruction that asked (cpu->pagefault, the port's abort channel), so both
+		 * flags are set and the exception arm -- which came first -- printed a bare
+		 * `(signal SIGBUS)` document and HID the reason.  The stop is the CAUSE of the abort, so
+		 * it is what a reader needs; a run with no stop is untouched by this order.  MEASURED:
+		 * before the flip, gate-long-mode.sh's 1 GiB / 2 MiB / 4 GiB mutation probes each
+		 * reported SIGBUS and found no stop text at all. */
 		if (result.exception >= 0) {
 			print_fixture(fixture64_mode);
 			return 0;

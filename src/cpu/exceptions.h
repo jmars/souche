@@ -162,6 +162,14 @@ static inline bool seg_descriptor_is_32(seg_descriptor_t d)
 {
     return (seg_descriptor_flags(d) & 4) == 4;
 }
+/* S5a (plan Appendix A rule 2): CS.L -- bit 21 of the descriptor, i.e. flag bit 2 of the
+ * type-specific dword whose bit 2 (value 4) is D/B and bit 3 (value 8) is G.  In a 64-bit
+ * code segment L=1 and D MUST be 0 (SDM Vol 3A 5.2.1); the port keeps both bits and derives
+ * is_32/is_64 from them, so a malformed descriptor is visible rather than averaged. */
+static inline bool seg_descriptor_is_long(seg_descriptor_t d)
+{
+    return (seg_descriptor_flags(d) & 2) == 2;
+}
 static inline uint32_t seg_descriptor_effective_limit(seg_descriptor_t d)
 {
     if ((seg_descriptor_flags(d) & 8) == 8) {
@@ -324,6 +332,17 @@ static inline void update_cs_size(bool new_size)
     if (cpu->is_32 != new_size) {
         cpu->is_32 = new_size;
     }
+}
+
+/* S5a: the SAME call shape for CS.L, so a site that loads a CS descriptor cannot set one
+ * half and forget the other -- which is the defect shape a separate call invites.  Sites
+ * that have only a `bool` (switch_cs_real_mode's `false`, the iret's size-only arms) keep
+ * calling update_cs_size and additionally clear is_64 explicitly, because the descriptor
+ * they came from is a real-mode or 16/32-bit one. */
+static inline void update_cs_size_long(bool new_size, bool new_long)
+{
+    update_cs_size(new_size);
+    cpu->is_64 = new_long;
 }
 
 /* lar/lsl/verr/verw are misc_instr.c's (M1a-2 deferred them; misc_instr.h carries their

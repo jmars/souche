@@ -95,6 +95,7 @@ INSTRUCTION_LIMIT ?= 1000000
 CPU_SRC := src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/paging.c \
            src/cpu/arith.c src/cpu/modrm.c src/cpu/misc_instr.c \
            src/cpu/string.c src/cpu/instructions.c src/cpu/instructions_0f.c \
+           src/cpu/instructions_64.c \
            src/cpu/sse_instr.c \
            src/cpu/softfloat.c src/cpu/fpu.c \
            src/cpu/exceptions.c src/cpu/pic.c \
@@ -107,6 +108,7 @@ CPU_SRC := src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/paging.c
 CPU_HDR := src/cpu/cpu_state.h src/cpu/flags.h src/cpu/memory.h src/cpu/paging.h \
            src/cpu/arith.h src/cpu/modrm.h src/cpu/misc_instr.h \
            src/cpu/string.h src/cpu/instructions.h src/cpu/instructions_0f.h \
+           src/cpu/instructions_64.h \
            src/cpu/sse_instr.h \
            src/cpu/softfloat.h src/cpu/fpu.h \
            src/cpu/exceptions.h src/cpu/pic.h \
@@ -182,6 +184,13 @@ GENERATOR := gen/interpreter_c.js
 X86_TABLE := v86/gen/x86_table.js
 GEN_C := src/cpu/interpreter_gen.c
 GEN_OBJ := $(BUILD)/cpu/interpreter_gen.o
+LONG_MODE_GEN := src/cpu/long_mode_gen.c
+LONG_MODE_GEN_OBJ := $(BUILD)/cpu/long_mode_gen.o
+# S5a: the emitter's SECOND output, the default-64 predicate (dispatch_os_index's second half).
+# It is its own translation unit because modrm.c needs it and the SELFTESTS do not link the
+# generated dispatcher -- they supply their own run_instruction, so a definition inside
+# interpreter_gen.c is invisible to them and the link fails (MEASURED: undefined reference to
+# `long_mode_default64` in cpu_selftest).
 
 # --- PERF-3 (HANDOFF=v86c-perf): the uop DECODE table (M1) -------------------------
 # The SECOND emitter pass over the same x86_table.js: the descriptor per dispatch case that
@@ -264,7 +273,7 @@ endif
 # 4.970 s on the same build), while it costs the hw rule its -Werror (the inlined io.c
 # port-map accesses trip -Warray-bounds) and puts 14 files' file-local statics in one
 # namespace for no measured gain.  Keep src/hw per-TU.
-UNITY_SRC := $(CPU_SRC) $(GEN_C) $(UOP_GEN)
+UNITY_SRC := $(CPU_SRC) $(GEN_C) $(LONG_MODE_GEN) $(UOP_GEN)
 UNITY_C := $(BUILD)/unity.c
 UNITY_OBJ := $(BUILD)/unity.o
 
@@ -291,6 +300,7 @@ SELFTEST_SRC := src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/pag
                 src/cpu/arith.c src/cpu/modrm.c src/cpu/misc_instr.c \
                 src/cpu/string.c src/cpu/instructions.c \
                 src/cpu/instructions_0f.c \
+                src/cpu/instructions_64.c \
                 src/cpu/sse_instr.c \
                 src/cpu/softfloat.c src/cpu/fpu.c
 
@@ -301,8 +311,12 @@ SELFTEST_SRC := src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/pag
 
 all: $(BUILD)/v86c
 
-$(GEN_C): $(GENERATOR) $(X86_TABLE) $(CPU_SRC) $(CPU_HDR)
+$(GEN_C) $(LONG_MODE_GEN): $(GENERATOR) $(X86_TABLE) gen/x86_table64.js $(CPU_SRC) $(CPU_HDR)
 	$(NODE) $(GENERATOR)
+
+$(LONG_MODE_GEN_OBJ): $(LONG_MODE_GEN)
+	@mkdir -p $(dir $@)
+	$(CC) $(CPU_CFLAGS) -c -o $@ $<
 
 $(UOP_GEN): $(UOP_GENERATOR) $(X86_TABLE) $(CPU_SRC) $(CPU_HDR)
 	$(NODE) $(UOP_GENERATOR)
@@ -431,10 +445,10 @@ engine-identity: $(BUILD)/v86c tests/test.img
 poison-probe: $(BUILD)/v86c $(IMAGE)
 	@set -e; 	./$(BUILD)/v86c $(IMAGE) $(INSTRUCTION_LIMIT) > $(BUILD)/poison-clean.txt; 	./$(BUILD)/v86c $(IMAGE) $(INSTRUCTION_LIMIT) --poison > $(BUILD)/poison-seeded.txt 2>/dev/null; 	cmp $(BUILD)/poison-clean.txt $(BUILD)/poison-seeded.txt; 	a=$$(sha256sum < $(BUILD)/poison-clean.txt | cut -c1-16); 	b=$$(sha256sum < $(BUILD)/poison-seeded.txt | cut -c1-16); 	echo "poison-probe: the widened fields' high halves do not reach the M0 transcript ($$a == $$b)"
 
-# PERF-1: the core is linked from $(UNITY_OBJ); $(GEN_OBJ) is still a prerequisite (it is
+# PERF-1: the core is linked from $(UNITY_OBJ); $(GEN_OBJ) $(LONG_MODE_GEN_OBJ) is still a prerequisite (it is
 # the object the results/*-mut-rig.sh scripts link by path, and the selftest links take it
 # too) but is INSIDE the unity object, so it is not on the command line.
-$(BUILD)/v86c: src/main.c $(UNITY_OBJ) $(GEN_OBJ) $(HW_OBJ) $(SF_OBJ) $(MINIBIOS_EMBED)
+$(BUILD)/v86c: src/main.c $(UNITY_OBJ) $(GEN_OBJ) $(LONG_MODE_GEN_OBJ) $(HW_OBJ) $(SF_OBJ) $(MINIBIOS_EMBED)
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) $(PERF_CFLAGS) -I src $(GC_LDFLAGS) -o $@ src/main.c $(MINIBIOS_EMBED) $(UNITY_OBJ) $(HW_OBJ) $(SF_OBJ)
 
@@ -502,17 +516,17 @@ selftest: $(BUILD)/cpu_selftest $(BUILD)/cpu_m1c_selftest $(BUILD)/hw_selftest $
 # Each binary is its own file target since M2-1: the asymmetry rig (results/m2-1-mut-rig.sh)
 # rebuilds ONE of them after a single-line mutation, which needs a real rule rather than a
 # recipe inside the phony target.
-$(BUILD)/cpu_selftest: src/cpu/cpu_selftest.c src/cpu/cpu_backend.c $(SELFTEST_SRC) src/cpu/*.h $(SF_OBJ) $(UOP_C_OBJ) $(UOP_OBJ) $(JIT_OBJ) $(JIT_CG_SRC)
+$(BUILD)/cpu_selftest: src/cpu/cpu_selftest.c src/cpu/cpu_backend.c $(SELFTEST_SRC) src/cpu/*.h $(SF_OBJ) $(UOP_C_OBJ) $(UOP_OBJ) $(JIT_OBJ) $(JIT_CG_SRC) $(LONG_MODE_GEN)
 	@mkdir -p $(BUILD)
-	$(CC) $(CPU_CFLAGS) $(GC_LDFLAGS) -o $@ src/cpu/cpu_selftest.c $(SELFTEST_SRC) src/cpu/cpu_backend.c $(UOP_C_OBJ) $(UOP_OBJ) $(JIT_OBJ) $(JIT_CG_SRC) $(SF_OBJ)
+	$(CC) $(CPU_CFLAGS) $(GC_LDFLAGS) -o $@ src/cpu/cpu_selftest.c $(SELFTEST_SRC) src/cpu/cpu_backend.c $(UOP_C_OBJ) $(UOP_OBJ) $(JIT_OBJ) $(JIT_CG_SRC) $(SF_OBJ) $(LONG_MODE_GEN)
 
-$(BUILD)/cpu_m1c_selftest: src/cpu/m1c_selftest.c $(CPU_SRC) $(HW_SRC) src/cpu/*.h $(HW_HDR) $(GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
+$(BUILD)/cpu_m1c_selftest: src/cpu/m1c_selftest.c $(CPU_SRC) $(HW_SRC) src/cpu/*.h $(HW_HDR) $(GEN_OBJ) $(LONG_MODE_GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
 	@mkdir -p $(BUILD)
-	$(CC) $(CPU_CFLAGS) $(GC_LDFLAGS) -o $@ src/cpu/m1c_selftest.c $(CPU_SRC) $(HW_SRC) $(GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
+	$(CC) $(CPU_CFLAGS) $(GC_LDFLAGS) -o $@ src/cpu/m1c_selftest.c $(CPU_SRC) $(HW_SRC) $(GEN_OBJ) $(LONG_MODE_GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
 
 # PERF-3 M1's gate: THE DECODE CHECKER.  It links the REAL core (CPU_SRC), the real device
 # layer (for the io_port_* bridge the IN/OUT bodies call) and the generated uop tables, but
-# NOT interpreter_gen.c's two switches as a separate object -- $(GEN_OBJ) is the dispatcher
+# NOT interpreter_gen.c's two switches as a separate object -- $(GEN_OBJ) $(LONG_MODE_GEN_OBJ) is the dispatcher
 # its differential drives, exactly as cpu_m1c_selftest takes it.
 # It does NOT link $(HW_SRC): the checker supplies its own io_port_* bridge (a benign,
 # counting stub -- see the file), because the device layer's unclaimed-port handler STOPS the
@@ -520,18 +534,18 @@ $(BUILD)/cpu_m1c_selftest: src/cpu/m1c_selftest.c $(CPU_SRC) $(HW_SRC) src/cpu/*
 # NOTE (PERF-4/M2): $(UOP_SRC) is IN $(CPU_SRC) since M2, so this link must NOT also name
 # $(UOP_C_OBJ) -- it would be both a source and an object (MEASURED: multiple definition of
 # uop_run and friends).  $(UOP_OBJ) stays: the generated tables are not in $(CPU_SRC).
-$(BUILD)/cpu_uop_selftest: src/cpu/uop_cache_selftest.c $(CPU_SRC) src/cpu/*.h $(CPU_HDR) $(UOP_HDR) $(GEN_OBJ) $(UOP_OBJ) $(SF_OBJ) $(NASM_CORPUS)
+$(BUILD)/cpu_uop_selftest: src/cpu/uop_cache_selftest.c $(CPU_SRC) src/cpu/*.h $(CPU_HDR) $(UOP_HDR) $(GEN_OBJ) $(LONG_MODE_GEN_OBJ) $(UOP_OBJ) $(SF_OBJ) $(NASM_CORPUS)
 	@mkdir -p $(BUILD)
-	$(CC) $(CPU_CFLAGS) $(GC_LDFLAGS) -o $@ src/cpu/uop_cache_selftest.c $(CPU_SRC) $(GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
+	$(CC) $(CPU_CFLAGS) $(GC_LDFLAGS) -o $@ src/cpu/uop_cache_selftest.c $(CPU_SRC) $(GEN_OBJ) $(LONG_MODE_GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
 
 # PERF-4 M2's gate (the plan's ss8 step 6): THE EXECUTOR'S OWN SUITE -- the SMC selftest, the
 # STAIRCASE PIN (a cache-on vs cache-off counter trace over a stream with jcc loops, mid-block
 # flushes, page-cross ends and a fetch fault) and the state-key pin.  It links the REAL core
 # including the cache and the generated tables (uop_cache.c is in $(CPU_SRC) since M2), and
 # like the M1 checker it supplies its own io_port_* bridge and does NOT link src/hw.
-$(BUILD)/cpu_uop_exec_selftest: $(UOP_EXEC_SELFTEST) $(CPU_SRC) src/cpu/*.h $(CPU_HDR) $(UOP_HDR) $(GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
+$(BUILD)/cpu_uop_exec_selftest: $(UOP_EXEC_SELFTEST) $(CPU_SRC) src/cpu/*.h $(CPU_HDR) $(UOP_HDR) $(GEN_OBJ) $(LONG_MODE_GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
 	@mkdir -p $(BUILD)
-	$(CC) $(CPU_CFLAGS) $(GC_LDFLAGS) -o $@ $(UOP_EXEC_SELFTEST) $(CPU_SRC) $(GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
+	$(CC) $(CPU_CFLAGS) $(GC_LDFLAGS) -o $@ $(UOP_EXEC_SELFTEST) $(CPU_SRC) $(GEN_OBJ) $(LONG_MODE_GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
 
 # JIT-SPIKE (HANDOFF=v86c-jit): THE EXECUTABLE-MEMORY SUBSTRATE'S GATE.  It links the REAL core
 # (CPU_SRC, which now carries src/cpu/jit_mem.c), the generated dispatcher and the uop tables,
@@ -542,17 +556,17 @@ $(BUILD)/cpu_uop_exec_selftest: $(UOP_EXEC_SELFTEST) $(CPU_SRC) src/cpu/*.h $(CP
 #
 # It is IN `make selftest` deliberately (a gate that is not run rots), and it adds a suite
 # rather than changing one: the four existing suites' counts are untouched by it.
-$(BUILD)/cpu_jit_selftest: src/cpu/jit_selftest.c $(CPU_SRC) src/cpu/*.h $(CPU_HDR) $(GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
+$(BUILD)/cpu_jit_selftest: src/cpu/jit_selftest.c $(CPU_SRC) src/cpu/*.h $(CPU_HDR) $(GEN_OBJ) $(LONG_MODE_GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
 	@mkdir -p $(BUILD)
-	$(CC) $(CPU_CFLAGS) $(GC_LDFLAGS) -o $@ src/cpu/jit_selftest.c $(CPU_SRC) $(GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
+	$(CC) $(CPU_CFLAGS) $(GC_LDFLAGS) -o $@ src/cpu/jit_selftest.c $(CPU_SRC) $(GEN_OBJ) $(LONG_MODE_GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
 
 # JIT-PLAN (HANDOFF=v86c-jit, unit JIT-1): M1'S GATE -- the encoder's byte pins, the one
 # recipe run differentially (jit-off vs jit-on: full cpu state, pending, RAM), the fault/
 # early-return, staircase, prefix/previous_ip, SMC-abort and exit-kind contract pins.  Same
 # shape as the substrate's suite above and for the same reason: it RUNS the machine.
-$(BUILD)/cpu_jit_codegen_selftest: src/cpu/jit_codegen_selftest.c $(CPU_SRC) src/cpu/*.h $(CPU_HDR) $(GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
+$(BUILD)/cpu_jit_codegen_selftest: src/cpu/jit_codegen_selftest.c $(CPU_SRC) src/cpu/*.h $(CPU_HDR) $(GEN_OBJ) $(LONG_MODE_GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
 	@mkdir -p $(BUILD)
-	$(CC) $(CPU_CFLAGS) $(GC_LDFLAGS) -o $@ src/cpu/jit_codegen_selftest.c $(CPU_SRC) $(GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
+	$(CC) $(CPU_CFLAGS) $(GC_LDFLAGS) -o $@ src/cpu/jit_codegen_selftest.c $(CPU_SRC) $(GEN_OBJ) $(LONG_MODE_GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
 
 jit-codegen-selftest: $(BUILD)/cpu_jit_codegen_selftest
 	./$(BUILD)/cpu_jit_codegen_selftest
@@ -562,9 +576,9 @@ jit-selftest: $(BUILD)/cpu_jit_selftest
 
 # M2-1's device gate (the brief's G1): the machine's devices driven through their register
 # interfaces, linked against the REAL device layer (src/hw) and the real core.
-$(BUILD)/hw_selftest: src/hw/hw_selftest.c $(CPU_SRC) $(HW_SRC) $(CPU_HDR) $(HW_HDR) $(GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
+$(BUILD)/hw_selftest: src/hw/hw_selftest.c $(CPU_SRC) $(HW_SRC) $(CPU_HDR) $(HW_HDR) $(GEN_OBJ) $(LONG_MODE_GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
 	@mkdir -p $(BUILD)
-	$(CC) $(CPU_CFLAGS) $(GC_LDFLAGS) -o $@ src/hw/hw_selftest.c $(CPU_SRC) $(HW_SRC) $(GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
+	$(CC) $(CPU_CFLAGS) $(GC_LDFLAGS) -o $@ src/hw/hw_selftest.c $(CPU_SRC) $(HW_SRC) $(GEN_OBJ) $(LONG_MODE_GEN_OBJ) $(UOP_OBJ) $(SF_OBJ)
 
 run: $(BUILD)/v86c $(IMAGE)
 	./$(BUILD)/v86c $(IMAGE) $(INSTRUCTION_LIMIT)

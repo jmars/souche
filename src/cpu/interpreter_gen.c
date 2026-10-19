@@ -25,14 +25,15 @@
  * reached this way still stops by name, exactly as the unprefixed encoding does.
  * See gen/interpreter_c.js, C-side difference 3.
  *
- * 1922 call sites, 0 of them unimplemented at the time this
- * file was generated (1926 instr* symbols defined in the port's sources).
+ * 2007 call sites, 23 of them unimplemented at the time this
+ * file was generated (1988 instr* symbols defined in the port's sources).
  */
 
 #include "cpu.h"
 #include "cpu_state.h"
 #include "instructions.h"
 #include "instructions_0f.h"
+#include "instructions_64.h"
 #include "misc_instr.h"
 #include "modrm.h"
 #include "paging.h"
@@ -52,11 +53,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_00_mem(addr, modrm_byte >> 3 & 7);
+			instr_00_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_00_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_00_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x200:
+	{
+		unimplemented_instruction("long mode: 0x00 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x01:
@@ -66,10 +73,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_01_mem(addr, modrm_byte >> 3 & 7);
+			instr16_01_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_01_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_01_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -80,10 +87,24 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_01_mem(addr, modrm_byte >> 3 & 7);
+			instr32_01_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_01_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_01_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
+	}
+	break;
+	case 0x201:
+	{
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_01_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_01_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -95,11 +116,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_02_mem(addr, modrm_byte >> 3 & 7);
+			instr_02_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_02_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_02_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x202:
+	{
+		unimplemented_instruction("long mode: 0x02 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x03:
@@ -109,10 +136,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_03_mem(addr, modrm_byte >> 3 & 7);
+			instr16_03_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_03_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_03_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -123,10 +150,24 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_03_mem(addr, modrm_byte >> 3 & 7);
+			instr32_03_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_03_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_03_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
+	}
+	break;
+	case 0x203:
+	{
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_03_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_03_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -136,6 +177,12 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm8();
 		if (cpu->pagefault) return;
 		instr_04(imm);
+	}
+	break;
+	case 0x204:
+	{
+		unimplemented_instruction("long mode: 0x04 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x05:
@@ -152,6 +199,12 @@ void run_instruction(int32_t opcode)
 		instr32_05(imm);
 	}
 	break;
+	case 0x205:
+	{
+		unimplemented_instruction("long mode: 0x05 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x06:
 	{
 		instr16_06();
@@ -160,6 +213,12 @@ void run_instruction(int32_t opcode)
 	case 0x106:
 	{
 		instr32_06();
+	}
+	break;
+	case 0x206:
+	{
+		unimplemented_instruction("long mode: 0x06 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x07:
@@ -174,6 +233,12 @@ void run_instruction(int32_t opcode)
 		after_block_boundary();
 	}
 	break;
+	case 0x207:
+	{
+		unimplemented_instruction("long mode: 0x07 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x08:
 	case 0x108:
 	{
@@ -182,11 +247,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_08_mem(addr, modrm_byte >> 3 & 7);
+			instr_08_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_08_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_08_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x208:
+	{
+		unimplemented_instruction("long mode: 0x08 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x09:
@@ -196,10 +267,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_09_mem(addr, modrm_byte >> 3 & 7);
+			instr16_09_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_09_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_09_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -210,11 +281,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_09_mem(addr, modrm_byte >> 3 & 7);
+			instr32_09_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_09_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_09_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x209:
+	{
+		unimplemented_instruction("long mode: 0x09 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x0A:
@@ -225,11 +302,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0A_mem(addr, modrm_byte >> 3 & 7);
+			instr_0A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0A_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x20A:
+	{
+		unimplemented_instruction("long mode: 0x0A has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x0B:
@@ -239,10 +322,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0B_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0B_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -253,11 +336,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0B_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0B_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x20B:
+	{
+		unimplemented_instruction("long mode: 0x0B has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x0C:
@@ -266,6 +355,12 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm8();
 		if (cpu->pagefault) return;
 		instr_0C(imm);
+	}
+	break;
+	case 0x20C:
+	{
+		unimplemented_instruction("long mode: 0x0C has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x0D:
@@ -282,6 +377,12 @@ void run_instruction(int32_t opcode)
 		instr32_0D(imm);
 	}
 	break;
+	case 0x20D:
+	{
+		unimplemented_instruction("long mode: 0x0D has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x0E:
 	{
 		instr16_0E();
@@ -290,6 +391,12 @@ void run_instruction(int32_t opcode)
 	case 0x10E:
 	{
 		instr32_0E();
+	}
+	break;
+	case 0x20E:
+	{
+		unimplemented_instruction("long mode: 0x0E has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x0F:
@@ -302,6 +409,12 @@ void run_instruction(int32_t opcode)
 		instr32_0F();
 	}
 	break;
+	case 0x20F:
+	{
+		unimplemented_instruction("long mode: the 0F space has no 64-bit arms yet (S11)");
+		return;
+	}
+	break;
 	case 0x10:
 	case 0x110:
 	{
@@ -310,11 +423,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_10_mem(addr, modrm_byte >> 3 & 7);
+			instr_10_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_10_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_10_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x210:
+	{
+		unimplemented_instruction("long mode: 0x10 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x11:
@@ -324,10 +443,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_11_mem(addr, modrm_byte >> 3 & 7);
+			instr16_11_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_11_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_11_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -338,11 +457,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_11_mem(addr, modrm_byte >> 3 & 7);
+			instr32_11_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_11_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_11_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x211:
+	{
+		unimplemented_instruction("long mode: 0x11 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x12:
@@ -353,11 +478,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_12_mem(addr, modrm_byte >> 3 & 7);
+			instr_12_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_12_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_12_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x212:
+	{
+		unimplemented_instruction("long mode: 0x12 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x13:
@@ -367,10 +498,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_13_mem(addr, modrm_byte >> 3 & 7);
+			instr16_13_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_13_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_13_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -381,11 +512,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_13_mem(addr, modrm_byte >> 3 & 7);
+			instr32_13_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_13_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_13_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x213:
+	{
+		unimplemented_instruction("long mode: 0x13 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x14:
@@ -394,6 +531,12 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm8();
 		if (cpu->pagefault) return;
 		instr_14(imm);
+	}
+	break;
+	case 0x214:
+	{
+		unimplemented_instruction("long mode: 0x14 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x15:
@@ -410,6 +553,12 @@ void run_instruction(int32_t opcode)
 		instr32_15(imm);
 	}
 	break;
+	case 0x215:
+	{
+		unimplemented_instruction("long mode: 0x15 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x16:
 	{
 		instr16_16();
@@ -418,6 +567,12 @@ void run_instruction(int32_t opcode)
 	case 0x116:
 	{
 		instr32_16();
+	}
+	break;
+	case 0x216:
+	{
+		unimplemented_instruction("long mode: 0x16 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x17:
@@ -432,6 +587,12 @@ void run_instruction(int32_t opcode)
 		after_block_boundary();
 	}
 	break;
+	case 0x217:
+	{
+		unimplemented_instruction("long mode: 0x17 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x18:
 	case 0x118:
 	{
@@ -440,11 +601,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_18_mem(addr, modrm_byte >> 3 & 7);
+			instr_18_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_18_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_18_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x218:
+	{
+		unimplemented_instruction("long mode: 0x18 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x19:
@@ -454,10 +621,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_19_mem(addr, modrm_byte >> 3 & 7);
+			instr16_19_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_19_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_19_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -468,11 +635,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_19_mem(addr, modrm_byte >> 3 & 7);
+			instr32_19_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_19_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_19_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x219:
+	{
+		unimplemented_instruction("long mode: 0x19 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x1A:
@@ -483,11 +656,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_1A_mem(addr, modrm_byte >> 3 & 7);
+			instr_1A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_1A_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_1A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x21A:
+	{
+		unimplemented_instruction("long mode: 0x1A has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x1B:
@@ -497,10 +676,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_1B_mem(addr, modrm_byte >> 3 & 7);
+			instr16_1B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_1B_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_1B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -511,11 +690,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_1B_mem(addr, modrm_byte >> 3 & 7);
+			instr32_1B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_1B_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_1B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x21B:
+	{
+		unimplemented_instruction("long mode: 0x1B has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x1C:
@@ -524,6 +709,12 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm8();
 		if (cpu->pagefault) return;
 		instr_1C(imm);
+	}
+	break;
+	case 0x21C:
+	{
+		unimplemented_instruction("long mode: 0x1C has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x1D:
@@ -540,6 +731,12 @@ void run_instruction(int32_t opcode)
 		instr32_1D(imm);
 	}
 	break;
+	case 0x21D:
+	{
+		unimplemented_instruction("long mode: 0x1D has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x1E:
 	{
 		instr16_1E();
@@ -548,6 +745,12 @@ void run_instruction(int32_t opcode)
 	case 0x11E:
 	{
 		instr32_1E();
+	}
+	break;
+	case 0x21E:
+	{
+		unimplemented_instruction("long mode: 0x1E has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x1F:
@@ -562,6 +765,12 @@ void run_instruction(int32_t opcode)
 		after_block_boundary();
 	}
 	break;
+	case 0x21F:
+	{
+		unimplemented_instruction("long mode: 0x1F has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x20:
 	case 0x120:
 	{
@@ -570,11 +779,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_20_mem(addr, modrm_byte >> 3 & 7);
+			instr_20_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_20_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_20_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x220:
+	{
+		unimplemented_instruction("long mode: 0x20 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x21:
@@ -584,10 +799,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_21_mem(addr, modrm_byte >> 3 & 7);
+			instr16_21_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_21_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_21_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -598,11 +813,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_21_mem(addr, modrm_byte >> 3 & 7);
+			instr32_21_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_21_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_21_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x221:
+	{
+		unimplemented_instruction("long mode: 0x21 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x22:
@@ -613,11 +834,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_22_mem(addr, modrm_byte >> 3 & 7);
+			instr_22_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_22_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_22_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x222:
+	{
+		unimplemented_instruction("long mode: 0x22 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x23:
@@ -627,10 +854,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_23_mem(addr, modrm_byte >> 3 & 7);
+			instr16_23_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_23_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_23_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -641,11 +868,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_23_mem(addr, modrm_byte >> 3 & 7);
+			instr32_23_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_23_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_23_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x223:
+	{
+		unimplemented_instruction("long mode: 0x23 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x24:
@@ -654,6 +887,12 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm8();
 		if (cpu->pagefault) return;
 		instr_24(imm);
+	}
+	break;
+	case 0x224:
+	{
+		unimplemented_instruction("long mode: 0x24 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x25:
@@ -670,16 +909,34 @@ void run_instruction(int32_t opcode)
 		instr32_25(imm);
 	}
 	break;
+	case 0x225:
+	{
+		unimplemented_instruction("long mode: 0x25 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x26:
 	case 0x126:
 	{
 		instr_26();
 	}
 	break;
+	case 0x226:
+	{
+		unimplemented_instruction("long mode: 0x26 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x27:
 	case 0x127:
 	{
 		instr_27();
+	}
+	break;
+	case 0x227:
+	{
+		unimplemented_instruction("long mode: 0x27 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x28:
@@ -690,11 +947,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_28_mem(addr, modrm_byte >> 3 & 7);
+			instr_28_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_28_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_28_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x228:
+	{
+		unimplemented_instruction("long mode: 0x28 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x29:
@@ -704,10 +967,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_29_mem(addr, modrm_byte >> 3 & 7);
+			instr16_29_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_29_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_29_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -718,11 +981,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_29_mem(addr, modrm_byte >> 3 & 7);
+			instr32_29_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_29_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_29_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x229:
+	{
+		unimplemented_instruction("long mode: 0x29 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x2A:
@@ -733,11 +1002,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_2A_mem(addr, modrm_byte >> 3 & 7);
+			instr_2A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_2A_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_2A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x22A:
+	{
+		unimplemented_instruction("long mode: 0x2A has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x2B:
@@ -747,10 +1022,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_2B_mem(addr, modrm_byte >> 3 & 7);
+			instr16_2B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_2B_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_2B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -761,11 +1036,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_2B_mem(addr, modrm_byte >> 3 & 7);
+			instr32_2B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_2B_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_2B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x22B:
+	{
+		unimplemented_instruction("long mode: 0x2B has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x2C:
@@ -774,6 +1055,12 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm8();
 		if (cpu->pagefault) return;
 		instr_2C(imm);
+	}
+	break;
+	case 0x22C:
+	{
+		unimplemented_instruction("long mode: 0x2C has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x2D:
@@ -790,16 +1077,34 @@ void run_instruction(int32_t opcode)
 		instr32_2D(imm);
 	}
 	break;
+	case 0x22D:
+	{
+		unimplemented_instruction("long mode: 0x2D has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x2E:
 	case 0x12E:
 	{
 		instr_2E();
 	}
 	break;
+	case 0x22E:
+	{
+		unimplemented_instruction("long mode: 0x2E has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x2F:
 	case 0x12F:
 	{
 		instr_2F();
+	}
+	break;
+	case 0x22F:
+	{
+		unimplemented_instruction("long mode: 0x2F has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x30:
@@ -810,11 +1115,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_30_mem(addr, modrm_byte >> 3 & 7);
+			instr_30_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_30_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_30_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x230:
+	{
+		unimplemented_instruction("long mode: 0x30 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x31:
@@ -824,10 +1135,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_31_mem(addr, modrm_byte >> 3 & 7);
+			instr16_31_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_31_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_31_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -838,10 +1149,24 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_31_mem(addr, modrm_byte >> 3 & 7);
+			instr32_31_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_31_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_31_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
+	}
+	break;
+	case 0x231:
+	{
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_31_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_31_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -853,11 +1178,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_32_mem(addr, modrm_byte >> 3 & 7);
+			instr_32_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_32_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_32_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x232:
+	{
+		unimplemented_instruction("long mode: 0x32 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x33:
@@ -867,10 +1198,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_33_mem(addr, modrm_byte >> 3 & 7);
+			instr16_33_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_33_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_33_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -881,10 +1212,24 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_33_mem(addr, modrm_byte >> 3 & 7);
+			instr32_33_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_33_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_33_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
+	}
+	break;
+	case 0x233:
+	{
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_33_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_33_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -894,6 +1239,12 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm8();
 		if (cpu->pagefault) return;
 		instr_34(imm);
+	}
+	break;
+	case 0x234:
+	{
+		unimplemented_instruction("long mode: 0x34 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x35:
@@ -910,16 +1261,34 @@ void run_instruction(int32_t opcode)
 		instr32_35(imm);
 	}
 	break;
+	case 0x235:
+	{
+		unimplemented_instruction("long mode: 0x35 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x36:
 	case 0x136:
 	{
 		instr_36();
 	}
 	break;
+	case 0x236:
+	{
+		unimplemented_instruction("long mode: 0x36 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x37:
 	case 0x137:
 	{
 		instr_37();
+	}
+	break;
+	case 0x237:
+	{
+		unimplemented_instruction("long mode: 0x37 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x38:
@@ -930,11 +1299,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_38_mem(addr, modrm_byte >> 3 & 7);
+			instr_38_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_38_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_38_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x238:
+	{
+		unimplemented_instruction("long mode: 0x38 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x39:
@@ -944,10 +1319,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_39_mem(addr, modrm_byte >> 3 & 7);
+			instr16_39_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_39_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_39_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -958,11 +1333,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_39_mem(addr, modrm_byte >> 3 & 7);
+			instr32_39_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_39_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_39_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x239:
+	{
+		unimplemented_instruction("long mode: 0x39 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x3A:
@@ -973,11 +1354,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_3A_mem(addr, modrm_byte >> 3 & 7);
+			instr_3A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_3A_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_3A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x23A:
+	{
+		unimplemented_instruction("long mode: 0x3A has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x3B:
@@ -987,10 +1374,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_3B_mem(addr, modrm_byte >> 3 & 7);
+			instr16_3B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_3B_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_3B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -1001,11 +1388,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_3B_mem(addr, modrm_byte >> 3 & 7);
+			instr32_3B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_3B_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_3B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x23B:
+	{
+		unimplemented_instruction("long mode: 0x3B has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x3C:
@@ -1014,6 +1407,12 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm8();
 		if (cpu->pagefault) return;
 		instr_3C(imm);
+	}
+	break;
+	case 0x23C:
+	{
+		unimplemented_instruction("long mode: 0x3C has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x3D:
@@ -1030,16 +1429,34 @@ void run_instruction(int32_t opcode)
 		instr32_3D(imm);
 	}
 	break;
+	case 0x23D:
+	{
+		unimplemented_instruction("long mode: 0x3D has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x3E:
 	case 0x13E:
 	{
 		instr_3E();
 	}
 	break;
+	case 0x23E:
+	{
+		unimplemented_instruction("long mode: 0x3E has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x3F:
 	case 0x13F:
 	{
 		instr_3F();
+	}
+	break;
+	case 0x23F:
+	{
+		unimplemented_instruction("long mode: 0x3F has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x40:
@@ -1052,6 +1469,12 @@ void run_instruction(int32_t opcode)
 		instr32_40();
 	}
 	break;
+	case 0x240:
+	{
+		long_mode_rex_prefix(0x40);
+		return;
+	}
+
 	case 0x41:
 	{
 		instr16_41();
@@ -1062,6 +1485,12 @@ void run_instruction(int32_t opcode)
 		instr32_41();
 	}
 	break;
+	case 0x241:
+	{
+		long_mode_rex_prefix(0x41);
+		return;
+	}
+
 	case 0x42:
 	{
 		instr16_42();
@@ -1072,6 +1501,12 @@ void run_instruction(int32_t opcode)
 		instr32_42();
 	}
 	break;
+	case 0x242:
+	{
+		long_mode_rex_prefix(0x42);
+		return;
+	}
+
 	case 0x43:
 	{
 		instr16_43();
@@ -1082,6 +1517,12 @@ void run_instruction(int32_t opcode)
 		instr32_43();
 	}
 	break;
+	case 0x243:
+	{
+		long_mode_rex_prefix(0x43);
+		return;
+	}
+
 	case 0x44:
 	{
 		instr16_44();
@@ -1092,6 +1533,12 @@ void run_instruction(int32_t opcode)
 		instr32_44();
 	}
 	break;
+	case 0x244:
+	{
+		long_mode_rex_prefix(0x44);
+		return;
+	}
+
 	case 0x45:
 	{
 		instr16_45();
@@ -1102,6 +1549,12 @@ void run_instruction(int32_t opcode)
 		instr32_45();
 	}
 	break;
+	case 0x245:
+	{
+		long_mode_rex_prefix(0x45);
+		return;
+	}
+
 	case 0x46:
 	{
 		instr16_46();
@@ -1112,6 +1565,12 @@ void run_instruction(int32_t opcode)
 		instr32_46();
 	}
 	break;
+	case 0x246:
+	{
+		long_mode_rex_prefix(0x46);
+		return;
+	}
+
 	case 0x47:
 	{
 		instr16_47();
@@ -1122,6 +1581,12 @@ void run_instruction(int32_t opcode)
 		instr32_47();
 	}
 	break;
+	case 0x247:
+	{
+		long_mode_rex_prefix(0x47);
+		return;
+	}
+
 	case 0x48:
 	{
 		instr16_48();
@@ -1132,6 +1597,12 @@ void run_instruction(int32_t opcode)
 		instr32_48();
 	}
 	break;
+	case 0x248:
+	{
+		long_mode_rex_prefix(0x48);
+		return;
+	}
+
 	case 0x49:
 	{
 		instr16_49();
@@ -1142,6 +1613,12 @@ void run_instruction(int32_t opcode)
 		instr32_49();
 	}
 	break;
+	case 0x249:
+	{
+		long_mode_rex_prefix(0x49);
+		return;
+	}
+
 	case 0x4A:
 	{
 		instr16_4A();
@@ -1152,6 +1629,12 @@ void run_instruction(int32_t opcode)
 		instr32_4A();
 	}
 	break;
+	case 0x24A:
+	{
+		long_mode_rex_prefix(0x4A);
+		return;
+	}
+
 	case 0x4B:
 	{
 		instr16_4B();
@@ -1162,6 +1645,12 @@ void run_instruction(int32_t opcode)
 		instr32_4B();
 	}
 	break;
+	case 0x24B:
+	{
+		long_mode_rex_prefix(0x4B);
+		return;
+	}
+
 	case 0x4C:
 	{
 		instr16_4C();
@@ -1172,6 +1661,12 @@ void run_instruction(int32_t opcode)
 		instr32_4C();
 	}
 	break;
+	case 0x24C:
+	{
+		long_mode_rex_prefix(0x4C);
+		return;
+	}
+
 	case 0x4D:
 	{
 		instr16_4D();
@@ -1182,6 +1677,12 @@ void run_instruction(int32_t opcode)
 		instr32_4D();
 	}
 	break;
+	case 0x24D:
+	{
+		long_mode_rex_prefix(0x4D);
+		return;
+	}
+
 	case 0x4E:
 	{
 		instr16_4E();
@@ -1192,6 +1693,12 @@ void run_instruction(int32_t opcode)
 		instr32_4E();
 	}
 	break;
+	case 0x24E:
+	{
+		long_mode_rex_prefix(0x4E);
+		return;
+	}
+
 	case 0x4F:
 	{
 		instr16_4F();
@@ -1202,6 +1709,12 @@ void run_instruction(int32_t opcode)
 		instr32_4F();
 	}
 	break;
+	case 0x24F:
+	{
+		long_mode_rex_prefix(0x4F);
+		return;
+	}
+
 	case 0x50:
 	{
 		instr16_50();
@@ -1210,6 +1723,11 @@ void run_instruction(int32_t opcode)
 	case 0x150:
 	{
 		instr32_50();
+	}
+	break;
+	case 0x250:
+	{
+		instr64_50();
 	}
 	break;
 	case 0x51:
@@ -1222,6 +1740,11 @@ void run_instruction(int32_t opcode)
 		instr32_51();
 	}
 	break;
+	case 0x251:
+	{
+		instr64_51();
+	}
+	break;
 	case 0x52:
 	{
 		instr16_52();
@@ -1230,6 +1753,11 @@ void run_instruction(int32_t opcode)
 	case 0x152:
 	{
 		instr32_52();
+	}
+	break;
+	case 0x252:
+	{
+		instr64_52();
 	}
 	break;
 	case 0x53:
@@ -1242,6 +1770,11 @@ void run_instruction(int32_t opcode)
 		instr32_53();
 	}
 	break;
+	case 0x253:
+	{
+		instr64_53();
+	}
+	break;
 	case 0x54:
 	{
 		instr16_54();
@@ -1250,6 +1783,11 @@ void run_instruction(int32_t opcode)
 	case 0x154:
 	{
 		instr32_54();
+	}
+	break;
+	case 0x254:
+	{
+		instr64_54();
 	}
 	break;
 	case 0x55:
@@ -1262,6 +1800,11 @@ void run_instruction(int32_t opcode)
 		instr32_55();
 	}
 	break;
+	case 0x255:
+	{
+		instr64_55();
+	}
+	break;
 	case 0x56:
 	{
 		instr16_56();
@@ -1270,6 +1813,11 @@ void run_instruction(int32_t opcode)
 	case 0x156:
 	{
 		instr32_56();
+	}
+	break;
+	case 0x256:
+	{
+		instr64_56();
 	}
 	break;
 	case 0x57:
@@ -1282,6 +1830,11 @@ void run_instruction(int32_t opcode)
 		instr32_57();
 	}
 	break;
+	case 0x257:
+	{
+		instr64_57();
+	}
+	break;
 	case 0x58:
 	{
 		instr16_58();
@@ -1290,6 +1843,11 @@ void run_instruction(int32_t opcode)
 	case 0x158:
 	{
 		instr32_58();
+	}
+	break;
+	case 0x258:
+	{
+		instr64_58();
 	}
 	break;
 	case 0x59:
@@ -1302,6 +1860,11 @@ void run_instruction(int32_t opcode)
 		instr32_59();
 	}
 	break;
+	case 0x259:
+	{
+		instr64_59();
+	}
+	break;
 	case 0x5A:
 	{
 		instr16_5A();
@@ -1310,6 +1873,11 @@ void run_instruction(int32_t opcode)
 	case 0x15A:
 	{
 		instr32_5A();
+	}
+	break;
+	case 0x25A:
+	{
+		instr64_5A();
 	}
 	break;
 	case 0x5B:
@@ -1322,6 +1890,11 @@ void run_instruction(int32_t opcode)
 		instr32_5B();
 	}
 	break;
+	case 0x25B:
+	{
+		instr64_5B();
+	}
+	break;
 	case 0x5C:
 	{
 		instr16_5C();
@@ -1330,6 +1903,11 @@ void run_instruction(int32_t opcode)
 	case 0x15C:
 	{
 		instr32_5C();
+	}
+	break;
+	case 0x25C:
+	{
+		instr64_5C();
 	}
 	break;
 	case 0x5D:
@@ -1342,6 +1920,11 @@ void run_instruction(int32_t opcode)
 		instr32_5D();
 	}
 	break;
+	case 0x25D:
+	{
+		instr64_5D();
+	}
+	break;
 	case 0x5E:
 	{
 		instr16_5E();
@@ -1352,6 +1935,11 @@ void run_instruction(int32_t opcode)
 		instr32_5E();
 	}
 	break;
+	case 0x25E:
+	{
+		instr64_5E();
+	}
+	break;
 	case 0x5F:
 	{
 		instr16_5F();
@@ -1360,6 +1948,11 @@ void run_instruction(int32_t opcode)
 	case 0x15F:
 	{
 		instr32_5F();
+	}
+	break;
+	case 0x25F:
+	{
+		instr64_5F();
 	}
 	break;
 	case 0x60:
@@ -1374,6 +1967,12 @@ void run_instruction(int32_t opcode)
 		after_block_boundary();
 	}
 	break;
+	case 0x260:
+	{
+		unimplemented_instruction("long mode: 0x60 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x61:
 	{
 		instr16_61();
@@ -1386,6 +1985,12 @@ void run_instruction(int32_t opcode)
 		after_block_boundary();
 	}
 	break;
+	case 0x261:
+	{
+		unimplemented_instruction("long mode: 0x61 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x62:
 	case 0x162:
 	{
@@ -1394,12 +1999,18 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_62_mem(addr, modrm_byte >> 3 & 7);
+			instr_62_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_62_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_62_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 		after_block_boundary();
+	}
+	break;
+	case 0x262:
+	{
+		unimplemented_instruction("long mode: 0x62 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x63:
@@ -1410,12 +2021,18 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_63_mem(addr, modrm_byte >> 3 & 7);
+			instr_63_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_63_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_63_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 		after_block_boundary();
+	}
+	break;
+	case 0x263:
+	{
+		unimplemented_instruction("long mode: 0x63 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x64:
@@ -1424,10 +2041,22 @@ void run_instruction(int32_t opcode)
 		instr_64();
 	}
 	break;
+	case 0x264:
+	{
+		unimplemented_instruction("long mode: 0x64 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x65:
 	case 0x165:
 	{
 		instr_65();
+	}
+	break;
+	case 0x265:
+	{
+		unimplemented_instruction("long mode: 0x65 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x66:
@@ -1436,10 +2065,22 @@ void run_instruction(int32_t opcode)
 		instr_66();
 	}
 	break;
+	case 0x266:
+	{
+		unimplemented_instruction("long mode: 0x66 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x67:
 	case 0x167:
 	{
 		instr_67();
+	}
+	break;
+	case 0x267:
+	{
+		unimplemented_instruction("long mode: 0x67 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x68:
@@ -1456,6 +2097,13 @@ void run_instruction(int32_t opcode)
 		instr32_68(imm);
 	}
 	break;
+	case 0x268:
+	{
+		int64_t imm = read_imm32s();
+		if (cpu->pagefault) return;
+		instr64_68(imm);
+	}
+	break;
 	case 0x69:
 	{
 		int32_t modrm_byte = read_imm8();
@@ -1465,12 +2113,12 @@ void run_instruction(int32_t opcode)
 			if (cpu->pagefault) return;
 			int32_t imm = read_imm16();
 			if (cpu->pagefault) return;
-			instr16_69_mem(addr, modrm_byte >> 3 & 7, imm);
+			instr16_69_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 		}
 		else {
 			int32_t imm = read_imm16();
 			if (cpu->pagefault) return;
-			instr16_69_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+			instr16_69_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 		}
 	}
 	break;
@@ -1483,13 +2131,19 @@ void run_instruction(int32_t opcode)
 			if (cpu->pagefault) return;
 			int32_t imm = read_imm32s();
 			if (cpu->pagefault) return;
-			instr32_69_mem(addr, modrm_byte >> 3 & 7, imm);
+			instr32_69_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 		}
 		else {
 			int32_t imm = read_imm32s();
 			if (cpu->pagefault) return;
-			instr32_69_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+			instr32_69_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 		}
+	}
+	break;
+	case 0x269:
+	{
+		unimplemented_instruction("long mode: 0x69 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x6A:
@@ -1506,6 +2160,13 @@ void run_instruction(int32_t opcode)
 		instr32_6A(imm);
 	}
 	break;
+	case 0x26A:
+	{
+		int64_t imm = read_imm8s();
+		if (cpu->pagefault) return;
+		instr64_6A(imm);
+	}
+	break;
 	case 0x6B:
 	{
 		int32_t modrm_byte = read_imm8();
@@ -1515,12 +2176,12 @@ void run_instruction(int32_t opcode)
 			if (cpu->pagefault) return;
 			int32_t imm = read_imm8s();
 			if (cpu->pagefault) return;
-			instr16_6B_mem(addr, modrm_byte >> 3 & 7, imm);
+			instr16_6B_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 		}
 		else {
 			int32_t imm = read_imm8s();
 			if (cpu->pagefault) return;
-			instr16_6B_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+			instr16_6B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 		}
 	}
 	break;
@@ -1533,13 +2194,19 @@ void run_instruction(int32_t opcode)
 			if (cpu->pagefault) return;
 			int32_t imm = read_imm8s();
 			if (cpu->pagefault) return;
-			instr32_6B_mem(addr, modrm_byte >> 3 & 7, imm);
+			instr32_6B_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 		}
 		else {
 			int32_t imm = read_imm8s();
 			if (cpu->pagefault) return;
-			instr32_6B_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+			instr32_6B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 		}
+	}
+	break;
+	case 0x26B:
+	{
+		unimplemented_instruction("long mode: 0x6B has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x6C:
@@ -1558,6 +2225,12 @@ void run_instruction(int32_t opcode)
 			instr_6C();
 			after_block_boundary();
 		}
+	}
+	break;
+	case 0x26C:
+	{
+		unimplemented_instruction("long mode: 0x6C has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x6D:
@@ -1594,6 +2267,12 @@ void run_instruction(int32_t opcode)
 		}
 	}
 	break;
+	case 0x26D:
+	{
+		unimplemented_instruction("long mode: 0x6D has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x6E:
 	case 0x16E:
 	{
@@ -1610,6 +2289,12 @@ void run_instruction(int32_t opcode)
 			instr_6E();
 			after_block_boundary();
 		}
+	}
+	break;
+	case 0x26E:
+	{
+		unimplemented_instruction("long mode: 0x6E has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x6F:
@@ -1646,6 +2331,12 @@ void run_instruction(int32_t opcode)
 		}
 	}
 	break;
+	case 0x26F:
+	{
+		unimplemented_instruction("long mode: 0x6F has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x70:
 	{
 		int32_t imm = read_imm8s();
@@ -1658,6 +2349,12 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm8s();
 		if (cpu->pagefault) return;
 		instr32_70(imm);
+	}
+	break;
+	case 0x270:
+	{
+		unimplemented_instruction("long mode: 0x70 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x71:
@@ -1674,6 +2371,12 @@ void run_instruction(int32_t opcode)
 		instr32_71(imm);
 	}
 	break;
+	case 0x271:
+	{
+		unimplemented_instruction("long mode: 0x71 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x72:
 	{
 		int32_t imm = read_imm8s();
@@ -1686,6 +2389,12 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm8s();
 		if (cpu->pagefault) return;
 		instr32_72(imm);
+	}
+	break;
+	case 0x272:
+	{
+		unimplemented_instruction("long mode: 0x72 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x73:
@@ -1702,6 +2411,12 @@ void run_instruction(int32_t opcode)
 		instr32_73(imm);
 	}
 	break;
+	case 0x273:
+	{
+		unimplemented_instruction("long mode: 0x73 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x74:
 	{
 		int32_t imm = read_imm8s();
@@ -1714,6 +2429,12 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm8s();
 		if (cpu->pagefault) return;
 		instr32_74(imm);
+	}
+	break;
+	case 0x274:
+	{
+		unimplemented_instruction("long mode: 0x74 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x75:
@@ -1730,6 +2451,12 @@ void run_instruction(int32_t opcode)
 		instr32_75(imm);
 	}
 	break;
+	case 0x275:
+	{
+		unimplemented_instruction("long mode: 0x75 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x76:
 	{
 		int32_t imm = read_imm8s();
@@ -1742,6 +2469,12 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm8s();
 		if (cpu->pagefault) return;
 		instr32_76(imm);
+	}
+	break;
+	case 0x276:
+	{
+		unimplemented_instruction("long mode: 0x76 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x77:
@@ -1758,6 +2491,12 @@ void run_instruction(int32_t opcode)
 		instr32_77(imm);
 	}
 	break;
+	case 0x277:
+	{
+		unimplemented_instruction("long mode: 0x77 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x78:
 	{
 		int32_t imm = read_imm8s();
@@ -1770,6 +2509,12 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm8s();
 		if (cpu->pagefault) return;
 		instr32_78(imm);
+	}
+	break;
+	case 0x278:
+	{
+		unimplemented_instruction("long mode: 0x78 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x79:
@@ -1786,6 +2531,12 @@ void run_instruction(int32_t opcode)
 		instr32_79(imm);
 	}
 	break;
+	case 0x279:
+	{
+		unimplemented_instruction("long mode: 0x79 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x7A:
 	{
 		int32_t imm = read_imm8s();
@@ -1798,6 +2549,12 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm8s();
 		if (cpu->pagefault) return;
 		instr32_7A(imm);
+	}
+	break;
+	case 0x27A:
+	{
+		unimplemented_instruction("long mode: 0x7A has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x7B:
@@ -1814,6 +2571,12 @@ void run_instruction(int32_t opcode)
 		instr32_7B(imm);
 	}
 	break;
+	case 0x27B:
+	{
+		unimplemented_instruction("long mode: 0x7B has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x7C:
 	{
 		int32_t imm = read_imm8s();
@@ -1826,6 +2589,12 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm8s();
 		if (cpu->pagefault) return;
 		instr32_7C(imm);
+	}
+	break;
+	case 0x27C:
+	{
+		unimplemented_instruction("long mode: 0x7C has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x7D:
@@ -1842,6 +2611,12 @@ void run_instruction(int32_t opcode)
 		instr32_7D(imm);
 	}
 	break;
+	case 0x27D:
+	{
+		unimplemented_instruction("long mode: 0x7D has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x7E:
 	{
 		int32_t imm = read_imm8s();
@@ -1856,6 +2631,12 @@ void run_instruction(int32_t opcode)
 		instr32_7E(imm);
 	}
 	break;
+	case 0x27E:
+	{
+		unimplemented_instruction("long mode: 0x7E has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x7F:
 	{
 		int32_t imm = read_imm8s();
@@ -1868,6 +2649,12 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm8s();
 		if (cpu->pagefault) return;
 		instr32_7F(imm);
+	}
+	break;
+	case 0x27F:
+	{
+		unimplemented_instruction("long mode: 0x7F has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x80:
@@ -1888,7 +2675,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_80_0_reg(modrm_byte & 7, imm);
+				instr_80_0_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -1904,7 +2691,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_80_1_reg(modrm_byte & 7, imm);
+				instr_80_1_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -1920,7 +2707,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_80_2_reg(modrm_byte & 7, imm);
+				instr_80_2_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -1936,7 +2723,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_80_3_reg(modrm_byte & 7, imm);
+				instr_80_3_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -1952,7 +2739,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_80_4_reg(modrm_byte & 7, imm);
+				instr_80_4_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -1968,7 +2755,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_80_5_reg(modrm_byte & 7, imm);
+				instr_80_5_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -1984,7 +2771,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_80_6_reg(modrm_byte & 7, imm);
+				instr_80_6_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2000,7 +2787,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_80_7_reg(modrm_byte & 7, imm);
+				instr_80_7_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2008,6 +2795,12 @@ void run_instruction(int32_t opcode)
 			trigger_ud();
 			break;
 		}
+	}
+	break;
+	case 0x280:
+	{
+		unimplemented_instruction("long mode: 0x80 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x81:
@@ -2027,7 +2820,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
-				instr16_81_0_reg(modrm_byte & 7, imm);
+				instr16_81_0_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2043,7 +2836,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
-				instr16_81_1_reg(modrm_byte & 7, imm);
+				instr16_81_1_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2059,7 +2852,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
-				instr16_81_2_reg(modrm_byte & 7, imm);
+				instr16_81_2_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2075,7 +2868,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
-				instr16_81_3_reg(modrm_byte & 7, imm);
+				instr16_81_3_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2091,7 +2884,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
-				instr16_81_4_reg(modrm_byte & 7, imm);
+				instr16_81_4_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2107,7 +2900,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
-				instr16_81_5_reg(modrm_byte & 7, imm);
+				instr16_81_5_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2123,7 +2916,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
-				instr16_81_6_reg(modrm_byte & 7, imm);
+				instr16_81_6_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2139,7 +2932,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
-				instr16_81_7_reg(modrm_byte & 7, imm);
+				instr16_81_7_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2166,7 +2959,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
-				instr32_81_0_reg(modrm_byte & 7, imm);
+				instr32_81_0_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2182,7 +2975,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
-				instr32_81_1_reg(modrm_byte & 7, imm);
+				instr32_81_1_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2198,7 +2991,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
-				instr32_81_2_reg(modrm_byte & 7, imm);
+				instr32_81_2_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2214,7 +3007,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
-				instr32_81_3_reg(modrm_byte & 7, imm);
+				instr32_81_3_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2230,7 +3023,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
-				instr32_81_4_reg(modrm_byte & 7, imm);
+				instr32_81_4_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2246,7 +3039,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
-				instr32_81_5_reg(modrm_byte & 7, imm);
+				instr32_81_5_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2262,7 +3055,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
-				instr32_81_6_reg(modrm_byte & 7, imm);
+				instr32_81_6_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2278,7 +3071,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
-				instr32_81_7_reg(modrm_byte & 7, imm);
+				instr32_81_7_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2286,6 +3079,12 @@ void run_instruction(int32_t opcode)
 			trigger_ud();
 			break;
 		}
+	}
+	break;
+	case 0x281:
+	{
+		unimplemented_instruction("long mode: 0x81 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x82:
@@ -2306,7 +3105,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_82_0_reg(modrm_byte & 7, imm);
+				instr_82_0_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2322,7 +3121,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_82_1_reg(modrm_byte & 7, imm);
+				instr_82_1_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2338,7 +3137,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_82_2_reg(modrm_byte & 7, imm);
+				instr_82_2_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2354,7 +3153,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_82_3_reg(modrm_byte & 7, imm);
+				instr_82_3_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2370,7 +3169,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_82_4_reg(modrm_byte & 7, imm);
+				instr_82_4_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2386,7 +3185,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_82_5_reg(modrm_byte & 7, imm);
+				instr_82_5_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2402,7 +3201,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_82_6_reg(modrm_byte & 7, imm);
+				instr_82_6_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2418,7 +3217,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_82_7_reg(modrm_byte & 7, imm);
+				instr_82_7_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2426,6 +3225,12 @@ void run_instruction(int32_t opcode)
 			trigger_ud();
 			break;
 		}
+	}
+	break;
+	case 0x282:
+	{
+		unimplemented_instruction("long mode: 0x82 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x83:
@@ -2445,7 +3250,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
-				instr16_83_0_reg(modrm_byte & 7, imm);
+				instr16_83_0_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2461,7 +3266,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
-				instr16_83_1_reg(modrm_byte & 7, imm);
+				instr16_83_1_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2477,7 +3282,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
-				instr16_83_2_reg(modrm_byte & 7, imm);
+				instr16_83_2_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2493,7 +3298,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
-				instr16_83_3_reg(modrm_byte & 7, imm);
+				instr16_83_3_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2509,7 +3314,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
-				instr16_83_4_reg(modrm_byte & 7, imm);
+				instr16_83_4_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2525,7 +3330,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
-				instr16_83_5_reg(modrm_byte & 7, imm);
+				instr16_83_5_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2541,7 +3346,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
-				instr16_83_6_reg(modrm_byte & 7, imm);
+				instr16_83_6_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2557,7 +3362,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
-				instr16_83_7_reg(modrm_byte & 7, imm);
+				instr16_83_7_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2584,7 +3389,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
-				instr32_83_0_reg(modrm_byte & 7, imm);
+				instr32_83_0_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2600,7 +3405,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
-				instr32_83_1_reg(modrm_byte & 7, imm);
+				instr32_83_1_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2616,7 +3421,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
-				instr32_83_2_reg(modrm_byte & 7, imm);
+				instr32_83_2_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2632,7 +3437,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
-				instr32_83_3_reg(modrm_byte & 7, imm);
+				instr32_83_3_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2648,7 +3453,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
-				instr32_83_4_reg(modrm_byte & 7, imm);
+				instr32_83_4_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2664,7 +3469,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
-				instr32_83_5_reg(modrm_byte & 7, imm);
+				instr32_83_5_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2680,7 +3485,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
-				instr32_83_6_reg(modrm_byte & 7, imm);
+				instr32_83_6_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2696,7 +3501,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
-				instr32_83_7_reg(modrm_byte & 7, imm);
+				instr32_83_7_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -2704,6 +3509,12 @@ void run_instruction(int32_t opcode)
 			trigger_ud();
 			break;
 		}
+	}
+	break;
+	case 0x283:
+	{
+		unimplemented_instruction("long mode: 0x83 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x84:
@@ -2714,11 +3525,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_84_mem(addr, modrm_byte >> 3 & 7);
+			instr_84_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_84_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_84_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x284:
+	{
+		unimplemented_instruction("long mode: 0x84 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x85:
@@ -2728,10 +3545,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_85_mem(addr, modrm_byte >> 3 & 7);
+			instr16_85_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_85_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_85_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -2742,11 +3559,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_85_mem(addr, modrm_byte >> 3 & 7);
+			instr32_85_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_85_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_85_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x285:
+	{
+		unimplemented_instruction("long mode: 0x85 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x86:
@@ -2757,11 +3580,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_86_mem(addr, modrm_byte >> 3 & 7);
+			instr_86_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_86_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_86_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x286:
+	{
+		unimplemented_instruction("long mode: 0x86 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x87:
@@ -2771,10 +3600,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_87_mem(addr, modrm_byte >> 3 & 7);
+			instr16_87_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_87_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_87_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -2785,11 +3614,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_87_mem(addr, modrm_byte >> 3 & 7);
+			instr32_87_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_87_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_87_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x287:
+	{
+		unimplemented_instruction("long mode: 0x87 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x88:
@@ -2800,10 +3635,24 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_88_mem(addr, modrm_byte >> 3 & 7);
+			instr_88_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_88_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_88_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
+	}
+	break;
+	case 0x288:
+	{
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_88_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_88_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -2814,10 +3663,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_89_mem(addr, modrm_byte >> 3 & 7);
+			instr16_89_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_89_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_89_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -2828,10 +3677,24 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_89_mem(addr, modrm_byte >> 3 & 7);
+			instr32_89_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_89_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_89_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
+	}
+	break;
+	case 0x289:
+	{
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_89_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_89_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -2843,10 +3706,24 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_8A_mem(addr, modrm_byte >> 3 & 7);
+			instr_8A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_8A_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_8A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
+	}
+	break;
+	case 0x28A:
+	{
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_8A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_8A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -2857,10 +3734,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_8B_mem(addr, modrm_byte >> 3 & 7);
+			instr16_8B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_8B_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_8B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -2871,10 +3748,24 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_8B_mem(addr, modrm_byte >> 3 & 7);
+			instr32_8B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_8B_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_8B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
+	}
+	break;
+	case 0x28B:
+	{
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_8B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_8B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -2885,10 +3776,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_8C_mem(addr, modrm_byte >> 3 & 7);
+			instr16_8C_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_8C_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_8C_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -2899,11 +3790,17 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_8C_mem(addr, modrm_byte >> 3 & 7);
+			instr32_8C_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_8C_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_8C_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x28C:
+	{
+		unimplemented_instruction("long mode: 0x8C has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x8D:
@@ -2911,10 +3808,10 @@ void run_instruction(int32_t opcode)
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		if (modrm_byte < 0xC0) {
-			instr16_8D_mem(modrm_byte, modrm_byte >> 3 & 7);
+			instr16_8D_mem(modrm_byte, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_8D_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_8D_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -2923,11 +3820,17 @@ void run_instruction(int32_t opcode)
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		if (modrm_byte < 0xC0) {
-			instr32_8D_mem(modrm_byte, modrm_byte >> 3 & 7);
+			instr32_8D_mem(modrm_byte, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_8D_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_8D_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
+	}
+	break;
+	case 0x28D:
+	{
+		unimplemented_instruction("long mode: 0x8D has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x8E:
@@ -2938,12 +3841,18 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_8E_mem(addr, modrm_byte >> 3 & 7);
+			instr_8E_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_8E_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_8E_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 		after_block_boundary();
+	}
+	break;
+	case 0x28E:
+	{
+		unimplemented_instruction("long mode: 0x8E has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x8F:
@@ -2957,7 +3866,7 @@ void run_instruction(int32_t opcode)
 				instr16_8F_0_mem(modrm_byte);
 			}
 			else {
-				instr16_8F_0_reg(modrm_byte & 7);
+				instr16_8F_0_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -2979,9 +3888,32 @@ void run_instruction(int32_t opcode)
 				instr32_8F_0_mem(modrm_byte);
 			}
 			else {
-				instr32_8F_0_reg(modrm_byte & 7);
+				instr32_8F_0_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
+		}
+			break;
+		default:
+			trigger_ud();
+			break;
+		}
+	}
+	break;
+	case 0x28F:
+	{
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		switch (modrm_byte >> 3 & 7) {
+		case 0:
+		{
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions::instr64_8F_0_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions::instr64_8F_0_reg");
+				return;
+			}
 		}
 			break;
 		default:
@@ -2996,6 +3928,12 @@ void run_instruction(int32_t opcode)
 		instr_90();
 	}
 	break;
+	case 0x290:
+	{
+		unimplemented_instruction("long mode: 0x90 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x91:
 	{
 		instr16_91();
@@ -3004,6 +3942,12 @@ void run_instruction(int32_t opcode)
 	case 0x191:
 	{
 		instr32_91();
+	}
+	break;
+	case 0x291:
+	{
+		unimplemented_instruction("long mode: 0x91 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x92:
@@ -3016,6 +3960,12 @@ void run_instruction(int32_t opcode)
 		instr32_92();
 	}
 	break;
+	case 0x292:
+	{
+		unimplemented_instruction("long mode: 0x92 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x93:
 	{
 		instr16_93();
@@ -3024,6 +3974,12 @@ void run_instruction(int32_t opcode)
 	case 0x193:
 	{
 		instr32_93();
+	}
+	break;
+	case 0x293:
+	{
+		unimplemented_instruction("long mode: 0x93 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x94:
@@ -3036,6 +3992,12 @@ void run_instruction(int32_t opcode)
 		instr32_94();
 	}
 	break;
+	case 0x294:
+	{
+		unimplemented_instruction("long mode: 0x94 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x95:
 	{
 		instr16_95();
@@ -3044,6 +4006,12 @@ void run_instruction(int32_t opcode)
 	case 0x195:
 	{
 		instr32_95();
+	}
+	break;
+	case 0x295:
+	{
+		unimplemented_instruction("long mode: 0x95 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x96:
@@ -3056,6 +4024,12 @@ void run_instruction(int32_t opcode)
 		instr32_96();
 	}
 	break;
+	case 0x296:
+	{
+		unimplemented_instruction("long mode: 0x96 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x97:
 	{
 		instr16_97();
@@ -3064,6 +4038,12 @@ void run_instruction(int32_t opcode)
 	case 0x197:
 	{
 		instr32_97();
+	}
+	break;
+	case 0x297:
+	{
+		unimplemented_instruction("long mode: 0x97 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x98:
@@ -3076,6 +4056,12 @@ void run_instruction(int32_t opcode)
 		instr32_98();
 	}
 	break;
+	case 0x298:
+	{
+		unimplemented_instruction("long mode: 0x98 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0x99:
 	{
 		instr16_99();
@@ -3084,6 +4070,12 @@ void run_instruction(int32_t opcode)
 	case 0x199:
 	{
 		instr32_99();
+	}
+	break;
+	case 0x299:
+	{
+		unimplemented_instruction("long mode: 0x99 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x9A:
@@ -3106,11 +4098,22 @@ void run_instruction(int32_t opcode)
 		after_block_boundary();
 	}
 	break;
+	case 0x29A:
+	{
+		trigger_ud();
+	}
+	break;
 	case 0x9B:
 	case 0x19B:
 	{
 		instr_9B();
 		after_block_boundary();
+	}
+	break;
+	case 0x29B:
+	{
+		unimplemented_instruction("long mode: 0x9B has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x9C:
@@ -3123,6 +4126,11 @@ void run_instruction(int32_t opcode)
 		instr32_9C();
 	}
 	break;
+	case 0x29C:
+	{
+		instr64_9C();
+	}
+	break;
 	case 0x9D:
 	{
 		instr16_9D();
@@ -3133,10 +4141,21 @@ void run_instruction(int32_t opcode)
 		instr32_9D();
 	}
 	break;
+	case 0x29D:
+	{
+		instr64_9D();
+	}
+	break;
 	case 0x9E:
 	case 0x19E:
 	{
 		instr_9E();
+	}
+	break;
+	case 0x29E:
+	{
+		unimplemented_instruction("long mode: 0x9E has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0x9F:
@@ -3145,12 +4164,25 @@ void run_instruction(int32_t opcode)
 		instr_9F();
 	}
 	break;
+	case 0x29F:
+	{
+		unimplemented_instruction("long mode: 0x9F has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xA0:
 	case 0x1A0:
 	{
 		int32_t imm = read_moffs();
 		if (cpu->pagefault) return;
 		instr_A0(imm);
+	}
+	break;
+	case 0x2A0:
+	{
+		int64_t imm = read_moffs64();
+		if (cpu->pagefault) return;
+		instr64_A0(imm);
 	}
 	break;
 	case 0xA1:
@@ -3167,12 +4199,26 @@ void run_instruction(int32_t opcode)
 		instr32_A1(imm);
 	}
 	break;
+	case 0x2A1:
+	{
+		int64_t imm = read_moffs64();
+		if (cpu->pagefault) return;
+		instr64_A1(imm);
+	}
+	break;
 	case 0xA2:
 	case 0x1A2:
 	{
 		int32_t imm = read_moffs();
 		if (cpu->pagefault) return;
 		instr_A2(imm);
+	}
+	break;
+	case 0x2A2:
+	{
+		int64_t imm = read_moffs64();
+		if (cpu->pagefault) return;
+		instr64_A2(imm);
 	}
 	break;
 	case 0xA3:
@@ -3187,6 +4233,13 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_moffs();
 		if (cpu->pagefault) return;
 		instr32_A3(imm);
+	}
+	break;
+	case 0x2A3:
+	{
+		int64_t imm = read_moffs64();
+		if (cpu->pagefault) return;
+		instr64_A3(imm);
 	}
 	break;
 	case 0xA4:
@@ -3204,6 +4257,12 @@ void run_instruction(int32_t opcode)
 		else {
 			instr_A4();
 		}
+	}
+	break;
+	case 0x2A4:
+	{
+		unimplemented_instruction("long mode: 0xA4 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xA5:
@@ -3238,6 +4297,12 @@ void run_instruction(int32_t opcode)
 		}
 	}
 	break;
+	case 0x2A5:
+	{
+		unimplemented_instruction("long mode: 0xA5 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xA6:
 	case 0x1A6:
 	{
@@ -3254,6 +4319,12 @@ void run_instruction(int32_t opcode)
 			instr_A6();
 			after_block_boundary();
 		}
+	}
+	break;
+	case 0x2A6:
+	{
+		unimplemented_instruction("long mode: 0xA6 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xA7:
@@ -3290,12 +4361,24 @@ void run_instruction(int32_t opcode)
 		}
 	}
 	break;
+	case 0x2A7:
+	{
+		unimplemented_instruction("long mode: 0xA7 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xA8:
 	case 0x1A8:
 	{
 		int32_t imm = read_imm8();
 		if (cpu->pagefault) return;
 		instr_A8(imm);
+	}
+	break;
+	case 0x2A8:
+	{
+		unimplemented_instruction("long mode: 0xA8 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xA9:
@@ -3310,6 +4393,12 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm32s();
 		if (cpu->pagefault) return;
 		instr32_A9(imm);
+	}
+	break;
+	case 0x2A9:
+	{
+		unimplemented_instruction("long mode: 0xA9 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xAA:
@@ -3327,6 +4416,12 @@ void run_instruction(int32_t opcode)
 		else {
 			instr_AA();
 		}
+	}
+	break;
+	case 0x2AA:
+	{
+		unimplemented_instruction("long mode: 0xAA has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xAB:
@@ -3361,6 +4456,12 @@ void run_instruction(int32_t opcode)
 		}
 	}
 	break;
+	case 0x2AB:
+	{
+		unimplemented_instruction("long mode: 0xAB has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xAC:
 	case 0x1AC:
 	{
@@ -3376,6 +4477,12 @@ void run_instruction(int32_t opcode)
 		else {
 			instr_AC();
 		}
+	}
+	break;
+	case 0x2AC:
+	{
+		unimplemented_instruction("long mode: 0xAC has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xAD:
@@ -3410,6 +4517,12 @@ void run_instruction(int32_t opcode)
 		}
 	}
 	break;
+	case 0x2AD:
+	{
+		unimplemented_instruction("long mode: 0xAD has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xAE:
 	case 0x1AE:
 	{
@@ -3425,6 +4538,12 @@ void run_instruction(int32_t opcode)
 		else {
 			instr_AE();
 		}
+	}
+	break;
+	case 0x2AE:
+	{
+		unimplemented_instruction("long mode: 0xAE has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xAF:
@@ -3459,12 +4578,25 @@ void run_instruction(int32_t opcode)
 		}
 	}
 	break;
+	case 0x2AF:
+	{
+		unimplemented_instruction("long mode: 0xAF has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xB0:
 	case 0x1B0:
 	{
 		int32_t imm = read_imm8();
 		if (cpu->pagefault) return;
 		instr_B0(imm);
+	}
+	break;
+	case 0x2B0:
+	{
+		int64_t imm = read_imm8();
+		if (cpu->pagefault) return;
+		instr64_B0(imm);
 	}
 	break;
 	case 0xB1:
@@ -3475,12 +4607,26 @@ void run_instruction(int32_t opcode)
 		instr_B1(imm);
 	}
 	break;
+	case 0x2B1:
+	{
+		int64_t imm = read_imm8();
+		if (cpu->pagefault) return;
+		instr64_B1(imm);
+	}
+	break;
 	case 0xB2:
 	case 0x1B2:
 	{
 		int32_t imm = read_imm8();
 		if (cpu->pagefault) return;
 		instr_B2(imm);
+	}
+	break;
+	case 0x2B2:
+	{
+		int64_t imm = read_imm8();
+		if (cpu->pagefault) return;
+		instr64_B2(imm);
 	}
 	break;
 	case 0xB3:
@@ -3491,12 +4637,26 @@ void run_instruction(int32_t opcode)
 		instr_B3(imm);
 	}
 	break;
+	case 0x2B3:
+	{
+		int64_t imm = read_imm8();
+		if (cpu->pagefault) return;
+		instr64_B3(imm);
+	}
+	break;
 	case 0xB4:
 	case 0x1B4:
 	{
 		int32_t imm = read_imm8();
 		if (cpu->pagefault) return;
 		instr_B4(imm);
+	}
+	break;
+	case 0x2B4:
+	{
+		int64_t imm = read_imm8();
+		if (cpu->pagefault) return;
+		instr64_B4(imm);
 	}
 	break;
 	case 0xB5:
@@ -3507,6 +4667,13 @@ void run_instruction(int32_t opcode)
 		instr_B5(imm);
 	}
 	break;
+	case 0x2B5:
+	{
+		int64_t imm = read_imm8();
+		if (cpu->pagefault) return;
+		instr64_B5(imm);
+	}
+	break;
 	case 0xB6:
 	case 0x1B6:
 	{
@@ -3515,12 +4682,26 @@ void run_instruction(int32_t opcode)
 		instr_B6(imm);
 	}
 	break;
+	case 0x2B6:
+	{
+		int64_t imm = read_imm8();
+		if (cpu->pagefault) return;
+		instr64_B6(imm);
+	}
+	break;
 	case 0xB7:
 	case 0x1B7:
 	{
 		int32_t imm = read_imm8();
 		if (cpu->pagefault) return;
 		instr_B7(imm);
+	}
+	break;
+	case 0x2B7:
+	{
+		int64_t imm = read_imm8();
+		if (cpu->pagefault) return;
+		instr64_B7(imm);
 	}
 	break;
 	case 0xB8:
@@ -3537,6 +4718,13 @@ void run_instruction(int32_t opcode)
 		instr32_B8(imm);
 	}
 	break;
+	case 0x2B8:
+	{
+		int64_t imm = read_imm64();
+		if (cpu->pagefault) return;
+		instr64_B8(imm);
+	}
+	break;
 	case 0xB9:
 	{
 		int32_t imm = read_imm16();
@@ -3549,6 +4737,13 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm32s();
 		if (cpu->pagefault) return;
 		instr32_B9(imm);
+	}
+	break;
+	case 0x2B9:
+	{
+		int64_t imm = read_imm64();
+		if (cpu->pagefault) return;
+		instr64_B9(imm);
 	}
 	break;
 	case 0xBA:
@@ -3565,6 +4760,13 @@ void run_instruction(int32_t opcode)
 		instr32_BA(imm);
 	}
 	break;
+	case 0x2BA:
+	{
+		int64_t imm = read_imm64();
+		if (cpu->pagefault) return;
+		instr64_BA(imm);
+	}
+	break;
 	case 0xBB:
 	{
 		int32_t imm = read_imm16();
@@ -3577,6 +4779,13 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm32s();
 		if (cpu->pagefault) return;
 		instr32_BB(imm);
+	}
+	break;
+	case 0x2BB:
+	{
+		int64_t imm = read_imm64();
+		if (cpu->pagefault) return;
+		instr64_BB(imm);
 	}
 	break;
 	case 0xBC:
@@ -3593,6 +4802,13 @@ void run_instruction(int32_t opcode)
 		instr32_BC(imm);
 	}
 	break;
+	case 0x2BC:
+	{
+		int64_t imm = read_imm64();
+		if (cpu->pagefault) return;
+		instr64_BC(imm);
+	}
+	break;
 	case 0xBD:
 	{
 		int32_t imm = read_imm16();
@@ -3605,6 +4821,13 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm32s();
 		if (cpu->pagefault) return;
 		instr32_BD(imm);
+	}
+	break;
+	case 0x2BD:
+	{
+		int64_t imm = read_imm64();
+		if (cpu->pagefault) return;
+		instr64_BD(imm);
 	}
 	break;
 	case 0xBE:
@@ -3621,6 +4844,13 @@ void run_instruction(int32_t opcode)
 		instr32_BE(imm);
 	}
 	break;
+	case 0x2BE:
+	{
+		int64_t imm = read_imm64();
+		if (cpu->pagefault) return;
+		instr64_BE(imm);
+	}
+	break;
 	case 0xBF:
 	{
 		int32_t imm = read_imm16();
@@ -3633,6 +4863,13 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm32s();
 		if (cpu->pagefault) return;
 		instr32_BF(imm);
+	}
+	break;
+	case 0x2BF:
+	{
+		int64_t imm = read_imm64();
+		if (cpu->pagefault) return;
+		instr64_BF(imm);
 	}
 	break;
 	case 0xC0:
@@ -3653,7 +4890,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_C0_0_reg(modrm_byte & 7, imm);
+				instr_C0_0_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -3669,7 +4906,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_C0_1_reg(modrm_byte & 7, imm);
+				instr_C0_1_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -3685,7 +4922,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_C0_2_reg(modrm_byte & 7, imm);
+				instr_C0_2_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -3701,7 +4938,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_C0_3_reg(modrm_byte & 7, imm);
+				instr_C0_3_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -3717,7 +4954,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_C0_4_reg(modrm_byte & 7, imm);
+				instr_C0_4_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -3733,7 +4970,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_C0_5_reg(modrm_byte & 7, imm);
+				instr_C0_5_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -3749,7 +4986,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_C0_6_reg(modrm_byte & 7, imm);
+				instr_C0_6_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -3765,7 +5002,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_C0_7_reg(modrm_byte & 7, imm);
+				instr_C0_7_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -3773,6 +5010,12 @@ void run_instruction(int32_t opcode)
 			trigger_ud();
 			break;
 		}
+	}
+	break;
+	case 0x2C0:
+	{
+		unimplemented_instruction("long mode: 0xC0 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xC1:
@@ -3792,7 +5035,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr16_C1_0_reg(modrm_byte & 7, imm);
+				instr16_C1_0_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -3808,7 +5051,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr16_C1_1_reg(modrm_byte & 7, imm);
+				instr16_C1_1_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -3824,7 +5067,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr16_C1_2_reg(modrm_byte & 7, imm);
+				instr16_C1_2_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -3840,7 +5083,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr16_C1_3_reg(modrm_byte & 7, imm);
+				instr16_C1_3_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -3856,7 +5099,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr16_C1_4_reg(modrm_byte & 7, imm);
+				instr16_C1_4_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -3872,7 +5115,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr16_C1_5_reg(modrm_byte & 7, imm);
+				instr16_C1_5_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -3888,7 +5131,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr16_C1_6_reg(modrm_byte & 7, imm);
+				instr16_C1_6_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -3904,7 +5147,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr16_C1_7_reg(modrm_byte & 7, imm);
+				instr16_C1_7_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -3931,7 +5174,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr32_C1_0_reg(modrm_byte & 7, imm);
+				instr32_C1_0_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -3947,7 +5190,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr32_C1_1_reg(modrm_byte & 7, imm);
+				instr32_C1_1_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -3963,7 +5206,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr32_C1_2_reg(modrm_byte & 7, imm);
+				instr32_C1_2_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -3979,7 +5222,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr32_C1_3_reg(modrm_byte & 7, imm);
+				instr32_C1_3_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -3995,7 +5238,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr32_C1_4_reg(modrm_byte & 7, imm);
+				instr32_C1_4_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -4011,7 +5254,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr32_C1_5_reg(modrm_byte & 7, imm);
+				instr32_C1_5_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -4027,7 +5270,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr32_C1_6_reg(modrm_byte & 7, imm);
+				instr32_C1_6_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -4043,7 +5286,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr32_C1_7_reg(modrm_byte & 7, imm);
+				instr32_C1_7_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -4051,6 +5294,12 @@ void run_instruction(int32_t opcode)
 			trigger_ud();
 			break;
 		}
+	}
+	break;
+	case 0x2C1:
+	{
+		unimplemented_instruction("long mode: 0xC1 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xC2:
@@ -4069,6 +5318,12 @@ void run_instruction(int32_t opcode)
 		after_block_boundary();
 	}
 	break;
+	case 0x2C2:
+	{
+		unimplemented_instruction("instructions::instr64_C2");
+		return;
+	}
+	break;
 	case 0xC3:
 	{
 		instr16_C3();
@@ -4081,6 +5336,12 @@ void run_instruction(int32_t opcode)
 		after_block_boundary();
 	}
 	break;
+	case 0x2C3:
+	{
+		unimplemented_instruction("instructions::instr64_C3");
+		return;
+	}
+	break;
 	case 0xC4:
 	{
 		int32_t modrm_byte = read_imm8();
@@ -4088,10 +5349,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_C4_mem(addr, modrm_byte >> 3 & 7);
+			instr16_C4_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_C4_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_C4_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 		after_block_boundary();
 	}
@@ -4103,12 +5364,18 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_C4_mem(addr, modrm_byte >> 3 & 7);
+			instr32_C4_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_C4_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_C4_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 		after_block_boundary();
+	}
+	break;
+	case 0x2C4:
+	{
+		unimplemented_instruction("long mode: 0xC4 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xC5:
@@ -4118,10 +5385,10 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_C5_mem(addr, modrm_byte >> 3 & 7);
+			instr16_C5_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_C5_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_C5_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 		after_block_boundary();
 	}
@@ -4133,12 +5400,18 @@ void run_instruction(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_C5_mem(addr, modrm_byte >> 3 & 7);
+			instr32_C5_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_C5_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_C5_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 		after_block_boundary();
+	}
+	break;
+	case 0x2C5:
+	{
+		unimplemented_instruction("long mode: 0xC5 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xC6:
@@ -4159,7 +5432,34 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_C6_0_reg(modrm_byte & 7, imm);
+				instr_C6_0_reg(reg_index_b(modrm_byte & 7), imm);
+			}
+		}
+			break;
+		default:
+			trigger_ud();
+			break;
+		}
+	}
+	break;
+	case 0x2C6:
+	{
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		switch (modrm_byte >> 3 & 7) {
+		case 0:
+		{
+			if (modrm_byte < 0xC0) {
+				int64_t addr = modrm_resolve64(modrm_byte);
+				if (cpu->pagefault) return;
+				int64_t imm = read_imm8();
+				if (cpu->pagefault) return;
+				instr64_C6_0_mem(addr, imm);
+			}
+			else {
+				int64_t imm = read_imm8();
+				if (cpu->pagefault) return;
+				instr64_C6_0_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -4186,7 +5486,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
-				instr16_C7_0_reg(modrm_byte & 7, imm);
+				instr16_C7_0_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -4213,7 +5513,34 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
-				instr32_C7_0_reg(modrm_byte & 7, imm);
+				instr32_C7_0_reg(reg_index_b(modrm_byte & 7), imm);
+			}
+		}
+			break;
+		default:
+			trigger_ud();
+			break;
+		}
+	}
+	break;
+	case 0x2C7:
+	{
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		switch (modrm_byte >> 3 & 7) {
+		case 0:
+		{
+			if (modrm_byte < 0xC0) {
+				int64_t addr = modrm_resolve64(modrm_byte);
+				if (cpu->pagefault) return;
+				int64_t imm = read_imm32s();
+				if (cpu->pagefault) return;
+				instr64_C7_0_mem(addr, imm);
+			}
+			else {
+				int64_t imm = read_imm32s();
+				if (cpu->pagefault) return;
+				instr64_C7_0_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -4243,6 +5570,12 @@ void run_instruction(int32_t opcode)
 		after_block_boundary();
 	}
 	break;
+	case 0x2C8:
+	{
+		unimplemented_instruction("long mode: 0xC8 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xC9:
 	{
 		instr16_C9();
@@ -4251,6 +5584,12 @@ void run_instruction(int32_t opcode)
 	case 0x1C9:
 	{
 		instr32_C9();
+	}
+	break;
+	case 0x2C9:
+	{
+		unimplemented_instruction("long mode: 0xC9 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xCA:
@@ -4269,6 +5608,12 @@ void run_instruction(int32_t opcode)
 		after_block_boundary();
 	}
 	break;
+	case 0x2CA:
+	{
+		unimplemented_instruction("instructions::instr64_CA");
+		return;
+	}
+	break;
 	case 0xCB:
 	{
 		instr16_CB();
@@ -4281,11 +5626,23 @@ void run_instruction(int32_t opcode)
 		after_block_boundary();
 	}
 	break;
+	case 0x2CB:
+	{
+		unimplemented_instruction("instructions::instr64_CB");
+		return;
+	}
+	break;
 	case 0xCC:
 	case 0x1CC:
 	{
 		instr_CC();
 		after_block_boundary();
+	}
+	break;
+	case 0x2CC:
+	{
+		unimplemented_instruction("long mode: 0xCC has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xCD:
@@ -4297,11 +5654,23 @@ void run_instruction(int32_t opcode)
 		after_block_boundary();
 	}
 	break;
+	case 0x2CD:
+	{
+		unimplemented_instruction("long mode: 0xCD has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xCE:
 	case 0x1CE:
 	{
 		instr_CE();
 		after_block_boundary();
+	}
+	break;
+	case 0x2CE:
+	{
+		unimplemented_instruction("long mode: 0xCE has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xCF:
@@ -4314,6 +5683,12 @@ void run_instruction(int32_t opcode)
 	{
 		instr32_CF();
 		after_block_boundary();
+	}
+	break;
+	case 0x2CF:
+	{
+		unimplemented_instruction("instructions::instr64_CF");
+		return;
 	}
 	break;
 	case 0xD0:
@@ -4330,7 +5705,7 @@ void run_instruction(int32_t opcode)
 				instr_D0_0_mem(addr);
 			}
 			else {
-				instr_D0_0_reg(modrm_byte & 7);
+				instr_D0_0_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4342,7 +5717,7 @@ void run_instruction(int32_t opcode)
 				instr_D0_1_mem(addr);
 			}
 			else {
-				instr_D0_1_reg(modrm_byte & 7);
+				instr_D0_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4354,7 +5729,7 @@ void run_instruction(int32_t opcode)
 				instr_D0_2_mem(addr);
 			}
 			else {
-				instr_D0_2_reg(modrm_byte & 7);
+				instr_D0_2_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4366,7 +5741,7 @@ void run_instruction(int32_t opcode)
 				instr_D0_3_mem(addr);
 			}
 			else {
-				instr_D0_3_reg(modrm_byte & 7);
+				instr_D0_3_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4378,7 +5753,7 @@ void run_instruction(int32_t opcode)
 				instr_D0_4_mem(addr);
 			}
 			else {
-				instr_D0_4_reg(modrm_byte & 7);
+				instr_D0_4_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4390,7 +5765,7 @@ void run_instruction(int32_t opcode)
 				instr_D0_5_mem(addr);
 			}
 			else {
-				instr_D0_5_reg(modrm_byte & 7);
+				instr_D0_5_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4402,7 +5777,7 @@ void run_instruction(int32_t opcode)
 				instr_D0_6_mem(addr);
 			}
 			else {
-				instr_D0_6_reg(modrm_byte & 7);
+				instr_D0_6_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4414,7 +5789,7 @@ void run_instruction(int32_t opcode)
 				instr_D0_7_mem(addr);
 			}
 			else {
-				instr_D0_7_reg(modrm_byte & 7);
+				instr_D0_7_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4422,6 +5797,12 @@ void run_instruction(int32_t opcode)
 			trigger_ud();
 			break;
 		}
+	}
+	break;
+	case 0x2D0:
+	{
+		unimplemented_instruction("long mode: 0xD0 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xD1:
@@ -4437,7 +5818,7 @@ void run_instruction(int32_t opcode)
 				instr16_D1_0_mem(addr);
 			}
 			else {
-				instr16_D1_0_reg(modrm_byte & 7);
+				instr16_D1_0_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4449,7 +5830,7 @@ void run_instruction(int32_t opcode)
 				instr16_D1_1_mem(addr);
 			}
 			else {
-				instr16_D1_1_reg(modrm_byte & 7);
+				instr16_D1_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4461,7 +5842,7 @@ void run_instruction(int32_t opcode)
 				instr16_D1_2_mem(addr);
 			}
 			else {
-				instr16_D1_2_reg(modrm_byte & 7);
+				instr16_D1_2_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4473,7 +5854,7 @@ void run_instruction(int32_t opcode)
 				instr16_D1_3_mem(addr);
 			}
 			else {
-				instr16_D1_3_reg(modrm_byte & 7);
+				instr16_D1_3_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4485,7 +5866,7 @@ void run_instruction(int32_t opcode)
 				instr16_D1_4_mem(addr);
 			}
 			else {
-				instr16_D1_4_reg(modrm_byte & 7);
+				instr16_D1_4_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4497,7 +5878,7 @@ void run_instruction(int32_t opcode)
 				instr16_D1_5_mem(addr);
 			}
 			else {
-				instr16_D1_5_reg(modrm_byte & 7);
+				instr16_D1_5_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4509,7 +5890,7 @@ void run_instruction(int32_t opcode)
 				instr16_D1_6_mem(addr);
 			}
 			else {
-				instr16_D1_6_reg(modrm_byte & 7);
+				instr16_D1_6_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4521,7 +5902,7 @@ void run_instruction(int32_t opcode)
 				instr16_D1_7_mem(addr);
 			}
 			else {
-				instr16_D1_7_reg(modrm_byte & 7);
+				instr16_D1_7_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4544,7 +5925,7 @@ void run_instruction(int32_t opcode)
 				instr32_D1_0_mem(addr);
 			}
 			else {
-				instr32_D1_0_reg(modrm_byte & 7);
+				instr32_D1_0_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4556,7 +5937,7 @@ void run_instruction(int32_t opcode)
 				instr32_D1_1_mem(addr);
 			}
 			else {
-				instr32_D1_1_reg(modrm_byte & 7);
+				instr32_D1_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4568,7 +5949,7 @@ void run_instruction(int32_t opcode)
 				instr32_D1_2_mem(addr);
 			}
 			else {
-				instr32_D1_2_reg(modrm_byte & 7);
+				instr32_D1_2_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4580,7 +5961,7 @@ void run_instruction(int32_t opcode)
 				instr32_D1_3_mem(addr);
 			}
 			else {
-				instr32_D1_3_reg(modrm_byte & 7);
+				instr32_D1_3_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4592,7 +5973,7 @@ void run_instruction(int32_t opcode)
 				instr32_D1_4_mem(addr);
 			}
 			else {
-				instr32_D1_4_reg(modrm_byte & 7);
+				instr32_D1_4_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4604,7 +5985,7 @@ void run_instruction(int32_t opcode)
 				instr32_D1_5_mem(addr);
 			}
 			else {
-				instr32_D1_5_reg(modrm_byte & 7);
+				instr32_D1_5_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4616,7 +5997,7 @@ void run_instruction(int32_t opcode)
 				instr32_D1_6_mem(addr);
 			}
 			else {
-				instr32_D1_6_reg(modrm_byte & 7);
+				instr32_D1_6_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4628,7 +6009,7 @@ void run_instruction(int32_t opcode)
 				instr32_D1_7_mem(addr);
 			}
 			else {
-				instr32_D1_7_reg(modrm_byte & 7);
+				instr32_D1_7_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4636,6 +6017,12 @@ void run_instruction(int32_t opcode)
 			trigger_ud();
 			break;
 		}
+	}
+	break;
+	case 0x2D1:
+	{
+		unimplemented_instruction("long mode: 0xD1 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xD2:
@@ -4652,7 +6039,7 @@ void run_instruction(int32_t opcode)
 				instr_D2_0_mem(addr);
 			}
 			else {
-				instr_D2_0_reg(modrm_byte & 7);
+				instr_D2_0_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4664,7 +6051,7 @@ void run_instruction(int32_t opcode)
 				instr_D2_1_mem(addr);
 			}
 			else {
-				instr_D2_1_reg(modrm_byte & 7);
+				instr_D2_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4676,7 +6063,7 @@ void run_instruction(int32_t opcode)
 				instr_D2_2_mem(addr);
 			}
 			else {
-				instr_D2_2_reg(modrm_byte & 7);
+				instr_D2_2_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4688,7 +6075,7 @@ void run_instruction(int32_t opcode)
 				instr_D2_3_mem(addr);
 			}
 			else {
-				instr_D2_3_reg(modrm_byte & 7);
+				instr_D2_3_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4700,7 +6087,7 @@ void run_instruction(int32_t opcode)
 				instr_D2_4_mem(addr);
 			}
 			else {
-				instr_D2_4_reg(modrm_byte & 7);
+				instr_D2_4_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4712,7 +6099,7 @@ void run_instruction(int32_t opcode)
 				instr_D2_5_mem(addr);
 			}
 			else {
-				instr_D2_5_reg(modrm_byte & 7);
+				instr_D2_5_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4724,7 +6111,7 @@ void run_instruction(int32_t opcode)
 				instr_D2_6_mem(addr);
 			}
 			else {
-				instr_D2_6_reg(modrm_byte & 7);
+				instr_D2_6_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4736,7 +6123,7 @@ void run_instruction(int32_t opcode)
 				instr_D2_7_mem(addr);
 			}
 			else {
-				instr_D2_7_reg(modrm_byte & 7);
+				instr_D2_7_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4744,6 +6131,12 @@ void run_instruction(int32_t opcode)
 			trigger_ud();
 			break;
 		}
+	}
+	break;
+	case 0x2D2:
+	{
+		unimplemented_instruction("long mode: 0xD2 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xD3:
@@ -4759,7 +6152,7 @@ void run_instruction(int32_t opcode)
 				instr16_D3_0_mem(addr);
 			}
 			else {
-				instr16_D3_0_reg(modrm_byte & 7);
+				instr16_D3_0_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4771,7 +6164,7 @@ void run_instruction(int32_t opcode)
 				instr16_D3_1_mem(addr);
 			}
 			else {
-				instr16_D3_1_reg(modrm_byte & 7);
+				instr16_D3_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4783,7 +6176,7 @@ void run_instruction(int32_t opcode)
 				instr16_D3_2_mem(addr);
 			}
 			else {
-				instr16_D3_2_reg(modrm_byte & 7);
+				instr16_D3_2_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4795,7 +6188,7 @@ void run_instruction(int32_t opcode)
 				instr16_D3_3_mem(addr);
 			}
 			else {
-				instr16_D3_3_reg(modrm_byte & 7);
+				instr16_D3_3_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4807,7 +6200,7 @@ void run_instruction(int32_t opcode)
 				instr16_D3_4_mem(addr);
 			}
 			else {
-				instr16_D3_4_reg(modrm_byte & 7);
+				instr16_D3_4_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4819,7 +6212,7 @@ void run_instruction(int32_t opcode)
 				instr16_D3_5_mem(addr);
 			}
 			else {
-				instr16_D3_5_reg(modrm_byte & 7);
+				instr16_D3_5_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4831,7 +6224,7 @@ void run_instruction(int32_t opcode)
 				instr16_D3_6_mem(addr);
 			}
 			else {
-				instr16_D3_6_reg(modrm_byte & 7);
+				instr16_D3_6_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4843,7 +6236,7 @@ void run_instruction(int32_t opcode)
 				instr16_D3_7_mem(addr);
 			}
 			else {
-				instr16_D3_7_reg(modrm_byte & 7);
+				instr16_D3_7_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4866,7 +6259,7 @@ void run_instruction(int32_t opcode)
 				instr32_D3_0_mem(addr);
 			}
 			else {
-				instr32_D3_0_reg(modrm_byte & 7);
+				instr32_D3_0_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4878,7 +6271,7 @@ void run_instruction(int32_t opcode)
 				instr32_D3_1_mem(addr);
 			}
 			else {
-				instr32_D3_1_reg(modrm_byte & 7);
+				instr32_D3_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4890,7 +6283,7 @@ void run_instruction(int32_t opcode)
 				instr32_D3_2_mem(addr);
 			}
 			else {
-				instr32_D3_2_reg(modrm_byte & 7);
+				instr32_D3_2_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4902,7 +6295,7 @@ void run_instruction(int32_t opcode)
 				instr32_D3_3_mem(addr);
 			}
 			else {
-				instr32_D3_3_reg(modrm_byte & 7);
+				instr32_D3_3_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4914,7 +6307,7 @@ void run_instruction(int32_t opcode)
 				instr32_D3_4_mem(addr);
 			}
 			else {
-				instr32_D3_4_reg(modrm_byte & 7);
+				instr32_D3_4_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4926,7 +6319,7 @@ void run_instruction(int32_t opcode)
 				instr32_D3_5_mem(addr);
 			}
 			else {
-				instr32_D3_5_reg(modrm_byte & 7);
+				instr32_D3_5_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4938,7 +6331,7 @@ void run_instruction(int32_t opcode)
 				instr32_D3_6_mem(addr);
 			}
 			else {
-				instr32_D3_6_reg(modrm_byte & 7);
+				instr32_D3_6_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4950,7 +6343,7 @@ void run_instruction(int32_t opcode)
 				instr32_D3_7_mem(addr);
 			}
 			else {
-				instr32_D3_7_reg(modrm_byte & 7);
+				instr32_D3_7_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -4958,6 +6351,12 @@ void run_instruction(int32_t opcode)
 			trigger_ud();
 			break;
 		}
+	}
+	break;
+	case 0x2D3:
+	{
+		unimplemented_instruction("long mode: 0xD3 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xD4:
@@ -4969,6 +6368,12 @@ void run_instruction(int32_t opcode)
 		after_block_boundary();
 	}
 	break;
+	case 0x2D4:
+	{
+		unimplemented_instruction("long mode: 0xD4 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xD5:
 	case 0x1D5:
 	{
@@ -4977,16 +6382,34 @@ void run_instruction(int32_t opcode)
 		instr_D5(imm);
 	}
 	break;
+	case 0x2D5:
+	{
+		unimplemented_instruction("long mode: 0xD5 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xD6:
 	case 0x1D6:
 	{
 		instr_D6();
 	}
 	break;
+	case 0x2D6:
+	{
+		unimplemented_instruction("long mode: 0xD6 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xD7:
 	case 0x1D7:
 	{
 		instr_D7();
+	}
+	break;
+	case 0x2D7:
+	{
+		unimplemented_instruction("long mode: 0xD7 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xD8:
@@ -5006,7 +6429,7 @@ void run_instruction(int32_t opcode)
 				instr_D8_0_mem(addr);
 			}
 			else {
-				instr_D8_0_reg(modrm_byte & 7);
+				instr_D8_0_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5021,7 +6444,7 @@ void run_instruction(int32_t opcode)
 				instr_D8_1_mem(addr);
 			}
 			else {
-				instr_D8_1_reg(modrm_byte & 7);
+				instr_D8_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5036,7 +6459,7 @@ void run_instruction(int32_t opcode)
 				instr_D8_2_mem(addr);
 			}
 			else {
-				instr_D8_2_reg(modrm_byte & 7);
+				instr_D8_2_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5051,7 +6474,7 @@ void run_instruction(int32_t opcode)
 				instr_D8_3_mem(addr);
 			}
 			else {
-				instr_D8_3_reg(modrm_byte & 7);
+				instr_D8_3_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5066,7 +6489,7 @@ void run_instruction(int32_t opcode)
 				instr_D8_4_mem(addr);
 			}
 			else {
-				instr_D8_4_reg(modrm_byte & 7);
+				instr_D8_4_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5081,7 +6504,7 @@ void run_instruction(int32_t opcode)
 				instr_D8_5_mem(addr);
 			}
 			else {
-				instr_D8_5_reg(modrm_byte & 7);
+				instr_D8_5_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5096,7 +6519,7 @@ void run_instruction(int32_t opcode)
 				instr_D8_6_mem(addr);
 			}
 			else {
-				instr_D8_6_reg(modrm_byte & 7);
+				instr_D8_6_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5111,7 +6534,7 @@ void run_instruction(int32_t opcode)
 				instr_D8_7_mem(addr);
 			}
 			else {
-				instr_D8_7_reg(modrm_byte & 7);
+				instr_D8_7_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5119,6 +6542,12 @@ void run_instruction(int32_t opcode)
 			trigger_ud();
 			break;
 		}
+	}
+	break;
+	case 0x2D8:
+	{
+		unimplemented_instruction("long mode: 0xD8 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xD9:
@@ -5137,7 +6566,7 @@ void run_instruction(int32_t opcode)
 				instr16_D9_0_mem(addr);
 			}
 			else {
-				instr16_D9_0_reg(modrm_byte & 7);
+				instr16_D9_0_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5152,7 +6581,7 @@ void run_instruction(int32_t opcode)
 				instr16_D9_1_mem(addr);
 			}
 			else {
-				instr16_D9_1_reg(modrm_byte & 7);
+				instr16_D9_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5167,7 +6596,7 @@ void run_instruction(int32_t opcode)
 				instr16_D9_2_mem(addr);
 			}
 			else {
-				instr16_D9_2_reg(modrm_byte & 7);
+				instr16_D9_2_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5182,7 +6611,7 @@ void run_instruction(int32_t opcode)
 				instr16_D9_3_mem(addr);
 			}
 			else {
-				instr16_D9_3_reg(modrm_byte & 7);
+				instr16_D9_3_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5197,7 +6626,7 @@ void run_instruction(int32_t opcode)
 				instr16_D9_4_mem(addr);
 			}
 			else {
-				instr16_D9_4_reg(modrm_byte & 7);
+				instr16_D9_4_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5212,7 +6641,7 @@ void run_instruction(int32_t opcode)
 				instr16_D9_5_mem(addr);
 			}
 			else {
-				instr16_D9_5_reg(modrm_byte & 7);
+				instr16_D9_5_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5227,7 +6656,7 @@ void run_instruction(int32_t opcode)
 				instr16_D9_6_mem(addr);
 			}
 			else {
-				instr16_D9_6_reg(modrm_byte & 7);
+				instr16_D9_6_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5242,7 +6671,7 @@ void run_instruction(int32_t opcode)
 				instr16_D9_7_mem(addr);
 			}
 			else {
-				instr16_D9_7_reg(modrm_byte & 7);
+				instr16_D9_7_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5268,7 +6697,7 @@ void run_instruction(int32_t opcode)
 				instr32_D9_0_mem(addr);
 			}
 			else {
-				instr32_D9_0_reg(modrm_byte & 7);
+				instr32_D9_0_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5283,7 +6712,7 @@ void run_instruction(int32_t opcode)
 				instr32_D9_1_mem(addr);
 			}
 			else {
-				instr32_D9_1_reg(modrm_byte & 7);
+				instr32_D9_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5298,7 +6727,7 @@ void run_instruction(int32_t opcode)
 				instr32_D9_2_mem(addr);
 			}
 			else {
-				instr32_D9_2_reg(modrm_byte & 7);
+				instr32_D9_2_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5313,7 +6742,7 @@ void run_instruction(int32_t opcode)
 				instr32_D9_3_mem(addr);
 			}
 			else {
-				instr32_D9_3_reg(modrm_byte & 7);
+				instr32_D9_3_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5328,7 +6757,7 @@ void run_instruction(int32_t opcode)
 				instr32_D9_4_mem(addr);
 			}
 			else {
-				instr32_D9_4_reg(modrm_byte & 7);
+				instr32_D9_4_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5343,7 +6772,7 @@ void run_instruction(int32_t opcode)
 				instr32_D9_5_mem(addr);
 			}
 			else {
-				instr32_D9_5_reg(modrm_byte & 7);
+				instr32_D9_5_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5358,7 +6787,7 @@ void run_instruction(int32_t opcode)
 				instr32_D9_6_mem(addr);
 			}
 			else {
-				instr32_D9_6_reg(modrm_byte & 7);
+				instr32_D9_6_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5373,7 +6802,7 @@ void run_instruction(int32_t opcode)
 				instr32_D9_7_mem(addr);
 			}
 			else {
-				instr32_D9_7_reg(modrm_byte & 7);
+				instr32_D9_7_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5381,6 +6810,12 @@ void run_instruction(int32_t opcode)
 			trigger_ud();
 			break;
 		}
+	}
+	break;
+	case 0x2D9:
+	{
+		unimplemented_instruction("long mode: 0xD9 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xDA:
@@ -5400,7 +6835,7 @@ void run_instruction(int32_t opcode)
 				instr_DA_0_mem(addr);
 			}
 			else {
-				instr_DA_0_reg(modrm_byte & 7);
+				instr_DA_0_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5415,7 +6850,7 @@ void run_instruction(int32_t opcode)
 				instr_DA_1_mem(addr);
 			}
 			else {
-				instr_DA_1_reg(modrm_byte & 7);
+				instr_DA_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5430,7 +6865,7 @@ void run_instruction(int32_t opcode)
 				instr_DA_2_mem(addr);
 			}
 			else {
-				instr_DA_2_reg(modrm_byte & 7);
+				instr_DA_2_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5445,7 +6880,7 @@ void run_instruction(int32_t opcode)
 				instr_DA_3_mem(addr);
 			}
 			else {
-				instr_DA_3_reg(modrm_byte & 7);
+				instr_DA_3_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5460,7 +6895,7 @@ void run_instruction(int32_t opcode)
 				instr_DA_4_mem(addr);
 			}
 			else {
-				instr_DA_4_reg(modrm_byte & 7);
+				instr_DA_4_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5475,7 +6910,7 @@ void run_instruction(int32_t opcode)
 				instr_DA_5_mem(addr);
 			}
 			else {
-				instr_DA_5_reg(modrm_byte & 7);
+				instr_DA_5_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5490,7 +6925,7 @@ void run_instruction(int32_t opcode)
 				instr_DA_6_mem(addr);
 			}
 			else {
-				instr_DA_6_reg(modrm_byte & 7);
+				instr_DA_6_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5505,7 +6940,7 @@ void run_instruction(int32_t opcode)
 				instr_DA_7_mem(addr);
 			}
 			else {
-				instr_DA_7_reg(modrm_byte & 7);
+				instr_DA_7_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5513,6 +6948,12 @@ void run_instruction(int32_t opcode)
 			trigger_ud();
 			break;
 		}
+	}
+	break;
+	case 0x2DA:
+	{
+		unimplemented_instruction("long mode: 0xDA has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xDB:
@@ -5532,7 +6973,7 @@ void run_instruction(int32_t opcode)
 				instr_DB_0_mem(addr);
 			}
 			else {
-				instr_DB_0_reg(modrm_byte & 7);
+				instr_DB_0_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5547,7 +6988,7 @@ void run_instruction(int32_t opcode)
 				instr_DB_1_mem(addr);
 			}
 			else {
-				instr_DB_1_reg(modrm_byte & 7);
+				instr_DB_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5562,7 +7003,7 @@ void run_instruction(int32_t opcode)
 				instr_DB_2_mem(addr);
 			}
 			else {
-				instr_DB_2_reg(modrm_byte & 7);
+				instr_DB_2_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5577,7 +7018,7 @@ void run_instruction(int32_t opcode)
 				instr_DB_3_mem(addr);
 			}
 			else {
-				instr_DB_3_reg(modrm_byte & 7);
+				instr_DB_3_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5592,7 +7033,7 @@ void run_instruction(int32_t opcode)
 				instr_DB_4_mem(addr);
 			}
 			else {
-				instr_DB_4_reg(modrm_byte & 7);
+				instr_DB_4_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -5608,7 +7049,7 @@ void run_instruction(int32_t opcode)
 				instr_DB_5_mem(addr);
 			}
 			else {
-				instr_DB_5_reg(modrm_byte & 7);
+				instr_DB_5_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5623,7 +7064,7 @@ void run_instruction(int32_t opcode)
 				instr_DB_6_mem(addr);
 			}
 			else {
-				instr_DB_6_reg(modrm_byte & 7);
+				instr_DB_6_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5638,7 +7079,7 @@ void run_instruction(int32_t opcode)
 				instr_DB_7_mem(addr);
 			}
 			else {
-				instr_DB_7_reg(modrm_byte & 7);
+				instr_DB_7_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -5647,6 +7088,12 @@ void run_instruction(int32_t opcode)
 			trigger_ud();
 			break;
 		}
+	}
+	break;
+	case 0x2DB:
+	{
+		unimplemented_instruction("long mode: 0xDB has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xDC:
@@ -5666,7 +7113,7 @@ void run_instruction(int32_t opcode)
 				instr_DC_0_mem(addr);
 			}
 			else {
-				instr_DC_0_reg(modrm_byte & 7);
+				instr_DC_0_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5681,7 +7128,7 @@ void run_instruction(int32_t opcode)
 				instr_DC_1_mem(addr);
 			}
 			else {
-				instr_DC_1_reg(modrm_byte & 7);
+				instr_DC_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5696,7 +7143,7 @@ void run_instruction(int32_t opcode)
 				instr_DC_2_mem(addr);
 			}
 			else {
-				instr_DC_2_reg(modrm_byte & 7);
+				instr_DC_2_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5711,7 +7158,7 @@ void run_instruction(int32_t opcode)
 				instr_DC_3_mem(addr);
 			}
 			else {
-				instr_DC_3_reg(modrm_byte & 7);
+				instr_DC_3_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5726,7 +7173,7 @@ void run_instruction(int32_t opcode)
 				instr_DC_4_mem(addr);
 			}
 			else {
-				instr_DC_4_reg(modrm_byte & 7);
+				instr_DC_4_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5741,7 +7188,7 @@ void run_instruction(int32_t opcode)
 				instr_DC_5_mem(addr);
 			}
 			else {
-				instr_DC_5_reg(modrm_byte & 7);
+				instr_DC_5_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5756,7 +7203,7 @@ void run_instruction(int32_t opcode)
 				instr_DC_6_mem(addr);
 			}
 			else {
-				instr_DC_6_reg(modrm_byte & 7);
+				instr_DC_6_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5771,7 +7218,7 @@ void run_instruction(int32_t opcode)
 				instr_DC_7_mem(addr);
 			}
 			else {
-				instr_DC_7_reg(modrm_byte & 7);
+				instr_DC_7_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5779,6 +7226,12 @@ void run_instruction(int32_t opcode)
 			trigger_ud();
 			break;
 		}
+	}
+	break;
+	case 0x2DC:
+	{
+		unimplemented_instruction("long mode: 0xDC has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xDD:
@@ -5797,7 +7250,7 @@ void run_instruction(int32_t opcode)
 				instr16_DD_0_mem(addr);
 			}
 			else {
-				instr16_DD_0_reg(modrm_byte & 7);
+				instr16_DD_0_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5812,7 +7265,7 @@ void run_instruction(int32_t opcode)
 				instr16_DD_1_mem(addr);
 			}
 			else {
-				instr16_DD_1_reg(modrm_byte & 7);
+				instr16_DD_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5827,7 +7280,7 @@ void run_instruction(int32_t opcode)
 				instr16_DD_2_mem(addr);
 			}
 			else {
-				instr16_DD_2_reg(modrm_byte & 7);
+				instr16_DD_2_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5842,7 +7295,7 @@ void run_instruction(int32_t opcode)
 				instr16_DD_3_mem(addr);
 			}
 			else {
-				instr16_DD_3_reg(modrm_byte & 7);
+				instr16_DD_3_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5857,7 +7310,7 @@ void run_instruction(int32_t opcode)
 				instr16_DD_4_mem(addr);
 			}
 			else {
-				instr16_DD_4_reg(modrm_byte & 7);
+				instr16_DD_4_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -5873,7 +7326,7 @@ void run_instruction(int32_t opcode)
 				instr16_DD_5_mem(addr);
 			}
 			else {
-				instr16_DD_5_reg(modrm_byte & 7);
+				instr16_DD_5_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5888,7 +7341,7 @@ void run_instruction(int32_t opcode)
 				instr16_DD_6_mem(addr);
 			}
 			else {
-				instr16_DD_6_reg(modrm_byte & 7);
+				instr16_DD_6_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -5904,7 +7357,7 @@ void run_instruction(int32_t opcode)
 				instr16_DD_7_mem(addr);
 			}
 			else {
-				instr16_DD_7_reg(modrm_byte & 7);
+				instr16_DD_7_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -5931,7 +7384,7 @@ void run_instruction(int32_t opcode)
 				instr32_DD_0_mem(addr);
 			}
 			else {
-				instr32_DD_0_reg(modrm_byte & 7);
+				instr32_DD_0_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5946,7 +7399,7 @@ void run_instruction(int32_t opcode)
 				instr32_DD_1_mem(addr);
 			}
 			else {
-				instr32_DD_1_reg(modrm_byte & 7);
+				instr32_DD_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5961,7 +7414,7 @@ void run_instruction(int32_t opcode)
 				instr32_DD_2_mem(addr);
 			}
 			else {
-				instr32_DD_2_reg(modrm_byte & 7);
+				instr32_DD_2_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5976,7 +7429,7 @@ void run_instruction(int32_t opcode)
 				instr32_DD_3_mem(addr);
 			}
 			else {
-				instr32_DD_3_reg(modrm_byte & 7);
+				instr32_DD_3_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -5991,7 +7444,7 @@ void run_instruction(int32_t opcode)
 				instr32_DD_4_mem(addr);
 			}
 			else {
-				instr32_DD_4_reg(modrm_byte & 7);
+				instr32_DD_4_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -6007,7 +7460,7 @@ void run_instruction(int32_t opcode)
 				instr32_DD_5_mem(addr);
 			}
 			else {
-				instr32_DD_5_reg(modrm_byte & 7);
+				instr32_DD_5_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6022,7 +7475,7 @@ void run_instruction(int32_t opcode)
 				instr32_DD_6_mem(addr);
 			}
 			else {
-				instr32_DD_6_reg(modrm_byte & 7);
+				instr32_DD_6_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -6038,7 +7491,7 @@ void run_instruction(int32_t opcode)
 				instr32_DD_7_mem(addr);
 			}
 			else {
-				instr32_DD_7_reg(modrm_byte & 7);
+				instr32_DD_7_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -6047,6 +7500,12 @@ void run_instruction(int32_t opcode)
 			trigger_ud();
 			break;
 		}
+	}
+	break;
+	case 0x2DD:
+	{
+		unimplemented_instruction("long mode: 0xDD has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xDE:
@@ -6066,7 +7525,7 @@ void run_instruction(int32_t opcode)
 				instr_DE_0_mem(addr);
 			}
 			else {
-				instr_DE_0_reg(modrm_byte & 7);
+				instr_DE_0_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6081,7 +7540,7 @@ void run_instruction(int32_t opcode)
 				instr_DE_1_mem(addr);
 			}
 			else {
-				instr_DE_1_reg(modrm_byte & 7);
+				instr_DE_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6096,7 +7555,7 @@ void run_instruction(int32_t opcode)
 				instr_DE_2_mem(addr);
 			}
 			else {
-				instr_DE_2_reg(modrm_byte & 7);
+				instr_DE_2_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6111,7 +7570,7 @@ void run_instruction(int32_t opcode)
 				instr_DE_3_mem(addr);
 			}
 			else {
-				instr_DE_3_reg(modrm_byte & 7);
+				instr_DE_3_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6126,7 +7585,7 @@ void run_instruction(int32_t opcode)
 				instr_DE_4_mem(addr);
 			}
 			else {
-				instr_DE_4_reg(modrm_byte & 7);
+				instr_DE_4_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6141,7 +7600,7 @@ void run_instruction(int32_t opcode)
 				instr_DE_5_mem(addr);
 			}
 			else {
-				instr_DE_5_reg(modrm_byte & 7);
+				instr_DE_5_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6156,7 +7615,7 @@ void run_instruction(int32_t opcode)
 				instr_DE_6_mem(addr);
 			}
 			else {
-				instr_DE_6_reg(modrm_byte & 7);
+				instr_DE_6_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6171,7 +7630,7 @@ void run_instruction(int32_t opcode)
 				instr_DE_7_mem(addr);
 			}
 			else {
-				instr_DE_7_reg(modrm_byte & 7);
+				instr_DE_7_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6179,6 +7638,12 @@ void run_instruction(int32_t opcode)
 			trigger_ud();
 			break;
 		}
+	}
+	break;
+	case 0x2DE:
+	{
+		unimplemented_instruction("long mode: 0xDE has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xDF:
@@ -6198,7 +7663,7 @@ void run_instruction(int32_t opcode)
 				instr_DF_0_mem(addr);
 			}
 			else {
-				instr_DF_0_reg(modrm_byte & 7);
+				instr_DF_0_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -6214,7 +7679,7 @@ void run_instruction(int32_t opcode)
 				instr_DF_1_mem(addr);
 			}
 			else {
-				instr_DF_1_reg(modrm_byte & 7);
+				instr_DF_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6229,7 +7694,7 @@ void run_instruction(int32_t opcode)
 				instr_DF_2_mem(addr);
 			}
 			else {
-				instr_DF_2_reg(modrm_byte & 7);
+				instr_DF_2_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6244,7 +7709,7 @@ void run_instruction(int32_t opcode)
 				instr_DF_3_mem(addr);
 			}
 			else {
-				instr_DF_3_reg(modrm_byte & 7);
+				instr_DF_3_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6259,7 +7724,7 @@ void run_instruction(int32_t opcode)
 				instr_DF_4_mem(addr);
 			}
 			else {
-				instr_DF_4_reg(modrm_byte & 7);
+				instr_DF_4_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6274,7 +7739,7 @@ void run_instruction(int32_t opcode)
 				instr_DF_5_mem(addr);
 			}
 			else {
-				instr_DF_5_reg(modrm_byte & 7);
+				instr_DF_5_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6289,7 +7754,7 @@ void run_instruction(int32_t opcode)
 				instr_DF_6_mem(addr);
 			}
 			else {
-				instr_DF_6_reg(modrm_byte & 7);
+				instr_DF_6_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6304,7 +7769,7 @@ void run_instruction(int32_t opcode)
 				instr_DF_7_mem(addr);
 			}
 			else {
-				instr_DF_7_reg(modrm_byte & 7);
+				instr_DF_7_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6312,6 +7777,12 @@ void run_instruction(int32_t opcode)
 			trigger_ud();
 			break;
 		}
+	}
+	break;
+	case 0x2DF:
+	{
+		unimplemented_instruction("long mode: 0xDF has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xE0:
@@ -6328,6 +7799,12 @@ void run_instruction(int32_t opcode)
 		instr32_E0(imm);
 	}
 	break;
+	case 0x2E0:
+	{
+		unimplemented_instruction("long mode: 0xE0 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xE1:
 	{
 		int32_t imm = read_imm8s();
@@ -6340,6 +7817,12 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm8s();
 		if (cpu->pagefault) return;
 		instr32_E1(imm);
+	}
+	break;
+	case 0x2E1:
+	{
+		unimplemented_instruction("long mode: 0xE1 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xE2:
@@ -6356,6 +7839,12 @@ void run_instruction(int32_t opcode)
 		instr32_E2(imm);
 	}
 	break;
+	case 0x2E2:
+	{
+		unimplemented_instruction("long mode: 0xE2 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xE3:
 	{
 		int32_t imm = read_imm8s();
@@ -6370,6 +7859,12 @@ void run_instruction(int32_t opcode)
 		instr32_E3(imm);
 	}
 	break;
+	case 0x2E3:
+	{
+		unimplemented_instruction("long mode: 0xE3 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xE4:
 	case 0x1E4:
 	{
@@ -6377,6 +7872,12 @@ void run_instruction(int32_t opcode)
 		if (cpu->pagefault) return;
 		instr_E4(imm);
 		after_block_boundary();
+	}
+	break;
+	case 0x2E4:
+	{
+		unimplemented_instruction("long mode: 0xE4 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xE5:
@@ -6395,6 +7896,12 @@ void run_instruction(int32_t opcode)
 		after_block_boundary();
 	}
 	break;
+	case 0x2E5:
+	{
+		unimplemented_instruction("long mode: 0xE5 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xE6:
 	case 0x1E6:
 	{
@@ -6402,6 +7909,12 @@ void run_instruction(int32_t opcode)
 		if (cpu->pagefault) return;
 		instr_E6(imm);
 		after_block_boundary();
+	}
+	break;
+	case 0x2E6:
+	{
+		unimplemented_instruction("long mode: 0xE6 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xE7:
@@ -6420,6 +7933,12 @@ void run_instruction(int32_t opcode)
 		after_block_boundary();
 	}
 	break;
+	case 0x2E7:
+	{
+		unimplemented_instruction("long mode: 0xE7 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xE8:
 	{
 		int32_t imm = read_imm16();
@@ -6436,6 +7955,12 @@ void run_instruction(int32_t opcode)
 		after_block_boundary();
 	}
 	break;
+	case 0x2E8:
+	{
+		unimplemented_instruction("instructions::instr64_E8");
+		return;
+	}
+	break;
 	case 0xE9:
 	{
 		int32_t imm = read_imm16();
@@ -6448,6 +7973,12 @@ void run_instruction(int32_t opcode)
 		int32_t imm = read_imm32s();
 		if (cpu->pagefault) return;
 		instr32_E9(imm);
+	}
+	break;
+	case 0x2E9:
+	{
+		unimplemented_instruction("instructions::instr64_E9");
+		return;
 	}
 	break;
 	case 0xEA:
@@ -6470,6 +8001,11 @@ void run_instruction(int32_t opcode)
 		after_block_boundary();
 	}
 	break;
+	case 0x2EA:
+	{
+		trigger_ud();
+	}
+	break;
 	case 0xEB:
 	{
 		int32_t imm = read_imm8s();
@@ -6484,11 +8020,24 @@ void run_instruction(int32_t opcode)
 		instr32_EB(imm);
 	}
 	break;
+	case 0x2EB:
+	{
+		int64_t imm = read_imm8s();
+		if (cpu->pagefault) return;
+		instr64_EB(imm);
+	}
+	break;
 	case 0xEC:
 	case 0x1EC:
 	{
 		instr_EC();
 		after_block_boundary();
+	}
+	break;
+	case 0x2EC:
+	{
+		unimplemented_instruction("long mode: 0xEC has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xED:
@@ -6503,11 +8052,23 @@ void run_instruction(int32_t opcode)
 		after_block_boundary();
 	}
 	break;
+	case 0x2ED:
+	{
+		unimplemented_instruction("long mode: 0xED has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xEE:
 	case 0x1EE:
 	{
 		instr_EE();
 		after_block_boundary();
+	}
+	break;
+	case 0x2EE:
+	{
+		unimplemented_instruction("long mode: 0xEE has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xEF:
@@ -6522,10 +8083,22 @@ void run_instruction(int32_t opcode)
 		after_block_boundary();
 	}
 	break;
+	case 0x2EF:
+	{
+		unimplemented_instruction("long mode: 0xEF has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xF0:
 	case 0x1F0:
 	{
 		instr_F0();
+	}
+	break;
+	case 0x2F0:
+	{
+		unimplemented_instruction("long mode: 0xF0 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xF1:
@@ -6534,16 +8107,34 @@ void run_instruction(int32_t opcode)
 		instr_F1();
 	}
 	break;
+	case 0x2F1:
+	{
+		unimplemented_instruction("long mode: 0xF1 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xF2:
 	case 0x1F2:
 	{
 		instr_F2();
 	}
 	break;
+	case 0x2F2:
+	{
+		unimplemented_instruction("long mode: 0xF2 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xF3:
 	case 0x1F3:
 	{
 		instr_F3();
+	}
+	break;
+	case 0x2F3:
+	{
+		unimplemented_instruction("long mode: 0xF3 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xF4:
@@ -6553,10 +8144,22 @@ void run_instruction(int32_t opcode)
 		after_block_boundary();
 	}
 	break;
+	case 0x2F4:
+	{
+		instr64_F4();
+		after_block_boundary();
+	}
+	break;
 	case 0xF5:
 	case 0x1F5:
 	{
 		instr_F5();
+	}
+	break;
+	case 0x2F5:
+	{
+		unimplemented_instruction("long mode: 0xF5 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xF6:
@@ -6577,7 +8180,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_F6_0_reg(modrm_byte & 7, imm);
+				instr_F6_0_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -6593,7 +8196,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_F6_1_reg(modrm_byte & 7, imm);
+				instr_F6_1_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -6605,7 +8208,7 @@ void run_instruction(int32_t opcode)
 				instr_F6_2_mem(addr);
 			}
 			else {
-				instr_F6_2_reg(modrm_byte & 7);
+				instr_F6_2_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6617,7 +8220,7 @@ void run_instruction(int32_t opcode)
 				instr_F6_3_mem(addr);
 			}
 			else {
-				instr_F6_3_reg(modrm_byte & 7);
+				instr_F6_3_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6629,7 +8232,7 @@ void run_instruction(int32_t opcode)
 				instr_F6_4_mem(addr);
 			}
 			else {
-				instr_F6_4_reg(modrm_byte & 7);
+				instr_F6_4_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -6642,7 +8245,7 @@ void run_instruction(int32_t opcode)
 				instr_F6_5_mem(addr);
 			}
 			else {
-				instr_F6_5_reg(modrm_byte & 7);
+				instr_F6_5_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -6655,7 +8258,7 @@ void run_instruction(int32_t opcode)
 				instr_F6_6_mem(addr);
 			}
 			else {
-				instr_F6_6_reg(modrm_byte & 7);
+				instr_F6_6_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -6668,7 +8271,7 @@ void run_instruction(int32_t opcode)
 				instr_F6_7_mem(addr);
 			}
 			else {
-				instr_F6_7_reg(modrm_byte & 7);
+				instr_F6_7_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -6677,6 +8280,12 @@ void run_instruction(int32_t opcode)
 			trigger_ud();
 			break;
 		}
+	}
+	break;
+	case 0x2F6:
+	{
+		unimplemented_instruction("long mode: 0xF6 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xF7:
@@ -6696,7 +8305,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
-				instr16_F7_0_reg(modrm_byte & 7, imm);
+				instr16_F7_0_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -6712,7 +8321,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
-				instr16_F7_1_reg(modrm_byte & 7, imm);
+				instr16_F7_1_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -6724,7 +8333,7 @@ void run_instruction(int32_t opcode)
 				instr16_F7_2_mem(addr);
 			}
 			else {
-				instr16_F7_2_reg(modrm_byte & 7);
+				instr16_F7_2_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6736,7 +8345,7 @@ void run_instruction(int32_t opcode)
 				instr16_F7_3_mem(addr);
 			}
 			else {
-				instr16_F7_3_reg(modrm_byte & 7);
+				instr16_F7_3_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6748,7 +8357,7 @@ void run_instruction(int32_t opcode)
 				instr16_F7_4_mem(addr);
 			}
 			else {
-				instr16_F7_4_reg(modrm_byte & 7);
+				instr16_F7_4_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6760,7 +8369,7 @@ void run_instruction(int32_t opcode)
 				instr16_F7_5_mem(addr);
 			}
 			else {
-				instr16_F7_5_reg(modrm_byte & 7);
+				instr16_F7_5_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6772,7 +8381,7 @@ void run_instruction(int32_t opcode)
 				instr16_F7_6_mem(addr);
 			}
 			else {
-				instr16_F7_6_reg(modrm_byte & 7);
+				instr16_F7_6_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6784,7 +8393,7 @@ void run_instruction(int32_t opcode)
 				instr16_F7_7_mem(addr);
 			}
 			else {
-				instr16_F7_7_reg(modrm_byte & 7);
+				instr16_F7_7_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6811,7 +8420,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
-				instr32_F7_0_reg(modrm_byte & 7, imm);
+				instr32_F7_0_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -6827,7 +8436,7 @@ void run_instruction(int32_t opcode)
 			else {
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
-				instr32_F7_1_reg(modrm_byte & 7, imm);
+				instr32_F7_1_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -6839,7 +8448,7 @@ void run_instruction(int32_t opcode)
 				instr32_F7_2_mem(addr);
 			}
 			else {
-				instr32_F7_2_reg(modrm_byte & 7);
+				instr32_F7_2_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6851,7 +8460,7 @@ void run_instruction(int32_t opcode)
 				instr32_F7_3_mem(addr);
 			}
 			else {
-				instr32_F7_3_reg(modrm_byte & 7);
+				instr32_F7_3_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6863,7 +8472,7 @@ void run_instruction(int32_t opcode)
 				instr32_F7_4_mem(addr);
 			}
 			else {
-				instr32_F7_4_reg(modrm_byte & 7);
+				instr32_F7_4_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6875,7 +8484,7 @@ void run_instruction(int32_t opcode)
 				instr32_F7_5_mem(addr);
 			}
 			else {
-				instr32_F7_5_reg(modrm_byte & 7);
+				instr32_F7_5_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6887,7 +8496,7 @@ void run_instruction(int32_t opcode)
 				instr32_F7_6_mem(addr);
 			}
 			else {
-				instr32_F7_6_reg(modrm_byte & 7);
+				instr32_F7_6_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6899,7 +8508,7 @@ void run_instruction(int32_t opcode)
 				instr32_F7_7_mem(addr);
 			}
 			else {
-				instr32_F7_7_reg(modrm_byte & 7);
+				instr32_F7_7_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6909,10 +8518,22 @@ void run_instruction(int32_t opcode)
 		}
 	}
 	break;
+	case 0x2F7:
+	{
+		unimplemented_instruction("long mode: 0xF7 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xF8:
 	case 0x1F8:
 	{
 		instr_F8();
+	}
+	break;
+	case 0x2F8:
+	{
+		unimplemented_instruction("long mode: 0xF8 has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xF9:
@@ -6921,10 +8542,22 @@ void run_instruction(int32_t opcode)
 		instr_F9();
 	}
 	break;
+	case 0x2F9:
+	{
+		unimplemented_instruction("long mode: 0xF9 has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xFA:
 	case 0x1FA:
 	{
 		instr_FA();
+	}
+	break;
+	case 0x2FA:
+	{
+		unimplemented_instruction("long mode: 0xFA has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xFB:
@@ -6933,16 +8566,34 @@ void run_instruction(int32_t opcode)
 		instr_FB();
 	}
 	break;
+	case 0x2FB:
+	{
+		unimplemented_instruction("long mode: 0xFB has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xFC:
 	case 0x1FC:
 	{
 		instr_FC();
 	}
 	break;
+	case 0x2FC:
+	{
+		unimplemented_instruction("long mode: 0xFC has no 64-bit form in gen/x86_table64.js");
+		return;
+	}
+	break;
 	case 0xFD:
 	case 0x1FD:
 	{
 		instr_FD();
+	}
+	break;
+	case 0x2FD:
+	{
+		unimplemented_instruction("long mode: 0xFD has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xFE:
@@ -6959,7 +8610,7 @@ void run_instruction(int32_t opcode)
 				instr_FE_0_mem(addr);
 			}
 			else {
-				instr_FE_0_reg(modrm_byte & 7);
+				instr_FE_0_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6971,7 +8622,7 @@ void run_instruction(int32_t opcode)
 				instr_FE_1_mem(addr);
 			}
 			else {
-				instr_FE_1_reg(modrm_byte & 7);
+				instr_FE_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -6979,6 +8630,12 @@ void run_instruction(int32_t opcode)
 			trigger_ud();
 			break;
 		}
+	}
+	break;
+	case 0x2FE:
+	{
+		unimplemented_instruction("long mode: 0xFE has no 64-bit form in gen/x86_table64.js");
+		return;
 	}
 	break;
 	case 0xFF:
@@ -6994,7 +8651,7 @@ void run_instruction(int32_t opcode)
 				instr16_FF_0_mem(addr);
 			}
 			else {
-				instr16_FF_0_reg(modrm_byte & 7);
+				instr16_FF_0_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -7006,7 +8663,7 @@ void run_instruction(int32_t opcode)
 				instr16_FF_1_mem(addr);
 			}
 			else {
-				instr16_FF_1_reg(modrm_byte & 7);
+				instr16_FF_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -7018,7 +8675,7 @@ void run_instruction(int32_t opcode)
 				instr16_FF_2_mem(addr);
 			}
 			else {
-				instr16_FF_2_reg(modrm_byte & 7);
+				instr16_FF_2_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7031,7 +8688,7 @@ void run_instruction(int32_t opcode)
 				instr16_FF_3_mem(addr);
 			}
 			else {
-				instr16_FF_3_reg(modrm_byte & 7);
+				instr16_FF_3_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7044,7 +8701,7 @@ void run_instruction(int32_t opcode)
 				instr16_FF_4_mem(addr);
 			}
 			else {
-				instr16_FF_4_reg(modrm_byte & 7);
+				instr16_FF_4_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7057,7 +8714,7 @@ void run_instruction(int32_t opcode)
 				instr16_FF_5_mem(addr);
 			}
 			else {
-				instr16_FF_5_reg(modrm_byte & 7);
+				instr16_FF_5_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7070,7 +8727,7 @@ void run_instruction(int32_t opcode)
 				instr16_FF_6_mem(addr);
 			}
 			else {
-				instr16_FF_6_reg(modrm_byte & 7);
+				instr16_FF_6_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -7093,7 +8750,7 @@ void run_instruction(int32_t opcode)
 				instr32_FF_0_mem(addr);
 			}
 			else {
-				instr32_FF_0_reg(modrm_byte & 7);
+				instr32_FF_0_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -7105,7 +8762,7 @@ void run_instruction(int32_t opcode)
 				instr32_FF_1_mem(addr);
 			}
 			else {
-				instr32_FF_1_reg(modrm_byte & 7);
+				instr32_FF_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -7117,7 +8774,7 @@ void run_instruction(int32_t opcode)
 				instr32_FF_2_mem(addr);
 			}
 			else {
-				instr32_FF_2_reg(modrm_byte & 7);
+				instr32_FF_2_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7130,7 +8787,7 @@ void run_instruction(int32_t opcode)
 				instr32_FF_3_mem(addr);
 			}
 			else {
-				instr32_FF_3_reg(modrm_byte & 7);
+				instr32_FF_3_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7143,7 +8800,7 @@ void run_instruction(int32_t opcode)
 				instr32_FF_4_mem(addr);
 			}
 			else {
-				instr32_FF_4_reg(modrm_byte & 7);
+				instr32_FF_4_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7156,7 +8813,7 @@ void run_instruction(int32_t opcode)
 				instr32_FF_5_mem(addr);
 			}
 			else {
-				instr32_FF_5_reg(modrm_byte & 7);
+				instr32_FF_5_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7169,7 +8826,102 @@ void run_instruction(int32_t opcode)
 				instr32_FF_6_mem(addr);
 			}
 			else {
-				instr32_FF_6_reg(modrm_byte & 7);
+				instr32_FF_6_reg(reg_index_b(modrm_byte & 7));
+			}
+		}
+			break;
+		default:
+			trigger_ud();
+			break;
+		}
+	}
+	break;
+	case 0x2FF:
+	{
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		switch (modrm_byte >> 3 & 7) {
+		case 0:
+		{
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions::instr64_FF_0_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions::instr64_FF_0_reg");
+				return;
+			}
+		}
+			break;
+		case 1:
+		{
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions::instr64_FF_1_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions::instr64_FF_1_reg");
+				return;
+			}
+		}
+			break;
+		case 2:
+		{
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions::instr64_FF_2_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions::instr64_FF_2_reg");
+				return;
+			}
+		}
+			break;
+		case 3:
+		{
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions::instr64_FF_3_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions::instr64_FF_3_reg");
+				return;
+			}
+		}
+			break;
+		case 4:
+		{
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions::instr64_FF_4_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions::instr64_FF_4_reg");
+				return;
+			}
+		}
+			break;
+		case 5:
+		{
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions::instr64_FF_5_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions::instr64_FF_5_reg");
+				return;
+			}
+		}
+			break;
+		case 6:
+		{
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions::instr64_FF_6_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions::instr64_FF_6_reg");
+				return;
 			}
 		}
 			break;
@@ -7205,7 +8957,7 @@ void run_instruction0f(int32_t opcode)
 				instr16_0F00_0_mem(addr);
 			}
 			else {
-				instr16_0F00_0_reg(modrm_byte & 7);
+				instr16_0F00_0_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7218,7 +8970,7 @@ void run_instruction0f(int32_t opcode)
 				instr16_0F00_1_mem(addr);
 			}
 			else {
-				instr16_0F00_1_reg(modrm_byte & 7);
+				instr16_0F00_1_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7231,7 +8983,7 @@ void run_instruction0f(int32_t opcode)
 				instr16_0F00_2_mem(addr);
 			}
 			else {
-				instr16_0F00_2_reg(modrm_byte & 7);
+				instr16_0F00_2_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7244,7 +8996,7 @@ void run_instruction0f(int32_t opcode)
 				instr16_0F00_3_mem(addr);
 			}
 			else {
-				instr16_0F00_3_reg(modrm_byte & 7);
+				instr16_0F00_3_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7257,7 +9009,7 @@ void run_instruction0f(int32_t opcode)
 				instr16_0F00_4_mem(addr);
 			}
 			else {
-				instr16_0F00_4_reg(modrm_byte & 7);
+				instr16_0F00_4_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7270,7 +9022,7 @@ void run_instruction0f(int32_t opcode)
 				instr16_0F00_5_mem(addr);
 			}
 			else {
-				instr16_0F00_5_reg(modrm_byte & 7);
+				instr16_0F00_5_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7294,7 +9046,7 @@ void run_instruction0f(int32_t opcode)
 				instr32_0F00_0_mem(addr);
 			}
 			else {
-				instr32_0F00_0_reg(modrm_byte & 7);
+				instr32_0F00_0_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7307,7 +9059,7 @@ void run_instruction0f(int32_t opcode)
 				instr32_0F00_1_mem(addr);
 			}
 			else {
-				instr32_0F00_1_reg(modrm_byte & 7);
+				instr32_0F00_1_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7320,7 +9072,7 @@ void run_instruction0f(int32_t opcode)
 				instr32_0F00_2_mem(addr);
 			}
 			else {
-				instr32_0F00_2_reg(modrm_byte & 7);
+				instr32_0F00_2_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7333,7 +9085,7 @@ void run_instruction0f(int32_t opcode)
 				instr32_0F00_3_mem(addr);
 			}
 			else {
-				instr32_0F00_3_reg(modrm_byte & 7);
+				instr32_0F00_3_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7346,7 +9098,7 @@ void run_instruction0f(int32_t opcode)
 				instr32_0F00_4_mem(addr);
 			}
 			else {
-				instr32_0F00_4_reg(modrm_byte & 7);
+				instr32_0F00_4_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7359,7 +9111,7 @@ void run_instruction0f(int32_t opcode)
 				instr32_0F00_5_mem(addr);
 			}
 			else {
-				instr32_0F00_5_reg(modrm_byte & 7);
+				instr32_0F00_5_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7383,7 +9135,7 @@ void run_instruction0f(int32_t opcode)
 				instr16_0F01_0_mem(addr);
 			}
 			else {
-				instr16_0F01_0_reg(modrm_byte & 7);
+				instr16_0F01_0_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7396,7 +9148,7 @@ void run_instruction0f(int32_t opcode)
 				instr16_0F01_1_mem(addr);
 			}
 			else {
-				instr16_0F01_1_reg(modrm_byte & 7);
+				instr16_0F01_1_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7409,7 +9161,7 @@ void run_instruction0f(int32_t opcode)
 				instr16_0F01_2_mem(addr);
 			}
 			else {
-				instr16_0F01_2_reg(modrm_byte & 7);
+				instr16_0F01_2_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7422,7 +9174,7 @@ void run_instruction0f(int32_t opcode)
 				instr16_0F01_3_mem(addr);
 			}
 			else {
-				instr16_0F01_3_reg(modrm_byte & 7);
+				instr16_0F01_3_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7435,7 +9187,7 @@ void run_instruction0f(int32_t opcode)
 				instr16_0F01_4_mem(addr);
 			}
 			else {
-				instr16_0F01_4_reg(modrm_byte & 7);
+				instr16_0F01_4_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7448,7 +9200,7 @@ void run_instruction0f(int32_t opcode)
 				instr16_0F01_6_mem(addr);
 			}
 			else {
-				instr16_0F01_6_reg(modrm_byte & 7);
+				instr16_0F01_6_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7461,7 +9213,7 @@ void run_instruction0f(int32_t opcode)
 				instr16_0F01_7_mem(addr);
 			}
 			else {
-				instr16_0F01_7_reg(modrm_byte & 7);
+				instr16_0F01_7_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7485,7 +9237,7 @@ void run_instruction0f(int32_t opcode)
 				instr32_0F01_0_mem(addr);
 			}
 			else {
-				instr32_0F01_0_reg(modrm_byte & 7);
+				instr32_0F01_0_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7498,7 +9250,7 @@ void run_instruction0f(int32_t opcode)
 				instr32_0F01_1_mem(addr);
 			}
 			else {
-				instr32_0F01_1_reg(modrm_byte & 7);
+				instr32_0F01_1_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7511,7 +9263,7 @@ void run_instruction0f(int32_t opcode)
 				instr32_0F01_2_mem(addr);
 			}
 			else {
-				instr32_0F01_2_reg(modrm_byte & 7);
+				instr32_0F01_2_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7524,7 +9276,7 @@ void run_instruction0f(int32_t opcode)
 				instr32_0F01_3_mem(addr);
 			}
 			else {
-				instr32_0F01_3_reg(modrm_byte & 7);
+				instr32_0F01_3_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7537,7 +9289,7 @@ void run_instruction0f(int32_t opcode)
 				instr32_0F01_4_mem(addr);
 			}
 			else {
-				instr32_0F01_4_reg(modrm_byte & 7);
+				instr32_0F01_4_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7550,7 +9302,7 @@ void run_instruction0f(int32_t opcode)
 				instr32_0F01_6_mem(addr);
 			}
 			else {
-				instr32_0F01_6_reg(modrm_byte & 7);
+				instr32_0F01_6_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7563,7 +9315,7 @@ void run_instruction0f(int32_t opcode)
 				instr32_0F01_7_mem(addr);
 			}
 			else {
-				instr32_0F01_7_reg(modrm_byte & 7);
+				instr32_0F01_7_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -7581,10 +9333,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0F02_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0F02_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0F02_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0F02_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 		after_block_boundary();
 	}
@@ -7596,10 +9348,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0F02_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0F02_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0F02_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0F02_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 		after_block_boundary();
 	}
@@ -7611,10 +9363,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0F03_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0F03_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0F03_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0F03_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 		after_block_boundary();
 	}
@@ -7626,10 +9378,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0F03_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0F03_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0F03_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0F03_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 		after_block_boundary();
 	}
@@ -7731,10 +9483,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F10_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F10_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F10_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F10_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F2) != 0) {
@@ -7744,10 +9496,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F20F10_mem(addr, modrm_byte >> 3 & 7);
+				instr_F20F10_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F20F10_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F20F10_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -7757,10 +9509,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F10_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F10_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F10_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F10_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -7770,10 +9522,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F10_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F10_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F10_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F10_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -7791,10 +9543,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F11_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F11_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F11_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F11_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F2) != 0) {
@@ -7804,10 +9556,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F20F11_mem(addr, modrm_byte >> 3 & 7);
+				instr_F20F11_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F20F11_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F20F11_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -7817,10 +9569,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F11_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F11_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F11_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F11_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -7830,10 +9582,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F11_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F11_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F11_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F11_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -7851,10 +9603,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F12_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F12_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F12_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F12_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F2) != 0) {
@@ -7864,10 +9616,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F20F12_mem(addr, modrm_byte >> 3 & 7);
+				instr_F20F12_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F20F12_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F20F12_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -7877,10 +9629,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F12_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F12_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F12_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F12_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -7890,10 +9642,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F12_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F12_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F12_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F12_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -7911,10 +9663,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F13_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F13_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F13_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F13_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -7924,10 +9676,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F13_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F13_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F13_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F13_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -7945,10 +9697,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F14_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F14_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F14_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F14_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -7958,10 +9710,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F14_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F14_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F14_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F14_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -7979,10 +9731,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F15_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F15_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F15_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F15_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -7992,10 +9744,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F15_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F15_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F15_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F15_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -8013,10 +9765,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F16_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F16_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F16_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F16_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -8026,10 +9778,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F16_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F16_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F16_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F16_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -8039,10 +9791,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F16_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F16_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F16_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F16_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -8060,10 +9812,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F17_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F17_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F17_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F17_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -8073,10 +9825,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F17_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F17_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F17_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F17_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -8089,10 +9841,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F18_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F18_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F18_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F18_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8104,10 +9856,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F19_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F19_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F19_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F19_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8133,10 +9885,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F1C_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F1C_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F1C_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F1C_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8148,10 +9900,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F1D_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F1D_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F1D_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F1D_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8163,10 +9915,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F1E_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F1E_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F1E_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F1E_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8178,10 +9930,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F1F_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F1F_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F1F_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F1F_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8262,10 +10014,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F28_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F28_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F28_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F28_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -8275,10 +10027,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F28_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F28_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F28_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F28_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -8296,10 +10048,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F29_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F29_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F29_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F29_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -8309,10 +10061,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F29_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F29_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F29_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F29_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -8330,10 +10082,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F2A_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F2A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F2A_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F2A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F2) != 0) {
@@ -8343,10 +10095,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F20F2A_mem(addr, modrm_byte >> 3 & 7);
+				instr_F20F2A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F20F2A_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F20F2A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -8356,10 +10108,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F2A_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F2A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F2A_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F2A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -8369,10 +10121,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F2A_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F2A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F2A_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F2A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -8390,10 +10142,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F2B_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F2B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F2B_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F2B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -8403,10 +10155,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F2B_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F2B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F2B_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F2B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -8424,10 +10176,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F2C_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F2C_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F2C_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F2C_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 			after_block_boundary();
 		}
@@ -8438,10 +10190,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F20F2C_mem(addr, modrm_byte >> 3 & 7);
+				instr_F20F2C_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F20F2C_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F20F2C_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -8451,10 +10203,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F2C_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F2C_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F2C_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F2C_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -8464,10 +10216,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F2C_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F2C_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F2C_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F2C_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 			after_block_boundary();
 		}
@@ -8486,10 +10238,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F2D_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F2D_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F2D_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F2D_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 			after_block_boundary();
 		}
@@ -8500,10 +10252,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F20F2D_mem(addr, modrm_byte >> 3 & 7);
+				instr_F20F2D_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F20F2D_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F20F2D_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -8513,10 +10265,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F2D_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F2D_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F2D_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F2D_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -8526,10 +10278,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F2D_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F2D_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F2D_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F2D_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 			after_block_boundary();
 		}
@@ -8548,10 +10300,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F2E_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F2E_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F2E_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F2E_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -8561,10 +10313,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F2E_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F2E_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F2E_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F2E_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -8582,10 +10334,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F2F_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F2F_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F2F_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F2F_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -8595,10 +10347,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F2F_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F2F_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F2F_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F2F_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -8721,10 +10473,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0F40_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0F40_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0F40_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0F40_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8735,10 +10487,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0F40_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0F40_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0F40_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0F40_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8749,10 +10501,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0F41_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0F41_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0F41_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0F41_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8763,10 +10515,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0F41_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0F41_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0F41_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0F41_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8777,10 +10529,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0F42_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0F42_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0F42_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0F42_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8791,10 +10543,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0F42_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0F42_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0F42_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0F42_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8805,10 +10557,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0F43_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0F43_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0F43_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0F43_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8819,10 +10571,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0F43_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0F43_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0F43_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0F43_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8833,10 +10585,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0F44_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0F44_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0F44_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0F44_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8847,10 +10599,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0F44_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0F44_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0F44_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0F44_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8861,10 +10613,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0F45_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0F45_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0F45_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0F45_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8875,10 +10627,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0F45_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0F45_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0F45_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0F45_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8889,10 +10641,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0F46_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0F46_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0F46_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0F46_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8903,10 +10655,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0F46_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0F46_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0F46_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0F46_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8917,10 +10669,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0F47_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0F47_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0F47_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0F47_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8931,10 +10683,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0F47_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0F47_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0F47_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0F47_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8945,10 +10697,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0F48_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0F48_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0F48_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0F48_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8959,10 +10711,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0F48_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0F48_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0F48_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0F48_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8973,10 +10725,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0F49_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0F49_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0F49_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0F49_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -8987,10 +10739,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0F49_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0F49_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0F49_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0F49_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -9001,10 +10753,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0F4A_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0F4A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0F4A_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0F4A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -9015,10 +10767,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0F4A_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0F4A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0F4A_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0F4A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -9029,10 +10781,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0F4B_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0F4B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0F4B_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0F4B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -9043,10 +10795,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0F4B_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0F4B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0F4B_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0F4B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -9057,10 +10809,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0F4C_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0F4C_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0F4C_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0F4C_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -9071,10 +10823,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0F4C_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0F4C_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0F4C_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0F4C_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -9085,10 +10837,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0F4D_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0F4D_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0F4D_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0F4D_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -9099,10 +10851,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0F4D_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0F4D_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0F4D_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0F4D_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -9113,10 +10865,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0F4E_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0F4E_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0F4E_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0F4E_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -9127,10 +10879,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0F4E_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0F4E_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0F4E_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0F4E_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -9141,10 +10893,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0F4F_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0F4F_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0F4F_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0F4F_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -9155,10 +10907,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0F4F_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0F4F_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0F4F_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0F4F_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -9175,10 +10927,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F50_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F50_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F50_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F50_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 			after_block_boundary();
 		}
@@ -9189,10 +10941,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F50_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F50_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F50_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F50_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 			after_block_boundary();
 		}
@@ -9211,10 +10963,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F51_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F51_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F51_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F51_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F2) != 0) {
@@ -9224,10 +10976,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F20F51_mem(addr, modrm_byte >> 3 & 7);
+				instr_F20F51_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F20F51_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F20F51_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -9237,10 +10989,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F51_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F51_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F51_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F51_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -9250,10 +11002,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F51_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F51_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F51_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F51_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -9271,10 +11023,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F52_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F52_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F52_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F52_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -9284,10 +11036,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F52_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F52_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F52_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F52_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -9305,10 +11057,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F53_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F53_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F53_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F53_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -9318,10 +11070,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F53_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F53_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F53_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F53_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -9339,10 +11091,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F54_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F54_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F54_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F54_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -9352,10 +11104,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F54_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F54_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F54_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F54_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -9373,10 +11125,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F55_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F55_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F55_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F55_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -9386,10 +11138,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F55_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F55_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F55_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F55_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -9407,10 +11159,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F56_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F56_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F56_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F56_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -9420,10 +11172,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F56_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F56_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F56_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F56_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -9441,10 +11193,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F57_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F57_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F57_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F57_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -9454,10 +11206,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F57_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F57_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F57_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F57_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -9475,10 +11227,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F58_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F58_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F58_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F58_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F2) != 0) {
@@ -9488,10 +11240,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F20F58_mem(addr, modrm_byte >> 3 & 7);
+				instr_F20F58_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F20F58_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F20F58_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -9501,10 +11253,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F58_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F58_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F58_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F58_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -9514,10 +11266,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F58_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F58_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F58_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F58_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -9535,10 +11287,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F59_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F59_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F59_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F59_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F2) != 0) {
@@ -9548,10 +11300,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F20F59_mem(addr, modrm_byte >> 3 & 7);
+				instr_F20F59_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F20F59_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F20F59_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -9561,10 +11313,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F59_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F59_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F59_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F59_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -9574,10 +11326,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F59_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F59_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F59_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F59_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -9595,10 +11347,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F5A_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F5A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F5A_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F5A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F2) != 0) {
@@ -9608,10 +11360,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F20F5A_mem(addr, modrm_byte >> 3 & 7);
+				instr_F20F5A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F20F5A_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F20F5A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -9621,10 +11373,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F5A_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F5A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F5A_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F5A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -9634,10 +11386,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F5A_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F5A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F5A_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F5A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -9655,10 +11407,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F5B_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F5B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F5B_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F5B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -9668,10 +11420,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F5B_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F5B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F5B_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F5B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -9681,10 +11433,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F5B_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F5B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F5B_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F5B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -9702,10 +11454,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F5C_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F5C_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F5C_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F5C_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F2) != 0) {
@@ -9715,10 +11467,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F20F5C_mem(addr, modrm_byte >> 3 & 7);
+				instr_F20F5C_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F20F5C_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F20F5C_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -9728,10 +11480,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F5C_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F5C_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F5C_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F5C_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -9741,10 +11493,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F5C_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F5C_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F5C_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F5C_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -9762,10 +11514,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F5D_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F5D_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F5D_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F5D_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F2) != 0) {
@@ -9775,10 +11527,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F20F5D_mem(addr, modrm_byte >> 3 & 7);
+				instr_F20F5D_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F20F5D_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F20F5D_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -9788,10 +11540,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F5D_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F5D_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F5D_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F5D_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -9801,10 +11553,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F5D_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F5D_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F5D_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F5D_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -9822,10 +11574,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F5E_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F5E_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F5E_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F5E_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F2) != 0) {
@@ -9835,10 +11587,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F20F5E_mem(addr, modrm_byte >> 3 & 7);
+				instr_F20F5E_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F20F5E_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F20F5E_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -9848,10 +11600,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F5E_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F5E_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F5E_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F5E_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -9861,10 +11613,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F5E_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F5E_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F5E_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F5E_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -9882,10 +11634,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F5F_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F5F_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F5F_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F5F_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F2) != 0) {
@@ -9895,10 +11647,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F20F5F_mem(addr, modrm_byte >> 3 & 7);
+				instr_F20F5F_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F20F5F_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F20F5F_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -9908,10 +11660,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F5F_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F5F_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F5F_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F5F_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -9921,10 +11673,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F5F_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F5F_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F5F_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F5F_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -9942,10 +11694,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F60_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F60_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F60_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F60_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -9955,10 +11707,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F60_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F60_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F60_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F60_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -9976,10 +11728,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F61_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F61_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F61_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F61_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -9989,10 +11741,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F61_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F61_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F61_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F61_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -10010,10 +11762,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F62_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F62_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F62_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F62_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -10023,10 +11775,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F62_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F62_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F62_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F62_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -10044,10 +11796,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F63_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F63_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F63_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F63_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -10057,10 +11809,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F63_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F63_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F63_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F63_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -10078,10 +11830,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F64_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F64_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F64_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F64_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -10091,10 +11843,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F64_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F64_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F64_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F64_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -10112,10 +11864,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F65_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F65_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F65_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F65_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -10125,10 +11877,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F65_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F65_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F65_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F65_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -10146,10 +11898,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F66_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F66_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F66_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F66_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -10159,10 +11911,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F66_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F66_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F66_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F66_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -10180,10 +11932,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F67_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F67_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F67_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F67_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -10193,10 +11945,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F67_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F67_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F67_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F67_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -10214,10 +11966,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F68_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F68_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F68_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F68_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -10227,10 +11979,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F68_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F68_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F68_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F68_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -10248,10 +12000,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F69_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F69_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F69_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F69_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -10261,10 +12013,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F69_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F69_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F69_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F69_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -10282,10 +12034,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F6A_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F6A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F6A_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F6A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -10295,10 +12047,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F6A_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F6A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F6A_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F6A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -10316,10 +12068,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F6B_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F6B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F6B_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F6B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -10329,10 +12081,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F6B_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F6B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F6B_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F6B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -10350,10 +12102,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F6C_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F6C_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F6C_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F6C_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -10363,10 +12115,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F6C_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F6C_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F6C_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F6C_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 			after_block_boundary();
 		}
@@ -10385,10 +12137,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F6D_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F6D_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F6D_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F6D_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -10398,10 +12150,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F6D_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F6D_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F6D_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F6D_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 			after_block_boundary();
 		}
@@ -10420,10 +12172,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F6E_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F6E_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F6E_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F6E_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -10433,10 +12185,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F6E_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F6E_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F6E_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F6E_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -10454,10 +12206,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F6F_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F6F_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F6F_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F6F_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -10467,10 +12219,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F6F_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F6F_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F6F_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F6F_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -10480,10 +12232,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F6F_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F6F_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F6F_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F6F_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -10503,12 +12255,12 @@ void run_instruction0f(int32_t opcode)
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_660F70_mem(addr, modrm_byte >> 3 & 7, imm);
+				instr_660F70_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_660F70_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+				instr_660F70_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 		}
 		else if ((prefixes_ & PREFIX_F2) != 0) {
@@ -10520,12 +12272,12 @@ void run_instruction0f(int32_t opcode)
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_F20F70_mem(addr, modrm_byte >> 3 & 7, imm);
+				instr_F20F70_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_F20F70_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+				instr_F20F70_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -10537,12 +12289,12 @@ void run_instruction0f(int32_t opcode)
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_F30F70_mem(addr, modrm_byte >> 3 & 7, imm);
+				instr_F30F70_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_F30F70_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+				instr_F30F70_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 		}
 		else {
@@ -10554,12 +12306,12 @@ void run_instruction0f(int32_t opcode)
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_0F70_mem(addr, modrm_byte >> 3 & 7, imm);
+				instr_0F70_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_0F70_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+				instr_0F70_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 		}
 	}
@@ -10587,7 +12339,7 @@ void run_instruction0f(int32_t opcode)
 				else {
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
-					instr_660F71_2_reg(modrm_byte & 7, imm);
+					instr_660F71_2_reg(reg_index_b(modrm_byte & 7), imm);
 				}
 			}
 				break;
@@ -10606,7 +12358,7 @@ void run_instruction0f(int32_t opcode)
 				else {
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
-					instr_660F71_4_reg(modrm_byte & 7, imm);
+					instr_660F71_4_reg(reg_index_b(modrm_byte & 7), imm);
 				}
 			}
 				break;
@@ -10625,7 +12377,7 @@ void run_instruction0f(int32_t opcode)
 				else {
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
-					instr_660F71_6_reg(modrm_byte & 7, imm);
+					instr_660F71_6_reg(reg_index_b(modrm_byte & 7), imm);
 				}
 			}
 				break;
@@ -10651,7 +12403,7 @@ void run_instruction0f(int32_t opcode)
 				else {
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
-					instr_0F71_2_reg(modrm_byte & 7, imm);
+					instr_0F71_2_reg(reg_index_b(modrm_byte & 7), imm);
 				}
 			}
 				break;
@@ -10670,7 +12422,7 @@ void run_instruction0f(int32_t opcode)
 				else {
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
-					instr_0F71_4_reg(modrm_byte & 7, imm);
+					instr_0F71_4_reg(reg_index_b(modrm_byte & 7), imm);
 				}
 			}
 				break;
@@ -10689,7 +12441,7 @@ void run_instruction0f(int32_t opcode)
 				else {
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
-					instr_0F71_6_reg(modrm_byte & 7, imm);
+					instr_0F71_6_reg(reg_index_b(modrm_byte & 7), imm);
 				}
 			}
 				break;
@@ -10723,7 +12475,7 @@ void run_instruction0f(int32_t opcode)
 				else {
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
-					instr_660F72_2_reg(modrm_byte & 7, imm);
+					instr_660F72_2_reg(reg_index_b(modrm_byte & 7), imm);
 				}
 			}
 				break;
@@ -10742,7 +12494,7 @@ void run_instruction0f(int32_t opcode)
 				else {
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
-					instr_660F72_4_reg(modrm_byte & 7, imm);
+					instr_660F72_4_reg(reg_index_b(modrm_byte & 7), imm);
 				}
 			}
 				break;
@@ -10761,7 +12513,7 @@ void run_instruction0f(int32_t opcode)
 				else {
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
-					instr_660F72_6_reg(modrm_byte & 7, imm);
+					instr_660F72_6_reg(reg_index_b(modrm_byte & 7), imm);
 				}
 			}
 				break;
@@ -10787,7 +12539,7 @@ void run_instruction0f(int32_t opcode)
 				else {
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
-					instr_0F72_2_reg(modrm_byte & 7, imm);
+					instr_0F72_2_reg(reg_index_b(modrm_byte & 7), imm);
 				}
 			}
 				break;
@@ -10806,7 +12558,7 @@ void run_instruction0f(int32_t opcode)
 				else {
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
-					instr_0F72_4_reg(modrm_byte & 7, imm);
+					instr_0F72_4_reg(reg_index_b(modrm_byte & 7), imm);
 				}
 			}
 				break;
@@ -10825,7 +12577,7 @@ void run_instruction0f(int32_t opcode)
 				else {
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
-					instr_0F72_6_reg(modrm_byte & 7, imm);
+					instr_0F72_6_reg(reg_index_b(modrm_byte & 7), imm);
 				}
 			}
 				break;
@@ -10859,7 +12611,7 @@ void run_instruction0f(int32_t opcode)
 				else {
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
-					instr_660F73_2_reg(modrm_byte & 7, imm);
+					instr_660F73_2_reg(reg_index_b(modrm_byte & 7), imm);
 				}
 			}
 				break;
@@ -10878,7 +12630,7 @@ void run_instruction0f(int32_t opcode)
 				else {
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
-					instr_660F73_3_reg(modrm_byte & 7, imm);
+					instr_660F73_3_reg(reg_index_b(modrm_byte & 7), imm);
 				}
 			}
 				break;
@@ -10897,7 +12649,7 @@ void run_instruction0f(int32_t opcode)
 				else {
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
-					instr_660F73_6_reg(modrm_byte & 7, imm);
+					instr_660F73_6_reg(reg_index_b(modrm_byte & 7), imm);
 				}
 			}
 				break;
@@ -10916,7 +12668,7 @@ void run_instruction0f(int32_t opcode)
 				else {
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
-					instr_660F73_7_reg(modrm_byte & 7, imm);
+					instr_660F73_7_reg(reg_index_b(modrm_byte & 7), imm);
 				}
 			}
 				break;
@@ -10942,7 +12694,7 @@ void run_instruction0f(int32_t opcode)
 				else {
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
-					instr_0F73_2_reg(modrm_byte & 7, imm);
+					instr_0F73_2_reg(reg_index_b(modrm_byte & 7), imm);
 				}
 			}
 				break;
@@ -10961,7 +12713,7 @@ void run_instruction0f(int32_t opcode)
 				else {
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
-					instr_0F73_6_reg(modrm_byte & 7, imm);
+					instr_0F73_6_reg(reg_index_b(modrm_byte & 7), imm);
 				}
 			}
 				break;
@@ -10985,10 +12737,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F74_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F74_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F74_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F74_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -10998,10 +12750,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F74_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F74_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F74_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F74_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -11019,10 +12771,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F75_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F75_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F75_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F75_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -11032,10 +12784,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F75_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F75_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F75_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F75_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -11053,10 +12805,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F76_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F76_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F76_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F76_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -11066,10 +12818,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F76_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F76_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F76_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F76_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -11124,10 +12876,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F7C_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F7C_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F7C_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F7C_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F2) != 0) {
@@ -11137,10 +12889,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F20F7C_mem(addr, modrm_byte >> 3 & 7);
+				instr_F20F7C_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F20F7C_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F20F7C_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -11162,10 +12914,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F7D_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F7D_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F7D_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F7D_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F2) != 0) {
@@ -11175,10 +12927,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F20F7D_mem(addr, modrm_byte >> 3 & 7);
+				instr_F20F7D_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F20F7D_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F20F7D_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -11200,10 +12952,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F7E_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F7E_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F7E_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F7E_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -11213,10 +12965,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F7E_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F7E_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F7E_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F7E_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -11226,10 +12978,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F7E_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F7E_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F7E_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F7E_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -11247,10 +12999,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660F7F_mem(addr, modrm_byte >> 3 & 7);
+				instr_660F7F_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660F7F_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660F7F_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -11260,10 +13012,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30F7F_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30F7F_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30F7F_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30F7F_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -11273,10 +13025,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0F7F_mem(addr, modrm_byte >> 3 & 7);
+				instr_0F7F_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0F7F_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0F7F_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -11513,10 +13265,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F90_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F90_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F90_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F90_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11528,10 +13280,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F91_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F91_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F91_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F91_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11543,10 +13295,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F92_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F92_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F92_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F92_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11558,10 +13310,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F93_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F93_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F93_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F93_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11573,10 +13325,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F94_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F94_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F94_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F94_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11588,10 +13340,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F95_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F95_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F95_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F95_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11603,10 +13355,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F96_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F96_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F96_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F96_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11618,10 +13370,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F97_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F97_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F97_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F97_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11633,10 +13385,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F98_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F98_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F98_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F98_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11648,10 +13400,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F99_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F99_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F99_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F99_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11663,10 +13415,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F9A_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F9A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F9A_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F9A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11678,10 +13430,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F9B_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F9B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F9B_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F9B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11693,10 +13445,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F9C_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F9C_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F9C_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F9C_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11708,10 +13460,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F9D_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F9D_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F9D_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F9D_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11723,10 +13475,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F9E_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F9E_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F9E_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F9E_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11738,10 +13490,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0F9F_mem(addr, modrm_byte >> 3 & 7);
+			instr_0F9F_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0F9F_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0F9F_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11780,10 +13532,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0FA3_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0FA3_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0FA3_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0FA3_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11794,10 +13546,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0FA3_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0FA3_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0FA3_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0FA3_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11810,12 +13562,12 @@ void run_instruction0f(int32_t opcode)
 			if (cpu->pagefault) return;
 			int32_t imm = read_imm8();
 			if (cpu->pagefault) return;
-			instr16_0FA4_mem(addr, modrm_byte >> 3 & 7, imm);
+			instr16_0FA4_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 		}
 		else {
 			int32_t imm = read_imm8();
 			if (cpu->pagefault) return;
-			instr16_0FA4_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+			instr16_0FA4_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 		}
 	}
 	break;
@@ -11828,12 +13580,12 @@ void run_instruction0f(int32_t opcode)
 			if (cpu->pagefault) return;
 			int32_t imm = read_imm8();
 			if (cpu->pagefault) return;
-			instr32_0FA4_mem(addr, modrm_byte >> 3 & 7, imm);
+			instr32_0FA4_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 		}
 		else {
 			int32_t imm = read_imm8();
 			if (cpu->pagefault) return;
-			instr32_0FA4_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+			instr32_0FA4_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 		}
 	}
 	break;
@@ -11844,10 +13596,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0FA5_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0FA5_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0FA5_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0FA5_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11858,10 +13610,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0FA5_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0FA5_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0FA5_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0FA5_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11914,10 +13666,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0FAB_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0FAB_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0FAB_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0FAB_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11928,10 +13680,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0FAB_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0FAB_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0FAB_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0FAB_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11944,12 +13696,12 @@ void run_instruction0f(int32_t opcode)
 			if (cpu->pagefault) return;
 			int32_t imm = read_imm8();
 			if (cpu->pagefault) return;
-			instr16_0FAC_mem(addr, modrm_byte >> 3 & 7, imm);
+			instr16_0FAC_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 		}
 		else {
 			int32_t imm = read_imm8();
 			if (cpu->pagefault) return;
-			instr16_0FAC_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+			instr16_0FAC_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 		}
 	}
 	break;
@@ -11962,12 +13714,12 @@ void run_instruction0f(int32_t opcode)
 			if (cpu->pagefault) return;
 			int32_t imm = read_imm8();
 			if (cpu->pagefault) return;
-			instr32_0FAC_mem(addr, modrm_byte >> 3 & 7, imm);
+			instr32_0FAC_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 		}
 		else {
 			int32_t imm = read_imm8();
 			if (cpu->pagefault) return;
-			instr32_0FAC_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+			instr32_0FAC_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 		}
 	}
 	break;
@@ -11978,10 +13730,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0FAD_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0FAD_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0FAD_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0FAD_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -11992,10 +13744,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0FAD_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0FAD_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0FAD_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0FAD_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12016,7 +13768,7 @@ void run_instruction0f(int32_t opcode)
 				instr_0FAE_0_mem(addr);
 			}
 			else {
-				instr_0FAE_0_reg(modrm_byte & 7);
+				instr_0FAE_0_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -12032,7 +13784,7 @@ void run_instruction0f(int32_t opcode)
 				instr_0FAE_1_mem(addr);
 			}
 			else {
-				instr_0FAE_1_reg(modrm_byte & 7);
+				instr_0FAE_1_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -12048,7 +13800,7 @@ void run_instruction0f(int32_t opcode)
 				instr_0FAE_2_mem(addr);
 			}
 			else {
-				instr_0FAE_2_reg(modrm_byte & 7);
+				instr_0FAE_2_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -12064,7 +13816,7 @@ void run_instruction0f(int32_t opcode)
 				instr_0FAE_3_mem(addr);
 			}
 			else {
-				instr_0FAE_3_reg(modrm_byte & 7);
+				instr_0FAE_3_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -12077,7 +13829,7 @@ void run_instruction0f(int32_t opcode)
 				instr_0FAE_4_mem(addr);
 			}
 			else {
-				instr_0FAE_4_reg(modrm_byte & 7);
+				instr_0FAE_4_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -12090,7 +13842,7 @@ void run_instruction0f(int32_t opcode)
 				instr_0FAE_5_mem(addr);
 			}
 			else {
-				instr_0FAE_5_reg(modrm_byte & 7);
+				instr_0FAE_5_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -12102,7 +13854,7 @@ void run_instruction0f(int32_t opcode)
 				instr_0FAE_6_mem(addr);
 			}
 			else {
-				instr_0FAE_6_reg(modrm_byte & 7);
+				instr_0FAE_6_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -12115,7 +13867,7 @@ void run_instruction0f(int32_t opcode)
 				instr_0FAE_7_mem(addr);
 			}
 			else {
-				instr_0FAE_7_reg(modrm_byte & 7);
+				instr_0FAE_7_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -12133,10 +13885,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0FAF_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0FAF_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0FAF_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0FAF_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12147,10 +13899,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0FAF_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0FAF_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0FAF_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0FAF_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12162,10 +13914,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0FB0_mem(addr, modrm_byte >> 3 & 7);
+			instr_0FB0_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0FB0_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0FB0_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 		after_block_boundary();
 	}
@@ -12177,10 +13929,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0FB1_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0FB1_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0FB1_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0FB1_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12191,10 +13943,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0FB1_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0FB1_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0FB1_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0FB1_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12205,10 +13957,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0FB2_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0FB2_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0FB2_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0FB2_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 		after_block_boundary();
 	}
@@ -12220,10 +13972,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0FB2_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0FB2_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0FB2_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0FB2_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 		after_block_boundary();
 	}
@@ -12235,10 +13987,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0FB3_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0FB3_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0FB3_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0FB3_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12249,10 +14001,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0FB3_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0FB3_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0FB3_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0FB3_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12263,10 +14015,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0FB4_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0FB4_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0FB4_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0FB4_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 		after_block_boundary();
 	}
@@ -12278,10 +14030,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0FB4_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0FB4_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0FB4_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0FB4_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 		after_block_boundary();
 	}
@@ -12293,10 +14045,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0FB5_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0FB5_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0FB5_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0FB5_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 		after_block_boundary();
 	}
@@ -12308,10 +14060,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0FB5_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0FB5_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0FB5_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0FB5_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 		after_block_boundary();
 	}
@@ -12323,10 +14075,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0FB6_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0FB6_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0FB6_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0FB6_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12337,10 +14089,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0FB6_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0FB6_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0FB6_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0FB6_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12351,10 +14103,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0FB7_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0FB7_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0FB7_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0FB7_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12365,10 +14117,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0FB7_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0FB7_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0FB7_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0FB7_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12381,20 +14133,20 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr16_F30FB8_mem(addr, modrm_byte >> 3 & 7);
+				instr16_F30FB8_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr16_F30FB8_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr16_F30FB8_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr16_0FB8_mem(addr, modrm_byte >> 3 & 7);
+				instr16_0FB8_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr16_0FB8_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr16_0FB8_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 			after_block_boundary();
 		}
@@ -12409,20 +14161,20 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr32_F30FB8_mem(addr, modrm_byte >> 3 & 7);
+				instr32_F30FB8_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr32_F30FB8_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr32_F30FB8_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr32_0FB8_mem(addr, modrm_byte >> 3 & 7);
+				instr32_0FB8_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr32_0FB8_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr32_0FB8_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 			after_block_boundary();
 		}
@@ -12452,7 +14204,7 @@ void run_instruction0f(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr16_0FBA_4_reg(modrm_byte & 7, imm);
+				instr16_0FBA_4_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -12468,7 +14220,7 @@ void run_instruction0f(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr16_0FBA_5_reg(modrm_byte & 7, imm);
+				instr16_0FBA_5_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -12484,7 +14236,7 @@ void run_instruction0f(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr16_0FBA_6_reg(modrm_byte & 7, imm);
+				instr16_0FBA_6_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -12500,7 +14252,7 @@ void run_instruction0f(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr16_0FBA_7_reg(modrm_byte & 7, imm);
+				instr16_0FBA_7_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -12527,7 +14279,7 @@ void run_instruction0f(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr32_0FBA_4_reg(modrm_byte & 7, imm);
+				instr32_0FBA_4_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -12543,7 +14295,7 @@ void run_instruction0f(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr32_0FBA_5_reg(modrm_byte & 7, imm);
+				instr32_0FBA_5_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -12559,7 +14311,7 @@ void run_instruction0f(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr32_0FBA_6_reg(modrm_byte & 7, imm);
+				instr32_0FBA_6_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -12575,7 +14327,7 @@ void run_instruction0f(int32_t opcode)
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr32_0FBA_7_reg(modrm_byte & 7, imm);
+				instr32_0FBA_7_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;
@@ -12592,10 +14344,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0FBB_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0FBB_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0FBB_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0FBB_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12606,10 +14358,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0FBB_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0FBB_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0FBB_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0FBB_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12620,10 +14372,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0FBC_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0FBC_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0FBC_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0FBC_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12634,10 +14386,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0FBC_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0FBC_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0FBC_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0FBC_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12648,10 +14400,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0FBD_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0FBD_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0FBD_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0FBD_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12662,10 +14414,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0FBD_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0FBD_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0FBD_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0FBD_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12676,10 +14428,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0FBE_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0FBE_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0FBE_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0FBE_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12690,10 +14442,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0FBE_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0FBE_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0FBE_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0FBE_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12704,10 +14456,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0FBF_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0FBF_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0FBF_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0FBF_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12718,10 +14470,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0FBF_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0FBF_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0FBF_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0FBF_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12733,10 +14485,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0FC0_mem(addr, modrm_byte >> 3 & 7);
+			instr_0FC0_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0FC0_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0FC0_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 		after_block_boundary();
 	}
@@ -12748,10 +14500,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr16_0FC1_mem(addr, modrm_byte >> 3 & 7);
+			instr16_0FC1_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr16_0FC1_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr16_0FC1_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12762,10 +14514,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr32_0FC1_mem(addr, modrm_byte >> 3 & 7);
+			instr32_0FC1_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr32_0FC1_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr32_0FC1_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12784,12 +14536,12 @@ void run_instruction0f(int32_t opcode)
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_660FC2_mem(addr, modrm_byte >> 3 & 7, imm);
+				instr_660FC2_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_660FC2_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+				instr_660FC2_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 		}
 		else if ((prefixes_ & PREFIX_F2) != 0) {
@@ -12801,12 +14553,12 @@ void run_instruction0f(int32_t opcode)
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_F20FC2_mem(addr, modrm_byte >> 3 & 7, imm);
+				instr_F20FC2_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_F20FC2_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+				instr_F20FC2_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -12818,12 +14570,12 @@ void run_instruction0f(int32_t opcode)
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_F30FC2_mem(addr, modrm_byte >> 3 & 7, imm);
+				instr_F30FC2_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_F30FC2_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+				instr_F30FC2_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 		}
 		else {
@@ -12835,12 +14587,12 @@ void run_instruction0f(int32_t opcode)
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_0FC2_mem(addr, modrm_byte >> 3 & 7, imm);
+				instr_0FC2_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_0FC2_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+				instr_0FC2_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 		}
 	}
@@ -12853,10 +14605,10 @@ void run_instruction0f(int32_t opcode)
 		if (modrm_byte < 0xC0) {
 			int32_t addr = modrm_resolve(modrm_byte);
 			if (cpu->pagefault) return;
-			instr_0FC3_mem(addr, modrm_byte >> 3 & 7);
+			instr_0FC3_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 		}
 		else {
-			instr_0FC3_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+			instr_0FC3_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 		}
 	}
 	break;
@@ -12875,12 +14627,12 @@ void run_instruction0f(int32_t opcode)
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_660FC4_mem(addr, modrm_byte >> 3 & 7, imm);
+				instr_660FC4_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_660FC4_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+				instr_660FC4_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 		}
 		else {
@@ -12892,12 +14644,12 @@ void run_instruction0f(int32_t opcode)
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_0FC4_mem(addr, modrm_byte >> 3 & 7, imm);
+				instr_0FC4_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_0FC4_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+				instr_0FC4_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 		}
 	}
@@ -12917,12 +14669,12 @@ void run_instruction0f(int32_t opcode)
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_660FC5_mem(addr, modrm_byte >> 3 & 7, imm);
+				instr_660FC5_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_660FC5_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+				instr_660FC5_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 		}
 		else {
@@ -12934,12 +14686,12 @@ void run_instruction0f(int32_t opcode)
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_0FC5_mem(addr, modrm_byte >> 3 & 7, imm);
+				instr_0FC5_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_0FC5_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+				instr_0FC5_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 		}
 	}
@@ -12959,12 +14711,12 @@ void run_instruction0f(int32_t opcode)
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_660FC6_mem(addr, modrm_byte >> 3 & 7, imm);
+				instr_660FC6_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_660FC6_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+				instr_660FC6_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 		}
 		else {
@@ -12976,12 +14728,12 @@ void run_instruction0f(int32_t opcode)
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_0FC6_mem(addr, modrm_byte >> 3 & 7, imm);
+				instr_0FC6_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 			else {
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
-				instr_0FC6_reg(modrm_byte & 7, modrm_byte >> 3 & 7, imm);
+				instr_0FC6_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
 			}
 		}
 	}
@@ -12999,7 +14751,7 @@ void run_instruction0f(int32_t opcode)
 				instr16_0FC7_1_mem(addr);
 			}
 			else {
-				instr16_0FC7_1_reg(modrm_byte & 7);
+				instr16_0FC7_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -13011,7 +14763,7 @@ void run_instruction0f(int32_t opcode)
 				instr16_0FC7_6_mem(addr);
 			}
 			else {
-				instr16_0FC7_6_reg(modrm_byte & 7);
+				instr16_0FC7_6_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -13035,7 +14787,7 @@ void run_instruction0f(int32_t opcode)
 				instr32_0FC7_1_mem(addr);
 			}
 			else {
-				instr32_0FC7_1_reg(modrm_byte & 7);
+				instr32_0FC7_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
@@ -13047,7 +14799,7 @@ void run_instruction0f(int32_t opcode)
 				instr32_0FC7_6_mem(addr);
 			}
 			else {
-				instr32_0FC7_6_reg(modrm_byte & 7);
+				instr32_0FC7_6_reg(reg_index_b(modrm_byte & 7));
 			}
 			after_block_boundary();
 		}
@@ -13129,10 +14881,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FD1_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FD1_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FD1_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FD1_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13142,10 +14894,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FD1_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FD1_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FD1_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FD1_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -13163,10 +14915,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FD2_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FD2_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FD2_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FD2_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13176,10 +14928,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FD2_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FD2_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FD2_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FD2_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -13197,10 +14949,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FD3_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FD3_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FD3_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FD3_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13210,10 +14962,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FD3_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FD3_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FD3_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FD3_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -13231,10 +14983,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FD4_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FD4_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FD4_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FD4_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13244,10 +14996,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FD4_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FD4_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FD4_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FD4_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -13265,10 +15017,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FD5_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FD5_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FD5_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FD5_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13278,10 +15030,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FD5_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FD5_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FD5_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FD5_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -13299,10 +15051,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FD6_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FD6_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FD6_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FD6_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F2) != 0) {
@@ -13312,10 +15064,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F20FD6_mem(addr, modrm_byte >> 3 & 7);
+				instr_F20FD6_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F20FD6_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F20FD6_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 			after_block_boundary();
 		}
@@ -13326,10 +15078,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30FD6_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30FD6_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30FD6_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30FD6_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 			after_block_boundary();
 		}
@@ -13340,10 +15092,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FD6_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FD6_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FD6_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FD6_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 			after_block_boundary();
 		}
@@ -13362,10 +15114,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FD7_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FD7_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FD7_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FD7_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13375,10 +15127,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FD7_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FD7_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FD7_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FD7_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -13396,10 +15148,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FD8_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FD8_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FD8_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FD8_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13409,10 +15161,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FD8_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FD8_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FD8_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FD8_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -13430,10 +15182,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FD9_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FD9_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FD9_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FD9_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13443,10 +15195,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FD9_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FD9_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FD9_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FD9_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -13464,10 +15216,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FDA_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FDA_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FDA_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FDA_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13477,10 +15229,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FDA_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FDA_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FDA_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FDA_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -13498,10 +15250,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FDB_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FDB_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FDB_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FDB_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13511,10 +15263,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FDB_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FDB_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FDB_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FDB_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -13532,10 +15284,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FDC_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FDC_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FDC_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FDC_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13545,10 +15297,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FDC_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FDC_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FDC_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FDC_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -13566,10 +15318,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FDD_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FDD_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FDD_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FDD_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13579,10 +15331,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FDD_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FDD_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FDD_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FDD_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -13600,10 +15352,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FDE_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FDE_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FDE_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FDE_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13613,10 +15365,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FDE_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FDE_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FDE_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FDE_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -13634,10 +15386,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FDF_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FDF_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FDF_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FDF_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13647,10 +15399,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FDF_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FDF_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FDF_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FDF_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -13668,10 +15420,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FE0_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FE0_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FE0_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FE0_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13681,10 +15433,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FE0_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FE0_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FE0_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FE0_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -13702,10 +15454,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FE1_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FE1_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FE1_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FE1_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13715,10 +15467,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FE1_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FE1_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FE1_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FE1_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -13736,10 +15488,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FE2_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FE2_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FE2_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FE2_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13749,10 +15501,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FE2_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FE2_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FE2_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FE2_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -13770,10 +15522,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FE3_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FE3_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FE3_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FE3_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13783,10 +15535,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FE3_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FE3_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FE3_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FE3_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -13804,10 +15556,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FE4_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FE4_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FE4_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FE4_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13817,10 +15569,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FE4_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FE4_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FE4_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FE4_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -13838,10 +15590,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FE5_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FE5_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FE5_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FE5_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13851,10 +15603,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FE5_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FE5_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FE5_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FE5_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -13872,10 +15624,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FE6_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FE6_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FE6_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FE6_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F2) != 0) {
@@ -13885,10 +15637,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F20FE6_mem(addr, modrm_byte >> 3 & 7);
+				instr_F20FE6_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F20FE6_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F20FE6_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else if ((prefixes_ & PREFIX_F3) != 0) {
@@ -13898,10 +15650,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_F30FE6_mem(addr, modrm_byte >> 3 & 7);
+				instr_F30FE6_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_F30FE6_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_F30FE6_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13911,10 +15663,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FE6_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FE6_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FE6_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FE6_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 			after_block_boundary();
 		}
@@ -13933,10 +15685,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FE7_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FE7_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FE7_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FE7_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13946,10 +15698,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FE7_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FE7_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FE7_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FE7_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 			after_block_boundary();
 		}
@@ -13968,10 +15720,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FE8_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FE8_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FE8_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FE8_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -13981,10 +15733,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FE8_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FE8_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FE8_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FE8_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14002,10 +15754,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FE9_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FE9_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FE9_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FE9_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14015,10 +15767,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FE9_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FE9_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FE9_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FE9_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14036,10 +15788,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FEA_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FEA_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FEA_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FEA_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14049,10 +15801,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FEA_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FEA_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FEA_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FEA_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14070,10 +15822,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FEB_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FEB_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FEB_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FEB_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14083,10 +15835,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FEB_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FEB_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FEB_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FEB_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14104,10 +15856,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FEC_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FEC_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FEC_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FEC_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14117,10 +15869,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FEC_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FEC_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FEC_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FEC_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14138,10 +15890,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FED_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FED_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FED_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FED_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14151,10 +15903,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FED_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FED_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FED_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FED_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14172,10 +15924,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FEE_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FEE_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FEE_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FEE_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14185,10 +15937,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FEE_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FEE_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FEE_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FEE_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14206,10 +15958,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FEF_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FEF_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FEF_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FEF_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14219,10 +15971,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FEF_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FEF_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FEF_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FEF_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14250,10 +16002,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FF1_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FF1_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FF1_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FF1_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14263,10 +16015,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FF1_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FF1_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FF1_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FF1_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14284,10 +16036,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FF2_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FF2_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FF2_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FF2_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14297,10 +16049,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FF2_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FF2_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FF2_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FF2_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14318,10 +16070,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FF3_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FF3_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FF3_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FF3_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14331,10 +16083,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FF3_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FF3_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FF3_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FF3_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14352,10 +16104,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FF4_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FF4_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FF4_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FF4_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14365,10 +16117,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FF4_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FF4_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FF4_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FF4_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14386,10 +16138,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FF5_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FF5_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FF5_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FF5_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14399,10 +16151,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FF5_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FF5_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FF5_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FF5_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14420,10 +16172,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FF6_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FF6_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FF6_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FF6_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14433,10 +16185,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FF6_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FF6_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FF6_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FF6_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14454,10 +16206,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FF7_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FF7_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FF7_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FF7_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14467,10 +16219,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FF7_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FF7_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FF7_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FF7_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14488,10 +16240,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FF8_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FF8_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FF8_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FF8_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14501,10 +16253,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FF8_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FF8_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FF8_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FF8_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14522,10 +16274,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FF9_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FF9_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FF9_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FF9_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14535,10 +16287,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FF9_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FF9_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FF9_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FF9_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14556,10 +16308,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FFA_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FFA_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FFA_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FFA_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14569,10 +16321,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FFA_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FFA_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FFA_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FFA_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14590,10 +16342,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FFB_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FFB_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FFB_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FFB_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14603,10 +16355,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FFB_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FFB_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FFB_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FFB_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14624,10 +16376,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FFC_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FFC_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FFC_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FFC_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14637,10 +16389,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FFC_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FFC_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FFC_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FFC_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14658,10 +16410,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FFD_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FFD_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FFD_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FFD_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14671,10 +16423,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FFD_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FFD_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FFD_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FFD_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
@@ -14692,10 +16444,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_660FFE_mem(addr, modrm_byte >> 3 & 7);
+				instr_660FFE_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_660FFE_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_660FFE_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 		else {
@@ -14705,10 +16457,10 @@ void run_instruction0f(int32_t opcode)
 			if (modrm_byte < 0xC0) {
 				int32_t addr = modrm_resolve(modrm_byte);
 				if (cpu->pagefault) return;
-				instr_0FFE_mem(addr, modrm_byte >> 3 & 7);
+				instr_0FFE_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
 			}
 			else {
-				instr_0FFE_reg(modrm_byte & 7, modrm_byte >> 3 & 7);
+				instr_0FFE_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
 			}
 		}
 	}
