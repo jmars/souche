@@ -420,9 +420,59 @@ pages the last page into RAM gets the cached/compiled engine — `uop_cache_self
 and `jit_codegen_selftest`'s three-arm `test_last_page` pin it (state identical, `decodes 0/1/1`,
 and with the pre-fix expression restored the counters go to 0 while the state still agrees).
 
-**S4-S13 REMAIN**: the host-corpus infrastructure, then the vertical slice, the ISA families, the
-system layer, the guest and the engines' long-mode arms.  The rest of this section is the
-reconnaissance record and is not made stale by S0-S3.
+**S4 IS LANDED (2026-10-19): THE HOST-CORPUS INFRASTRUCTURE — AND ITS GATE IS NEGATIVE.**
+`results/x86-64-s4.md` is its report.  What exists now: `tests/mkfixture64.c` (the native leg — it
+`mmap`s the flat image at its link base `MAP_FIXED_NOREPLACE`, zeroes the GPRs and the FPU state, and
+jumps to the body under ptrace, so **the harness is the loader** and no shipped `load_elf` code
+changed), `tests/nasm64_run.py` (the differential runner: the 32-bit comparison's logic on the v2
+layout), `gen/nasm64_gen.py` + `tests/nasm64/*.asm` (a **generated** 57-case corpus over the six ISA
+families S5-S10 will land: mov 12, alu 10, ctrl 12, muldiv 11, strobits 6, simd 6 — every case
+required to contain a construct that DISCRIMINATES 32-bit from 64-bit execution, and the generator
+refuses one that does not), `tests/nasm64.ld` (`.stub@0x80000`, `.body@0x90000`, `.bss@0x100000`
+NOLOAD), the hand-written `tests/nasm64_control.asm`, and `--fixture64` in `src/main.c` (one printer,
+two documents: the 16-GPR/`rip` v2 array plus a `---BEGIN STATE---` control tail whose consumers are
+S13's engine differential and the KVM lane's state translation; the 32-bit document's bytes are
+unchanged, which §4's shape step pins rather than asserts).  **THE GATE (`make nasm64` = `tests/gate-nasm64.sh`, 11 steps, each one's exit code):** the v2
+printer's shape (2116/2124 elements, same registers, R8-R15 zero, same rip, identical
+FPU/memory/flags block); the harness's own control against an independent Python model (27/27
+clauses — the `loop` breakpoint, the 8 KiB window, the x87 read, all predicted from the source's
+constants); the **witness rule's own battery** (20 verdicts: the rule must refuse a wholly 32-bit
+body); the comparison CAN pass (57/57 green with the native leg on both sides); **one perturbed
+value per fixture is caught and NAMED** (a register word 55/55, a comparison-window word 55/55, the
+fault cases' `rip` 2/2); and **the RED census AS COUNTS** — `green=0 red_unimplemented=57
+mismatch=0 error=0`, every case stopping with a named `unimplemented:` (`EFER.LME asks for IA-32e …
+cannot run long mode`), because the machine cannot execute 64-bit code yet and a green corpus today
+would have tested nothing — plus that assertion's own **able-to-fail arm** (wrong counts must be
+refused) and the **not-red arm** (a bare `--stage run` against a document-producing leg must return
+a SUMMARY and green=57).  S4's own finds, all caught by the new instrument: the stub's `EFER.LME`
+written as bit 0 (i.e. `SCE`), which made the port run the whole stub into the plan's **C5**
+wrong-table walk and end in `SIGBUS`; the generator emitting each case's data BEFORE `loop:` (3 of
+57 cases fell through into their `.quad` bytes); the trampoline's register allocation jumping to 0;
+the host's inherited FPU state (the `memcpy`'s junk in `xmm0-15`).  **ROUND 2** (`results/x86-64-s4.md`
+§9) fixed the review's six findings: a BLOCKER in the runner (`fixture_text` unbound, so a bare
+`--stage run` would have died at the first case that stopped being RED — exactly gate step D's form,
+i.e. the harness would have been dead on arrival for S5); **the round-1 x87 claim was WRONG and is
+retracted** — the abridged FTW is not a dead field, it is AMD's **valid mask** (MEASURED: `fninit`
+→ `0x00`, `fninit; fld1` → `0x80`, three pushes → `0xe0`), and round 1 read it with Intel's polarity
+and built a value-derived rule on that mistake; the harness now **calibrates** the polarity at
+start-up, names it on stderr, and derives the tag the way the architecture does, which makes the
+shipped `simd-fild-fistp64` case report `0xAAAA` with the MMX branch FIRING (round 1 reported two
+panels live and compared nothing); the slot-order comment was inverted (the code was right — slot
+`i` is LOGICAL `st(i)`, the same convention as `mkfixture.c`); "the same `0xFFFFAAAA` as the 32-bit
+lane" was false (MEASURED over the 123 fixtures: `0xFFFFFFFF` x49, `0x55AA` x22, `0xAAAA` x7 …); the
+witness rule was **unsound** (it matched spellings, accepting a wholly 32-bit body and a
+zero-padded literal, and refusing a decimal ≥ 2^32) and is now class-based with a battery that
+refuses what it accepted, which made it strengthen 6 cases rather than delete them (57 → 57); and
+the gate verdict now asserts the SUMMARY NUMBERS (with its own able-to-fail arm) instead of a
+permissive shape.  The rest of the battery was unmoved — transcript `8bb8eca5…`, determinism
+4,000,096,757 both runs, bench 200,095,214, nasm 118/118, reboot 39/39, the five VGA gates, PAE-1
+11/0, PAE-L3 both legs.  NOT landed, named in the report: no 64-bit execution (57/57 RED), the stub
+is executed by NEITHER leg until S5, R8-R15 are the seat and print zero, the corpus is 57 cases (the
+plan's ~250 arrives family by family), and non-canonical `#GP` is deferred to S7 where a case can
+express it.
+
+**S5-S13 REMAIN**: the vertical slice, the ISA families, the system layer, the guest and the engines'
+long-mode arms.  The rest of this section is the reconnaissance record and is not made stale by S0-S4.
 
 Not implemented, and deliberately **not** listed as a non-goal: it is wanted one day. It is recorded
 here so the next reader inherits the reconnaissance instead of re-deriving it.

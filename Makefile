@@ -13,6 +13,10 @@
 #   make nasm-fixtures   the native (ptrace) fixture for each of them
 #   make nasm            the differential run -- native fixtures vs the actual
 #                        implementation (default: the pinned JS reference); the gate
+#   make nasm64-gen      regenerate the x86-64 corpus (gen/nasm64_gen.py -> tests/nasm64)
+#   make nasm64          S4's gate: the x86-64 corpus's instrument must be able to FAIL
+#                        (perturbed fixtures), its own controls must hold, and EVERY case
+#                        must be RED with a named `unimplemented:` stop until S5
 #   make clean
 
 COSMOCC_DIR ?= /home/jaye/.local/cosmo/bin
@@ -270,6 +274,14 @@ HOSTCC ?= cc
 NASM_MKFIXTURE := $(BUILD)/mkfixture
 NASM_WORKDIR := $(BUILD)/nasm
 
+# S4: the x86-64 corpus (HANDOFF=v86c-x86-64).  tests/mkfixture64.c is a host binary for
+# the same reason tests/mkfixture.c is: it mmaps the flat image at its link base, jumps to
+# the body under ptrace, and reads x86-64 PTRACE_GETREGS/GETFPREGS -- none of which cosmocc
+# has any business doing.  The corpus itself is GENERATED (gen/nasm64_gen.py), and the
+# image/ELF/objcopy pipeline lives in tests/nasm64_run.py.
+NASM64_MKFIXTURE := $(BUILD)/mkfixture64
+NASM64_WORKDIR := $(BUILD)/nasm64
+
 # The unit tests' source set: the M1a CPU files the selftest was written against.  It is
 # deliberately NOT CPU_SRC -- cpu_state.c here has its own recording definitions of every
 # boundary symbol (cpu.c/exec_boundary.c/instructions_0f.c DEFINE them now), so linking
@@ -285,7 +297,7 @@ SELFTEST_SRC := src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/pag
 .PHONY: all oracle determinism expected image run selftest clean generator \
         transcript-diff nasm nasm-js nasm-translate nasm-fixtures minibios unity unity-src bench \
         unity-symbols uop-gen uop-unity jit-selftest jit-codegen-selftest engine-identity \
-        poison-probe
+        poison-probe nasm64 nasm64-gen
 
 all: $(BUILD)/v86c
 
@@ -739,6 +751,32 @@ nasm-fixtures: $(NASM_MKFIXTURE)
 $(BUILD)/v86c-nasm: $(BUILD)/v86c
 	@printf '#!/bin/sh\nexec ./%s "$$@"\n' '$(BUILD)/v86c' > $@
 	@chmod +x $@
+
+# --- S4: the x86-64 corpus's harness, launcher and gate -------------------------
+# The launcher exists for the same measured reason build/v86c-nasm does: the APE's kernel
+# exec path gets ENOEXEC and its re-exec fallback lives in a shell, so a process spawned
+# directly (which is how tests/nasm64_run.py starts the actual leg) cannot start it.
+$(NASM64_MKFIXTURE): tests/mkfixture64.c
+	@mkdir -p $(BUILD)
+	$(HOSTCC) $(CFLAGS) -o $@ $<
+
+$(BUILD)/v86c-nasm64: $(BUILD)/v86c
+	@printf '#!/bin/sh\nexec ./%s "$$@"\n' '$(BUILD)/v86c' > $@
+	@chmod +x $@
+
+# The corpus is a REPO ARTIFACT (tests/nasm64/*.asm): it is generated, and checked in, so
+# that a reader can see what each slice will be graded on without running a generator.
+nasm64-gen:
+	$(PYTHON) gen/nasm64_gen.py --out tests/nasm64
+
+# S4'S GATE IS NEGATIVE (results/x86-64-plan.md ss6 S4): the comparison must be shown to
+# bite on a perturbed fixture, the harness's own controls must hold, and every case must be
+# RED with a named `unimplemented:` stop -- the machine cannot execute 64-bit code, so a
+# green corpus today would have tested nothing.  tests/gate-nasm64.sh is the gate; its exit
+# code is the verdict.
+nasm64: $(NASM64_MKFIXTURE) $(BUILD)/v86c-nasm64 nasm64-gen
+	@mkdir -p $(NASM64_WORKDIR)
+	sh tests/gate-nasm64.sh
 
 nasm: $(NASM_MKFIXTURE) $(BUILD)/v86c-nasm
 	@mkdir -p $(NASM_WORKDIR)

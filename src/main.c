@@ -278,7 +278,12 @@ static void multiboot_set_state(uint32_t entrypoint)
 		cpu->segment_limits[i] = 0xFFFFFFFFu;
 		cpu->sreg[i] = (uint16_t)(i == CS ? 0x08 : 0x10);
 	}
-	cpu->instruction_pointer = get_seg_cs() + (int32_t)entrypoint;
+	/* S3: through the fetch-cursor store (cpu_state.h), like every other producer of an eip:
+	 * get_seg_cs() is 64-bit now, and a bare assignment would let a 32-bit entry point with
+	 * bit 31 set sign-extend into the field.  Outside long mode the store projects, which is
+	 * upstream's i32 arithmetic; main.c's own entry point is the boot's, and the invariant at
+	 * the first batch boundary is what would name a mistake here. */
+	set_instruction_pointer(get_seg_cs() + (uint32_t)entrypoint);
 	update_state_flags();
 }
 
@@ -591,11 +596,98 @@ static void print_float(double v)
 	printf("%.17g", v); /* JS Number.toString is shortest-round-trip; %.17g round-trips too */
 }
 
-static void print_fixture(void)
+/* ------------------------------------------------------------------ *
+ * S4 -- THE LONG-MODE DOCUMENT'S CONTROL TAIL (plan ss5.4)
+ *
+ * `--fixture64` prints TWO sections: the compared v2 array (the corpus's actual leg) and
+ * this tail, which the corpus comparator IGNORES.  Its consumers are the things that need
+ * a machine's whole state rather than a comparison: the 64-bit ENGINE differential (interp
+ * vs uop vs jit, byte for byte -- S13) and the KVM lane's state translation
+ * (results/kvm-plan.md ss4 T1 asks for exactly one canonical state document).  Printing it
+ * now is deliberate: the document's SHAPE is what those consumers will be written against,
+ * and a shape invented at their moment of need is a shape nobody checked.
+ *
+ * WHAT IS NOT IN IT YET, so its absence is not read as a promise: the FS/GS/KERNEL_GS base
+ * MSRs and the long-mode MSR set are S11's (the widened segment_offsets[] slots are the
+ * seat they land in); cr[3] is a 32-bit PML4 base only because the model's physical space
+ * is 32-bit (ss5.1); and `rflags` appears in the compared array above, not here.
+ * ------------------------------------------------------------------ */
+static const char *document_mode_name(uint32_t mode)
+{
+	switch (mode) {
+	case CPU_MODE_REAL: return "real";
+	case CPU_MODE_PROT16: return "prot16";
+	case CPU_MODE_PROT32: return "prot32";
+	case CPU_MODE_LONG: return "long";
+	case CPU_MODE_COMPAT: return "compat";
+	default: return "unknown";
+	}
+}
+
+static void print_state_tail(void)
+{
+	printf("---BEGIN STATE---\n{\n");
+	printf("  \"mode\": \"%s\",\n", document_mode_name(cpu_mode_of(cpu)));
+	printf("  \"efer\": \"0x%llx\",\n", (unsigned long long)cpu->efer);
+	printf("  \"cr\": [");
+	for (int i = 0; i < 5; i++) printf("%s\"0x%x\"", i ? ", " : "", (unsigned)cpu->cr[i]);
+	printf("],\n");
+	printf("  \"gdtr\": { \"base\": \"0x%llx\", \"limit\": %d },\n",
+	       (unsigned long long)cpu->gdtr_offset, (int)cpu->gdtr_size);
+	printf("  \"idtr\": { \"base\": \"0x%llx\", \"limit\": %d },\n",
+	       (unsigned long long)cpu->idtr_offset, (int)cpu->idtr_size);
+	printf("  \"segments\": [");
+	for (int i = 0; i < 6; i++) {
+		printf("%s{ \"selector\": \"0x%x\", \"base\": \"0x%llx\", \"limit\": \"0x%x\" }",
+		       i ? ", " : "", (unsigned)cpu->sreg[i],
+		       (unsigned long long)cpu->segment_offsets[i],
+		       (unsigned)cpu->segment_limits[i]);
+	}
+	printf("],\n");
+	printf("  \"sysenter\": { \"cs\": \"0x%x\", \"esp\": \"0x%x\", \"eip\": \"0x%x\" },\n",
+	       (unsigned)cpu->sysenter_cs, (unsigned)cpu->sysenter_esp,
+	       (unsigned)cpu->sysenter_eip);
+	printf("  \"state_flags\": \"0x%x\",\n", (unsigned)cpu->state_flags);
+	printf("  \"instruction_pointer\": \"0x%llx\",\n",
+	       (unsigned long long)cpu->instruction_pointer);
+	printf("  \"previous_ip\": \"0x%llx\",\n", (unsigned long long)cpu->previous_ip);
+	printf("  \"instruction_count\": %llu\n", (unsigned long long)cpu->instruction_counter);
+	printf("}\n---END STATE---\n");
+}
+
+/* S4: THE TWO DOCUMENTS, ONE PRINTER.  `wide` selects the x86-64 corpus's format v2
+ * (tests/mkfixture64.c, results/x86-64-plan.md ss5.4): sixteen 64-bit GPRs and a 64-bit
+ * `rip`, then the SAME x87/MMX/XMM/memory block and flag word.  The 32-bit document is
+ * untouched -- every value it prints is the same expression, and the arity stays 2116 --
+ * because the M0 transcript and the nasm differential's 2116-check are contracts, not
+ * conventions.
+ *
+ * WHAT THE WIDE DOCUMENT CANNOT YET SHOW, stated so its silence is not read as a proof:
+ * R8-R15 DO NOT EXIST IN THE MODEL (plan ss4's inventory -- reg64[8] is eight slots; the
+ * high registers arrive with the 64-bit model in S5), so the sixteen-element register
+ * block prints their eight slots as ZERO.  The seat is built and the honest current value
+ * is in it: an emulated run and a native run of a case that USES r8-r15 must disagree on
+ * those slots until S5, which is one of the ways a family cannot go green early. */
+static void print_fixture(bool wide)
 {
 	int32_t fpu_tag = fpu_load_tag_word();
 	uint16_t fpu_status = fpu_load_status_word();
 	int32_t top = fpu_status >> 11 & 7;
+
+	/* THE FLAG DOES NOT PRETEND TO HAVE RUN A 64-BIT IMAGE.  The port cannot execute a
+	 * long-mode image yet (S5 is the first slice that can), so a run that STOPS BY NAME
+	 * never reaches here -- `--fixture64` on a corpus image exits 1 with
+	 * `unimplemented: EFER.LME asks for IA-32e...` before any document is printed, and
+	 * that IS the refusal.  What reaches here is a machine that stopped in a mode this
+	 * model has, and the document says so: the control tail names the mode, and this note
+	 * names the projection in the one place a reader would otherwise mistake the wide
+	 * register block for a 64-bit state. */
+	if (wide && (cpu->efer & EFER_LMA) == 0) {
+		fprintf(stderr, "v86c: --fixture64: the machine is NOT in long mode (efer=0x%llx,"
+		                " mode=%s); the v2 register block's high halves are the S3"
+		                " projection and r8-r15 do not exist yet (S5)\n",
+		        (unsigned long long)cpu->efer, document_mode_name(cpu_mode_of(cpu)));
+	}
 
 	if (guest_exception >= 0) {
 		const char *signal = exception_signal(guest_exception);
@@ -607,11 +699,26 @@ static void print_fixture(void)
 	}
 
 	printf("---BEGIN JSON---\n[\n");
-	/* S1: the register file is 64-bit now; the fixture document is a 32-bit document
-	 * (tests/mkfixture.c's `reg32[8]`), so the value printed is the low half, exactly as
-	 * before -- (int32_t)(uint32_t) reproduces both the %d width AND the sign. */
-	for (int i = 0; i < 8; i++) printf("    %d,\n", (int32_t)(uint32_t)cpu->reg64[i]);
-	printf("    %d,\n", cpu->instruction_pointer);
+	if (wide) {
+		/* format v2: the 16 GPRs of the native document (tests/mkfixture64.c), in
+		 * reg64[]'s order, as SIGNED decimal of the 64-bit value -- the same
+		 * convention on both sides, so the comparison never has to guess a width.
+		 * Slots 8-15 are the seat described above: zero until S5. */
+		for (int i = 0; i < 8; i++) printf("    %lld,\n", (long long)cpu->reg64[i]);
+		for (int i = 8; i < 16; i++) printf("    0,\n");
+		printf("    %lld,\n", (long long)cpu->instruction_pointer);
+	} else {
+		/* S1: the register file is 64-bit now; the fixture document is a 32-bit
+		 * document (tests/mkfixture.c's `reg32[8]`), so the value printed is the low
+		 * half, exactly as before -- (int32_t)(uint32_t) reproduces both the %d width
+		 * AND the sign. */
+		for (int i = 0; i < 8; i++) printf("    %d,\n", (int32_t)(uint32_t)cpu->reg64[i]);
+		/* S3: the eip is a uint64_t field; this is a 32-bit document
+		 * (tests/mkfixture.c's `reg32[8]`), so the value printed is the low half with
+		 * %d's own sign -- exactly the bytes the old `%d` of an int32_t field
+		 * produced. */
+		printf("    %d,\n", (int32_t)(uint32_t)cpu->instruction_pointer);
+	}
 
 	for (int i = 0; i < 8; i++) {
 		int32_t phys = (top + i) & 7;
@@ -641,6 +748,8 @@ static void print_fixture(void)
 	printf("    %d,\n", (int)fpu_tag);
 	printf("    %u\n", (unsigned)fpu_status);
 	printf("]\n---END JSON---\n");
+
+	if (wide) print_state_tail();
 }
 
 /* ------------------------------------------------------------------ *
@@ -1416,27 +1525,62 @@ static int boot_main(int argc, char *argv[])
  * requires a BYTE-IDENTICAL transcript.  If the transcript moves, a widened field leaked
  * into a 32-bit path: that is the finding, not a re-pin (results/x86-64-s1-s2.md ss3).
  *
- * WHAT IT CANNOT SHOW, stated so its silence is not read as a proof: it seeds the fields
+ * S3 EXTENDED ITS REACH TO THE ADDRESS FIELDS (results/x86-64-s3.md): instruction_pointer,
+ * previous_ip, last_virt_eip, eip_phys, idtr_offset, gdtr_offset and all eight
+ * segment_offsets[] slots.  That extension is the DIRECT detector for RISK R2 ("a truncating
+ * cast in the widening"): the claim is that every 32-bit path PROJECTS these fields (the
+ * batch boundary's invariant, the translate/mem8 casts), so a high half that is present from
+ * the boot on must not move a single byte of the transcript.  A move means some consumer read
+ * the high half.
+ *
+ * The seed also has to be compatible with the invariant itself: cpu_state.h's
+ * cpu_assert_address_widening would rightly stop the machine on a poisoned high half, so the
+ * probe DISABLES it (`cpu_address_widening_check_enabled = false`) -- the two instruments
+ * point in opposite directions and each is the other's control.  What the invariant proves is
+ * that the SHIPPED paths never produce a high half; what the probe proves is that a high half,
+ * once present, changes nothing.
+ *
+ * WHAT IT STILL CANNOT SHOW, stated so its silence is not read as a proof: it seeds the fields
  * that EXIST.  reg64[] has eight slots until the high registers (R8-R15) arrive with the
- * 64-bit model itself (plan ss6's $S5), so there is no R8-R15 to seed here; and for
- * last_op1/last_result the seed is inert BY CONSTRUCTION while flags_changed is clear
- * (every getter recomputes them from the operation that set the bit), so what the run
- * exercises there is only that the seed itself does not move the machine.  The flag cores'
- * high-half discipline is pinned where it can actually fail: cpu_selftest.c's
- * test_widened_state_poison, which poisons the operands of a live lazy flag word and
- * requires every getter to answer the same.
+ * 64-bit model itself (plan ss6's $S5), so there is no R8-R15 to seed here; for
+ * last_op1/last_result the seed is inert BY CONSTRUCTION while flags_changed is clear (every
+ * getter recomputes them from the operation that set the bit), so what the run exercises there
+ * is only that the seed itself does not move the machine; and the ADDRESS fields are seeded
+ * only where the boot state makes the machine consult them -- the M0 image is flat and its
+ * GDTR/IDTR bases are read once each, so segment_offsets[FS]/[GS]/[TR]/[LDTR] and
+ * idtr_offset/gdtr_offset are seeded but the image barely reads them.  cpl/paging matter: with
+ * CR0.PG clear there is no page walk, so the TLB fields are not consulted either.  The flag
+ * cores' high-half discipline (the one place the probe is inert by construction) is pinned
+ * where it can actually fail: cpu_selftest.c's test_widened_state_poison, and the address
+ * invariant's own able-to-fail arm is cpu_selftest.c's test_address_widening_invariant.
  * ------------------------------------------------------------------ */
 static void poison_widened_state(void)
 {
 	const uint64_t poison = 0xA5A5A5A5A5A5A5A5ull;
+	const uint64_t high = 0xA5A5A5A5ull << 32;
 
 	for (int i = 0; i < 8; i++) {
 		cpu->reg64[i] |= poison; /* the low half keeps the boot's value */
 		cpu->dreg[i] |= poison;
+		/* S3: the segment bases (u64 slots since ss4).  `| high`, not `| poison`: the
+		 * LOW half must keep the boot's value or the very first data access moves. */
+		cpu->segment_offsets[i] |= high;
 	}
 	cpu->last_op1 = (int64_t)poison;
 	cpu->last_result = (int64_t)poison;
-	fprintf(stderr, "v86c: --poison: the widened state's high halves are 0xA5A5A5A5\n");
+	/* S3: the address fields.  last_virt_eip's boot value is VIRT_EIP_NONE, whose low 12
+	 * bits are set; ORing the high half on top keeps it unmatchable as a page. */
+	cpu->instruction_pointer |= high;
+	cpu->previous_ip |= high;
+	cpu->last_virt_eip |= high;
+	cpu->eip_phys |= high;
+	cpu->idtr_offset |= high;
+	cpu->gdtr_offset |= high;
+
+	/* the two instruments point in opposite directions: see the note above */
+	cpu_address_widening_check_enabled = false;
+	fprintf(stderr, "v86c: --poison: the widened state's high halves are 0xA5A5A5A5"
+	                " (registers, lazy operands, and since S3 the address/segment fields)\n");
 }
 
 /* ------------------------------------------------------------------ *
@@ -1451,6 +1595,7 @@ int main(int argc, char *argv[])
 	}
 
 	bool fixture_mode = false;
+	bool fixture64_mode = false;
 	bool poison_mode = false;
 	const char *image_path = NULL;
 	const char *limit_text = NULL;
@@ -1463,6 +1608,10 @@ int main(int argc, char *argv[])
 
 	for (int i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "--fixture") == 0) fixture_mode = true;
+		/* S4: the x86-64 corpus's document (format v2 + the control tail).  See
+		 * print_fixture's header: it is the SAME printer with the wide register block, so
+		 * the 32-bit document's bytes are untouched. */
+		else if (strcmp(argv[i], "--fixture64") == 0) { fixture_mode = true; fixture64_mode = true; }
 		/* S1: the poison probe (see poison_widened_state).  A diagnostic flag, never a
 		 * default: nothing in the shipped invocations changes. */
 		else if (strcmp(argv[i], "--poison") == 0) poison_mode = true;
@@ -1485,7 +1634,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (image_path == NULL || limit_text == NULL) {
-		fprintf(stderr, "usage: %s <image> <instruction-limit> [--fixture]"
+		fprintf(stderr, "usage: %s <image> <instruction-limit> [--fixture] [--fixture64]"
 		                " [--vga-ansi] [--vga-doc FILE] [--uop-cache on|off]"
 		                " [--uop-cache-stats] [--jit on|off] [--cpu-engine NAME] [--poison]\n",
 		        argv[0]);
@@ -1594,14 +1743,14 @@ int main(int argc, char *argv[])
 		 * over it and running on, so "did not halt" is not observable here.  Stated
 		 * because the runner's `no_halt` path is therefore unusable for the C leg. */
 		if (result.exception >= 0) {
-			print_fixture();
+			print_fixture(fixture64_mode);
 			return 0;
 		}
 		if (result.unimplemented) {
 			fprintf(stderr, "v86c: unimplemented: %s\n", unimplemented_instruction_name());
 			return 1;
 		}
-		print_fixture();
+		print_fixture(fixture64_mode);
 		if (!result.halted) {
 			fprintf(stderr, "v86c: guest did not halt within %llu instructions (reached %llu)\n",
 				(unsigned long long)limit, (unsigned long long)result.count);
