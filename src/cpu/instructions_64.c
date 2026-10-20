@@ -783,5 +783,255 @@ void instr64_EB(int64_t imm)
 {
 	int64_t target = (int64_t)cpu->instruction_pointer + (int64_t)(int8_t)imm;
 	set_instruction_pointer((uint64_t)target);
-	after_block_boundary();
+	/* S7: NO after_block_boundary -- the reference's table marks jmp rel8
+	 * `block_boundary:1, no_block_boundary_in_interpreted:1`, which the emitter reads as "no
+	 * postfix in the interpreter", and S5's version called it anyway (harmless: a batch end is
+	 * invisible to the compared state, and family 1 stayed green).  The jcc bodies below follow
+	 * the reference instead, so they and this body agree. */
 }
+
+/* ================================================================== *
+ * S7 -- CONTROL FLOW AND STACK AT 64 BITS (plan ss6's S7 row)
+ *
+ * THE RULES THIS SLICE IS ABOUT, stated where a reader will look for them:
+ *   - push/pop/call/ret move EIGHT bytes; RSP is 64 bits and SS.B is IGNORED;
+ *   - a near CALL pushes the address of the NEXT instruction -- the fetch cursor AFTER the
+ *     displacement has been consumed, which is what `cpu->instruction_pointer` already is by
+ *     the time the body runs;
+ *   - a near RET pops that value straight into the instruction pointer (cs base is 0 in
+ *     64-bit mode, and this slice has no far returns: 0xC2/0xCA/0xCB stay named stops);
+ *   - jcc/pc-rel jumps add the SIGN-EXTENDED displacement to the 64-bit cursor;
+ *   - the register/index extensions are the same REX rules the mov family uses, because the
+ *     emitter's reg_index_* helpers are the same expressions.
+ *
+ * THE DISCIPLINE (results/x86-64-s6.md ss9's): every body here names the corpus case that
+ * proves it, and an encoding without a case is a NAMED STOP, not a body.
+ * ================================================================== */
+
+/* ------------------------------------------------------------------ *
+ * CALL / RET / JMP -- the far-transfer stops S5 left by name, now bodies
+ * ------------------------------------------------------------------ */
+
+/* 0xE8 call rel32.  The corpus case is ctrl-call-ret-64; the wrong implementations it would
+ * catch are a FOUR-byte push (the 32-bit arm's shape -- the return address and every
+ * subsequent rsp would drift by 4) and a return address taken BEFORE the displacement was
+ * consumed (an infinite loop, since the target would be re-entered). */
+void instr64_E8(int32_t imm)
+{
+	push64(cpu->instruction_pointer); /* the next instruction's address: cs base is 0 here */
+	if (cpu->pagefault) return;
+	set_instruction_pointer(cpu->instruction_pointer + (int64_t)(int32_t)imm);
+}
+
+/* 0xC3 ret.  Same case; the wrong implementations it would catch are a FOUR-byte pop (the
+ * return address would be half the pushed pair) and popping without advancing rsp. */
+void instr64_C3(void)
+{
+	uint64_t v;
+	if (!pop64(&v)) return;
+	set_instruction_pointer(v); /* cs base is 0 in 64-bit mode */
+}
+
+/* 0xE9 jmp rel32 */
+void instr64_E9(int32_t imm)
+{
+	set_instruction_pointer(cpu->instruction_pointer + (int64_t)(int32_t)imm);
+}
+
+/* 0xFF /6 push r/m64 -- ctrl-push-pop-64 (`push qword ptr [rip + body_data0]`).  The S5
+ * shutter for this sub-op is now a body; /2 call r/m, /3 callf and /5 jmpf stay named stops
+ * (no corpus case covers them, and each is a FAR transfer whose 64-bit form is S11's). */
+void instr64_FF_6_mem(int64_t addr)
+{
+	uint64_t v = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	push64(v);
+}
+void instr64_FF_6_reg(int32_t r1) { push64(read_reg64(r1)); }
+
+/* 0xFF /4 jmp r/m64 -- ctrl-jmp-indirect.  The wrong implementation it would catch is
+ * truncating the target to 32 bits (the corpus's target is above nothing special, but the
+ * register form carries a full 64-bit value).  /2 call r/m, /3 callf, /5 jmpf and /6 push r/m
+ * stay named stops: no corpus case covers them. */
+void instr64_FF_4_mem(int64_t addr)
+{
+	uint64_t v = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	set_instruction_pointer(v);
+}
+void instr64_FF_4_reg(int32_t r1) { set_instruction_pointer(read_reg64(r1)); }
+
+/* ------------------------------------------------------------------ *
+ * JCC REL8 -- 0x70-0x7F, sixteen one-liners over the port's OWN test_* predicates
+ * (misc_instr.h); ctrl-jcc-64 (S6 side-effect green) and every other family-3 branch run
+ * through these.  The target arithmetic is the 64-bit cursor plus the sign-extended rel8.
+ * ------------------------------------------------------------------ */
+#define JMPCC8(OP, COND)                                                               \
+	void instr64_##OP(int32_t imm)                                                     \
+	{                                                                                  \
+		if (COND) set_instruction_pointer(cpu->instruction_pointer + (int64_t)imm);     \
+	}
+
+JMPCC8(70, test_o())
+JMPCC8(71, test_no())
+JMPCC8(72, test_b())
+JMPCC8(73, test_nb())
+JMPCC8(74, test_z())
+JMPCC8(75, test_nz())
+JMPCC8(76, test_be())
+JMPCC8(77, test_nbe())
+JMPCC8(78, test_s())
+JMPCC8(79, test_ns())
+JMPCC8(7A, test_p())
+JMPCC8(7B, test_np())
+JMPCC8(7C, test_l())
+JMPCC8(7D, test_nl())
+JMPCC8(7E, test_le())
+JMPCC8(7F, test_nle())
+
+/* ------------------------------------------------------------------ *
+ * LEA (0x8D) -- the ONE instruction whose address computation is the RESULT.  It is
+ * `custom_modrm_resolve` (the emitter passes the raw modrm byte), and no memory access
+ * happens, so a faulting address does NOT fault: the reference suppresses only the register
+ * write, exactly as the 32-bit body does.  ctrl-lea-64 (SIB with scale, and rip-relative).
+ * ------------------------------------------------------------------ */
+void instr64_8D_mem(int32_t modrm_byte, int32_t r)
+{
+	int64_t addr = modrm_resolve64(modrm_byte);
+	if (!cpu->pagefault) {
+		write_reg64(r, (uint64_t)addr);
+	}
+}
+void instr64_8D_reg(int32_t _r, int32_t _r2)
+{
+	(void)_r;
+	(void)_r2;
+	trigger_ud(); /* lea with a register operand is #UD, as at 32 bits */
+}
+
+/* ------------------------------------------------------------------ *
+ * MOVSXD (0x63) -- the 64-bit-only sign extension, and the encoding whose 32-bit meaning
+ * (ARPL) does not exist in long mode.  ctrl-movsxd (0x80000000 sign-extends to
+ * 0xFFFFFFFF80000000, which is the case a movzd-less port fails).
+ * ------------------------------------------------------------------ */
+void instr64_63_mem(int64_t addr, int32_t r)
+{
+	int32_t x = (int32_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	write_reg64(r, (int64_t)x); /* the SIGN extension is the whole instruction */
+}
+void instr64_63_reg(int32_t r1, int32_t r)
+{
+	write_reg64(r, (int64_t)(int32_t)read_reg32(r1));
+}
+
+/* ------------------------------------------------------------------ *
+ * XCHG (0x87) -- ctrl-xchg-64 (r8/r9, i.e. REX.B and REX.R both live).
+ * ------------------------------------------------------------------ */
+void instr64_87_mem(int64_t addr, int32_t r)
+{
+	uint64_t m = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	uint64_t reg = read_reg64(r);
+	safe_write64_addr(addr, reg);
+	if (cpu->pagefault) return;
+	write_reg64(r, m);
+}
+void instr64_87_reg(int32_t r1, int32_t r)
+{
+	uint64_t a = read_reg64(r1);
+	write_reg64(r1, read_reg64(r));
+	write_reg64(r, a);
+}
+
+/* ------------------------------------------------------------------ *
+ * THE 0F ESCAPE IN 64-BIT MODE, and the S7 subset of its space
+ * ------------------------------------------------------------------ */
+
+/* the escape's own body: read the second byte and key it with the 0F rule (modrm.c).  This is
+ * `case 0x20F` -- the overlay's `entry64: "instr64_0F"` -- and it is the ONLY way a 0F-qualified
+ * 0x2NN arm is reachable. */
+void instr64_0F(void)
+{
+	int32_t opcode = read_imm8();
+	if (cpu->pagefault) return;
+	run_instruction0f_64(opcode);
+}
+
+/* the 64-bit cmovcc/setcc/movzx/movsx helpers, over the port's own condition predicates */
+static void cmovcc64(bool condition, uint64_t value, int32_t r)
+{
+	if (condition) write_reg64(r, value);
+}
+
+/* 0F 44/45 -- cmovcc r64, r/m64.  The memory form reads BEFORE the condition is applied (the
+ * reference's shape), so a faulting cmov leaves the destination untouched.  ctrl-cmov. */
+void instr64_0F44_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	cmovcc64(test_z(), x, r);
+}
+void instr64_0F44_reg(int32_t r1, int32_t r) { cmovcc64(test_z(), read_reg64(r1), r); }
+void instr64_0F45_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	cmovcc64(test_nz(), x, r);
+}
+void instr64_0F45_reg(int32_t r1, int32_t r) { cmovcc64(test_nz(), read_reg64(r1), r); }
+
+/* 0F 94/95 -- setcc r/m8.  A BYTE store: the destination register keeps its other bytes, and
+ * the REX-aware byte mapping (cpu_state.c) is what picks SPL/BPL/SIL/DIL over AH/CH/DH/BH.
+ * ctrl-setcc. */
+void instr64_0F94_mem(int64_t addr, int32_t _r2)
+{
+	(void)_r2;
+	safe_write8_addr(addr, test_z() ? 1 : 0);
+}
+void instr64_0F94_reg(int32_t r1, int32_t _r2)
+{
+	(void)_r2;
+	write_reg8(r1, test_z() ? 1 : 0);
+}
+void instr64_0F95_mem(int64_t addr, int32_t _r2)
+{
+	(void)_r2;
+	safe_write8_addr(addr, test_nz() ? 1 : 0);
+}
+void instr64_0F95_reg(int32_t r1, int32_t _r2)
+{
+	(void)_r2;
+	write_reg8(r1, test_nz() ? 1 : 0);
+}
+
+/* 0F B6/B7/BE/BF -- movzx/movsx r64, r/m8|16.  The extension is the whole instruction, and
+ * ctrl-movzx-movsx drives all four through one source byte/word. */
+void instr64_0FB6_mem(int64_t addr, int32_t r)
+{
+	int32_t x = safe_read8_addr(addr);
+	if (cpu->pagefault) return;
+	write_reg64(r, (uint64_t)(uint8_t)x);
+}
+void instr64_0FB6_reg(int32_t r1, int32_t r) { write_reg64(r, (uint64_t)(uint8_t)read_reg8(r1)); }
+void instr64_0FB7_mem(int64_t addr, int32_t r)
+{
+	int32_t x = (int32_t)safe_read64_addr(addr); /* a 16-bit read; the straddle path is S7's too */
+	if (cpu->pagefault) return;
+	write_reg64(r, (uint64_t)(uint16_t)x & 0xFFFFu);
+}
+void instr64_0FB7_reg(int32_t r1, int32_t r) { write_reg64(r, (uint64_t)(uint16_t)read_reg16(r1)); }
+void instr64_0FBE_mem(int64_t addr, int32_t r)
+{
+	int32_t x = safe_read8_addr(addr);
+	if (cpu->pagefault) return;
+	write_reg64(r, (uint64_t)(int64_t)(int8_t)x);
+}
+void instr64_0FBE_reg(int32_t r1, int32_t r) { write_reg64(r, (uint64_t)(int64_t)(int8_t)read_reg8(r1)); }
+void instr64_0FBF_mem(int64_t addr, int32_t r)
+{
+	int16_t x = (int16_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	write_reg64(r, (uint64_t)(int64_t)x);
+}
+void instr64_0FBF_reg(int32_t r1, int32_t r) { write_reg64(r, (uint64_t)(int64_t)(int16_t)read_reg16(r1)); }

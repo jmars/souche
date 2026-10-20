@@ -668,6 +668,24 @@ int32_t dispatch_os_index(int32_t opcode)
     return is_osize_32() ? 1 : 0;
 }
 
+/* S7: THE 0F ESCAPE'S SECOND BYTE, under the same three-valued rule.  The base opcode never
+ * reaches this function as 0x0F-prefixed (the escape is its own opcode), so this is a separate
+ * entry point -- and it is SIMPLER than the base one: the 0F space has no default-64 group and
+ * no REX-prefixed opcodes of its own (a REX before 0F is just a prefix on the whole
+ * instruction), so the rule is REX.W -> 2, 0x66 -> 0, otherwise 1.  `is_osize_32()` is again
+ * deliberately not used in the long-mode branch: in a 64-bit code segment CS.D is 0 and it
+ * would answer true, routing every 0F instruction to the 32-bit arm. */
+int32_t dispatch_os_index_0f(int32_t opcode)
+{
+    (void)opcode;
+    if (long_mode_64()) {
+        if ((cpu->prefixes & PREFIX_REX_W) != 0) return 2;
+        if ((cpu->prefixes & PREFIX_MASK_OPSIZE) != 0) return 0;
+        return 1;
+    }
+    return is_osize_32() ? 1 : 0;
+}
+
 /* ------------------------------------------------------------------ *
  * the 8-byte immediate and the moffs offset
  * ------------------------------------------------------------------ */

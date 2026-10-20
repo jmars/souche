@@ -98,6 +98,28 @@
  * judgement: a reader comparing the two should find them agree.
  */
 
+/* ------------------------------------------------------------------ *
+ * THE 0F-QUALIFIED 64-BIT ARMS (S7).  Keyed by the escape's SECOND byte; the emitter puts them
+ * in the generated 0F switch as `case 0x2NN:` arms (the same three-valued key), reachable only
+ * through instructions_64.c's instr64_0F, which keys the second byte with
+ * dispatch_os_index_0f.  NOTHING ELSE in the 0F space has a 64-bit arm: an unlisted second byte
+ * gets NO 0x2NN case and dispatch_os_index_0f therefore never selects one -- the 0F space's
+ * 16/32-bit arms run exactly as they always did.
+ *
+ * The corpus's ctrl-* cases use cmovcc (44/45), setcc (94/95) and movzx/movsx (B6/B7/BE/BF);
+ * every other second byte is a NAMED STOP in this build.
+ * ------------------------------------------------------------------ */
+const x86_table64_0f = [
+	{ opcode: 0x44 }, /* cmove r64, r/m64 */
+	{ opcode: 0x45 }, /* cmovne r64, r/m64 */
+	{ opcode: 0x94 }, /* sete r/m8 */
+	{ opcode: 0x95 }, /* setne r/m8 */
+	{ opcode: 0xB6 }, /* movzx r64, r/m8 */
+	{ opcode: 0xB7 }, /* movzx r64, r/m16 */
+	{ opcode: 0xBE }, /* movsx r64, r/m8 */
+	{ opcode: 0xBF }, /* movsx r64, r/m16 */
+];
+
 const x86_table64 = [
 	/* ---------------- 0x40-0x4F: REX, not INC/DEC ---------------- */
 	{ opcode: 0x40, prefix64: true },
@@ -116,6 +138,28 @@ const x86_table64 = [
 	{ opcode: 0x4D, prefix64: true },
 	{ opcode: 0x4E, prefix64: true },
 	{ opcode: 0x4F, prefix64: true },
+
+	/* ---------------- S7: CONTROL FLOW AND STACK AT 64 BITS ---------------- */
+	/* 0x0F itself: in 64-bit mode the escape's SECOND byte is keyed by the same three-valued
+	 * rule (modrm.c's dispatch_os_index_0f), and this entry is what makes the base switch's
+	 * `case 0x20F` exist and call the 64-bit escape handler (instructions_64.c's instr64_0F).
+	 * The 0F-qualified arms themselves are listed in the second table below. */
+	{ opcode: 0x0F, entry64: "instr64_0F" },
+
+	/* jcc rel8 (0x70-0x7F).  The 16 conditions are one line each over the port's OWN test_*
+	 * predicates (misc_instr.h), and the target arithmetic is 64-bit: `ip + sign_extend(rel8)`.
+	 * jcc rel32 (0F 80-8F) is NOT here -- no corpus case uses the rel32 form, so it stays a
+	 * named stop (results/x86-64-s7.md ss6). */
+	{ opcode: 0x70 }, { opcode: 0x71 }, { opcode: 0x72 }, { opcode: 0x73 },
+	{ opcode: 0x74 }, { opcode: 0x75 }, { opcode: 0x76 }, { opcode: 0x77 },
+	{ opcode: 0x78 }, { opcode: 0x79 }, { opcode: 0x7A }, { opcode: 0x7B },
+	{ opcode: 0x7C }, { opcode: 0x7D }, { opcode: 0x7E }, { opcode: 0x7F },
+
+	{ opcode: 0x63 },  /* movsxd r64, r/m32 (S7) */
+	{ opcode: 0x87 },  /* xchg r/m64, r64 (S7) */
+	{ opcode: 0x8D },  /* lea r64, m (S7; custom_modrm_resolve, like the 32-bit body) */
+	/* 0xC3 / 0xE8 / 0xE9 are ALREADY here as default-64 entries with no body (S5's shutter);
+	 * S7 gives them their bodies, and 0xC2 / 0xCA / 0xCB / 0xCF stay named stops. */
 
 	/* ------------------------------------------------------------------ *
 	 * INVALID IN 64-BIT MODE: THE SDM'S OWN REMOVAL LIST
@@ -164,7 +208,7 @@ const x86_table64 = [
 	 * ECX.  Both are S7's (control flow), so they stop by name -- the answer that keeps the
 	 * machine honest without pretending the encoding is illegal.
 	 * ------------------------------------------------------------------ */
-	{ opcode: 0x63, stop64: "0x63 is MOVSXD in 64-bit mode, and it is S7's (the 32-bit arm is ARPL)" },
+
 	{ opcode: 0xE3, stop64: "0xE3 is JRCXZ in 64-bit mode (RCX, not ECX), and the jcc family is S7's" },
 
 	/* ---------------- MOV, the S5 family ---------------- */
@@ -301,10 +345,11 @@ const x86_table64 = [
 	{ opcode: 0xCF, default64: true }, /* iretd -> iretq            -- S11 */
 	{ opcode: 0xE8, default64: true }, /* call rel32                -- S7 */
 	{ opcode: 0xE9, default64: true }, /* jmp rel32                 -- S7 */
-	{ opcode: 0xFF, default64: true }, /* /0 inc and /1 dec are S6's bodies; /2../6 (call,
-	                                   * callf, jmp, jmpf, push) stay S7's NAMED STOPS -- which
-	                                   * is automatic: the availability scan emits a stop for a
-	                                   * sub-op with no body. */
+	{ opcode: 0xFF, default64: true }, /* /0 inc and /1 dec are S6's bodies and /4 jmp r/m64
+	                                   * is S7's; /2 call r/m, /3 callf, /5 jmpf and /6 push
+	                                   * r/m stay NAMED STOPS -- automatic: the availability
+	                                   * scan emits a stop for a sub-op with no body. */
 ];
 
+export { x86_table64_0f };
 export default x86_table64;

@@ -575,9 +575,32 @@ error=0` over **11 cases**, the whole corpus `green=29 red_unimplemented=29`, an
 is unmoved (transcript `8bb8eca5…`, determinism 4,000,096,757 both runs, bench 200,095,214, nasm
 118/118, reboot 39/39, the five VGA gates, PAE-1 11/0, PAE-L3 both legs).
 
-**S7-S13 REMAIN**: control flow and stack, the remaining ISA families, the system layer, the guest
-and the engines' long-mode arms.  The rest of this section is the reconnaissance record and is not
-made stale by S0-S6.
+**S7 IS LANDED (2026-10-19): CONTROL FLOW AND STACK AT 64 BITS — ALL TWELVE FAMILY-3 CASES GREEN.**
+`results/x86-64-s7.md` is its report.  The far-transfer seats S5 left by name are now bodies with
+the case that proves each: `call rel32` pushes an **eight**-byte return address (the fetch cursor
+after the displacement), `ret` pops eight straight into the 64-bit cursor, `jmp rel32/rel8`, and
+`0xFF /4` (jmp r/m64) and `/6` (push r/m64 — S5's shutter) — while `ret imm16`, `retf`, `iretq`,
+`call r/m64`, `callf` and `jmpf` STAY NAMED STOPS (no case covers them; each is a far transfer
+whose 64-bit form is S11's).  jcc rel8 is sixteen one-liners over the port's own `test_*`
+predicates.  **THE 0F ESCAPE GAINED ITS THIRD OPERAND-SIZE ARM**: `dispatch_os_index_0f` (modrm.c,
+`REX.W→2 / 66→0 / else 1`), `run_instruction0f_64`, `instr64_0F`, and a 0F-qualified overlay table
+(cmovcc 44/45, setcc 94/95, movzx/movsx B6/B7/BE/BF) whose arms live in the generated 0F switch —
+with the base switch's NO-FALL-THROUGH guarantee added there too, because a REX.W before ANY 0F
+instruction selects key 2 and a second byte without an arm hit the 0F switch's `DBG_ASSERT` and
+**aborted the host on 10 corpus cases** (MEASURED, before the named-stop cases existed).  S5's
+`stop64` for `0x63` became the real MOVSXD body (ARPL does not exist in long mode), and S5's
+`after_block_boundary` on `jmp rel8` was removed as a divergence from the reference's table.  Whole
+corpus with `--long-mode on`: **`green=37 red_unimplemented=21 mismatch=0 error=0`** — the 21 are
+named stops for S8's `0xF7` group and shifts, S9's xadd/cmpxchg/bt/bsf and S10's SSE/movd/cvt
+encodings; family 3 is 12/12, families 1/2 unmoved, the flag-off machine unmoved at 0/58.  NOT
+landed, named in the report: `jcc rel32` (no case uses the rel32 form), `jcxz/loop*` (0xE3 stays a
+named stop), `ret imm16`/`retf`/`iretq`/`call r/m`/`callf`/`jmpf` (S11's far transfers), the other
+fourteen cmovcc/setcc conditions, and `xchg`'s MEMORY form (the body exists, no case grades it —
+unproven, stated).
+
+**S8-S13 REMAIN**: mul/div/shifts, the remaining ISA families, the system layer, the guest and the
+engines' long-mode arms.  The rest of this section is the reconnaissance record and is not made
+stale by S0-S7.
 
 Not implemented, and deliberately **not** listed as a non-goal: it is wanted one day. It is recorded
 here so the next reader inherits the reconnaissance instead of re-deriving it.

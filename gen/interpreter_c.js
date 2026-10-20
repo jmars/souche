@@ -68,7 +68,7 @@ import x86_table from "../v86/gen/x86_table.js";
 /* S5a: THE 64-BIT OVERLAY -- sparse, authored, keyed by base opcode (plan ss3.6).  It is the
  * only thing that decides which encodings get a third (os_index == 2) arm and which change
  * MEANING in long mode; everything else the emitter does is shared with the 32-bit table. */
-import x86_table64 from "./x86_table64.js";
+import x86_table64, { x86_table64_0f } from "./x86_table64.js";
 
 const HERE = url.fileURLToPath(new URL(".", import.meta.url));
 const ROOT = path.join(HERE, "..");
@@ -119,6 +119,16 @@ const overlay64 = new Map();
 for (const entry of x86_table64) {
 	if (overlay64.has(entry.opcode)) fail("duplicate 64-bit overlay entry: " + hex(entry.opcode, 2));
 	overlay64.set(entry.opcode, entry);
+}
+
+/* S7: the 0F-QUALIFIED overlay (the escape's second byte).  It drives `case 0x2NN:` arms in the
+ * generated 0F switch, reachable only through instr64_0F (which keys the second byte with
+ * dispatch_os_index_0f) -- so an unlisted second byte can never select a 64-bit arm and the 0F
+ * space's 16/32-bit arms are untouched. */
+const overlay64_0f = new Map();
+for (const entry of x86_table64_0f) {
+	if (overlay64_0f.has(entry.opcode)) fail("duplicate 0F 64-bit overlay entry: " + hex(entry.opcode, 2));
+	overlay64_0f.set(entry.opcode, entry);
 }
 
 /* ------------------------------------------------------------------ *
@@ -554,6 +564,17 @@ function gen_64_arm(by_opcode, opcode) {
 	return [label, "{"].concat(indent(body, 1)).concat(["}", "break;"]);
 }
 
+function gen_64_arm_0f(second_byte) {
+	const entry = overlay64_0f.get(second_byte);
+	const label = `case 0x2${hex(second_byte, 2)}:`;
+	/* the 0F encodings S7 lands are ordinary e-encodings with the SAME argument threading as
+	 * their 32-bit siblings; make_instruction_name's size-64 rule names them instr64_0FNN_*. */
+	const encoding = group_by_opcode().by_opcode0f[second_byte];
+	if (!encoding) fail("0F overlay entry with no 32-bit encoding: 0F " + hex(second_byte, 2));
+	const body = gen_instruction_body(encoding, 64);
+	return [label, "{"].concat(indent(body, 1)).concat(["}", "break;"]);
+}
+
 function switch_cases(by_opcode, is_0f) {
 	const out = [];
 	for (let opcode = 0; opcode < 0x100; opcode++) {
@@ -592,6 +613,20 @@ function switch_cases(by_opcode, is_0f) {
 			const arm = gen_64_arm(by_opcode, opcode);
 			out.push(arm[0]);
 			out.push(...arm.slice(1));
+		}
+		else if (is_0f && overlay64_0f.has(opcode)) {
+			const arm = gen_64_arm_0f(opcode);
+			out.push(arm[0]);
+			out.push(...arm.slice(1));
+		}
+		else if (is_0f) {
+			/* THE SAME NO-FALL-THROUGH GUARANTEE THE BASE SWITCH HAS (S5's `default:
+			 * DBG_ASSERT(false)` hole): a REX.W before ANY 0F instruction makes
+			 * dispatch_os_index_0f answer 2, and a second byte with no overlay entry would
+			 * otherwise hit THIS switch's own `default: DBG_ASSERT(false)` -- MEASURED as a
+			 * host abort on 10 corpus cases (bswap/bsf/movq with REX). */
+			out.push(`case 0x2${hex(opcode, 2)}:`);
+			out.push("{", `\tunimplemented_instruction("long mode: 0F ${hex(opcode, 2)} has no 64-bit arm in gen/x86_table64.js");`, "\treturn;", "}", "break;");
 		}
 		else if (!is_0f) {
 			/* THE NAMED STOP FOR AN ENCODING WITH NO 64-BIT ARM (plan ss3.6.3: "an encoding

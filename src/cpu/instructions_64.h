@@ -161,6 +161,58 @@ void instr64_FF_0_reg(int32_t r1);
 void instr64_FF_1_mem(int64_t addr);
 void instr64_FF_1_reg(int32_t r1);
 
+/* S7: control flow and stack at 64 bits */
+void instr64_0F(void);
+void instr64_70(int32_t imm);
+void instr64_71(int32_t imm);
+void instr64_72(int32_t imm);
+void instr64_73(int32_t imm);
+void instr64_74(int32_t imm);
+void instr64_75(int32_t imm);
+void instr64_76(int32_t imm);
+void instr64_77(int32_t imm);
+void instr64_78(int32_t imm);
+void instr64_79(int32_t imm);
+void instr64_7A(int32_t imm);
+void instr64_7B(int32_t imm);
+void instr64_7C(int32_t imm);
+void instr64_7D(int32_t imm);
+void instr64_7E(int32_t imm);
+void instr64_7F(int32_t imm);
+void instr64_8D_mem(int32_t modrm_byte, int32_t r);
+void instr64_8D_reg(int32_t _r, int32_t _r2);
+void instr64_63_mem(int64_t addr, int32_t r);
+void instr64_63_reg(int32_t r1, int32_t r);
+void instr64_87_mem(int64_t addr, int32_t r);
+void instr64_87_reg(int32_t r1, int32_t r);
+void instr64_C3(void);
+void instr64_E8(int32_t imm);
+void instr64_E9(int32_t imm);
+void instr64_FF_6_mem(int64_t addr);
+void instr64_FF_6_reg(int32_t r1);
+void instr64_FF_4_mem(int64_t addr);
+void instr64_FF_4_reg(int32_t r1);
+/* S7: the 0F-qualified arms (the escape's second byte) */
+void instr64_0F44_mem(int64_t addr, int32_t r);
+void instr64_0F44_reg(int32_t r1, int32_t r);
+void instr64_0F45_mem(int64_t addr, int32_t r);
+void instr64_0F45_reg(int32_t r1, int32_t r);
+/* setcc has NO reg operand, but v86's table marks the encoding `e` without fixed_g, so the
+ * emitter threads the reg field anyway and the body ignores it -- the 32-bit body's exact
+ * shape (instructions_0f.c's instr_0F94_mem(addr, _r2)). */
+void instr64_0F94_mem(int64_t addr, int32_t _r2);
+void instr64_0F94_reg(int32_t r1, int32_t _r2);
+void instr64_0F95_mem(int64_t addr, int32_t _r2);
+void instr64_0F95_reg(int32_t r1, int32_t _r2);
+void instr64_0FB6_mem(int64_t addr, int32_t r);
+void instr64_0FB6_reg(int32_t r1, int32_t r);
+void instr64_0FB7_mem(int64_t addr, int32_t r);
+void instr64_0FB7_reg(int32_t r1, int32_t r);
+void instr64_0FBE_mem(int64_t addr, int32_t r);
+void instr64_0FBE_reg(int32_t r1, int32_t r);
+void instr64_0FBF_mem(int64_t addr, int32_t r);
+void instr64_0FBF_reg(int32_t r1, int32_t r);
+
 void instr64_F4(void);
 void instr64_EB(int64_t imm);
 

@@ -96,14 +96,14 @@ step "uop-decoder-refusal" sh -c \
 	"./build/cpu_uop_selftest 2>&1 | grep -q 'PASS S5: the uop decoder refuses long mode'"
 
 echo "== D. the 0x2NN overlay's census (routed arms / named stops) AS NUMBERS"
-# MEASURED at S6: 117 overlay entries, 76 routed arms, 29 unimplemented call sites.  The 29 are
-# S8's group (mul/imul/div/idiv in 0xF7), the imm32 ALU group 0x81 has no entry at all, and the
-# default-64 stack/control encodings (ret/call/jmp) are S7's and S11's; S5 measured 102/61/23 and
-# S6's row in results/x86-64-s6.md records the move.  The 23 are
+# MEASURED at S7: 136 overlay entries, 96 routed arms, 38 unimplemented call sites.  The 38 are
+# S8's group (mul/imul/div/idiv in 0xF7, the shifts), S9's (xadd/cmpxchg/bt/bsf), S10's (the
+# SSE/movd/cvt 0F encodings) and the 0x81 imm32 ALU group S6 left uninstrumented; S5 measured
+# 102/61/23 and S6 117/76/29 -- each slice's move is in its own report.  The 23 are
 # the default-64 named stops (ret/call/jmp/pop r-m/iret) that S6-S11 replace; a slice that
 # lands one EDITS THIS LINE, which is the record of what it landed.
 step "overlay-census" sh -c \
-	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 117 overlay entries, 76 routed to instr64 bodies, 29 of those call sites unimplemented'"
+	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 136 overlay entries, 96 routed to instr64 bodies, 38 of those call sites unimplemented'"
 must_fail "overlay-census-able-to-fail" sh -c \
 	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 0 overlay entries'"
 
@@ -112,7 +112,7 @@ step "family-1-green" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_
 	--filter '^mov-' --expect counts \
 	--expect-counts "green=12 red_unimplemented=0 mismatch=0 error=0" --quiet
 step "whole-corpus-no-mismatch" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
-	--expect counts --expect-counts "green=29 red_unimplemented=29 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=37 red_unimplemented=21 mismatch=0 error=0" --quiet
 must_fail "whole-corpus-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
 	--actual "$ACTUAL_ON" --expect counts --expect-counts "green=57 mismatch=0" --quiet
 
@@ -183,12 +183,14 @@ step "bare-0xEA-is-UD-in-64bit" sh -c \
 #     every green case already proves (the stub's own far jump enters the body through it).
 step "0xEA-is-legal-in-compat" sh -c \
 	"$PORT64 $POISON 20000000 --fixture64 --long-mode on | grep -q 'BEGIN JSON'"
-# (iii) 0x63: a BARE ARPL in a 64-bit CS must not run.  This is the `stop64` half of the guard
-#      and it is the DECISIVE one -- the guard's own named stop is the visible output, so
-#      neutering the guard turns this step red (the 0xEA arm above proves the semantics, this
-#      one proves the seat).
+# (iii) 0x63: S7 IMPLEMENTED MOVSXD, so the S5-round-2 arm that required the named stop is
+#      INVERTED -- the same mutant (`63 90 31 c9`: movsxd r10 with REX-less encoding... note the
+#      bare 0x63 is now movsxd r/m32->r32) must EXECUTE, and the able-to-fail form is the stop
+#      text that used to be required.
 patch bare-arpl-0x63 31c031c9 639031c9
-step "bare-0x63-is-a-named-stop" sh -c \
+step "bare-0x63-executes" sh -c \
+	"$PORT64 $MUT/bare-arpl-0x63.img 20000000 --fixture64 --long-mode on | grep -q 'BEGIN JSON'"
+must_fail "bare-0x63-no-longer-stops" sh -c \
 	"$PORT64 $MUT/bare-arpl-0x63.img 20000000 --fixture64 --long-mode on 2>&1 | grep -q '0x63 is MOVSXD in 64-bit mode'" 
 # (ii) S6 REPLACED THE ALU STOPS WITH REAL BODIES, so the S5 arm that required `48 31 c0` to
 #      stop by name is now INVERTED: the same mutant must EXECUTE (a document, no stop).  Its
@@ -215,6 +217,19 @@ must_fail "alu-family-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage r
 # [0x101E00] and the case is green.
 step "alu-pop-rsp-green" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
 	--filter 'pop-rsp' --expect counts \
+	--expect-counts "green=1 red_unimplemented=0 mismatch=0 error=0" --quiet
+
+echo "== F4. S7: CONTROL FLOW AND STACK AT 64 BITS (family 3, 12/12 -- ALL GREEN)"
+step "ctrl-family" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
+	--filter '^ctrl-' --expect counts \
+	--expect-counts "green=12 red_unimplemented=0 mismatch=0 error=0" --quiet
+must_fail "ctrl-family-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
+	--actual "$ACTUAL_ON" --filter '^ctrl-' --expect counts \
+	--expect-counts "green=11 mismatch=0" --quiet
+# the call/ret pair is the slice's stack-discipline spine: an EIGHT-byte return address, and
+# the far transfer actually returning.  Assert the case's own counts as a named step.
+step "ctrl-call-ret" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
+	--filter 'call-ret' --expect counts \
 	--expect-counts "green=1 red_unimplemented=0 mismatch=0 error=0" --quiet
 
 # the ONE red case must be red for the named reason (div is S8's), not for a silent mismatch

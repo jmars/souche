@@ -49,6 +49,8 @@
 void run_instruction(int32_t opcode);
 void run_instruction0f_16(int32_t opcode);
 void run_instruction0f_32(int32_t opcode);
+/* S7: the 64-bit arm of the 0F switch (see instructions_0f.c). */
+void run_instruction0f_64(int32_t opcode);
 
 /* --- the prefix re-dispatch (cpu.rs:3366-3376).  DEFINED in instructions.c: their only
  * callers are this file's prefix instructions and instr_98.. -- see the definitions. */

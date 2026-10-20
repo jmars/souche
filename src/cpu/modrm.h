@@ -150,6 +150,10 @@ int32_t dispatch_os_index(int32_t opcode);
  * generated file for the same reason the arms do: one declaration, one source, and a slice that
  * adds a default-64 encoding cannot forget to update a second table. */
 bool long_mode_default64(int32_t opcode);
+
+/* S7: the same three-valued key for the 0F ESCAPE'S SECOND BYTE (no default-64 group, no REX
+ * opcodes of its own -- see modrm.c).  instr64_0F is its only caller. */
+int32_t dispatch_os_index_0f(int32_t opcode);
 int32_t resolve_modrm16(int32_t modrm_byte);
 int32_t resolve_modrm32(int32_t modrm_byte);
 /* modrm.rs:37-66 -- upstream-dead: nothing calls it (READ: no reference to

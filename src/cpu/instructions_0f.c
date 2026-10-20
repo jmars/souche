@@ -75,6 +75,11 @@ static void unimplemented_sse(void) { trigger_ud(); }
 /* cpu.rs:3132-3133 */
 void run_instruction0f_16(int32_t opcode) { run_instruction0f(opcode); }
 void run_instruction0f_32(int32_t opcode) { run_instruction0f(opcode | 0x100); }
+/* S7: the third arm.  The generated 0F switch gains `case 0x2NN:` cases only for the second
+ * bytes gen/x86_table64.js's 0F-qualified table lists, so an unlisted byte can never select a
+ * 64-bit arm here -- and this wrapper is reached ONLY through instructions_64.c's instr64_0F,
+ * which only a long-mode dispatch of the escape reaches. */
+void run_instruction0f_64(int32_t opcode) { run_instruction0f(opcode | 0x200); }
 
 /* ------------------------------------------------------------------ *
  * 0F 00 -- sldt, str
