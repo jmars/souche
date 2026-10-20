@@ -558,6 +558,23 @@ no corpus case grades them, `0xF7 /0,/1` likewise, `mul/imul/div/idiv` are S8's,
 operation is undefined and therefore not in the corpus, and a faulting store's flag behaviour
 diverges from the reference in a way no run here can observe.
 
+**S6 ROUND 2 (2026-10-19): the review's BLOCKER fixed — `pop r/m64` pre-adjusted RSP in the
+DECREMENT direction, but POP moves the stack pointer UP** (three sources: the SDM's POP text, v86's
+`adjust_stack_reg(4)` at `instructions.rs:955-969`, this tree's `instr32_8F_0_mem`), so
+`pop qword ptr [rsp]` stored eight bytes below the slot it read — a wrong store with no crash.  The
+corpus case that would have caught it exists now (`alu-pop-rsp`, whose effective address depends on
+rsp), MEASURED red under the old direction and green under the fix, and it is a gate step of its
+own.  Also fixed, each with its reason: **signed-overflow UB at nine flag-path sites** (the six
+cores' sums, `getaf`'s subtraction AND its negation at `INT64_MIN`, `getof`'s, `getzf`'s — the same
+class the tree already policed for `<<`), computed in `uint64_t`; a **flags store inserted between
+`not` and the first `neg`** (round 1's "NOT sets no flags" row was vacuous — nothing observed the
+non-effect); and **AF masked out (0x8C5) after LOGIC ops**, where the SDM leaves it undefined,
+while arithmetic stores keep 0x8D5 — round 1 compared an undefined bit against the host and was
+green only by empirical agreement.  Family 2 is now `green=10 red_unimplemented=1 mismatch=0
+error=0` over **11 cases**, the whole corpus `green=29 red_unimplemented=29`, and the whole battery
+is unmoved (transcript `8bb8eca5…`, determinism 4,000,096,757 both runs, bench 200,095,214, nasm
+118/118, reboot 39/39, the five VGA gates, PAE-1 11/0, PAE-L3 both legs).
+
 **S7-S13 REMAIN**: control flow and stack, the remaining ISA families, the system layer, the guest
 and the engines' long-mode arms.  The rest of this section is the reconnaissance record and is not
 made stale by S0-S6.

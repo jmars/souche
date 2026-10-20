@@ -71,13 +71,19 @@ class InventoryError(Exception):
 
 class Case:
     def __init__(self, name, family, why, body, stores=(), flags=False, data=(),
-                 fault=None):
+                 fault=None, flags_mask="0x8D5"):
         self.name = name
         self.family = family
         self.why = why            # WHAT makes the result differ 32 vs 64 (R4's rule)
         self.body = body          # asm lines, .code64, the shared prologue already ran
         self.stores = list(stores)  # extra (text, addr) stores; (reg, addr, size=8)
         self.flags = flags        # also store RFLAGS (pushfq/pop)
+        self.flags_mask = flags_mask
+        # ROUND 2 (should-fix 3): 0x8D5 is run.js's MASK_ARITH (CF|PF|AF|ZF|SF|OF), and AF --
+        # bit 4 -- is SDM-UNDEFINED after AND/OR/XOR/TEST.  A case whose last arithmetic op is a
+        # LOGIC one must therefore compare 0x8C5 (AF dropped), or it compares an undefined bit
+        # against the host and is green only by empirical agreement (plan ss2.1.5's rule: the
+        # corpus contains only outcomes the SDM states).
         self.data = list(data)    # .quad values after the code, body_data0..N
         self.fault = fault        # "DE" / "UD" / "GP" -- the case ENDS in a fault
         self.family_meta = None
@@ -389,17 +395,19 @@ case("alu", "logic-64",
     or rbx, rcx
     mov rsi, rax
     xor rsi, rcx
-""", flags=True)
+""", flags=True, flags_mask="0x8C5")
 case("alu", "test-cmp-64",
      "TEST/CMP set ZF from the 64-bit difference: 0x100000000 - 0x100000000 is zero "
      "at 64 bits and 0 at 32 too, but 0x100000000 vs 0 is only equal at 32",
      """\
     mov rax, 0x100000000
     test rax, rax
+    # AF is undefined after TEST (round 2, should-fix 3): this store drops it (0x8C5); the
+    # two stores after CMP keep it (0x8D5), because AF after CMP is defined
     pushfq
     pop qword ptr [0x100200]
-    and dword ptr [0x100200], 0x8D5
-    and dword ptr [rsp - 8], 0x8D5
+    and dword ptr [0x100200], 0x8C5
+    and dword ptr [rsp - 8], 0x8C5
     mov rcx, 0
     cmp rax, rcx
     pushfq
@@ -430,6 +438,17 @@ case("alu", "neg-not-64",
      """\
     mov rax, 0x00000000FFFFFFFF
     not rax
+    # ROUND 2 (should-fix 2): a STORE between the NOT and the NEG, so the NOT's flag
+    # NON-effect is OBSERVED.  Without it the only flags word in the case is the one after
+    # `neg rcx`, and a not64 implemented as neg (setting every flag) would stay green --
+    # the case could not fail on the one thing its name is about.  NOT leaves CF/OF/AF/SF/
+    # ZF/PF alone, so the word here must equal the word the PROLOGUE left (plus nothing):
+    # the masking is the contract's MASK_ARITH, and AF is dropped for the same reason the
+    # logic cases drop it (see below).
+    pushfq
+    pop qword ptr [0x100218]
+    and dword ptr [0x100218], 0x8C5
+    and dword ptr [rsp - 8], 0x8C5
     mov rbx, 1
     neg rbx
     mov rcx, 0x8000000000000000
@@ -484,6 +503,18 @@ case("alu", "op32-vs-op64",
     add rbx, 1
     mov qword ptr [0x100208], rbx
 """, flags=True)
+case("alu", "pop-rsp",
+     "POP r/m64 whose EFFECTIVE ADDRESS depends on RSP: the reference resolves the address "
+     "AFTER incrementing the stack pointer (POP moves it UP), so `pop qword ptr [rsp]` "
+     "reads [rsp] and stores [rsp+8] -- a pre-adjust in the decrement direction lands the "
+     "store eight bytes lower and nothing crashes (round-2 BLOCKER)",
+     """\
+    mov rsp, 0x101DF8
+    mov rax, 0xAAAAAAAAAAAAAAAA
+    mov qword ptr [0x101DF8], rax
+    mov rbx, 0x5555555555555555
+    pop qword ptr [rsp]
+""")
 case("alu", "div-zero",
      "the #DE triplet with the faulting rip: the exception KIND and the rip are the "
      "comparison for a faulting case",
@@ -1083,7 +1114,7 @@ def render(case):
         if case.flags:
             lines.append("    pushfq")
             lines.append("    pop qword ptr [%s]" % hex(FLAGS_SLOT))
-            lines.append("    and dword ptr [%s], 0x8D5" % hex(FLAGS_SLOT))
+            lines.append("    and dword ptr [%s], %s" % (hex(FLAGS_SLOT), case.flags_mask))
             # ... and the STACK copy pushfq left behind (the `pop` restored rsp, so the word is
             # at [rsp-8], inside the compared window).  WHY THE MASK EXISTS AT ALL, MEASURED:
             # the two legs run at different privilege levels -- the host leg at CPL3, where IF is
@@ -1094,7 +1125,7 @@ def render(case):
             # so the stores into memory mask to the same set.  `and dword ptr [mem], imm32` is the
             # 32-bit encoding (0x81 /4), i.e. an EXISTING body at os_index 1 -- and its own flag
             # writes are harmless because every site masks immediately after the store.
-            lines.append("    and dword ptr [rsp - 8], 0x8D5")
+            lines.append("    and dword ptr [rsp - 8], %s" % case.flags_mask)
     # THE EPILOGUE GOES FIRST AND THE DATA AFTER IT: a label emitted before `loop` is
     # reachable by FALL-THROUGH, and the first version of this generator put body_dataN
     # there -- every case with data ran off the end of its stores into those bytes and

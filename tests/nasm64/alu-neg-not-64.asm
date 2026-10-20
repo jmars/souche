@@ -119,6 +119,17 @@ body_start:
 
     mov rax, 0x00000000FFFFFFFF
     not rax
+    # ROUND 2 (should-fix 2): a STORE between the NOT and the NEG, so the NOT's flag
+    # NON-effect is OBSERVED.  Without it the only flags word in the case is the one after
+    # `neg rcx`, and a not64 implemented as neg (setting every flag) would stay green --
+    # the case could not fail on the one thing its name is about.  NOT leaves CF/OF/AF/SF/
+    # ZF/PF alone, so the word here must equal the word the PROLOGUE left (plus nothing):
+    # the masking is the contract's MASK_ARITH, and AF is dropped for the same reason the
+    # logic cases drop it (see below).
+    pushfq
+    pop qword ptr [0x100218]
+    and dword ptr [0x100218], 0x8C5
+    and dword ptr [rsp - 8], 0x8C5
     mov rbx, 1
     neg rbx
     mov rcx, 0x8000000000000000

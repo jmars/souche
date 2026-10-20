@@ -570,7 +570,14 @@ void instr64_8F_0_mem(int32_t modrm_byte)
 	 * updated BEFORE the address is resolved, so `pop qword [rsp+8]` uses the
 	 * post-decrement value; it is restored for the READ, and applied after the write. */
 	uint64_t rsp = read_reg64(ESP);
-	write_reg64(ESP, rsp - 8);
+	/* ROUND 2, THE BLOCKER: THE PRE-ADJUST IS AN INCREMENT, NOT A DECREMENT.  POP moves the
+	 * stack pointer UP; the reference's `adjust_stack_reg(4)` (v86 instructions.rs:955-969 and
+	 * this tree's instr32_8F_0_mem) is a +, and the review's three sources agree.  Round 1
+	 * wrote `rsp - 8` here, so `pop qword ptr [rsp]` resolved its address EIGHT BYTES BELOW
+	 * the slot the pop actually reads -- a wrong STORE with no crash, which the corpus could
+	 * not see until it had a case whose effective address depends on rsp (alu-pop-rsp).
+	 * MEASURED: the case is red with this line's old direction and green with it. */
+	write_reg64(ESP, rsp + 8);
 	int64_t addr = modrm_resolve64(modrm_byte);
 	if (cpu->pagefault) {
 		write_reg64(ESP, rsp); /* a fault resets the stack pointer, as the reference does */

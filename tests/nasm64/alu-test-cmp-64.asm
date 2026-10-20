@@ -119,10 +119,12 @@ body_start:
 
     mov rax, 0x100000000
     test rax, rax
+    # AF is undefined after TEST (round 2, should-fix 3): this store drops it (0x8C5); the
+    # two stores after CMP keep it (0x8D5), because AF after CMP is defined
     pushfq
     pop qword ptr [0x100200]
-    and dword ptr [0x100200], 0x8D5
-    and dword ptr [rsp - 8], 0x8D5
+    and dword ptr [0x100200], 0x8C5
+    and dword ptr [rsp - 8], 0x8C5
     mov rcx, 0
     cmp rax, rcx
     pushfq

@@ -78,7 +78,7 @@ must_fail() { # must_fail <name> <cmd...> -- the able-to-fail arm of an assertio
 
 echo "== A. --long-mode OFF is still the 32-bit machine (S2's refusal, by name, S4's counts)"
 step "off-is-32bit" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_OFF" \
-	--expect counts --expect-counts "green=0 red_unimplemented=57 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=0 red_unimplemented=58 mismatch=0 error=0" --quiet
 # a count assertion alone would also pass on 57 of anything, so the census's own line is
 # checked: the refusal must NAME the reason
 step "off-refusal-names-the-reason" sh -c \
@@ -112,7 +112,7 @@ step "family-1-green" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_
 	--filter '^mov-' --expect counts \
 	--expect-counts "green=12 red_unimplemented=0 mismatch=0 error=0" --quiet
 step "whole-corpus-no-mismatch" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
-	--expect counts --expect-counts "green=28 red_unimplemented=29 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=29 red_unimplemented=29 mismatch=0 error=0" --quiet
 must_fail "whole-corpus-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
 	--actual "$ACTUAL_ON" --expect counts --expect-counts "green=57 mismatch=0" --quiet
 
@@ -205,10 +205,18 @@ echo "== F3. S6: THE ALU FAMILY AT 64 BITS, WITH ITS FLAGS (family 2, case by ca
 # therefore RED BY NAME.  The counts are the assertion -- family 2's own census.
 step "alu-family" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
 	--filter '^alu-' --expect counts \
-	--expect-counts "green=9 red_unimplemented=1 mismatch=0 error=0" --quiet
+	--expect-counts "green=10 red_unimplemented=1 mismatch=0 error=0" --quiet
 must_fail "alu-family-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
 	--actual "$ACTUAL_ON" --filter '^alu-' --expect counts \
-	--expect-counts "green=10 mismatch=0" --quiet
+	--expect-counts "green=11 mismatch=0" --quiet
+# ROUND 2'S BLOCKER, AS ITS OWN STEP: alu-pop-rsp is the case that would have caught the
+# 0x8F /0 pre-adjust direction (round 1 decremented; POP increments), and its asymmetry is
+# MEASURED -- the old direction leaves [0x101DF0] = 0xAAAA... (mismatch), the fix stores at
+# [0x101E00] and the case is green.
+step "alu-pop-rsp-green" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
+	--filter 'pop-rsp' --expect counts \
+	--expect-counts "green=1 red_unimplemented=0 mismatch=0 error=0" --quiet
+
 # the ONE red case must be red for the named reason (div is S8's), not for a silent mismatch
 step "alu-div-zero-names-S8" sh -c \
 	"$PORT64 $POISON 20000000 --fixture64 --long-mode on >/dev/null 2>&1; \

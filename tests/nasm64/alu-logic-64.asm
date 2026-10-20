@@ -143,8 +143,8 @@ body_start:
     mov qword ptr [0x100078], r15
     pushfq
     pop qword ptr [0x100080]
-    and dword ptr [0x100080], 0x8D5
-    and dword ptr [rsp - 8], 0x8D5
+    and dword ptr [0x100080], 0x8C5
+    and dword ptr [rsp - 8], 0x8C5
 loop:
     hlt
     jmp loop

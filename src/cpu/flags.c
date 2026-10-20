@@ -77,7 +77,11 @@ bool getaf(void)
 {
     if (cpu->flags_changed & FLAG_ADJUST) {
         bool is_sub = (cpu->flags_changed & FLAG_SUB) != 0;
-        int64_t last_op2 = (cpu->last_result - cpu->last_op1) * (is_sub ? -1 : 1);
+        /* ROUND 2 (should-fix 1): unsigned subtraction, and the sign fold expressed as the
+         * OTHER subtraction rather than a negation -- `(x) * -1` is UB at INT64_MIN, which a
+         * full-width lazy operand can be.  Only bit 4 is examined, so the wrapping is inert. */
+        int64_t last_op2 = is_sub ? (int64_t)((uint64_t)cpu->last_op1 - (uint64_t)cpu->last_result)
+                                  : (int64_t)((uint64_t)cpu->last_result - (uint64_t)cpu->last_op1);
         /* only bit 4 is examined, so the widened subtraction's high bits cannot reach
          * the answer (the same argument the OF getter's bit extraction makes) */
         return ((cpu->last_op1 ^ last_op2 ^ cpu->last_result) & FLAG_ADJUST) != 0;
@@ -90,7 +94,8 @@ bool getaf(void)
 bool getzf(void)
 {
     if (cpu->flags_changed & FLAG_ZERO) {
-        return (((~cpu->last_result & (cpu->last_result - 1)) >> cpu->last_op_size) & 1) != 0;
+        return (((~(uint64_t)cpu->last_result &
+                  ((uint64_t)cpu->last_result - 1u)) >> cpu->last_op_size) & 1) != 0;
     }
     else {
         return (cpu->flags & FLAG_ZERO) != 0;
@@ -114,7 +119,8 @@ bool getof(void)
 
         /* add: (a ^ result) & (b ^ result);  sub: the b-xor-1 variant (misc_instr.rs:58-62).
          * Both sides are examined at bit `last_op_size` only. */
-        int64_t b_xor_1_if_sub = (cpu->last_result - cpu->last_op1) - is_sub;
+        int64_t b_xor_1_if_sub =
+            (int64_t)((uint64_t)cpu->last_result - (uint64_t)cpu->last_op1 - (uint64_t)is_sub);
         return (((cpu->last_op1 ^ cpu->last_result) & (b_xor_1_if_sub ^ cpu->last_result)) >>
                 cpu->last_op_size) &
                1;
@@ -130,7 +136,12 @@ bool getof(void)
 
 int64_t flags_add(int64_t dest_operand, int64_t source_operand, int32_t op_size)
 {
-    int64_t res = last_value(dest_operand + source_operand, op_size);
+    /* ROUND 2 (should-fix 1): THE SUM IS COMPUTED IN UNSIGNED, because signed overflow is UB
+     * and OPSIZE_64 makes the full-width inputs guest-reachable (`add rax, rax` with both
+     * halves set reaches INT64_MAX here).  Two's-complement addition is the same bits either
+     * way, so this is a definedness fix, not a semantic one -- the same shape flags.c's adc/sbb
+     * shifts already use (the tree polices this class for `<<` and did not for `+`). */
+    int64_t res = last_value((int64_t)((uint64_t)dest_operand + (uint64_t)source_operand), op_size);
     set_last_result(res, op_size);
     cpu->last_op1 = last_value(dest_operand, op_size);
     cpu->flags_changed = FLAGS_ALL;
@@ -142,7 +153,8 @@ int64_t flags_adc(int64_t dest_operand, int64_t source_operand, int32_t op_size)
     /* the incoming carry is read FIRST: it comes from the previous operation's
      * lazy state, which this call is about to overwrite (arith.rs:23) */
     int64_t cf = getcf() ? 1 : 0;
-    int64_t res = last_value(dest_operand + source_operand + cf, op_size);
+    int64_t res = last_value(
+        (int64_t)((uint64_t)dest_operand + (uint64_t)source_operand + (uint64_t)cf), op_size);
     set_last_result(res, op_size);
     cpu->last_op1 = last_value(dest_operand, op_size);
     cpu->flags_changed = FLAGS_ALL & ~FLAG_CARRY & ~FLAG_ADJUST & ~FLAG_OVERFLOW;
@@ -162,7 +174,7 @@ int64_t flags_adc(int64_t dest_operand, int64_t source_operand, int32_t op_size)
 
 int64_t flags_sub(int64_t dest_operand, int64_t source_operand, int32_t op_size)
 {
-    int64_t res = last_value(dest_operand - source_operand, op_size);
+    int64_t res = last_value((int64_t)((uint64_t)dest_operand - (uint64_t)source_operand), op_size);
     set_last_result(res, op_size);
     cpu->last_op1 = last_value(dest_operand, op_size);
     cpu->flags_changed = FLAGS_ALL | FLAG_SUB; /* bit 31 selects sub in the getters */
@@ -172,7 +184,8 @@ int64_t flags_sub(int64_t dest_operand, int64_t source_operand, int32_t op_size)
 int64_t flags_sbb(int64_t dest_operand, int64_t source_operand, int32_t op_size)
 {
     int64_t cf = getcf() ? 1 : 0;
-    int64_t res = last_value(dest_operand - source_operand - cf, op_size);
+    int64_t res = last_value(
+        (int64_t)((uint64_t)dest_operand - (uint64_t)source_operand - (uint64_t)cf), op_size);
     set_last_result(res, op_size);
     cpu->last_op1 = last_value(dest_operand, op_size);
     cpu->flags_changed =
@@ -192,7 +205,7 @@ int64_t flags_inc(int64_t dest_operand, int32_t op_size)
     /* inc/dec preserve CF (arith.rs:115): materialize it, then mark everything but
      * bit 0 stale */
     cpu->flags = (cpu->flags & ~1) | (getcf() ? 1 : 0);
-    int64_t res = last_value(dest_operand + 1, op_size);
+    int64_t res = last_value((int64_t)((uint64_t)dest_operand + 1u), op_size);
     set_last_result(res, op_size);
     cpu->last_op1 = last_value(dest_operand, op_size);
     cpu->flags_changed = FLAGS_ALL & ~1;
@@ -202,7 +215,7 @@ int64_t flags_inc(int64_t dest_operand, int32_t op_size)
 int64_t flags_dec(int64_t dest_operand, int32_t op_size)
 {
     cpu->flags = (cpu->flags & ~1) | (getcf() ? 1 : 0);
-    int64_t res = last_value(dest_operand - 1, op_size);
+    int64_t res = last_value((int64_t)((uint64_t)dest_operand - 1u), op_size);
     set_last_result(res, op_size);
     cpu->last_op1 = last_value(dest_operand, op_size);
     cpu->flags_changed = (FLAGS_ALL & ~1) | FLAG_SUB;
