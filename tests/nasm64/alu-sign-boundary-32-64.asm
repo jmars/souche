@@ -121,14 +121,20 @@ body_start:
     add rax, 1
     pushfq
     pop qword ptr [0x100200]
+    and dword ptr [0x100200], 0x8D5
+    and dword ptr [rsp - 8], 0x8D5
     mov rbx, 0x100000000
     add rbx, 1
     pushfq
     pop qword ptr [0x100208]
+    and dword ptr [0x100208], 0x8D5
+    and dword ptr [rsp - 8], 0x8D5
     mov rcx, 0x7FFFFFFFFFFFFFFF
     add rcx, 1
     pushfq
     pop qword ptr [0x100210]
+    and dword ptr [0x100210], 0x8D5
+    and dword ptr [rsp - 8], 0x8D5
     mov qword ptr [0x100000], rax
     mov qword ptr [0x100008], rcx
     mov qword ptr [0x100010], rdx
@@ -147,6 +153,8 @@ body_start:
     mov qword ptr [0x100078], r15
     pushfq
     pop qword ptr [0x100080]
+    and dword ptr [0x100080], 0x8D5
+    and dword ptr [rsp - 8], 0x8D5
 loop:
     hlt
     jmp loop

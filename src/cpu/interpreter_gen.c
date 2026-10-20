@@ -25,8 +25,8 @@
  * reached this way still stops by name, exactly as the unprefixed encoding does.
  * See gen/interpreter_c.js, C-side difference 3.
  *
- * 2007 call sites, 23 of them unimplemented at the time this
- * file was generated (1988 instr* symbols defined in the port's sources).
+ * 2065 call sites, 29 of them unimplemented at the time this
+ * file was generated (2040 instr* symbols defined in the port's sources).
  */
 
 #include "cpu.h"
@@ -316,8 +316,16 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x209:
 	{
-		unimplemented_instruction("long mode: 0x09 has no 64-bit form in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_09_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_09_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
 	}
 	break;
 	case 0x0A:
@@ -371,8 +379,16 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x20B:
 	{
-		unimplemented_instruction("long mode: 0x0B has no 64-bit form in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_0B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_0B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
 	}
 	break;
 	case 0x0C:
@@ -505,8 +521,16 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x211:
 	{
-		unimplemented_instruction("long mode: 0x11 has no 64-bit form in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_11_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_11_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
 	}
 	break;
 	case 0x12:
@@ -560,8 +584,16 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x213:
 	{
-		unimplemented_instruction("long mode: 0x13 has no 64-bit form in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_13_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_13_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
 	}
 	break;
 	case 0x14:
@@ -709,8 +741,16 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x219:
 	{
-		unimplemented_instruction("long mode: 0x19 has no 64-bit form in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_19_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_19_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
 	}
 	break;
 	case 0x1A:
@@ -764,8 +804,16 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x21B:
 	{
-		unimplemented_instruction("long mode: 0x1B has no 64-bit form in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_1B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_1B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
 	}
 	break;
 	case 0x1C:
@@ -913,8 +961,16 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x221:
 	{
-		unimplemented_instruction("long mode: 0x21 has no 64-bit form in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_21_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_21_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
 	}
 	break;
 	case 0x22:
@@ -968,8 +1024,16 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x223:
 	{
-		unimplemented_instruction("long mode: 0x23 has no 64-bit form in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_23_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_23_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
 	}
 	break;
 	case 0x24:
@@ -1089,8 +1153,16 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x229:
 	{
-		unimplemented_instruction("long mode: 0x29 has no 64-bit form in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_29_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_29_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
 	}
 	break;
 	case 0x2A:
@@ -1144,8 +1216,16 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x22B:
 	{
-		unimplemented_instruction("long mode: 0x2B has no 64-bit form in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_2B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_2B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
 	}
 	break;
 	case 0x2C:
@@ -1457,8 +1537,16 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x239:
 	{
-		unimplemented_instruction("long mode: 0x39 has no 64-bit form in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_39_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_39_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
 	}
 	break;
 	case 0x3A:
@@ -1512,8 +1600,16 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x23B:
 	{
-		unimplemented_instruction("long mode: 0x3B has no 64-bit form in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_3B_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_3B_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
 	}
 	break;
 	case 0x3C:
@@ -3684,8 +3780,141 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x283:
 	{
-		unimplemented_instruction("long mode: 0x83 has no 64-bit form in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		switch (modrm_byte >> 3 & 7) {
+		case 0:
+		{
+			if (modrm_byte < 0xC0) {
+				int64_t addr = modrm_resolve64(modrm_byte);
+				if (cpu->pagefault) return;
+				int64_t imm = read_imm8s();
+				if (cpu->pagefault) return;
+				instr64_83_0_mem(addr, imm);
+			}
+			else {
+				int64_t imm = read_imm8s();
+				if (cpu->pagefault) return;
+				instr64_83_0_reg(reg_index_b(modrm_byte & 7), imm);
+			}
+		}
+			break;
+		case 1:
+		{
+			if (modrm_byte < 0xC0) {
+				int64_t addr = modrm_resolve64(modrm_byte);
+				if (cpu->pagefault) return;
+				int64_t imm = read_imm8s();
+				if (cpu->pagefault) return;
+				instr64_83_1_mem(addr, imm);
+			}
+			else {
+				int64_t imm = read_imm8s();
+				if (cpu->pagefault) return;
+				instr64_83_1_reg(reg_index_b(modrm_byte & 7), imm);
+			}
+		}
+			break;
+		case 2:
+		{
+			if (modrm_byte < 0xC0) {
+				int64_t addr = modrm_resolve64(modrm_byte);
+				if (cpu->pagefault) return;
+				int64_t imm = read_imm8s();
+				if (cpu->pagefault) return;
+				instr64_83_2_mem(addr, imm);
+			}
+			else {
+				int64_t imm = read_imm8s();
+				if (cpu->pagefault) return;
+				instr64_83_2_reg(reg_index_b(modrm_byte & 7), imm);
+			}
+		}
+			break;
+		case 3:
+		{
+			if (modrm_byte < 0xC0) {
+				int64_t addr = modrm_resolve64(modrm_byte);
+				if (cpu->pagefault) return;
+				int64_t imm = read_imm8s();
+				if (cpu->pagefault) return;
+				instr64_83_3_mem(addr, imm);
+			}
+			else {
+				int64_t imm = read_imm8s();
+				if (cpu->pagefault) return;
+				instr64_83_3_reg(reg_index_b(modrm_byte & 7), imm);
+			}
+		}
+			break;
+		case 4:
+		{
+			if (modrm_byte < 0xC0) {
+				int64_t addr = modrm_resolve64(modrm_byte);
+				if (cpu->pagefault) return;
+				int64_t imm = read_imm8s();
+				if (cpu->pagefault) return;
+				instr64_83_4_mem(addr, imm);
+			}
+			else {
+				int64_t imm = read_imm8s();
+				if (cpu->pagefault) return;
+				instr64_83_4_reg(reg_index_b(modrm_byte & 7), imm);
+			}
+		}
+			break;
+		case 5:
+		{
+			if (modrm_byte < 0xC0) {
+				int64_t addr = modrm_resolve64(modrm_byte);
+				if (cpu->pagefault) return;
+				int64_t imm = read_imm8s();
+				if (cpu->pagefault) return;
+				instr64_83_5_mem(addr, imm);
+			}
+			else {
+				int64_t imm = read_imm8s();
+				if (cpu->pagefault) return;
+				instr64_83_5_reg(reg_index_b(modrm_byte & 7), imm);
+			}
+		}
+			break;
+		case 6:
+		{
+			if (modrm_byte < 0xC0) {
+				int64_t addr = modrm_resolve64(modrm_byte);
+				if (cpu->pagefault) return;
+				int64_t imm = read_imm8s();
+				if (cpu->pagefault) return;
+				instr64_83_6_mem(addr, imm);
+			}
+			else {
+				int64_t imm = read_imm8s();
+				if (cpu->pagefault) return;
+				instr64_83_6_reg(reg_index_b(modrm_byte & 7), imm);
+			}
+		}
+			break;
+		case 7:
+		{
+			if (modrm_byte < 0xC0) {
+				int64_t addr = modrm_resolve64(modrm_byte);
+				if (cpu->pagefault) return;
+				int64_t imm = read_imm8s();
+				if (cpu->pagefault) return;
+				instr64_83_7_mem(addr, imm);
+			}
+			else {
+				int64_t imm = read_imm8s();
+				if (cpu->pagefault) return;
+				instr64_83_7_reg(reg_index_b(modrm_byte & 7), imm);
+			}
+		}
+			break;
+		default:
+			trigger_ud();
+			break;
+		}
 	}
 	break;
 	case 0x84:
@@ -3739,8 +3968,16 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x285:
 	{
-		unimplemented_instruction("long mode: 0x85 has no 64-bit form in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve64(modrm_byte);
+			if (cpu->pagefault) return;
+			instr64_85_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+		}
+		else {
+			instr64_85_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+		}
 	}
 	break;
 	case 0x86:
@@ -4078,13 +4315,12 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				unimplemented_instruction("instructions::instr64_8F_0_mem");
-				return;
+				instr64_8F_0_mem(modrm_byte);
 			}
 			else {
-				unimplemented_instruction("instructions::instr64_8F_0_reg");
-				return;
+				instr64_8F_0_reg(reg_index_b(modrm_byte & 7));
 			}
+			after_block_boundary();
 		}
 			break;
 		default:
@@ -8787,8 +9023,109 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x2F7:
 	{
-		unimplemented_instruction("long mode: 0xF7 has no 64-bit form in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		switch (modrm_byte >> 3 & 7) {
+		case 0:
+		{
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions::instr64_F7_0_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions::instr64_F7_0_reg");
+				return;
+			}
+		}
+			break;
+		case 1:
+		{
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions::instr64_F7_1_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions::instr64_F7_1_reg");
+				return;
+			}
+		}
+			break;
+		case 2:
+		{
+			if (modrm_byte < 0xC0) {
+				int64_t addr = modrm_resolve64(modrm_byte);
+				if (cpu->pagefault) return;
+				instr64_F7_2_mem(addr);
+			}
+			else {
+				instr64_F7_2_reg(reg_index_b(modrm_byte & 7));
+			}
+		}
+			break;
+		case 3:
+		{
+			if (modrm_byte < 0xC0) {
+				int64_t addr = modrm_resolve64(modrm_byte);
+				if (cpu->pagefault) return;
+				instr64_F7_3_mem(addr);
+			}
+			else {
+				instr64_F7_3_reg(reg_index_b(modrm_byte & 7));
+			}
+		}
+			break;
+		case 4:
+		{
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions::instr64_F7_4_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions::instr64_F7_4_reg");
+				return;
+			}
+		}
+			break;
+		case 5:
+		{
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions::instr64_F7_5_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions::instr64_F7_5_reg");
+				return;
+			}
+		}
+			break;
+		case 6:
+		{
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions::instr64_F7_6_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions::instr64_F7_6_reg");
+				return;
+			}
+		}
+			break;
+		case 7:
+		{
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions::instr64_F7_7_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions::instr64_F7_7_reg");
+				return;
+			}
+		}
+			break;
+		default:
+			trigger_ud();
+			break;
+		}
 	}
 	break;
 	case 0xF8:
@@ -9111,24 +9448,24 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				unimplemented_instruction("instructions::instr64_FF_0_mem");
-				return;
+				int64_t addr = modrm_resolve64(modrm_byte);
+				if (cpu->pagefault) return;
+				instr64_FF_0_mem(addr);
 			}
 			else {
-				unimplemented_instruction("instructions::instr64_FF_0_reg");
-				return;
+				instr64_FF_0_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;
 		case 1:
 		{
 			if (modrm_byte < 0xC0) {
-				unimplemented_instruction("instructions::instr64_FF_1_mem");
-				return;
+				int64_t addr = modrm_resolve64(modrm_byte);
+				if (cpu->pagefault) return;
+				instr64_FF_1_mem(addr);
 			}
 			else {
-				unimplemented_instruction("instructions::instr64_FF_1_reg");
-				return;
+				instr64_FF_1_reg(reg_index_b(modrm_byte & 7));
 			}
 		}
 			break;

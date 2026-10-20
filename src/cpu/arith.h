@@ -98,6 +98,37 @@ int32_t xor8(int32_t x, int32_t y);
 int32_t xor16(int32_t x, int32_t y);
 int32_t xor32(int32_t x, int32_t y);
 
+/* ------------------------------------------------------------------ *
+ * S6: THE 64-BIT ALU WRAPPERS (results/x86-64-plan.md ss6 S6)
+ *
+ * These are WRAPPERS over the one set of flag cores (flags_add/sub/adc/sbb/inc/dec and
+ * arith_and/or/xor), exactly as the 8/16/32-bit ones are: `tests/gate-long-mode.sh`'s
+ * family-2 cases compare CF/PF/AF/ZF/SF/OF against the HOST, so a second flag implementation
+ * would be a second thing to get wrong.  The cores mask to the operand size and the lazy
+ * operands are stored in S1's canonical (zero-extended) form, so OPSIZE_64 is a parameter
+ * here, not a code path.
+ *
+ * WHY THE LOGIC CORES HAD TO WIDEN (a live 64-bit defect this slice found): arith_and/or/xor
+ * took `int32_t dest_operand, int32_t source_operand`, i.e. a 64-bit AND would have been
+ * computed on the LOW 32 BITS of both operands and then stored as if it were a 64-bit
+ * result -- silently wrong in the one way the corpus's alu-logic-64 case is built to catch.
+ * They are `int64_t` now; the 8/16/32-bit wrappers truncate on the way back and are
+ * bit-identical.
+ * ------------------------------------------------------------------ */
+int64_t add64(int64_t x, int64_t y);
+int64_t adc64(int64_t x, int64_t y);
+int64_t sub64(int64_t x, int64_t y);
+int64_t sbb64(int64_t x, int64_t y);
+void cmp64(int64_t x, int64_t y);
+int64_t inc64(int64_t x);
+int64_t dec64(int64_t x);
+int64_t neg64(int64_t x);
+int64_t not64(int64_t x);
+int64_t and64(int64_t x, int64_t y);
+void test64(int64_t x, int64_t y);
+int64_t or64(int64_t x, int64_t y);
+int64_t xor64(int64_t x, int64_t y);
+
 /* ---- rotate / rotate-through-carry (arith.rs:440-637) ---- */
 int32_t rol8(int32_t dest_operand, int32_t count);
 int32_t rol16(int32_t dest_operand, int32_t count);

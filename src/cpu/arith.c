@@ -381,25 +381,27 @@ void bcd_aas(void)
  * prefix is the whole rename.  Note that (like upstream) they do NOT mask to op_size.
  * ------------------------------------------------------------------ */
 
-static int32_t arith_and(int32_t dest_operand, int32_t source_operand, int32_t op_size)
+/* S6: int64_t operands -- a 64-bit AND computed on 32-bit operands is a silent-wrong
+ * result, and the 8/16/32-bit wrappers truncate on the way back (bit-identical). */
+static int64_t arith_and(int64_t dest_operand, int64_t source_operand, int32_t op_size)
 {
-    int32_t result = dest_operand & source_operand;
+    int64_t result = dest_operand & source_operand;
     set_last_result(result, op_size);
     cpu->flags &= ~1 & ~FLAG_OVERFLOW & ~FLAG_ADJUST;
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW & ~FLAG_ADJUST;
     return result;
 }
-static int32_t arith_or(int32_t dest_operand, int32_t source_operand, int32_t op_size)
+static int64_t arith_or(int64_t dest_operand, int64_t source_operand, int32_t op_size)
 {
-    int32_t result = dest_operand | source_operand;
+    int64_t result = dest_operand | source_operand;
     set_last_result(result, op_size);
     cpu->flags &= ~1 & ~FLAG_OVERFLOW & ~FLAG_ADJUST;
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW & ~FLAG_ADJUST;
     return result;
 }
-static int32_t arith_xor(int32_t dest_operand, int32_t source_operand, int32_t op_size)
+static int64_t arith_xor(int64_t dest_operand, int64_t source_operand, int32_t op_size)
 {
-    int32_t result = dest_operand ^ source_operand;
+    int64_t result = dest_operand ^ source_operand;
     set_last_result(result, op_size);
     cpu->flags &= ~1 & ~FLAG_OVERFLOW & ~FLAG_ADJUST;
     cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW & ~FLAG_ADJUST;
@@ -418,6 +420,25 @@ int32_t or32(int32_t x, int32_t y) { return arith_or(x, y, OPSIZE_32); }
 int32_t xor8(int32_t x, int32_t y) { return arith_xor(x, y, OPSIZE_8); }
 int32_t xor16(int32_t x, int32_t y) { return arith_xor(x, y, OPSIZE_16); }
 int32_t xor32(int32_t x, int32_t y) { return arith_xor(x, y, OPSIZE_32); }
+
+/* ------------------------------------------------------------------ *
+ * S6: the 64-bit wrappers (arith.h carries the argument)
+ * ------------------------------------------------------------------ */
+int64_t add64(int64_t x, int64_t y) { return flags_add(x, y, OPSIZE_64); }
+int64_t adc64(int64_t x, int64_t y) { return flags_adc(x, y, OPSIZE_64); }
+int64_t sub64(int64_t x, int64_t y) { return flags_sub(x, y, OPSIZE_64); }
+int64_t sbb64(int64_t x, int64_t y) { return flags_sbb(x, y, OPSIZE_64); }
+void cmp64(int64_t x, int64_t y) { flags_sub(x, y, OPSIZE_64); }
+int64_t inc64(int64_t x) { return flags_inc(x, OPSIZE_64); }
+int64_t dec64(int64_t x) { return flags_dec(x, OPSIZE_64); }
+int64_t neg64(int64_t x) { return flags_neg(x, OPSIZE_64); }
+/* NOT sets NO flags (the SDM leaves CF/OF/AF/SF/ZF/PF alone), so it is the one member of the
+ * family that is a plain complement -- at 64 bits as at 8. */
+int64_t not64(int64_t x) { return ~x; }
+int64_t and64(int64_t x, int64_t y) { return arith_and(x, y, OPSIZE_64); }
+void test64(int64_t x, int64_t y) { arith_and(x, y, OPSIZE_64); }
+int64_t or64(int64_t x, int64_t y) { return arith_or(x, y, OPSIZE_64); }
+int64_t xor64(int64_t x, int64_t y) { return arith_xor(x, y, OPSIZE_64); }
 
 /* ------------------------------------------------------------------ *
  * rotate -- arith.rs:440-637

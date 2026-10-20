@@ -126,6 +126,8 @@ body_start:
     scasq
     pushfq
     pop qword ptr [0x100200]
+    and dword ptr [0x100200], 0x8D5
+    and dword ptr [rsp - 8], 0x8D5
     mov rsi, 0x100100
     mov rdi, 0x100108
     cmpsq
@@ -147,6 +149,8 @@ body_start:
     mov qword ptr [0x100078], r15
     pushfq
     pop qword ptr [0x100080]
+    and dword ptr [0x100080], 0x8D5
+    and dword ptr [rsp - 8], 0x8D5
 loop:
     hlt
     jmp loop

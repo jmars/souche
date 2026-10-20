@@ -42,6 +42,7 @@
 
 #include "instructions_64.h"
 
+#include "arith.h" /* S6: add64/sub64/... -- the ONE set of flag cores at OPSIZE_64 */
 #include "cpu.h"
 #include "flags.h"
 #include "instructions.h" /* S5a: run_prefix_instruction, handle_irqs (declared there) */
@@ -192,67 +193,431 @@ void instr64_A3(int64_t addr)
 }
 
 /* ================================================================== *
- * ADD and XOR AT 64 BITS -- STOP BY NAME, DELIBERATELY (round 2, finding 1)
+ * S6: THE ALU FAMILY AT 64 BITS, WITH ITS FLAGS
  *
- * THESE FOUR OPCODES ARE NOT IMPLEMENTED HERE, and the reason is correctness rather than
- * scope.  64-bit ALU FLAGS ARE S6'S WORK: arith.c's cores compute `last_op1`/`last_result` and
- * the lazy flag bits at 32 bits (plan ss4's row for last_op1/last_result widens them in S6 with
- * OPSIZE_64), so a body that delivers the 64-bit RESULT would leave every flag stale -- and a
- * following `jcc`, `adc`, `setcc` or `cmovcc` would branch on the previous instruction's flags.
- * That is precisely the silent-wrong class this tree refuses, and it is worse than a missing
- * instruction because the RESULT is right and only the flags lie.
+ * results/x86-64-plan.md ss6's S6 row.  Every body here DELIVERS the 64-bit result and SETS
+ * THE ARITHMETIC FLAGS, through the port's ONE set of flag cores at `OPSIZE_64`
+ * (arith.h's note; the cores themselves are S1's widened `flags_add/adc/sub/sbb/inc/dec` and
+ * the now-widened `arith_and/or/xor`).  There is deliberately no second flag path: a 64-bit
+ * carry computed by a parallel implementation is exactly the thing that gets fixed in one
+ * width and broken in the other.
  *
- * ROUND 1 GOT THIS WRONG IN THE OTHER DIRECTION: its four bodies wrote the 64-bit result and
- * returned, while this comment CLAIMED "the flags these bodies leave are computed here with the
- * 64-bit values".  The review measured the code against the comment (the bodies write no flag at
- * all).  A comment that lies is worse than no comment, so both halves are gone: the bodies stop
- * by name and the claim is this paragraph.
+ * WHICH FLAG RULES ARE VERIFIED, AND WHERE (the honest inventory -- the corpus is the only
+ * oracle there is for this layer, plan ss2.1):
  *
- * WHY A NAMED STOP IS FREE: the corpus's shared prologue zeroes its registers with `xor
- * eax, eax` AND `xor r8d, r8d` -- REX WITHOUT W, i.e. os_index 1, the 32-bit arm, which is
- * genuinely 32-bit and genuinely sets flags.  No S5 case reaches the 0x2NN arms of 0x01/0x03/
- * 0x31/0x33 (MEASURED: the 12 family-1 cases are green, and green here means the host agreed
- * on every compared field INCLUDING rflags).  So the stop costs S5 nothing and prevents a
- * latent silent-wrong body from being inherited by S6, which is where the WRAP bodies over the
- * widened cores belong -- with the corpus's `alu` family as their gate.
+ *   CF   alu-add64-carry-chain (`0xFFFFFFFF + 1` at 64 bits sets CF and the adc chain adds
+ *        it), alu-adc-chain-wide (two chains from 0xFFFFFFFFFFFFFFFF), alu-sub-sbb-64
+ *        (borrow out of 64)                                  -- VERIFIED
+ *   OF   alu-inc-dec-64 (`inc 0x7FFFFFFFFFFFFFFF` overflows; `dec 0` does not),
+ *        alu-sign-boundary-32-64, alu-neg-not-64 (`neg 0x8000000000000000` overflows) -- VERIFIED
+ *   SF   alu-test-cmp-64, alu-sign-boundary-32-64, alu-neg-not-64                   -- VERIFIED
+ *   ZF   alu-test-cmp-64 (`test rax,rax` with rax != 0 and `cmp rax,rcx` with rcx = 0),
+ *        alu-logic-64                                                                -- VERIFIED
+ *   PF   carried in every pushfq those cases store (the mask the comparison uses is
+ *        run.js's MASK_ARITH: CF|PF|AF|ZF|SF|OF)                                     -- VERIFIED
+ *   AF   the same word, on the cases whose low nibble carries (`add rax,1` from 0xFFFFFFFF
+ *        carries out of bit 3)                                                       -- VERIFIED
+ *   the 32-vs-64 OPERAND-SIZE boundary: alu-op32-vs-op64 does the same `add` at both widths
+ *        and compares the 64-bit register AND the flags -- the case that would catch a body
+ *        that lost the zero-extension rule (write_reg32 zeroes the high half)        -- VERIFIED
+ *
+ * WHAT IS **NOT** COVERED, named here rather than implied (results/x86-64-s6.md ss5): the
+ * imm32 ALU group (0x81) and the accumulator-immediate forms (0x05/0x0D/0x15/0x1D/0x25/0x2D/
+ * 0x35/0x3D) have bodies in NO slice yet -- they stop by name -- and no corpus case exercises
+ * AF on a LOGIC operation (the SDM leaves AF undefined there, which is why the corpus may not
+ * contain one: plan ss2.1.5's "out of reach by rule").
+ *
+ * ONE STATED DIVERGENCE from the reference's shape, and it is unobservable in every run this
+ * corpus can make: the reference's SAFE_READ_WRITE* macros TRANSLATE THE WRITE ADDRESS FIRST,
+ * so a faulting store leaves the flags untouched; these bodies compute the operation (and
+ * therefore the flags) and then store, so a faulting store leaves the flags set.  A fault
+ * aborts the instruction either way and S5's walk names its own faults, so the difference can
+ * only be seen by a #PF handler that reads flags mid-instruction, which no corpus case can
+ * build.  Stating it because the alternative -- a per-body write pre-translation for 32
+ * bodies -- buys nothing measurable today.
  * ================================================================== */
 
-#define INSTR64_ALU_IS_S6(what)                                                        \
-	do {                                                                                \
-		unimplemented_instruction(                                                       \
-		    "instructions_64: " what " at 64 bits is S6's (the flag cores are 32-bit"   \
-		    " until last_op1/last_result widen -- results/x86-64-plan.md ss6 S6)");     \
-		return;                                                                          \
-	} while (0)
-
+/* 0x01 add r/m64, r64 */
 void instr64_01_mem(int64_t addr, int32_t r)
 {
-	(void)addr;
-	(void)r;
-	INSTR64_ALU_IS_S6("add r/m64, r64");
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)add64(x, (int64_t)read_reg64(r)));
 }
-void instr64_01_reg(int32_t r1, int32_t r) { (void)r1; (void)r; INSTR64_ALU_IS_S6("add r/m64, r64"); }
+void instr64_01_reg(int32_t r1, int32_t r)
+{
+	write_reg64(r1, (uint64_t)add64((int64_t)read_reg64(r1), (int64_t)read_reg64(r)));
+}
+/* 0x03 add r64, r/m64 */
 void instr64_03_mem(int64_t addr, int32_t r)
 {
-	(void)addr;
-	(void)r;
-	INSTR64_ALU_IS_S6("add r64, r/m64");
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	write_reg64(r, (uint64_t)add64((int64_t)read_reg64(r), x));
 }
-void instr64_03_reg(int32_t r1, int32_t r) { (void)r1; (void)r; INSTR64_ALU_IS_S6("add r64, r/m64"); }
+void instr64_03_reg(int32_t r1, int32_t r)
+{
+	write_reg64(r, (uint64_t)add64((int64_t)read_reg64(r), (int64_t)read_reg64(r1)));
+}
+
+/* 0x09 or r/m64, r64 */
+void instr64_09_mem(int64_t addr, int32_t r)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)or64(x, (int64_t)read_reg64(r)));
+}
+void instr64_09_reg(int32_t r1, int32_t r)
+{
+	write_reg64(r1, (uint64_t)or64((int64_t)read_reg64(r1), (int64_t)read_reg64(r)));
+}
+/* 0x0B or r64, r/m64 */
+void instr64_0B_mem(int64_t addr, int32_t r)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	write_reg64(r, (uint64_t)or64((int64_t)read_reg64(r), x));
+}
+void instr64_0B_reg(int32_t r1, int32_t r)
+{
+	write_reg64(r, (uint64_t)or64((int64_t)read_reg64(r), (int64_t)read_reg64(r1)));
+}
+
+/* 0x11 adc r/m64, r64 -- adc READS CF FIRST (flags.h's invariant), which adc64 does */
+void instr64_11_mem(int64_t addr, int32_t r)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)adc64(x, (int64_t)read_reg64(r)));
+}
+void instr64_11_reg(int32_t r1, int32_t r)
+{
+	write_reg64(r1, (uint64_t)adc64((int64_t)read_reg64(r1), (int64_t)read_reg64(r)));
+}
+/* 0x13 adc r64, r/m64 */
+void instr64_13_mem(int64_t addr, int32_t r)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	write_reg64(r, (uint64_t)adc64((int64_t)read_reg64(r), x));
+}
+void instr64_13_reg(int32_t r1, int32_t r)
+{
+	write_reg64(r, (uint64_t)adc64((int64_t)read_reg64(r), (int64_t)read_reg64(r1)));
+}
+
+/* 0x19 sbb r/m64, r64 */
+void instr64_19_mem(int64_t addr, int32_t r)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)sbb64(x, (int64_t)read_reg64(r)));
+}
+void instr64_19_reg(int32_t r1, int32_t r)
+{
+	write_reg64(r1, (uint64_t)sbb64((int64_t)read_reg64(r1), (int64_t)read_reg64(r)));
+}
+/* 0x1B sbb r64, r/m64 */
+void instr64_1B_mem(int64_t addr, int32_t r)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	write_reg64(r, (uint64_t)sbb64((int64_t)read_reg64(r), x));
+}
+void instr64_1B_reg(int32_t r1, int32_t r)
+{
+	write_reg64(r, (uint64_t)sbb64((int64_t)read_reg64(r), (int64_t)read_reg64(r1)));
+}
+
+/* 0x21 and r/m64, r64 */
+void instr64_21_mem(int64_t addr, int32_t r)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)and64(x, (int64_t)read_reg64(r)));
+}
+void instr64_21_reg(int32_t r1, int32_t r)
+{
+	write_reg64(r1, (uint64_t)and64((int64_t)read_reg64(r1), (int64_t)read_reg64(r)));
+}
+/* 0x23 and r64, r/m64 */
+void instr64_23_mem(int64_t addr, int32_t r)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	write_reg64(r, (uint64_t)and64((int64_t)read_reg64(r), x));
+}
+void instr64_23_reg(int32_t r1, int32_t r)
+{
+	write_reg64(r, (uint64_t)and64((int64_t)read_reg64(r), (int64_t)read_reg64(r1)));
+}
+
+/* 0x29 sub r/m64, r64 */
+void instr64_29_mem(int64_t addr, int32_t r)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)sub64(x, (int64_t)read_reg64(r)));
+}
+void instr64_29_reg(int32_t r1, int32_t r)
+{
+	write_reg64(r1, (uint64_t)sub64((int64_t)read_reg64(r1), (int64_t)read_reg64(r)));
+}
+/* 0x2B sub r64, r/m64 */
+void instr64_2B_mem(int64_t addr, int32_t r)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	write_reg64(r, (uint64_t)sub64((int64_t)read_reg64(r), x));
+}
+void instr64_2B_reg(int32_t r1, int32_t r)
+{
+	write_reg64(r, (uint64_t)sub64((int64_t)read_reg64(r), (int64_t)read_reg64(r1)));
+}
+
+/* 0x31 xor r/m64, r64 */
 void instr64_31_mem(int64_t addr, int32_t r)
 {
-	(void)addr;
-	(void)r;
-	INSTR64_ALU_IS_S6("xor r/m64, r64");
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)xor64(x, (int64_t)read_reg64(r)));
 }
-void instr64_31_reg(int32_t r1, int32_t r) { (void)r1; (void)r; INSTR64_ALU_IS_S6("xor r/m64, r64"); }
+void instr64_31_reg(int32_t r1, int32_t r)
+{
+	write_reg64(r1, (uint64_t)xor64((int64_t)read_reg64(r1), (int64_t)read_reg64(r)));
+}
+/* 0x33 xor r64, r/m64 */
 void instr64_33_mem(int64_t addr, int32_t r)
 {
-	(void)addr;
-	(void)r;
-	INSTR64_ALU_IS_S6("xor r64, r/m64");
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	write_reg64(r, (uint64_t)xor64((int64_t)read_reg64(r), x));
 }
-void instr64_33_reg(int32_t r1, int32_t r) { (void)r1; (void)r; INSTR64_ALU_IS_S6("xor r64, r/m64"); }
+void instr64_33_reg(int32_t r1, int32_t r)
+{
+	write_reg64(r, (uint64_t)xor64((int64_t)read_reg64(r), (int64_t)read_reg64(r1)));
+}
+
+/* 0x39 cmp r/m64, r64 -- the SUBTRACTION whose result is discarded (cmp64 does the flags) */
+void instr64_39_mem(int64_t addr, int32_t r)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	cmp64(x, (int64_t)read_reg64(r));
+}
+void instr64_39_reg(int32_t r1, int32_t r)
+{
+	cmp64((int64_t)read_reg64(r1), (int64_t)read_reg64(r));
+}
+/* 0x3B cmp r64, r/m64 */
+void instr64_3B_mem(int64_t addr, int32_t r)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	cmp64((int64_t)read_reg64(r), x);
+}
+void instr64_3B_reg(int32_t r1, int32_t r)
+{
+	cmp64((int64_t)read_reg64(r), (int64_t)read_reg64(r1));
+}
+
+/* 0x85 test r/m64, r64 -- the AND whose result is discarded */
+void instr64_85_mem(int64_t addr, int32_t r)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	test64(x, (int64_t)read_reg64(r));
+}
+void instr64_85_reg(int32_t r1, int32_t r)
+{
+	test64((int64_t)read_reg64(r1), (int64_t)read_reg64(r));
+}
+
+/* ------------------------------------------------------------------ *
+ * 0x83: THE IMM8 GROUP, /0 add /1 or /2 adc /3 sbb /4 and /5 sub /6 xor /7 cmp.
+ *
+ * The immediate is a SIGN-EXTENDED imm8 at every operand size, which is why the emitter hands
+ * these bodies an `int64_t imm` that `read_imm8s` sign-extended: `add rax, -1` is `83 C0 FF`.
+ * The other half of the group (0x81, the imm32 form) has no body yet and stops by name.
+ *
+ * SPELLED OUT, not macro-generated: the emitter's availability scan reads definitions with
+ * `^void <name>(` at the START OF A LINE (S5 measured this the hard way with MOV_IMM64 -- the
+ * bodies existed and the arms stayed named stops), and sixteen one-line bodies read better
+ * than a macro at this size anyway.
+ * ------------------------------------------------------------------ */
+
+void instr64_83_0_mem(int64_t addr, int64_t imm)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)add64(x, imm));
+}
+
+void instr64_83_0_reg(int32_t r1, int64_t imm)
+{
+	write_reg64(r1, (uint64_t)add64((int64_t)read_reg64(r1), imm));
+}
+
+void instr64_83_1_mem(int64_t addr, int64_t imm)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)or64(x, imm));
+}
+
+void instr64_83_1_reg(int32_t r1, int64_t imm)
+{
+	write_reg64(r1, (uint64_t)or64((int64_t)read_reg64(r1), imm));
+}
+
+void instr64_83_2_mem(int64_t addr, int64_t imm)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)adc64(x, imm));
+}
+
+void instr64_83_2_reg(int32_t r1, int64_t imm)
+{
+	write_reg64(r1, (uint64_t)adc64((int64_t)read_reg64(r1), imm));
+}
+
+void instr64_83_3_mem(int64_t addr, int64_t imm)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)sbb64(x, imm));
+}
+
+void instr64_83_3_reg(int32_t r1, int64_t imm)
+{
+	write_reg64(r1, (uint64_t)sbb64((int64_t)read_reg64(r1), imm));
+}
+
+void instr64_83_4_mem(int64_t addr, int64_t imm)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)and64(x, imm));
+}
+
+void instr64_83_4_reg(int32_t r1, int64_t imm)
+{
+	write_reg64(r1, (uint64_t)and64((int64_t)read_reg64(r1), imm));
+}
+
+void instr64_83_5_mem(int64_t addr, int64_t imm)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)sub64(x, imm));
+}
+
+void instr64_83_5_reg(int32_t r1, int64_t imm)
+{
+	write_reg64(r1, (uint64_t)sub64((int64_t)read_reg64(r1), imm));
+}
+
+void instr64_83_6_mem(int64_t addr, int64_t imm)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)xor64(x, imm));
+}
+
+void instr64_83_6_reg(int32_t r1, int64_t imm)
+{
+	write_reg64(r1, (uint64_t)xor64((int64_t)read_reg64(r1), imm));
+}
+
+void instr64_83_7_mem(int64_t addr, int64_t imm)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	cmp64(x, imm);
+}
+
+void instr64_83_7_reg(int32_t r1, int64_t imm)
+{
+	cmp64((int64_t)read_reg64(r1), imm);
+}
+
+/* ------------------------------------------------------------------ *
+ * 0xF7: /2 NOT and /3 NEG, and 0xFF: /0 INC and /1 DEC.
+ *
+ * The two fixed_g groups whose reg field is the SUB-OPCODE take no register argument (the
+ * emitter passes only the address, or the r/m register).  Why only two of 0xF7's eight: /0 and
+ * /1 are `test r/m64, imm32` and /4../7 are MUL/IMUL/DIV/IDIV, which are S8's -- the
+ * availability scan turns their arms into NAMED STOPS, so they cannot run silently.  NOT sets
+ * no flags; INC/DEC preserve CF (flags.h's invariants).
+ * ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------ *
+ * 0x8F /0: POP r/m64.  The plan's S7 row owns push/pop of a REGISTER OR MEMORY operand, but
+ * family 2's cases need this one to STORE RFLAGS into the compared window (`pushfq; pop qword
+ * ptr [0x100080]`), and a slice whose own cases cannot run is not a slice.  Its long-mode
+ * operand size is 64 BY DEFAULT (the overlay's `default64` entry), and it is the reason a body
+ * here is not "S7 work leaking into S6": it is the instrument's own plumbing, named.
+ * ------------------------------------------------------------------ */
+void instr64_8F_0_mem(int32_t modrm_byte)
+{
+	/* THE ADDRESS IS RESOLVED BY THE BODY, because 0x8F is `custom_modrm_resolve` in the
+	 * reference's table and the emitter therefore passes the RAW MODRM BYTE (S5's C6/C7 arms
+	 * are the ordinary kind, which is why this one surprised the first version of this body:
+	 * MEASURED, the case's rax came out 0x100080 -- an address -- with the pushfq/popf
+	 * plumbing writing four bytes into physical 4).
+	 *
+	 * AND THE ORDER IS THE REFERENCE'S (instructions.c's instr32_8F_0_mem): ESP/RSP is
+	 * updated BEFORE the address is resolved, so `pop qword [rsp+8]` uses the
+	 * post-decrement value; it is restored for the READ, and applied after the write. */
+	uint64_t rsp = read_reg64(ESP);
+	write_reg64(ESP, rsp - 8);
+	int64_t addr = modrm_resolve64(modrm_byte);
+	if (cpu->pagefault) {
+		write_reg64(ESP, rsp); /* a fault resets the stack pointer, as the reference does */
+		return;
+	}
+	write_reg64(ESP, rsp);
+	uint64_t v = safe_read64_addr((int64_t)rsp);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, v);
+	if (cpu->pagefault) return;
+	write_reg64(ESP, rsp + 8);
+}
+void instr64_8F_0_reg(int32_t r1)
+{
+	uint64_t rsp = read_reg64(ESP);
+	uint64_t v = safe_read64_addr((int64_t)rsp);
+	if (cpu->pagefault) return;
+	write_reg64(ESP, rsp + 8);
+	write_reg64(r1, v);
+}
+
+void instr64_F7_2_mem(int64_t addr)
+{
+	safe_write64_addr(addr, (uint64_t)not64((int64_t)safe_read64_addr(addr)));
+}
+void instr64_F7_2_reg(int32_t r1) { write_reg64(r1, (uint64_t)not64((int64_t)read_reg64(r1))); }
+void instr64_F7_3_mem(int64_t addr)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)neg64(x));
+}
+void instr64_F7_3_reg(int32_t r1) { write_reg64(r1, (uint64_t)neg64((int64_t)read_reg64(r1))); }
+void instr64_FF_0_mem(int64_t addr)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)inc64(x));
+}
+void instr64_FF_0_reg(int32_t r1) { write_reg64(r1, (uint64_t)inc64((int64_t)read_reg64(r1))); }
+void instr64_FF_1_mem(int64_t addr)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)dec64(x));
+}
+void instr64_FF_1_reg(int32_t r1) { write_reg64(r1, (uint64_t)dec64((int64_t)read_reg64(r1))); }
 
 /* ================================================================== *
  * THE STACK -- push/pop/pushf/popf, all of them default-64

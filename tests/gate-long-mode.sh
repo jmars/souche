@@ -96,12 +96,14 @@ step "uop-decoder-refusal" sh -c \
 	"./build/cpu_uop_selftest 2>&1 | grep -q 'PASS S5: the uop decoder refuses long mode'"
 
 echo "== D. the 0x2NN overlay's census (routed arms / named stops) AS NUMBERS"
-# MEASURED at S5 (round 2): 102 overlay entries (the SDM's 64-bit removal list and the two
-# `stop64` encodings are entries without bodies), 61 routed arms, 23 unimplemented call sites.  The 23 are
+# MEASURED at S6: 117 overlay entries, 76 routed arms, 29 unimplemented call sites.  The 29 are
+# S8's group (mul/imul/div/idiv in 0xF7), the imm32 ALU group 0x81 has no entry at all, and the
+# default-64 stack/control encodings (ret/call/jmp) are S7's and S11's; S5 measured 102/61/23 and
+# S6's row in results/x86-64-s6.md records the move.  The 23 are
 # the default-64 named stops (ret/call/jmp/pop r-m/iret) that S6-S11 replace; a slice that
 # lands one EDITS THIS LINE, which is the record of what it landed.
 step "overlay-census" sh -c \
-	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 102 overlay entries, 61 routed to instr64 bodies, 23 of those call sites unimplemented'"
+	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 117 overlay entries, 76 routed to instr64 bodies, 29 of those call sites unimplemented'"
 must_fail "overlay-census-able-to-fail" sh -c \
 	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 0 overlay entries'"
 
@@ -110,7 +112,7 @@ step "family-1-green" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_
 	--filter '^mov-' --expect counts \
 	--expect-counts "green=12 red_unimplemented=0 mismatch=0 error=0" --quiet
 step "whole-corpus-no-mismatch" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
-	--expect counts --expect-counts "green=17 red_unimplemented=40 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=28 red_unimplemented=29 mismatch=0 error=0" --quiet
 must_fail "whole-corpus-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
 	--actual "$ACTUAL_ON" --expect counts --expect-counts "green=57 mismatch=0" --quiet
 
@@ -188,14 +190,29 @@ step "0xEA-is-legal-in-compat" sh -c \
 patch bare-arpl-0x63 31c031c9 639031c9
 step "bare-0x63-is-a-named-stop" sh -c \
 	"$PORT64 $MUT/bare-arpl-0x63.img 20000000 --fixture64 --long-mode on 2>&1 | grep -q '0x63 is MOVSXD in 64-bit mode'" 
-# (ii) a REX.W xor in the body: `48 31 c0` is `xor rax, rax`, whose 64-bit flags are S6's.  It
-#      must STOP BY NAME, never leave stale flags (round 1's bodies wrote the result and no flag
-#      at all, so a following jcc branched on the previous instruction's flags).
+# (ii) S6 REPLACED THE ALU STOPS WITH REAL BODIES, so the S5 arm that required `48 31 c0` to
+#      stop by name is now INVERTED: the same mutant must EXECUTE (a document, no stop).  Its
+#      able-to-fail form is the stop text that used to be required -- if a body ever regresses
+#      to `INSTR64_ALU_IS_S6`, this pair goes red.
 patch rexw-xor 31c031c9 4831c090
-step "rexw-xor-stops-as-S6s" sh -c \
+step "rexw-xor-executes" sh -c \
+	"$PORT64 $MUT/rexw-xor.img 20000000 --fixture64 --long-mode on | grep -q 'BEGIN JSON'"
+must_fail "rexw-xor-no-longer-stops" sh -c \
 	"$PORT64 $MUT/rexw-xor.img 20000000 --fixture64 --long-mode on 2>&1 | grep -q 'at 64 bits is S6'"
-must_fail "rexw-xor-stop-is-not-universal" sh -c \
-	"$PORT64 $POISON 20000000 --fixture64 --long-mode on 2>&1 | grep -q 'at 64 bits is S6'"
+
+echo "== F3. S6: THE ALU FAMILY AT 64 BITS, WITH ITS FLAGS (family 2, case by case)"
+# 9 of the 10 cases are green against the HOST; alu-div-zero needs DIV, which is S8's, and is
+# therefore RED BY NAME.  The counts are the assertion -- family 2's own census.
+step "alu-family" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
+	--filter '^alu-' --expect counts \
+	--expect-counts "green=9 red_unimplemented=1 mismatch=0 error=0" --quiet
+must_fail "alu-family-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
+	--actual "$ACTUAL_ON" --filter '^alu-' --expect counts \
+	--expect-counts "green=10 mismatch=0" --quiet
+# the ONE red case must be red for the named reason (div is S8's), not for a silent mismatch
+step "alu-div-zero-names-S8" sh -c \
+	"$PORT64 $POISON 20000000 --fixture64 --long-mode on >/dev/null 2>&1; \
+	 $PORT64 build/nasm64/alu-div-zero.img 20000000 --fixture64 --long-mode on 2>&1 | grep -q 'instr64_F7_6'" 
 
 echo "== G. the bound NAMES THE FRAME, and the unmutated image produces neither stop nor fault"
 step "above-4gib-names-the-frame" sh -c \

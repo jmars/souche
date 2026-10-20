@@ -398,14 +398,20 @@ case("alu", "test-cmp-64",
     test rax, rax
     pushfq
     pop qword ptr [0x100200]
+    and dword ptr [0x100200], 0x8D5
+    and dword ptr [rsp - 8], 0x8D5
     mov rcx, 0
     cmp rax, rcx
     pushfq
     pop qword ptr [0x100208]
+    and dword ptr [0x100208], 0x8D5
+    and dword ptr [rsp - 8], 0x8D5
     mov rdx, 0x1FFFFFFFF
     cmp rdx, rax
     pushfq
     pop qword ptr [0x100210]
+    and dword ptr [0x100210], 0x8D5
+    and dword ptr [rsp - 8], 0x8D5
 """, flags=True)
 case("alu", "inc-dec-64",
      "INC/DEC wrap at 64 bits: 0xFFFFFFFF + 1 = 0x100000000, and 0 - 1 = all ones -- "
@@ -438,14 +444,20 @@ case("alu", "sign-boundary-32-64",
     add rax, 1
     pushfq
     pop qword ptr [0x100200]
+    and dword ptr [0x100200], 0x8D5
+    and dword ptr [rsp - 8], 0x8D5
     mov rbx, 0x100000000
     add rbx, 1
     pushfq
     pop qword ptr [0x100208]
+    and dword ptr [0x100208], 0x8D5
+    and dword ptr [rsp - 8], 0x8D5
     mov rcx, 0x7FFFFFFFFFFFFFFF
     add rcx, 1
     pushfq
     pop qword ptr [0x100210]
+    and dword ptr [0x100210], 0x8D5
+    and dword ptr [rsp - 8], 0x8D5
 """, flags=True)
 case("alu", "adc-chain-wide",
      "a three-word addition: ADC carries across two 64-bit halves, so the top word "
@@ -758,6 +770,8 @@ case("strobits", "scas-cmps-64",
     scasq
     pushfq
     pop qword ptr [0x100200]
+    and dword ptr [0x100200], 0x8D5
+    and dword ptr [rsp - 8], 0x8D5
     mov rsi, 0x100100
     mov rdi, 0x100108
     cmpsq
@@ -782,6 +796,8 @@ case("strobits", "cmpxchg-64",
     cmpxchg qword ptr [0x100100], rcx
     pushfq
     pop qword ptr [0x100200]
+    and dword ptr [0x100200], 0x8D5
+    and dword ptr [rsp - 8], 0x8D5
 """, flags=True)
 case("strobits", "xadd-64",
      "XADD exchanges and adds an 8-byte operand",
@@ -806,6 +822,8 @@ case("strobits", "cmpxchg16b",
     cmpxchg16b [0x100100]
     pushfq
     pop qword ptr [0x100200]
+    and dword ptr [0x100200], 0x8D5
+    and dword ptr [rsp - 8], 0x8D5
 """, flags=True)
 
 # --- family 6: simd (S10) -------------------------------------------------------
@@ -1065,6 +1083,18 @@ def render(case):
         if case.flags:
             lines.append("    pushfq")
             lines.append("    pop qword ptr [%s]" % hex(FLAGS_SLOT))
+            lines.append("    and dword ptr [%s], 0x8D5" % hex(FLAGS_SLOT))
+            # ... and the STACK copy pushfq left behind (the `pop` restored rsp, so the word is
+            # at [rsp-8], inside the compared window).  WHY THE MASK EXISTS AT ALL, MEASURED:
+            # the two legs run at different privilege levels -- the host leg at CPL3, where IF is
+            # ALWAYS 1, and the emulated one at CPL0 with the prologue's `pushfq/popfq` leaving
+            # IF 0 -- so an UNMASKED flags word differs by bit 9 in every case.  IF is an
+            # environment property, not a computed one: the contract's flag set is run.js's
+            # MASK_ARITH (CF|PF|AF|ZF|SF|OF), which is what the dedicated flags element compares,
+            # so the stores into memory mask to the same set.  `and dword ptr [mem], imm32` is the
+            # 32-bit encoding (0x81 /4), i.e. an EXISTING body at os_index 1 -- and its own flag
+            # writes are harmless because every site masks immediately after the store.
+            lines.append("    and dword ptr [rsp - 8], 0x8D5")
     # THE EPILOGUE GOES FIRST AND THE DATA AFTER IT: a label emitted before `loop` is
     # reachable by FALL-THROUGH, and the first version of this generator put body_dataN
     # there -- every case with data ran off the end of its stores into those bytes and

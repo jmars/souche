@@ -218,10 +218,36 @@ const x86_table64 = [
 	 * `xor eax,eax` and `xor r8d,r8d`) and the mov family's cases use `xor` at 64 bits; ADD is
 	 * the row's own word and the S6 family's first three cases read `add` at 64 bits -- S6
 	 * still owns adc/sbb/and/or/sub/test/cmp/inc/dec/neg/not and the WRAP bodies. */
-	{ opcode: 0x01 }, /* add r/m, r */
-	{ opcode: 0x03 }, /* add r, r/m */
-	{ opcode: 0x31 }, /* xor r/m, r */
-	{ opcode: 0x33 }, /* xor r, r/m */
+	/* ---------------- S6: THE ALU FAMILY AT 64 BITS ---------------- *
+	 * The plan's S6 row: add/adc/sub/sbb/and/or/xor/cmp/test/inc/dec/neg/not.  Every one of
+	 * these DELIVERS its 64-bit result AND SETS THE ARITHMETIC FLAGS through the port's ONE
+	 * set of flag cores at OPSIZE_64 (arith.h's note) -- the lazy operands, the canonical
+	 * storage form and the getters are S1's, unchanged.
+	 *
+	 * THE ENCODINGS ARE THE ONES FAMILY 2 USES, and the rest are NAMED STOPS rather than
+	 * implied: 0x81 (imm32 ALU group) and the accumulator-immediate forms 0x05/0x0D/0x15/
+	 * 0x1D/0x25/0x2D/0x35/0x3D have no body here because no corpus case covers them, and an
+	 * encoding with no instrument is not landed silently (results/x86-64-s6.md ss5 lists
+	 * them).  0xF7's mul/imul/div/idiv are S8's, as are the shifts and rotates. */
+	{ opcode: 0x01 }, /* add r/m64, r64 */
+	{ opcode: 0x03 }, /* add r64, r/m64 */
+	{ opcode: 0x09 }, /* or  r/m64, r64 */
+	{ opcode: 0x0B }, /* or  r64, r/m64 */
+	{ opcode: 0x11 }, /* adc r/m64, r64 */
+	{ opcode: 0x13 }, /* adc r64, r/m64 */
+	{ opcode: 0x19 }, /* sbb r/m64, r64 */
+	{ opcode: 0x1B }, /* sbb r64, r/m64 */
+	{ opcode: 0x21 }, /* and r/m64, r64 */
+	{ opcode: 0x23 }, /* and r64, r/m64 */
+	{ opcode: 0x29 }, /* sub r/m64, r64 */
+	{ opcode: 0x2B }, /* sub r64, r/m64 */
+	{ opcode: 0x31 }, /* xor r/m64, r64 */
+	{ opcode: 0x33 }, /* xor r64, r/m64 */
+	{ opcode: 0x39 }, /* cmp r/m64, r64 */
+	{ opcode: 0x3B }, /* cmp r64, r/m64 */
+	{ opcode: 0x83 }, /* the imm8 group: /0 add /1 or /2 adc /3 sbb /4 and /5 sub /6 xor /7 cmp */
+	{ opcode: 0x85 }, /* test r/m64, r64 */
+	{ opcode: 0xF7 }, /* the group: /2 not /3 neg (the rest are S8's) */
 
 	/* ---------------- the stack and the stop, all default-64 ---------------- */
 	{ opcode: 0x50, default64: true }, /* push r0 */
@@ -275,7 +301,10 @@ const x86_table64 = [
 	{ opcode: 0xCF, default64: true }, /* iretd -> iretq            -- S11 */
 	{ opcode: 0xE8, default64: true }, /* call rel32                -- S7 */
 	{ opcode: 0xE9, default64: true }, /* jmp rel32                 -- S7 */
-	{ opcode: 0xFF, default64: true }, /* inc/dec/call/callf/jmp/jmpf/push -- S6/S7 */
+	{ opcode: 0xFF, default64: true }, /* /0 inc and /1 dec are S6's bodies; /2../6 (call,
+	                                   * callf, jmp, jmpf, push) stay S7's NAMED STOPS -- which
+	                                   * is automatic: the availability scan emits a stop for a
+	                                   * sub-op with no body. */
 ];
 
 export default x86_table64;

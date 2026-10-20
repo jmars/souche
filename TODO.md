@@ -525,8 +525,42 @@ named in the report: the REX **cancel** rule is implemented and no corpus case m
 (S6's), the `0F` space has no 64-bit arms (11 of the 40 red cases stop there), non-canonical
 `#GP` is S7's, and the system layer is S11's.
 
-**S6-S13 REMAIN**: the ISA families, the system layer, the guest and the engines' long-mode arms.
-The rest of this section is the reconnaissance record and is not made stale by S0-S5.
+**S6 IS LANDED (2026-10-19): THE ALU FAMILY AT 64 BITS, WITH ITS FLAGS.**  `results/x86-64-s6.md`
+is its report.  The eleven ALU operations the row names (add/adc/sub/sbb/and/or/xor/cmp/test/
+inc/dec/neg/not) now deliver their 64-bit results **and their flags** through the port's ONE set of
+flag cores at `OPSIZE_64` — thirteen new wrappers in `arith.h`/`arith.c` over the S1-widened
+`flags_add/adc/sub/sbb/inc/dec` and the now-widened `arith_and/or/xor` — and **9 of family 2's 10
+cases are green against the HOST** (`green=9 red_unimplemented=1 mismatch=0 error=0`), the tenth
+(`alu-div-zero`) being RED **by name** because `DIV` is S8's (the gate asserts the reason,
+`instr64_F7_6`, not just the count).  Whole corpus with `--long-mode on`: **`green=28
+red_unimplemented=29 mismatch=0 error=0`** (S5: 17/40); family 1 unmoved at 12/12; the default
+(flag-off) machine unmoved at `green=0 red_unimplemented=57`.  Nineteen overlay entries and **58
+bodies** landed, including `0x8F /0` `pop r/m64` — the `pushfq; pop qword ptr [slot]` plumbing
+nine of the ten cases need to STORE their flags — and the four S5 `INSTR64_ALU_IS_S6` stops are
+gone (their gate arms INVERTED on purpose: `rexw-xor` used to require the stop and now requires
+the mutant to execute).  TWO OF THE GREENS ARE OUTSIDE FAMILY 2 and are named as such:
+`ctrl-jcc-64` and `ctrl-setcc` (S7's) could not be green without 64-bit flag producers; S7 owns
+keeping them green.  **LIVE DEFECT FOUND AND FIXED**: `arith_and/or/xor` took `int32_t` operands,
+so a 64-bit `and rdx, rcx` was computed on the LOW 32 BITS of both and stored as the 64-bit result
+(MEASURED by `alu-logic-64`); the cores are `int64_t` now and the 8/16/32-bit wrappers truncate on
+the way back, pinned by the transcript and nasm 118/118.  **INSTRUMENT DEFECT FOUND AND FIXED**:
+every flags word was compared UNMASKED in memory, and the two legs run at different privilege
+levels (host CPL3 → IF always 1; the emulated CPL0 with the prologue's `pushfq/popfq` → IF 0), so
+every family-2 case differed by exactly `0x200`; the generator now masks every flags store to the
+contract's `MASK_ARITH` (0x8D5) in the slot AND in the stack copy `pushfq` leaves behind — the
+alternative (setting IF in the prologue) was rejected because it leaves the emulated guest with
+interrupts ENABLED in every corpus image.  Also measured: `0x8F` is `custom_modrm_resolve` in the
+reference, so its body receives the RAW MODRM BYTE and must resolve the address itself in the
+reference's order (the first version wrote the flags word into physical 4 and left an address in
+RAX).  NOT landed, named in the report: the imm32 ALU group `0x81` and the accumulator-immediate
+forms `0x05/0x0D/0x15/0x1D/0x25/0x2D/0x35/0x3D` have NO overlay entry (they stop by name) because
+no corpus case grades them, `0xF7 /0,/1` likewise, `mul/imul/div/idiv` are S8's, AF on a LOGIC
+operation is undefined and therefore not in the corpus, and a faulting store's flag behaviour
+diverges from the reference in a way no run here can observe.
+
+**S7-S13 REMAIN**: control flow and stack, the remaining ISA families, the system layer, the guest
+and the engines' long-mode arms.  The rest of this section is the reconnaissance record and is not
+made stale by S0-S6.
 
 Not implemented, and deliberately **not** listed as a non-goal: it is wanted one day. It is recorded
 here so the next reader inherits the reconnaissance instead of re-deriving it.
