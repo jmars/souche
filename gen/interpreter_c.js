@@ -499,6 +499,33 @@ function group_by_opcode() {
  * the overlay a declaration rather than a comment.
  * ------------------------------------------------------------------ */
 
+/* ROUND 2, FINDING 2: THE GUARD FOR AN ENCODING THAT MUST NOT RUN ITS 32-BIT ARM IN 64-BIT
+ * MODE.  `invalid64` (the SDM removes the encoding entirely) and `stop64` (the 64-bit form is
+ * another slice's) share it.
+ *
+ * WHY THE 0x2NN ARM ALONE IS NOT ENOUGH, MEASURED: `dispatch_os_index` answers 2 for a bare
+ * `0xEA` only if a REX.W precedes it, so a BARE `EA` in a 64-bit CS dispatched to `case 0x1EA`
+ * -- the REAL far jump -- where the SDM says #UD.  The 0x2NN arm was `trigger_ud` and never
+ * reached.  So the guard goes on the 0xNN AND 0x1NN arms as well, and it tests the MODE, not
+ * the operand size: in 32-bit and compatibility modes those arms run exactly as before (the
+ * stub's own compat-mode `0xEA` far jump is the case that keeps it honest). */
+function long_mode_guard(entry) {
+	if (entry.stop64) {
+		return [`if (long_mode_64()) {`,
+			`\tunimplemented_instruction("long mode: ${entry.stop64}");`,
+			"\treturn;",
+			"}"];
+	}
+	const why = entry.why64 !== undefined
+		? entry.why64
+		: `0x${hex(entry.opcode, 2)} is INVALID in 64-bit mode (the SDM removes it)`;
+	return [`if (long_mode_64()) {`,
+		`\tunimplemented_instruction("long mode: ${why}");`,
+		"\ttrigger_ud();",
+		"\treturn;",
+		"}"];
+}
+
 function gen_64_arm(by_opcode, opcode) {
 	const entry = overlay64.get(opcode);
 	const encoding = by_opcode[opcode];
@@ -511,9 +538,13 @@ function gen_64_arm(by_opcode, opcode) {
 		 * read as if something followed. */
 		return [label, "{", `\tlong_mode_rex_prefix(0x${hex(opcode, 2)});`, "\treturn;", "}", ""];
 	}
-	if (entry.invalid64) {
-		/* #UD in long mode (0x9A/0xEA: the ptr16:32 far transfers the SDM removes) */
-		return [label, "{", "\ttrigger_ud();", "}", "break;"];
+	if (entry.invalid64 || entry.stop64) {
+		/* #UD in long mode (0x9A/0xEA: the ptr16:32 far transfers the SDM removes), or a
+		 * NAMED STOP for an encoding whose 64-bit behaviour is another slice's (0x63 MOVSXD
+		 * and 0xE3 JRCXZ are S7's).  Both are the same seat: an encoding that must NOT run
+		 * its 32-bit arm in 64-bit mode.  The guard on the 0xNN/0x1NN arms below is what
+		 * makes it hold for the no-REX.W forms too -- see the round-2 note there. */
+		return [label, "{"].concat(indent(long_mode_guard(entry), 1)).concat(["}", "break;"]);
 	}
 
 	/* a real 64-bit body: the SAME argument threading as the 32-bit arm, with size 64 --
@@ -540,9 +571,12 @@ function switch_cases(by_opcode, is_0f) {
 			blocks.push({ labels: [`0x${opcode_hex}`, `0x${opcode_high_hex}`], body: gen_instruction_body(encoding, undefined) });
 		}
 
+		const guard_entry = overlay64.get(opcode);
+		const needs_guard = !is_0f && guard_entry && (guard_entry.invalid64 || guard_entry.stop64);
 		for (const block of blocks) {
 			for (const label of block.labels) out.push(`case ${label}:`);
 			out.push("{");
+			if (needs_guard) out.push(...indent(long_mode_guard(guard_entry), 1));
 			out.push(...indent(block.body, 1));
 			out.push("}", "break;");
 		}
@@ -706,7 +740,9 @@ function generate() {
 	 * `routed` counts the overlay's real arms; `implemented` is the availability scan's verdict
 	 * on the bodies they call.  A slice turns the first number into the second. */
 	let routed = 0;
-	for (const entry of x86_table64) if (!entry.prefix64 && !entry.invalid64) routed++;
+	for (const entry of x86_table64) {
+		if (!entry.prefix64 && !entry.invalid64 && !entry.stop64) routed++;
+	}
 
 	console.log(
 		`[+] ${path.relative(ROOT, OUT_FILE)}: ${stat_calls} call sites, ` +

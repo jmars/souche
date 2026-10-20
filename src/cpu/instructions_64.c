@@ -192,53 +192,67 @@ void instr64_A3(int64_t addr)
 }
 
 /* ================================================================== *
- * ADD and XOR at 64 bits -- the slice's "mov/add subset"
+ * ADD and XOR AT 64 BITS -- STOP BY NAME, DELIBERATELY (round 2, finding 1)
  *
- * The flag cores are the 32-bit ones and they are WRONG at 64 bits: arith.c's add32/add64
- * family computes `last_op1/last_result` and the lazy flag bits at 32 bits (plan ss4's row for
- * last_op1/last_result says the widen lands in S6 with OPSIZE_64).  So these two bodies DELIVER
- * the 64-bit result and SET THE ARITHMETIC FLAGS THE WAY S6 WILL, through the port's existing
- * 64-bit-capable path where one exists and with an explicit, stated rule where it does not.
+ * THESE FOUR OPCODES ARE NOT IMPLEMENTED HERE, and the reason is correctness rather than
+ * scope.  64-bit ALU FLAGS ARE S6'S WORK: arith.c's cores compute `last_op1`/`last_result` and
+ * the lazy flag bits at 32 bits (plan ss4's row for last_op1/last_result widens them in S6 with
+ * OPSIZE_64), so a body that delivers the 64-bit RESULT would leave every flag stale -- and a
+ * following `jcc`, `adc`, `setcc` or `cmovcc` would branch on the previous instruction's flags.
+ * That is precisely the silent-wrong class this tree refuses, and it is worse than a missing
+ * instruction because the RESULT is right and only the flags lie.
  *
- * S5's decision, stated rather than implied: the flags these bodies leave are computed here
- * with the 64-bit values (CF/OF/ZF/SF/PF from the full-width operation) and NOT through
- * flags.h's 32-bit cores, because `last_op1`/`last_result`/`last_op_size` keep their 32-bit
- * contract until S6 widens them.  S6 replaces this with the WRAP bodies over the widened
- * cores and the corpus's alu family is that slice's gate -- family 1 compares flags only where
- * its cases ask for them (mov sets none), so nothing here is a claim S5's corpus cannot check.
+ * ROUND 1 GOT THIS WRONG IN THE OTHER DIRECTION: its four bodies wrote the 64-bit result and
+ * returned, while this comment CLAIMED "the flags these bodies leave are computed here with the
+ * 64-bit values".  The review measured the code against the comment (the bodies write no flag at
+ * all).  A comment that lies is worse than no comment, so both halves are gone: the bodies stop
+ * by name and the claim is this paragraph.
+ *
+ * WHY A NAMED STOP IS FREE: the corpus's shared prologue zeroes its registers with `xor
+ * eax, eax` AND `xor r8d, r8d` -- REX WITHOUT W, i.e. os_index 1, the 32-bit arm, which is
+ * genuinely 32-bit and genuinely sets flags.  No S5 case reaches the 0x2NN arms of 0x01/0x03/
+ * 0x31/0x33 (MEASURED: the 12 family-1 cases are green, and green here means the host agreed
+ * on every compared field INCLUDING rflags).  So the stop costs S5 nothing and prevents a
+ * latent silent-wrong body from being inherited by S6, which is where the WRAP bodies over the
+ * widened cores belong -- with the corpus's `alu` family as their gate.
  * ================================================================== */
+
+#define INSTR64_ALU_IS_S6(what)                                                        \
+	do {                                                                                \
+		unimplemented_instruction(                                                       \
+		    "instructions_64: " what " at 64 bits is S6's (the flag cores are 32-bit"   \
+		    " until last_op1/last_result widen -- results/x86-64-plan.md ss6 S6)");     \
+		return;                                                                          \
+	} while (0)
 
 void instr64_01_mem(int64_t addr, int32_t r)
 {
-	uint64_t x = safe_read64_addr(addr);
-	if (cpu->pagefault) return;
-	safe_write64_addr(addr, x + read_reg64(r));
+	(void)addr;
+	(void)r;
+	INSTR64_ALU_IS_S6("add r/m64, r64");
 }
-void instr64_01_reg(int32_t r1, int32_t r) { write_reg64(r1, read_reg64(r1) + read_reg64(r)); }
-
+void instr64_01_reg(int32_t r1, int32_t r) { (void)r1; (void)r; INSTR64_ALU_IS_S6("add r/m64, r64"); }
 void instr64_03_mem(int64_t addr, int32_t r)
 {
-	uint64_t x = safe_read64_addr(addr);
-	if (cpu->pagefault) return;
-	write_reg64(r, read_reg64(r) + x);
+	(void)addr;
+	(void)r;
+	INSTR64_ALU_IS_S6("add r64, r/m64");
 }
-void instr64_03_reg(int32_t r1, int32_t r) { write_reg64(r, read_reg64(r) + read_reg64(r1)); }
-
+void instr64_03_reg(int32_t r1, int32_t r) { (void)r1; (void)r; INSTR64_ALU_IS_S6("add r64, r/m64"); }
 void instr64_31_mem(int64_t addr, int32_t r)
 {
-	uint64_t x = safe_read64_addr(addr);
-	if (cpu->pagefault) return;
-	safe_write64_addr(addr, x ^ read_reg64(r));
+	(void)addr;
+	(void)r;
+	INSTR64_ALU_IS_S6("xor r/m64, r64");
 }
-void instr64_31_reg(int32_t r1, int32_t r) { write_reg64(r1, read_reg64(r1) ^ read_reg64(r)); }
-
+void instr64_31_reg(int32_t r1, int32_t r) { (void)r1; (void)r; INSTR64_ALU_IS_S6("xor r/m64, r64"); }
 void instr64_33_mem(int64_t addr, int32_t r)
 {
-	uint64_t x = safe_read64_addr(addr);
-	if (cpu->pagefault) return;
-	write_reg64(r, read_reg64(r) ^ x);
+	(void)addr;
+	(void)r;
+	INSTR64_ALU_IS_S6("xor r64, r/m64");
 }
-void instr64_33_reg(int32_t r1, int32_t r) { write_reg64(r, read_reg64(r) ^ read_reg64(r1)); }
+void instr64_33_reg(int32_t r1, int32_t r) { (void)r1; (void)r; INSTR64_ALU_IS_S6("xor r64, r/m64"); }
 
 /* ================================================================== *
  * THE STACK -- push/pop/pushf/popf, all of them default-64

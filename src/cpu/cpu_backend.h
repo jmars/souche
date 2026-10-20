@@ -192,9 +192,10 @@ void cpu_backend_dispatch(uint32_t phys_addr);
  * uop cache and the JIT deliberately do NOT gain the bits: their long-mode arms are S13's,
  * and their refusal is the correct current answer.
  *
- * It returns true today for every engine (there is nothing that can fail: no allocation, no
- * platform probe), so the seat is honest about being a declaration.  The query beside it is
- * what the gate asserts with. */
+ * It CANNOT FAIL TODAY -- there is nothing to allocate and no platform probe, so the body is an
+ * OR and a `return true`; the return value exists so that a backend which one day must be built
+ * has a refusal path already wired at both of main.c's call sites.  The query beside it is what
+ * the gate asserts with. */
 bool cpu_backend_enable_long_mode(void);
 bool cpu_backend_long_mode_available(void);
 

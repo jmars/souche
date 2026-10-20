@@ -207,36 +207,62 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x06:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x06 (push es) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr16_06();
 	}
 	break;
 	case 0x106:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x06 (push es) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr32_06();
 	}
 	break;
 	case 0x206:
 	{
-		unimplemented_instruction("long mode: 0x06 has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x06 (push es) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0x07:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x07 (pop es) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr16_07();
 		after_block_boundary();
 	}
 	break;
 	case 0x107:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x07 (pop es) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr32_07();
 		after_block_boundary();
 	}
 	break;
 	case 0x207:
 	{
-		unimplemented_instruction("long mode: 0x07 has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x07 (pop es) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0x08:
@@ -385,18 +411,31 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x0E:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x0E (push cs) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr16_0E();
 	}
 	break;
 	case 0x10E:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x0E (push cs) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr32_0E();
 	}
 	break;
 	case 0x20E:
 	{
-		unimplemented_instruction("long mode: 0x0E has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x0E (push cs) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0x0F:
@@ -561,36 +600,62 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x16:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x16 (push ss) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr16_16();
 	}
 	break;
 	case 0x116:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x16 (push ss) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr32_16();
 	}
 	break;
 	case 0x216:
 	{
-		unimplemented_instruction("long mode: 0x16 has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x16 (push ss) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0x17:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x17 (pop ss) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr16_17();
 		after_block_boundary();
 	}
 	break;
 	case 0x117:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x17 (pop ss) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr32_17();
 		after_block_boundary();
 	}
 	break;
 	case 0x217:
 	{
-		unimplemented_instruction("long mode: 0x17 has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x17 (pop ss) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0x18:
@@ -739,36 +804,62 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x1E:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x1E (push ds) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr16_1E();
 	}
 	break;
 	case 0x11E:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x1E (push ds) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr32_1E();
 	}
 	break;
 	case 0x21E:
 	{
-		unimplemented_instruction("long mode: 0x1E has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x1E (push ds) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0x1F:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x1F (pop ds) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr16_1F();
 		after_block_boundary();
 	}
 	break;
 	case 0x11F:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x1F (pop ds) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr32_1F();
 		after_block_boundary();
 	}
 	break;
 	case 0x21F:
 	{
-		unimplemented_instruction("long mode: 0x1F has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x1F (pop ds) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0x20:
@@ -930,13 +1021,21 @@ void run_instruction(int32_t opcode)
 	case 0x27:
 	case 0x127:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x27 (daa) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr_27();
 	}
 	break;
 	case 0x227:
 	{
-		unimplemented_instruction("long mode: 0x27 has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x27 (daa) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0x28:
@@ -1098,13 +1197,21 @@ void run_instruction(int32_t opcode)
 	case 0x2F:
 	case 0x12F:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x2F (das) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr_2F();
 	}
 	break;
 	case 0x22F:
 	{
-		unimplemented_instruction("long mode: 0x2F has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x2F (das) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0x30:
@@ -1282,13 +1389,21 @@ void run_instruction(int32_t opcode)
 	case 0x37:
 	case 0x137:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x37 (aaa) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr_37();
 	}
 	break;
 	case 0x237:
 	{
-		unimplemented_instruction("long mode: 0x37 has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x37 (aaa) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0x38:
@@ -1450,13 +1565,21 @@ void run_instruction(int32_t opcode)
 	case 0x3F:
 	case 0x13F:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x3F (aas) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr_3F();
 	}
 	break;
 	case 0x23F:
 	{
-		unimplemented_instruction("long mode: 0x3F has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x3F (aas) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0x40:
@@ -1957,43 +2080,74 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x60:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x60 (pusha) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr16_60();
 		after_block_boundary();
 	}
 	break;
 	case 0x160:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x60 (pusha) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr32_60();
 		after_block_boundary();
 	}
 	break;
 	case 0x260:
 	{
-		unimplemented_instruction("long mode: 0x60 has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x60 (pusha) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0x61:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x61 (popa) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr16_61();
 		after_block_boundary();
 	}
 	break;
 	case 0x161:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x61 (popa) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr32_61();
 		after_block_boundary();
 	}
 	break;
 	case 0x261:
 	{
-		unimplemented_instruction("long mode: 0x61 has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x61 (popa) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0x62:
 	case 0x162:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x62 (bound) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		if (modrm_byte < 0xC0) {
@@ -2009,13 +2163,20 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x262:
 	{
-		unimplemented_instruction("long mode: 0x62 has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x62 (bound) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0x63:
 	case 0x163:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x63 is MOVSXD in 64-bit mode, and it is S7's (the 32-bit arm is ARPL)");
+			return;
+		}
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		if (modrm_byte < 0xC0) {
@@ -2031,8 +2192,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x263:
 	{
-		unimplemented_instruction("long mode: 0x63 has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x63 is MOVSXD in 64-bit mode, and it is S7's (the 32-bit arm is ARPL)");
+			return;
+		}
 	}
 	break;
 	case 0x64:
@@ -3090,6 +3253,11 @@ void run_instruction(int32_t opcode)
 	case 0x82:
 	case 0x182:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x82 is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		switch (modrm_byte >> 3 & 7) {
@@ -3229,8 +3397,11 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x282:
 	{
-		unimplemented_instruction("long mode: 0x82 has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x82 is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0x83:
@@ -4080,6 +4251,11 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x9A:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x9A (call far ptr16:32) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		int32_t imm = read_imm16();
 		if (cpu->pagefault) return;
 		int32_t imm2 = read_imm16();
@@ -4090,6 +4266,11 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x19A:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x9A (call far ptr16:32) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		int32_t imm = read_imm32s();
 		if (cpu->pagefault) return;
 		int32_t imm2 = read_imm16();
@@ -4100,7 +4281,11 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x29A:
 	{
-		trigger_ud();
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x9A (call far ptr16:32) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0x9B:
@@ -5344,6 +5529,11 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0xC4:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0xC4 (les) is VEX-encoded in 64-bit mode, and VEX is not implemented");
+			trigger_ud();
+			return;
+		}
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		if (modrm_byte < 0xC0) {
@@ -5359,6 +5549,11 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x1C4:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0xC4 (les) is VEX-encoded in 64-bit mode, and VEX is not implemented");
+			trigger_ud();
+			return;
+		}
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		if (modrm_byte < 0xC0) {
@@ -5374,12 +5569,20 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x2C4:
 	{
-		unimplemented_instruction("long mode: 0xC4 has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0xC4 (les) is VEX-encoded in 64-bit mode, and VEX is not implemented");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0xC5:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0xC5 (lds) is VEX-encoded in 64-bit mode, and VEX is not implemented");
+			trigger_ud();
+			return;
+		}
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		if (modrm_byte < 0xC0) {
@@ -5395,6 +5598,11 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x1C5:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0xC5 (lds) is VEX-encoded in 64-bit mode, and VEX is not implemented");
+			trigger_ud();
+			return;
+		}
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		if (modrm_byte < 0xC0) {
@@ -5410,8 +5618,11 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x2C5:
 	{
-		unimplemented_instruction("long mode: 0xC5 has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0xC5 (lds) is VEX-encoded in 64-bit mode, and VEX is not implemented");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0xC6:
@@ -5663,14 +5874,22 @@ void run_instruction(int32_t opcode)
 	case 0xCE:
 	case 0x1CE:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0xCE (into) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr_CE();
 		after_block_boundary();
 	}
 	break;
 	case 0x2CE:
 	{
-		unimplemented_instruction("long mode: 0xCE has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0xCE (into) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0xCF:
@@ -6362,6 +6581,11 @@ void run_instruction(int32_t opcode)
 	case 0xD4:
 	case 0x1D4:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0xD4 (aam) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		int32_t imm = read_imm8();
 		if (cpu->pagefault) return;
 		instr_D4(imm);
@@ -6370,13 +6594,21 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x2D4:
 	{
-		unimplemented_instruction("long mode: 0xD4 has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0xD4 (aam) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0xD5:
 	case 0x1D5:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0xD5 (aad) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		int32_t imm = read_imm8();
 		if (cpu->pagefault) return;
 		instr_D5(imm);
@@ -6384,20 +6616,31 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x2D5:
 	{
-		unimplemented_instruction("long mode: 0xD5 has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0xD5 (aad) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0xD6:
 	case 0x1D6:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0xD6 (salc) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		instr_D6();
 	}
 	break;
 	case 0x2D6:
 	{
-		unimplemented_instruction("long mode: 0xD6 has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0xD6 (salc) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0xD7:
@@ -7847,6 +8090,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0xE3:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0xE3 is JRCXZ in 64-bit mode (RCX, not ECX), and the jcc family is S7's");
+			return;
+		}
 		int32_t imm = read_imm8s();
 		if (cpu->pagefault) return;
 		instr16_E3(imm);
@@ -7854,6 +8101,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x1E3:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0xE3 is JRCXZ in 64-bit mode (RCX, not ECX), and the jcc family is S7's");
+			return;
+		}
 		int32_t imm = read_imm8s();
 		if (cpu->pagefault) return;
 		instr32_E3(imm);
@@ -7861,8 +8112,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x2E3:
 	{
-		unimplemented_instruction("long mode: 0xE3 has no 64-bit form in gen/x86_table64.js");
-		return;
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0xE3 is JRCXZ in 64-bit mode (RCX, not ECX), and the jcc family is S7's");
+			return;
+		}
 	}
 	break;
 	case 0xE4:
@@ -7983,6 +8236,11 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0xEA:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0xEA (jmp far ptr16:32) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		int32_t imm = read_imm16();
 		if (cpu->pagefault) return;
 		int32_t imm2 = read_imm16();
@@ -7993,6 +8251,11 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x1EA:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0xEA (jmp far ptr16:32) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 		int32_t imm = read_imm32s();
 		if (cpu->pagefault) return;
 		int32_t imm2 = read_imm16();
@@ -8003,7 +8266,11 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x2EA:
 	{
-		trigger_ud();
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0xEA (jmp far ptr16:32) is invalid in 64-bit mode");
+			trigger_ud();
+			return;
+		}
 	}
 	break;
 	case 0xEB:

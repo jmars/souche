@@ -22,13 +22,23 @@
  *     mode.  They cannot be "another arm": the byte must be consumed and the stream
  *     re-dispatched, so all three of their case labels route to the prefix handler.
  *
- * AN ENCODING WITH NO ENTRY HERE HAS NO 64-BIT FORM IN THIS BUILD, and that is not a
- * fall-through: the emitter simply emits no 0x2NN arm, so `dispatch_os_index` can never
- * produce 2 for it (see the note on `default64` below) and the instruction is decoded with its
- * 32-bit body -- or, for the subset S5 does not own, with a body that STOPS BY NAME.  The
- * distinction matters: `movsxd` (0x63) has no entry YET and stops by name; `add` (0x01/0x03)
- * has one in S6.  The census the generator prints is how many of the port's encodings have an
- * arm -- "how much of long mode is live" as a measurement, not a mood.
+ * AN ENCODING WITH NO ENTRY HERE gets no 0x2NN arm and no guard, so `dispatch_os_index` can
+ * never select a 64-bit arm for it.  WHAT HAPPENS THEN DEPENDS ON THE OPERAND SIZE, and the
+ * first version of this header claimed more than the file can deliver (round-2 finding 2):
+ *
+ *   - WITH REX.W the key is 2, the switch has no `case 0x2NN` for it, and the emitter's
+ *     NAMED-STOP case fires ("long mode: 0xNN has no 64-bit form in gen/x86_table64.js").
+ *     That is the no-fall-through guarantee.
+ *   - WITHOUT REX.W the key is 0 or 1 and the instruction runs its 32-BIT ARM.  That is
+ *     CORRECT for every encoding whose 64-bit behaviour does not differ (the whole reason the
+ *     mov family's non-REX forms are green), and it is SILENT-WRONG for the ones where
+ *     "different" is the point -- which is why `invalid64` and `stop64` exist and why their
+ *     guard is emitted on the 0xNN and 0x1NN arms too.  An encoding that changes MEANING in
+ *     64-bit mode (0x63, 0xE3) or ceases to exist (the SDM's removal list) MUST be listed
+ *     here; an encoding that merely gains a 64-bit form need not be.
+ *
+ * The census the generator prints is how many of the port's encodings have an arm -- "how much
+ * of long mode is live" as a measurement, not a mood.
  *
  * ------------------------------------------------------------------ *
  * THE FOUR KINDS OF ENTRY
@@ -107,11 +117,55 @@ const x86_table64 = [
 	{ opcode: 0x4E, prefix64: true },
 	{ opcode: 0x4F, prefix64: true },
 
-	/* ---------------- invalid in long mode ---------------- */
-	{ opcode: 0x9A, invalid64: true }, /* call far ptr16:32 -- the SDM makes it #UD in 64-bit */
-	{ opcode: 0xEA, invalid64: true }, /* jmp far ptr16:32  -- ditto (the 32-bit mode form the
-	                                    * corpus's stub uses runs in COMPATIBILITY mode, where it
-	                                    * is still valid: that is plan correction GAP 2) */
+	/* ------------------------------------------------------------------ *
+	 * INVALID IN 64-BIT MODE: THE SDM'S OWN REMOVAL LIST
+	 *
+	 * Each of these is an encoding the SDM REMOVES in 64-bit mode (`#UD`), and each has a
+	 * live 32-bit arm in this port -- so without an entry here a bare byte in a 64-bit CS
+	 * would execute the 32-bit instruction.  The guard is applied to the 0xNN and 0x1NN arms
+	 * as well as the 0x2NN one, because `dispatch_os_index` only answers 2 for these when a
+	 * REX.W precedes them (round-2 finding 2, MEASURED: a bare `EA` reached `case 0x1EA`, the
+	 * real far jump, where the SDM says #UD).
+	 *
+	 * The list is the SDM's, not a guess: 06/07/0E/16/17/1E/1F (PUSH/POP Sreg), 27/2F/37/3F
+	 * (DAA/DAS/AAA/AAS -- the BCD group, absent from 64-bit mode), 60/61 (PUSHA/POPA), 62
+	 * (BOUND), 82 (the alias of the imm8 ALU group), 9A/EA (the ptr16:32 far transfers), C4/C5
+	 * (LES/LDS, whose bytes are VEX in 64-bit mode), CE (INTO), D4/D5 (AAM/AAD), D6 (SALC).
+	 * ------------------------------------------------------------------ */
+	{ opcode: 0x06, invalid64: true, why64: "0x06 (push es) is invalid in 64-bit mode" },
+	{ opcode: 0x07, invalid64: true, why64: "0x07 (pop es) is invalid in 64-bit mode" },
+	{ opcode: 0x0E, invalid64: true, why64: "0x0E (push cs) is invalid in 64-bit mode" },
+	{ opcode: 0x16, invalid64: true, why64: "0x16 (push ss) is invalid in 64-bit mode" },
+	{ opcode: 0x17, invalid64: true, why64: "0x17 (pop ss) is invalid in 64-bit mode" },
+	{ opcode: 0x1E, invalid64: true, why64: "0x1E (push ds) is invalid in 64-bit mode" },
+	{ opcode: 0x1F, invalid64: true, why64: "0x1F (pop ds) is invalid in 64-bit mode" },
+	{ opcode: 0x27, invalid64: true, why64: "0x27 (daa) is invalid in 64-bit mode" },
+	{ opcode: 0x2F, invalid64: true, why64: "0x2F (das) is invalid in 64-bit mode" },
+	{ opcode: 0x37, invalid64: true, why64: "0x37 (aaa) is invalid in 64-bit mode" },
+	{ opcode: 0x3F, invalid64: true, why64: "0x3F (aas) is invalid in 64-bit mode" },
+	{ opcode: 0x60, invalid64: true, why64: "0x60 (pusha) is invalid in 64-bit mode" },
+	{ opcode: 0x61, invalid64: true, why64: "0x61 (popa) is invalid in 64-bit mode" },
+	{ opcode: 0x62, invalid64: true, why64: "0x62 (bound) is invalid in 64-bit mode" },
+	{ opcode: 0x82, invalid64: true, why64: "0x82 is invalid in 64-bit mode" },
+	{ opcode: 0x9A, invalid64: true, why64: "0x9A (call far ptr16:32) is invalid in 64-bit mode" },
+	{ opcode: 0xC4, invalid64: true, why64: "0xC4 (les) is VEX-encoded in 64-bit mode, and VEX is not implemented" },
+	{ opcode: 0xC5, invalid64: true, why64: "0xC5 (lds) is VEX-encoded in 64-bit mode, and VEX is not implemented" },
+	{ opcode: 0xCE, invalid64: true, why64: "0xCE (into) is invalid in 64-bit mode" },
+	{ opcode: 0xD4, invalid64: true, why64: "0xD4 (aam) is invalid in 64-bit mode" },
+	{ opcode: 0xD5, invalid64: true, why64: "0xD5 (aad) is invalid in 64-bit mode" },
+	{ opcode: 0xD6, invalid64: true, why64: "0xD6 (salc) is invalid in 64-bit mode" },
+	{ opcode: 0xEA, invalid64: true, why64: "0xEA (jmp far ptr16:32) is invalid in 64-bit mode" },
+
+	/* ------------------------------------------------------------------ *
+	 * VALID IN 64-BIT MODE, BUT WITH DIFFERENT SEMANTICS: a NAMED STOP, NOT a #UD
+	 *
+	 * 0x63 is MOVSXD there and ARPL does not exist (the length is the same, so this is a
+	 * silent-wrong-answer, not a desync); 0xE3 is JRCXZ, whose counter is RCX rather than
+	 * ECX.  Both are S7's (control flow), so they stop by name -- the answer that keeps the
+	 * machine honest without pretending the encoding is illegal.
+	 * ------------------------------------------------------------------ */
+	{ opcode: 0x63, stop64: "0x63 is MOVSXD in 64-bit mode, and it is S7's (the 32-bit arm is ARPL)" },
+	{ opcode: 0xE3, stop64: "0xE3 is JRCXZ in 64-bit mode (RCX, not ECX), and the jcc family is S7's" },
 
 	/* ---------------- MOV, the S5 family ---------------- */
 	/* 0x88/0x89/0x8A/0x8B: the r/m,r and r,r/m forms at 8/32/64.  The 64-bit bodies exist for

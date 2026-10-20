@@ -211,7 +211,12 @@ const cpu_backend_t *cpu_backend_select(const char *name)
  * uopjit` silently ran the INTERPRETER and never refused -- the flag moved the machine to an
  * engine the user did not ask for, which is the seam's false-declaration class.
  *
- * Returns false for an engine that has no long-mode implementation, so a caller can say so.
+ * IT CANNOT FAIL TODAY, and the bool says so rather than pretending: there is nothing to
+ * allocate and no platform probe (the interpreter has no substrate of its own), so the body is
+ * an OR and a `return true`.  The return value is kept because the CALLERS' refusal path is the
+ * seat that matters the day a backend has to be built: `if (!cpu_backend_enable_long_mode())
+ * return 2;` in both entry points (src/main.c), and the review was right that a promise of
+ * failure with no failure body is a comment that lies.
  * ------------------------------------------------------------------ */
 bool cpu_backend_enable_long_mode(void)
 {

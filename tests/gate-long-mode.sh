@@ -96,11 +96,12 @@ step "uop-decoder-refusal" sh -c \
 	"./build/cpu_uop_selftest 2>&1 | grep -q 'PASS S5: the uop decoder refuses long mode'"
 
 echo "== D. the 0x2NN overlay's census (routed arms / named stops) AS NUMBERS"
-# MEASURED at S5: 79 overlay entries, 61 routed arms, 23 unimplemented call sites.  The 23 are
+# MEASURED at S5 (round 2): 102 overlay entries (the SDM's 64-bit removal list and the two
+# `stop64` encodings are entries without bodies), 61 routed arms, 23 unimplemented call sites.  The 23 are
 # the default-64 named stops (ret/call/jmp/pop r-m/iret) that S6-S11 replace; a slice that
 # lands one EDITS THIS LINE, which is the record of what it landed.
 step "overlay-census" sh -c \
-	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 79 overlay entries, 61 routed to instr64 bodies, 23 of those call sites unimplemented'"
+	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 102 overlay entries, 61 routed to instr64 bodies, 23 of those call sites unimplemented'"
 must_fail "overlay-census-able-to-fail" sh -c \
 	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 0 overlay entries'"
 
@@ -146,10 +147,55 @@ step "walk-1gib-named-stop" sh -c \
 patch pde-2mib c7050060100003701000 c7050060100083701000
 step "walk-2mib-named-stop" sh -c \
 	"$PORT64 $MUT/pde-2mib.img 20000000 --fixture64 --long-mode on 2>&1 | grep -q 'a 2 MiB page (PDE.PS) in long mode is S11'"
+# (4b) the PD base is repointed ABOVE guest RAM (MEMORY_SIZE = 0x200000, src/main.c:68): a
+# page-table read must be BOUNDED by memory_size, not handed to read64s -- the second HOST
+# out-of-bounds read this slice found (results/x86-64-s5.md ss6.6).  The patched instruction is
+# the stub's `mov dword ptr [0x106000], 0x107003` (PD[0] -> PT0); the mutation sets the base to
+# 0x200000, so the PT read for the body's page computes 0x200480 and the walk must STOP BY NAME
+# instead of reading the host's heap.
+patch pt-base-past-ram c7050060100003701000 c7050060100003002000
+step "walk-table-read-past-ram" sh -c \
+	"$PORT64 $MUT/pt-base-past-ram.img 20000000 --fixture64 --long-mode on 2>&1 | grep -q 'page-table read at physical'"
+
 # (5) the PT fill loop writes a NON-ZERO high dword -> every frame is at 4 GiB: the BOUND.
 patch pte-above-4gib c7470400000000 c7470401000000
 step "walk-above-4gib-named-stop" sh -c \
 	"$PORT64 $MUT/pte-above-4gib.img 20000000 --fixture64 --long-mode on 2>&1 | grep -q \"above the port's 32-bit physical model\""
+
+echo "== F2. ROUND 2: the 64-bit-invalid and S6-owned guards BITE (they were silent before)"
+# (i) a BARE 0xEA in the body.  In a 64-bit CS the SDM says #UD; before round 2 it dispatched
+#     to `case 0x1EA` -- the REAL far jump -- because dispatch_os_index only answers 2 for 0xEA
+#     when a REX.W precedes it.  The patch replaces the prologue's `xor eax,eax; xor ecx,ecx`
+#     (31 c0 31 c9) with `ea 90 31 c9`: the same length, and the 0xEA is the first byte executed.
+patch bare-far-jump 31c031c9 ea9031c9
+#     THE RIP IS PART OF THE ASSERTION, and it is what makes the arm able to fail: a #UD raised
+#     ON the 0xEA byte leaves rip = body_start (0x90000), while the OLD behaviour (the real far
+#     jump) leaves the machine somewhere else entirely and would ALSO eventually die with some
+#     signal.  Asserting only "(signal SIGILL)" was MEASURED to pass against the mutant, i.e. it
+#     was an arm that could not fail.
+step "bare-0xEA-is-UD-in-64bit" sh -c \
+	"$PORT64 $MUT/bare-far-jump.img 20000000 --fixture64 --long-mode on 2>&1 > $MUT/ea.out; \
+	 grep -q '(signal SIGILL)' $MUT/ea.out && \
+	 grep -q '\"instruction_pointer\": \"0x90000\"' $MUT/ea.out"
+#     ... and the OTHER half of the same rule: 0xEA is LEGAL in compatibility mode, which is what
+#     every green case already proves (the stub's own far jump enters the body through it).
+step "0xEA-is-legal-in-compat" sh -c \
+	"$PORT64 $POISON 20000000 --fixture64 --long-mode on | grep -q 'BEGIN JSON'"
+# (iii) 0x63: a BARE ARPL in a 64-bit CS must not run.  This is the `stop64` half of the guard
+#      and it is the DECISIVE one -- the guard's own named stop is the visible output, so
+#      neutering the guard turns this step red (the 0xEA arm above proves the semantics, this
+#      one proves the seat).
+patch bare-arpl-0x63 31c031c9 639031c9
+step "bare-0x63-is-a-named-stop" sh -c \
+	"$PORT64 $MUT/bare-arpl-0x63.img 20000000 --fixture64 --long-mode on 2>&1 | grep -q '0x63 is MOVSXD in 64-bit mode'" 
+# (ii) a REX.W xor in the body: `48 31 c0` is `xor rax, rax`, whose 64-bit flags are S6's.  It
+#      must STOP BY NAME, never leave stale flags (round 1's bodies wrote the result and no flag
+#      at all, so a following jcc branched on the previous instruction's flags).
+patch rexw-xor 31c031c9 4831c090
+step "rexw-xor-stops-as-S6s" sh -c \
+	"$PORT64 $MUT/rexw-xor.img 20000000 --fixture64 --long-mode on 2>&1 | grep -q 'at 64 bits is S6'"
+must_fail "rexw-xor-stop-is-not-universal" sh -c \
+	"$PORT64 $POISON 20000000 --fixture64 --long-mode on 2>&1 | grep -q 'at 64 bits is S6'"
 
 echo "== G. the bound NAMES THE FRAME, and the unmutated image produces neither stop nor fault"
 step "above-4gib-names-the-frame" sh -c \
