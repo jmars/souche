@@ -782,6 +782,32 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE JUMP UNIT: THE AMD64 KERNEL ENTERS ITS OWN CODE AND DIES ON ITS 56th INSTRUCTION (2026-10-19).**
+`results/x86-64-jump.md` is its report; MEASUREMENT ONLY, no source file changed.  The jump FIRES:
+at instruction **4,475,477,636** control reaches `eip=0x1000000` with `rsp=0x2a03f58 rsi=0x84790
+cr0=0x80050033 cr3=0x4f76000` and the bytes `48 8d 25 51 3f a0 01 48 8d 3d f2 ff ff ff b9 01 ...` --
+READ as `startup_64` in arch/x86/kernel/head_64.S:64-82 (`leaq (__end_init_task-FRAME_SIZE)(%rip),%rsp;
+leaq _text(%rip),%rdi; movl $MSR_GS_BASE,%ecx; ...; wrmsr; pushq %rsi; call startup_64_setup_env`).
+The kernel then runs 56 instructions: the tail of `startup_64_setup_env`, INCLUDING a stack-canary
+read through `%gs:0x28` that MATCHES (so the MSR write and GS-based addressing work in long mode),
+then `leave; jmp 0x1E01D30`.  THE NAMED STOP: 0x1E01D30 holds a bare `c3` at the end of a 0xCC
+padding run followed by multi-byte NOPs and a large zero region; that `ret` raises **#GP (vector 13)**
+-- a non-canonical popped address -- delivered into the **NULL IDT** the stub installs before the jump
+(`idtr base=0 limit=0`, READ misc.c:463-465), so the machine stops at 4,475,477,692 instructions with
+`exception=13 unimplemented=1 eip=0x0`.  On hardware the same #GP would triple-fault, so it is a real
+fault, but WHAT makes the popped address bad is NOT established: the stack words at rsp=0x2a03f34 read
+`0x0478000000000000 0x0100000000000000 0x0100003600000000 0x084790000000000`, which look BYTE-SHIFTED
+against plausible values (0x4780000, 0x1000000, 0x1000036xx, 0x84790) -- offered as a hypothesis, NOT
+a finding.  WALL CLOCK (MEASURED, three runs): 112 s / 114 s / 118 s for 4.475 G instructions =
+**~38-40 M instructions/s**, so the reloc unit's "~25 min for a 5 G boot" estimate was **wrong by
+~13x**: 5 G instructions is ~2m10s, and no run reaches its 5 G budget because the #GP stops it first.
+NEXT MEASUREMENT (named, ~2 min each): (a) the stack at 0x1001BD2 before the tail call and the exact
+word the `ret` pops; (b) a BYTE-COMPARE of a known code region before and after `parse_elf`
+(0x1000000..0x1001000 vs the decompressed image at output+0x200000) -- the prime hypothesis is that
+the in-place, overlapping relocation misplaced the image, and the `cc`-then-`ret` shape is what a
+mis-shifted copy would produce; (c) decode the five program headers BEFORE parse_elf runs (afterwards
+the copy overwrites the ELF header, which is why this unit's late-run header dump was garbage).
+
 **THE RELOC UNIT IS A MEASUREMENT: NO PORT DEFECT IN THE POST-DECOMPRESSION PATH (2026-10-19).**
 `results/x86-64-reloc.md` is its report, and it CORRECTS the wide unit's headline: "the decompression
 completes, all 8,388,607 bytes" was **my own 8 MiB scan ceiling**, not the image's end -- re-measured
