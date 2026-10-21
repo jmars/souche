@@ -421,6 +421,50 @@ case("alu", "test-cmp-64",
     and dword ptr [0x100210], 0x8D5
     and dword ptr [rsp - 8], 0x8D5
 """, flags=True)
+case("alu", "accumulator-imm32",
+     "the eight accumulator-immediate forms (05/0D/15/1D/25/2D/35/3D) at 64 bits, whose "
+     "imm32 is SIGN-EXTENDED: `and rax, 0xFFFFFFFF80000000` can only be encoded as "
+     "`48 25 00 00 00 80`, and at 32 bits that immediate is 0x80000000",
+     """\
+    mov rax, 0x1122334455667788
+    add rax, 0x10
+    or  rax, 0xFFFFFFFF80000000
+    adc rax, 0x1
+    sbb rax, 0x1
+    and rax, 0xFFFFFFFFFFFFFFF0
+    sub rax, 0xFFFFFFFF80000000
+    xor rax, 0x1
+    cmp rax, 0x1000000
+    pushfq
+    pop qword ptr [0x100200]
+    and dword ptr [0x100200], 0x8D5
+    and dword ptr [rsp - 8], 0x8D5
+""", flags=True)
+case("alu", "imm32-group-64",
+     "0x81 (the imm32 ALU group) at 64 bits, all eight sub-ops, and the immediate is "
+     "SIGN-EXTENDED: `sub r10, 0x80000000` leaves 0xFFFFFFFF80000000 at 64 bits and "
+     "0x80000000 at 32, which no 32-bit encoding of this body can produce.  Both the "
+     "register and the MEMORY form are exercised, and the closing CMP is the guest's own "
+     "`cmp rbp, 0x1000000` shape (results/x86-64-idt64.md)",
+     """\
+    mov r8, 0x100000000
+    add r8, 0x10
+    adc r8, 0x1
+    sbb r8, 0x1
+    or  r8, 0x100
+    xor r8, 0x2
+    and r8, 0xFFFFFFFFFFFFFFF0
+    mov r10, 0
+    sub r10, 0xFFFFFFFF80000000
+    mov rax, 0x100000000
+    mov qword ptr [0x100210], rax
+    add qword ptr [0x100210], 1
+    cmp r8, 0x1000000
+    pushfq
+    pop qword ptr [0x100200]
+    and dword ptr [0x100200], 0x8D5
+    and dword ptr [rsp - 8], 0x8D5
+""", flags=True)
 case("alu", "inc-dec-64",
      "INC/DEC wrap at 64 bits: 0xFFFFFFFF + 1 = 0x100000000, and 0 - 1 = all ones -- "
      "at 32 bits the first is 0",
@@ -665,6 +709,73 @@ case("ctrl", "cmov",
     cmove rdx, rbx
     cmovne rsi, rbx
 """)
+case("ctrl", "indirect-transfer",
+     "CALL r/m64 and JMP r/m64 (FF /2 and FF /4) are 64-bit transfers whose pushed return "
+     "address is EIGHT bytes: a 32-bit push leaves rsp drifting by 4 and the `ret` pops half "
+     "a pair.  The target register is r9/r11 (REX.B), so a 32-bit decoder cannot even name it",
+     """\
+    lea r9, [rip + 1f]
+    call r9
+    jmp 2f
+1:
+    mov r10, 0x100000000
+    ret
+2:
+    lea r11, [rip + 3f]
+    jmp r11
+3:
+    mov r12, 0xFFFFFFFF
+""")
+case("ctrl", "rexb-implied-register",
+     "REX.B on an OPCODE-IMPLIED register at a 32-bit operand size: `41 BC imm32` is "
+     "`mov r12d, imm32` and must NOT touch esp (the 32-bit arm's hardcoded ESP was exactly "
+     "the bug: the guest's stack pointer became 1).  0xB8-0xBF, 0xB0-0xB7 and 0x91-0x97 are "
+     "the three '+r' families whose 16/32-bit arms are reachable in 64-bit mode, and each "
+     "must land in r8-r15",
+     """\
+    mov r12d, 1
+    mov r13d, 0x7FFFFFFF
+    mov r8d, 0x80000000
+    mov r9w, 0x1234
+    mov r10b, 0x5A
+    mov eax, 0x100000000
+    xchg eax, r11d
+    mov rsp, 0x102000
+    mov qword ptr [0x100200], r12
+    mov qword ptr [0x100208], r13
+    mov qword ptr [0x100210], r8
+    mov qword ptr [0x100218], r9
+    mov qword ptr [0x100220], r10
+    mov qword ptr [0x100228], r11
+    mov qword ptr [0x100230], rax
+""")
+case("ctrl", "cmov-family",
+     "ALL SIXTEEN CMOVcc conditions in one flag state, and the values moved are above 2^32 "
+     "so no 32-bit cmov can produce them.  `cmp rax, rbx` with rax=0x100000000, rbx=0xFFFFFFFF "
+     "leaves OF=0 CF=0 ZF=0 SF=0 PF=0, so the eight even-numbered (negated) conditions all "
+     "move and the eight odd ones all leave their destination at zero -- a swapped predicate "
+     "pair (e.g. cmovb for cmovae) changes half the window",
+     """\
+    mov rax, 0x100000000
+    mov rbx, 0xFFFFFFFF
+    cmp rax, rbx
+    cmovo  rcx, rax
+    cmovno rdx, rax
+    cmovb  rsi, rax
+    cmovae rdi, rax
+    cmovbe r8, rax
+    cmova  r9, rax
+    cmovs  r10, rax
+    cmovns r11, rax
+    cmovp  r12, rax
+    cmovnp r13, rax
+    cmovl  r14, rax
+    cmovge r15, rax
+    mov rcx, 0
+    cmovle rcx, rax
+    mov rsi, 0
+    cmovg  rsi, rax
+""", flags=True)
 case("ctrl", "setcc",
      "SETcc writes one BYTE of a 64-bit register; the rest of the register must stay "
      "as it was set",

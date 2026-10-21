@@ -37,6 +37,8 @@
 
 #include "exceptions.h"
 
+#include <stdio.h> /* snprintf, for the stop messages that carry their evidence */
+
 #include "cpu.h"
 #include "flags.h"
 #include "instructions.h" /* handle_irqs */
@@ -534,7 +536,28 @@ void call_interrupt_vector(int32_t interrupt, bool is_int, bool has_error_code, 
         }
 
         if (gate_type != INTR_GATE_TRAP && gate_type != INTR_GATE_INTERRUPT && gate_type != INTR_GATE_TASK) {
-            panic_stop("call_interrupt_vector: invalid gate type (upstream panic \"Unimplemented: #GP handler\", cpu.rs:851)");
+            /* S11/S12 GAP: the message carries the EVIDENCE, not just the verdict -- the vector,
+             * the IDT base/limit, the descriptor address and the descriptor itself.  Without them
+             * "invalid gate type" is a symptom a reader cannot act on (it cost this lane one
+             * investigation to learn that the IDT had never been loaded at the high base). */
+            char stop[384];
+            snprintf(stop, sizeof(stop),
+                     "call_interrupt_vector: invalid gate type %u for vector %d (idtr base 0x%llx"
+                     " limit %d, descriptor at 0x%x = 0x%llx, faulting rip 0x%llx bytes %02x %02x %02x %02x %02x %02x,"
+                     " cpl %d cr2 0x%llx cr3 0x%llx)",
+                     (unsigned)gate_type, (int)interrupt,
+                     (unsigned long long)cpu->idtr_offset, (int)cpu->idtr_size,
+                     (unsigned)descriptor_address, (unsigned long long)descriptor.raw,
+                     (unsigned long long)cpu->instruction_pointer,
+                     (unsigned)read8((uint32_t)translate_address_read(cpu->instruction_pointer)),
+                     (unsigned)read8((uint32_t)translate_address_read(cpu->instruction_pointer + 1)),
+                     (unsigned)read8((uint32_t)translate_address_read(cpu->instruction_pointer + 2)),
+                     (unsigned)read8((uint32_t)translate_address_read(cpu->instruction_pointer + 3)),
+                     (unsigned)read8((uint32_t)translate_address_read(cpu->instruction_pointer + 4)),
+                     (unsigned)read8((uint32_t)translate_address_read(cpu->instruction_pointer + 5)),
+                     (int)cpu->cpl, (unsigned long long)(uint32_t)cpu->cr[2],
+                     (unsigned long long)cpu->cr[3]);
+            panic_stop(stop);
             return;
         }
 
@@ -868,15 +891,37 @@ bool switch_seg(int32_t reg, int32_t selector_raw)
         return false;
     }
     if (lookup == SELECTOR_LOOKUP_IS_NULL) {
-        if (reg == SS) {
+        /* THE 64-BIT-MODE EXCEPTION TO THE NULL-SELECTOR RULE.  In protected mode SS cannot be
+         * loaded with a null selector (the arm below), and this port kept that rule in 64-bit
+         * mode too -- which STOPS A REAL GUEST (MEASURED, this unit's finding): the amd64
+         * decompressor's 0x200 entry point -- the ABI-immutable 64-bit entry -- begins
+         *
+         *     cld / cli / xorl %eax,%eax / movl %eax,%ds / movl %eax,%es / movl %eax,%ss ...
+         *
+         * (linux v6.1 arch/x86/boot/compressed/head_64.S:334-356, READ) and the port raised
+         * #GP(0) on the `movl %eax,%ss` at guest 0x100208, whose IDT is still null: the guest
+         * could not take the fault and the machine stopped.  Hardware runs that sequence, so
+         * the null-selector rule cannot apply to SS in 64-bit mode at CPL 0.  The condition
+         * below is QEMU's (target/i386/tcg/seg_helper.c:1293-1302, READ):
+         * `seg_reg == R_SS && (!(hflags & HF_CS64_MASK) || cpl == 3)` -> #GP.  Note the
+         * CPL-3 half: at CPL 3 in 64-bit mode a null SS IS a #GP, so this is an exception for
+         * the kernel-mode case only, not a general licence. */
+        if (reg == SS && !(long_mode_64() && cpu->cpl == 0)) {
             /* upstream dbg_log! dropped */
             trigger_gp(0);
             return false;
         }
         else {
-            /* es, ds, fs, gs */
+            /* es, ds, fs, gs -- and SS in 64-bit mode at CPL 0 */
             cpu->sreg[reg] = (uint16_t)selector_raw;
             cpu->segment_is_null[reg] = true;
+            /* In 64-bit mode CS/DS/ES/SS bases are architecturally 0, and modrm_resolve64 adds
+             * segment_offsets[] unconditionally, so the base must be CLEARED here rather than
+             * left at whatever the previous selector loaded.  FS/GS are NOT cleared: their
+             * base is the MSR's (cpu_state.h:428) and a selector load does not write it. */
+            if (long_mode_64() && reg != FS && reg != GS) {
+                cpu->segment_offsets[reg] = 0;
+            }
             update_state_flags();
             return true;
         }

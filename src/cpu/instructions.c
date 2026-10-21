@@ -1148,20 +1148,20 @@ void instr32_8F_0_reg(int32_t r) { int32_t v = pop32s(); if (cpu->pagefault) ret
  * ================================================================== */
 
 void instr_90(void) {}
-void instr16_91(void) { xchg16r(CX); }
-void instr32_91(void) { xchg32r(ECX); }
-void instr16_92(void) { xchg16r(DX); }
-void instr32_92(void) { xchg32r(EDX); }
-void instr16_93(void) { xchg16r(BX); }
-void instr32_93(void) { xchg32r(EBX); }
-void instr16_94(void) { xchg16r(SP); }
-void instr32_94(void) { xchg32r(ESP); }
-void instr16_95(void) { xchg16r(BP); }
-void instr32_95(void) { xchg32r(EBP); }
-void instr16_96(void) { xchg16r(SI); }
-void instr32_96(void) { xchg32r(ESI); }
-void instr16_97(void) { xchg16r(DI); }
-void instr32_97(void) { xchg32r(EDI); }
+void instr16_91(void) { xchg16r(reg_index_b(1)); }
+void instr32_91(void) { xchg32r(reg_index_b(1)); }
+void instr16_92(void) { xchg16r(reg_index_b(2)); }
+void instr32_92(void) { xchg32r(reg_index_b(2)); }
+void instr16_93(void) { xchg16r(reg_index_b(3)); }
+void instr32_93(void) { xchg32r(reg_index_b(3)); }
+void instr16_94(void) { xchg16r(reg_index_b(4)); }
+void instr32_94(void) { xchg32r(reg_index_b(4)); }
+void instr16_95(void) { xchg16r(reg_index_b(5)); }
+void instr32_95(void) { xchg32r(reg_index_b(5)); }
+void instr16_96(void) { xchg16r(reg_index_b(6)); }
+void instr32_96(void) { xchg32r(reg_index_b(6)); }
+void instr16_97(void) { xchg16r(reg_index_b(7)); }
+void instr32_97(void) { xchg32r(reg_index_b(7)); }
 
 /* cbw/cwde and cwd/cdq.  Upstream `read_reg8(AL) << 24 >> 24` / `read_reg16(AX) as i16 as
  * i32` -- the left shift is spelled through uint32_t (M1a-2's D5 rule: C's `<<` into the
@@ -1398,32 +1398,43 @@ void instr32_F3AF(void) { scasd_repz(is_asize_32()); }
 
 /* ================================================================== *
  * 0xB0-0xBF -- mov immediate to register
+ *
+ * THE "+r" REGISTERS GO THROUGH reg_index_b, AND THAT IS A CORRECTNESS RULE, NOT STYLE.  The
+ * destination of an opcode-implied register is `opcode & 7` EXTENDED BY REX.B, and REX.B is
+ * live whenever a REX byte is present -- including the REX byte of a 32-bit-operand form, which
+ * dispatches to these 16/32-bit arms (`41 BC imm32` is `mov r12d, imm32`, NOT `mov esp`).
+ * MEASURED, and the reason the class was rewritten (results/x86-64-idt64.md): the amd64
+ * decompressor's `mov r12d, 1` (41 BC 01 00 00 00) was executed by the 32-bit arm as
+ * `mov esp, 1`, and the guest's next `call` pushed its return address to 0xFFFFFFFFFFFFFFF9.
+ * The same rule covers 0x90-0x97 (xchg r, eax) below; 0x50-0x5F need nothing because their
+ * 16/32-bit arms are unreachable in 64-bit mode (the overlay's default64 entries route them to
+ * the 64-bit bodies, and the 16-bit forms stop by name).
  * ================================================================== */
 
-void instr_B0(int32_t imm8) { write_reg8(AL, imm8); }
-void instr_B1(int32_t imm8) { write_reg8(CL, imm8); }
-void instr_B2(int32_t imm8) { write_reg8(DL, imm8); }
-void instr_B3(int32_t imm8) { write_reg8(BL, imm8); }
-void instr_B4(int32_t imm8) { write_reg8(AH, imm8); }
-void instr_B5(int32_t imm8) { write_reg8(CH, imm8); }
-void instr_B6(int32_t imm8) { write_reg8(DH, imm8); }
-void instr_B7(int32_t imm8) { write_reg8(BH, imm8); }
-void instr16_B8(int32_t imm) { write_reg16(AX, imm); }
-void instr32_B8(int32_t imm) { write_reg32(EAX, imm); }
-void instr16_B9(int32_t imm) { write_reg16(CX, imm); }
-void instr32_B9(int32_t imm) { write_reg32(ECX, imm); }
-void instr16_BA(int32_t imm) { write_reg16(DX, imm); }
-void instr32_BA(int32_t imm) { write_reg32(EDX, imm); }
-void instr16_BB(int32_t imm) { write_reg16(BX, imm); }
-void instr32_BB(int32_t imm) { write_reg32(EBX, imm); }
-void instr16_BC(int32_t imm) { write_reg16(SP, imm); }
-void instr32_BC(int32_t imm) { write_reg32(ESP, imm); }
-void instr16_BD(int32_t imm) { write_reg16(BP, imm); }
-void instr32_BD(int32_t imm) { write_reg32(EBP, imm); }
-void instr16_BE(int32_t imm) { write_reg16(SI, imm); }
-void instr32_BE(int32_t imm) { write_reg32(ESI, imm); }
-void instr16_BF(int32_t imm) { write_reg16(DI, imm); }
-void instr32_BF(int32_t imm) { write_reg32(EDI, imm); }
+void instr_B0(int32_t imm8) { write_reg8(reg_index_b(0), imm8); }
+void instr_B1(int32_t imm8) { write_reg8(reg_index_b(1), imm8); }
+void instr_B2(int32_t imm8) { write_reg8(reg_index_b(2), imm8); }
+void instr_B3(int32_t imm8) { write_reg8(reg_index_b(3), imm8); }
+void instr_B4(int32_t imm8) { write_reg8(reg_index_b(4), imm8); }
+void instr_B5(int32_t imm8) { write_reg8(reg_index_b(5), imm8); }
+void instr_B6(int32_t imm8) { write_reg8(reg_index_b(6), imm8); }
+void instr_B7(int32_t imm8) { write_reg8(reg_index_b(7), imm8); }
+void instr16_B8(int32_t imm) { write_reg16(reg_index_b(0), imm); }
+void instr32_B8(int32_t imm) { write_reg32(reg_index_b(0), imm); }
+void instr16_B9(int32_t imm) { write_reg16(reg_index_b(1), imm); }
+void instr32_B9(int32_t imm) { write_reg32(reg_index_b(1), imm); }
+void instr16_BA(int32_t imm) { write_reg16(reg_index_b(2), imm); }
+void instr32_BA(int32_t imm) { write_reg32(reg_index_b(2), imm); }
+void instr16_BB(int32_t imm) { write_reg16(reg_index_b(3), imm); }
+void instr32_BB(int32_t imm) { write_reg32(reg_index_b(3), imm); }
+void instr16_BC(int32_t imm) { write_reg16(reg_index_b(4), imm); }
+void instr32_BC(int32_t imm) { write_reg32(reg_index_b(4), imm); }
+void instr16_BD(int32_t imm) { write_reg16(reg_index_b(5), imm); }
+void instr32_BD(int32_t imm) { write_reg32(reg_index_b(5), imm); }
+void instr16_BE(int32_t imm) { write_reg16(reg_index_b(6), imm); }
+void instr32_BE(int32_t imm) { write_reg32(reg_index_b(6), imm); }
+void instr16_BF(int32_t imm) { write_reg16(reg_index_b(7), imm); }
+void instr32_BF(int32_t imm) { write_reg32(reg_index_b(7), imm); }
 
 /* ================================================================== *
  * 0xC0-0xCF -- shift/rotate groups, ret/retf, les/lds, mov imm, enter/

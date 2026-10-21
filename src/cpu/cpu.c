@@ -62,7 +62,11 @@
 bool jit_block_boundary = false;
 
 bool interpreted_unimplemented = false;
-static char unimplemented_name[160];
+/* 384, not 160: call_interrupt_vector's gate-type stop carries the IDT base/limit, the
+ * descriptor, the faulting rip's bytes and cr2/cr3 (exceptions.c), and at 160 the message was
+ * CUT MID-EVIDENCE -- MEASURED in results/x86-64-idt64.md, where the reported instruction
+ * bytes ended at "8e d0 8e e0 8".  The larger buffer is only ever touched by a stop. */
+static char unimplemented_name[384];
 
 void unimplemented_instruction(const char *name)
 {

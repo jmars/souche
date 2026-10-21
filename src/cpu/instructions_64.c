@@ -544,6 +544,114 @@ void instr64_83_7_reg(int32_t r1, int64_t imm)
 }
 
 /* ------------------------------------------------------------------ *
+ * 0x81: THE IMM32 GROUP, /0 add /1 or /2 adc /3 sbb /4 and /5 sub /6 xor /7 cmp.
+ *
+ * S6's overlay note used to list this encoding as a NAMED STOP ("no corpus case covers it"),
+ * and the amd64 guest is what closed it (MEASURED, this unit): the decompressor's
+ * `48 81 fd 00 00 00 01` (`cmp rbp, 0x1000000`, linux v6.1 head_64.S) stopped the machine at
+ * guest 0x100228 with "long mode: 0x81 has no 64-bit form".  The immediate is a SIGN-EXTENDED
+ * imm32 at every operand size -- the emitter hands these bodies an `int64_t` that
+ * `read_imm32s` sign-extended, so `sub r10, 0x80000000` is 0xFFFFFFFF80000000 and not
+ * 0x0000000080000000 -- and the flags come from the same OPSIZE_64 cores 0x83 uses.
+ * ------------------------------------------------------------------ */
+
+void instr64_81_0_mem(int64_t addr, int64_t imm)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)add64(x, imm));
+}
+
+void instr64_81_0_reg(int32_t r1, int64_t imm)
+{
+	write_reg64(r1, (uint64_t)add64((int64_t)read_reg64(r1), imm));
+}
+
+void instr64_81_1_mem(int64_t addr, int64_t imm)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)or64(x, imm));
+}
+
+void instr64_81_1_reg(int32_t r1, int64_t imm)
+{
+	write_reg64(r1, (uint64_t)or64((int64_t)read_reg64(r1), imm));
+}
+
+void instr64_81_2_mem(int64_t addr, int64_t imm)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)adc64(x, imm));
+}
+
+void instr64_81_2_reg(int32_t r1, int64_t imm)
+{
+	write_reg64(r1, (uint64_t)adc64((int64_t)read_reg64(r1), imm));
+}
+
+void instr64_81_3_mem(int64_t addr, int64_t imm)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)sbb64(x, imm));
+}
+
+void instr64_81_3_reg(int32_t r1, int64_t imm)
+{
+	write_reg64(r1, (uint64_t)sbb64((int64_t)read_reg64(r1), imm));
+}
+
+void instr64_81_4_mem(int64_t addr, int64_t imm)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)and64(x, imm));
+}
+
+void instr64_81_4_reg(int32_t r1, int64_t imm)
+{
+	write_reg64(r1, (uint64_t)and64((int64_t)read_reg64(r1), imm));
+}
+
+void instr64_81_5_mem(int64_t addr, int64_t imm)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)sub64(x, imm));
+}
+
+void instr64_81_5_reg(int32_t r1, int64_t imm)
+{
+	write_reg64(r1, (uint64_t)sub64((int64_t)read_reg64(r1), imm));
+}
+
+void instr64_81_6_mem(int64_t addr, int64_t imm)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, (uint64_t)xor64(x, imm));
+}
+
+void instr64_81_6_reg(int32_t r1, int64_t imm)
+{
+	write_reg64(r1, (uint64_t)xor64((int64_t)read_reg64(r1), imm));
+}
+
+void instr64_81_7_mem(int64_t addr, int64_t imm)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	cmp64(x, imm);
+}
+
+void instr64_81_7_reg(int32_t r1, int64_t imm)
+{
+	cmp64((int64_t)read_reg64(r1), imm);
+}
+
+/* ------------------------------------------------------------------ *
  * 0xF7: /2 NOT and /3 NEG, and 0xFF: /0 INC and /1 DEC.
  *
  * The two fixed_g groups whose reg field is the SUB-OPCODE take no register argument (the
@@ -833,6 +941,57 @@ void instr64_C3(void)
 	set_instruction_pointer(v); /* cs base is 0 in 64-bit mode */
 }
 
+/* 0xCB retf.  THE 64-BIT FRAME IS 16 BYTES: an 8-byte return address and an 8-byte CS slot
+ * whose upper 48 bits are discarded (SDM Vol 2B RET: "in 64-bit mode ... a 64-bit return
+ * address").  The wrong implementations this case catches are the 32-bit arm's 8-byte frame
+ * (every later rsp drifts by 8) and a 2-byte CS read (the low half of the second qword, which
+ * happens to be the same selector -- so the selector is NOT the instrument; the frame size is).
+ *
+ * MEASURED as the reason this body exists (results/x86-64-idt64.md): the amd64 decompressor
+ * switches to its 4-level-paging path with `push $__KERNEL_CS; lea rax,[rip+3]; push rax;
+ * 48 CB` (linux v6.1 arch/x86/boot/compressed/head_64.S's trampoline), and the machine stopped
+ * at guest 0x100266 on "instructions::instr64_CB".
+ *
+ * Two NAMED STOPS rather than silent truncation, both the port's 32-bit IP showing through
+ * far_return's int32_t eip: a target at or above 4 GiB, and a return that CHANGES privilege
+ * (far_return's CPL-change path reads a 32-bit ESP/SS pair, which is the wrong frame shape in
+ * 64-bit mode). */
+void instr64_CB(void)
+{
+	uint64_t ip = safe_read64_addr((int64_t)get_stack_pointer(0));
+	if (cpu->pagefault) return;
+	uint64_t cs = safe_read64_addr((int64_t)get_stack_pointer(8));
+	if (cpu->pagefault) return;
+	if (ip > 0xFFFFFFFFull) {
+		unimplemented_instruction(
+			"long mode: a RETF target at or above 4 GiB (far_return takes a 32-bit eip)");
+		return;
+	}
+	if ((int32_t)(cs & 3) != cpu->cpl) {
+		unimplemented_instruction(
+			"long mode: a RETF that changes privilege level (far_return's CPL-change path reads"
+			" a 32-bit ESP/SS frame)");
+		return;
+	}
+	/* stack_adjust 8 is the difference between the 32-bit frame far_return assumes (2*4) and
+	 * this one (2*8); is_osize_32 stays true for the same reason as the eip bound above. */
+	far_return((int32_t)(uint32_t)ip, (int32_t)(cs & 0xFFFF), 8, true);
+}
+
+/* 0x05/0x0D/0x15/0x1D/0x25/0x2D/0x35/0x3D -- THE ACCUMULATOR-IMMEDIATE FORMS at 64 bits.  Each
+ * is `OP RAX, imm32` with the immediate SIGN-EXTENDED (there is no imm64 form of these), so
+ * `48 25 00 00 00 80` is `and rax, 0xFFFFFFFF80000000` and not `and rax, 0x80000000`.  Named
+ * stops until the amd64 guest's decompressor reached `48 25` (results/x86-64-idt64.md);
+ * alu/accumulator-imm32 is the instrument that lands the eight together. */
+void instr64_05(int64_t imm) { write_reg64(0, (uint64_t)add64((int64_t)read_reg64(0), imm)); }
+void instr64_0D(int64_t imm) { write_reg64(0, (uint64_t)or64((int64_t)read_reg64(0), imm)); }
+void instr64_15(int64_t imm) { write_reg64(0, (uint64_t)adc64((int64_t)read_reg64(0), imm)); }
+void instr64_1D(int64_t imm) { write_reg64(0, (uint64_t)sbb64((int64_t)read_reg64(0), imm)); }
+void instr64_25(int64_t imm) { write_reg64(0, (uint64_t)and64((int64_t)read_reg64(0), imm)); }
+void instr64_2D(int64_t imm) { write_reg64(0, (uint64_t)sub64((int64_t)read_reg64(0), imm)); }
+void instr64_35(int64_t imm) { write_reg64(0, (uint64_t)xor64((int64_t)read_reg64(0), imm)); }
+void instr64_3D(int64_t imm) { cmp64((int64_t)read_reg64(0), imm); }
+
 /* 0xE9 jmp rel32 */
 void instr64_E9(int32_t imm)
 {
@@ -850,6 +1009,27 @@ void instr64_FF_6_mem(int64_t addr)
 }
 void instr64_FF_6_reg(int32_t r1) { push64(read_reg64(r1)); }
 
+/* 0xFF /2 call r/m64 -- THE INDIRECT NEAR CALL, the one sub-op of this group that was still a
+ * named stop (/4 jmp r/m64 and /6 push r/m are S7's and landed; /3 callf and /5 jmpf stay
+ * named stops).  It arrived when the amd64 guest's decompressor reached `FF /2`
+ * (results/x86-64-idt64.md), with ctrl-indirect-transfer as its instrument.  The ORDER is the contract: the
+ * target is READ first, so a faulting `call qword [mem]` leaves rsp untouched and re-executes
+ * cleanly; the push then carries the NEXT instruction's address, exactly as 0xE8's does. */
+void instr64_FF_2_mem(int64_t addr)
+{
+	uint64_t target = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	push64(cpu->instruction_pointer);
+	if (cpu->pagefault) return;
+	set_instruction_pointer(target);
+}
+void instr64_FF_2_reg(int32_t r1)
+{
+	uint64_t target = read_reg64(r1);
+	push64(cpu->instruction_pointer);
+	if (cpu->pagefault) return;
+	set_instruction_pointer(target);
+}
 /* 0xFF /4 jmp r/m64 -- ctrl-jmp-indirect.  The wrong implementation it would catch is
  * truncating the target to 32 bits (the corpus's target is above nothing special, but the
  * register form carries a full 64-bit value).  /2 call r/m, /3 callf, /5 jmpf and /6 push r/m
@@ -985,6 +1165,110 @@ void instr64_0F45_mem(int64_t addr, int32_t r)
 	cmovcc64(test_nz(), x, r);
 }
 void instr64_0F45_reg(int32_t r1, int32_t r) { cmovcc64(test_nz(), read_reg64(r1), r); }
+
+/* THE REST OF THE CMOVcc FAMILY (0F 40-43, 46-4F).  Each is the same body with a different
+ * condition predicate, and the predicates are misc_instr.h's own (test_o .. test_nle) -- so
+ * there is exactly ONE definition of each condition in the port.  Named stops until the amd64
+ * guest's decompressor needed cmova (results/x86-64-idt64.md); ctrl-cmov-family is the
+ * instrument that lands them together. */
+void instr64_0F40_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	cmovcc64(test_o(), x, r);
+}
+void instr64_0F40_reg(int32_t r1, int32_t r) { cmovcc64(test_o(), read_reg64(r1), r); }
+void instr64_0F41_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	cmovcc64(test_no(), x, r);
+}
+void instr64_0F41_reg(int32_t r1, int32_t r) { cmovcc64(test_no(), read_reg64(r1), r); }
+void instr64_0F42_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	cmovcc64(test_b(), x, r);
+}
+void instr64_0F42_reg(int32_t r1, int32_t r) { cmovcc64(test_b(), read_reg64(r1), r); }
+void instr64_0F43_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	cmovcc64(test_nb(), x, r);
+}
+void instr64_0F43_reg(int32_t r1, int32_t r) { cmovcc64(test_nb(), read_reg64(r1), r); }
+void instr64_0F46_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	cmovcc64(test_be(), x, r);
+}
+void instr64_0F46_reg(int32_t r1, int32_t r) { cmovcc64(test_be(), read_reg64(r1), r); }
+void instr64_0F47_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	cmovcc64(test_nbe(), x, r);
+}
+void instr64_0F47_reg(int32_t r1, int32_t r) { cmovcc64(test_nbe(), read_reg64(r1), r); }
+void instr64_0F48_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	cmovcc64(test_s(), x, r);
+}
+void instr64_0F48_reg(int32_t r1, int32_t r) { cmovcc64(test_s(), read_reg64(r1), r); }
+void instr64_0F49_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	cmovcc64(test_ns(), x, r);
+}
+void instr64_0F49_reg(int32_t r1, int32_t r) { cmovcc64(test_ns(), read_reg64(r1), r); }
+void instr64_0F4A_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	cmovcc64(test_p(), x, r);
+}
+void instr64_0F4A_reg(int32_t r1, int32_t r) { cmovcc64(test_p(), read_reg64(r1), r); }
+void instr64_0F4B_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	cmovcc64(test_np(), x, r);
+}
+void instr64_0F4B_reg(int32_t r1, int32_t r) { cmovcc64(test_np(), read_reg64(r1), r); }
+void instr64_0F4C_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	cmovcc64(test_l(), x, r);
+}
+void instr64_0F4C_reg(int32_t r1, int32_t r) { cmovcc64(test_l(), read_reg64(r1), r); }
+void instr64_0F4D_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	cmovcc64(test_nl(), x, r);
+}
+void instr64_0F4D_reg(int32_t r1, int32_t r) { cmovcc64(test_nl(), read_reg64(r1), r); }
+void instr64_0F4E_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	cmovcc64(test_le(), x, r);
+}
+void instr64_0F4E_reg(int32_t r1, int32_t r) { cmovcc64(test_le(), read_reg64(r1), r); }
+void instr64_0F4F_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	cmovcc64(test_nle(), x, r);
+}
+void instr64_0F4F_reg(int32_t r1, int32_t r) { cmovcc64(test_nle(), read_reg64(r1), r); }
 
 /* 0F 94/95 -- setcc r/m8.  A BYTE store: the destination register keeps its other bytes, and
  * the REX-aware byte mapping (cpu_state.c) is what picks SPL/BPL/SIL/DIL over AH/CH/DH/BH.

@@ -106,12 +106,30 @@
  * gets NO 0x2NN case and dispatch_os_index_0f therefore never selects one -- the 0F space's
  * 16/32-bit arms run exactly as they always did.
  *
- * The corpus's ctrl-* cases use cmovcc (44/45), setcc (94/95) and movzx/movsx (B6/B7/BE/BF);
+ * The corpus's ctrl-* cases use cmovcc (40-4F), setcc (94/95) and movzx/movsx (B6/B7/BE/BF);
  * every other second byte is a NAMED STOP in this build.
  * ------------------------------------------------------------------ */
 const x86_table64_0f = [
-	{ opcode: 0x44 }, /* cmove r64, r/m64 */
-	{ opcode: 0x45 }, /* cmovne r64, r/m64 */
+	/* THE WHOLE CMOVcc FAMILY (0F 40-4F).  44/45 were the corpus's own; the other fourteen
+	 * were NAMED STOPS until the amd64 guest needed `0F 47` (cmova) in its decompressor
+	 * (results/x86-64-idt64.md), and they arrive with ctrl-cmov-family's instrument rather
+	 * than as a silent widening. */
+	{ opcode: 0x40 }, /* cmovo  r64, r/m64 */
+	{ opcode: 0x41 }, /* cmovno */
+	{ opcode: 0x42 }, /* cmovb  */
+	{ opcode: 0x43 }, /* cmovae */
+	{ opcode: 0x44 }, /* cmove  */
+	{ opcode: 0x45 }, /* cmovne */
+	{ opcode: 0x46 }, /* cmovbe */
+	{ opcode: 0x47 }, /* cmova  */
+	{ opcode: 0x48 }, /* cmovs  */
+	{ opcode: 0x49 }, /* cmovns */
+	{ opcode: 0x4A }, /* cmovp  */
+	{ opcode: 0x4B }, /* cmovnp */
+	{ opcode: 0x4C }, /* cmovl  */
+	{ opcode: 0x4D }, /* cmovge */
+	{ opcode: 0x4E }, /* cmovle */
+	{ opcode: 0x4F }, /* cmovg  */
 	{ opcode: 0x94 }, /* sete r/m8 */
 	{ opcode: 0x95 }, /* setne r/m8 */
 	{ opcode: 0xB6 }, /* movzx r64, r/m8 */
@@ -302,10 +320,13 @@ const x86_table64 = [
 	 * storage form and the getters are S1's, unchanged.
 	 *
 	 * THE ENCODINGS ARE THE ONES FAMILY 2 USES, and the rest are NAMED STOPS rather than
-	 * implied: 0x81 (imm32 ALU group) and the accumulator-immediate forms 0x05/0x0D/0x15/
-	 * 0x1D/0x25/0x2D/0x35/0x3D have no body here because no corpus case covers them, and an
-	 * encoding with no instrument is not landed silently (results/x86-64-s6.md ss5 lists
-	 * them).  0xF7's mul/imul/div/idiv are S8's, as are the shifts and rotates. */
+	 * implied: the accumulator-immediate forms 0x05/0x0D/0x15/0x1D/0x25/0x2D/0x35/0x3D have
+	 * no body here because no corpus case covers them, and an encoding with no instrument is
+	 * not landed silently (results/x86-64-s6.md ss5 lists them).  0x81 (the imm32 ALU group)
+	 * WAS on that list and is no longer: the amd64 guest's decompressor executes
+	 * `48 81 fd 00 00 00 01` and stopped the machine on the named stop (results/x86-64-idt64.md),
+	 * so it has bodies and a corpus case (alu/imm32-group-64) rather than a gap.
+	 * 0xF7's mul/imul/div/idiv are S8's, as are the shifts and rotates. */
 	{ opcode: 0x01 }, /* add r/m64, r64 */
 	{ opcode: 0x03 }, /* add r64, r/m64 */
 	{ opcode: 0x09 }, /* or  r/m64, r64 */
@@ -322,6 +343,18 @@ const x86_table64 = [
 	{ opcode: 0x33 }, /* xor r64, r/m64 */
 	{ opcode: 0x39 }, /* cmp r/m64, r64 */
 	{ opcode: 0x3B }, /* cmp r64, r/m64 */
+	{ opcode: 0x81 }, /* the imm32 group: the same eight sub-ops, immediate SIGN-EXTENDED */
+	/* THE ACCUMULATOR-IMMEDIATE FORMS (0x05/0x0D/0x15/0x1D/0x25/0x2D/0x35/0x3D).  Named stops
+	 * until the amd64 guest reached `48 25` (results/x86-64-idt64.md); alu/accumulator-imm32
+	 * is their instrument. */
+	{ opcode: 0x05 }, /* add rax, imm32 */
+	{ opcode: 0x0D }, /* or  rax, imm32 */
+	{ opcode: 0x15 }, /* adc rax, imm32 */
+	{ opcode: 0x1D }, /* sbb rax, imm32 */
+	{ opcode: 0x25 }, /* and rax, imm32 */
+	{ opcode: 0x2D }, /* sub rax, imm32 */
+	{ opcode: 0x35 }, /* xor rax, imm32 */
+	{ opcode: 0x3D }, /* cmp rax, imm32 */
 	{ opcode: 0x83 }, /* the imm8 group: /0 add /1 or /2 adc /3 sbb /4 and /5 sub /6 xor /7 cmp */
 	/* S8: the shift group (0xD1 by 1, 0xD3 by CL, 0xC1 by imm8) and the three-operand IMULs.
 	 * RCL/RCR (/2,/3) stay NAMED STOPS: no corpus case, and their carry-in rule is its own
@@ -386,10 +419,11 @@ const x86_table64 = [
 	{ opcode: 0xCF, default64: true }, /* iretd -> iretq            -- S11 */
 	{ opcode: 0xE8, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true }, /* call rel32                -- S7 */
 	{ opcode: 0xE9, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true }, /* jmp rel32                 -- S7 */
-	{ opcode: 0xFF, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true }, /* /0 inc and /1 dec are S6's bodies and /4 jmp r/m64
-	                                   * is S7's; /2 call r/m, /3 callf, /5 jmpf and /6 push
-	                                   * r/m stay NAMED STOPS -- automatic: the availability
-	                                   * scan emits a stop for a sub-op with no body. */
+	{ opcode: 0xFF, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true }, /* /0 inc and /1 dec are S6's; /2 call r/m, /4 jmp r/m and /6 push r/m are S7's
+	                                   * (ctrl-indirect-transfer / ctrl-jmp-indirect); /3 callf
+	                                   * and /5 jmpf stay NAMED STOPS --
+	                                   * automatic: the availability scan emits a stop for a
+	                                   * sub-op with no body. */
 ];
 
 export { x86_table64_0f };

@@ -610,11 +610,20 @@ int32_t modrm_resolve(int32_t modrm_byte)
      * address.  In long mode the resolver's answer is 64-bit, so a linear address above 4 GiB
      * STOPS BY NAME instead of being truncated (S7/S10 widen the bodies; the port's physical
      * model is 32 bits, so the address bound is the model's own -- plan ss5.1).  The 0x2NN
-     * arms call modrm_resolve64 directly and are not affected by the bound. */
+     * arms call modrm_resolve64 directly and are not affected by the bound.
+     *
+     * THE LEA CARVE-OUT (SEG_PREFIX_ZERO, the sentinel instr16_8D_mem/instr32_8D_mem set): LEA
+     * is not a memory access -- its 32-bit form stores the LOW 32 BITS of the effective
+     * address, so truncating is the instruction's own semantics, not a silent wrap of an
+     * access.  MEASURED as the reason the condition has a second half (results/x86-64-idt64.md):
+     * the amd64 decompressor's `lea r10d, [r9 + rdi]` with r9=0xFFF72000, rdi=0x8E000 sums to
+     * exactly 0x100000000 and stopped the machine at guest 0x8BD1B2 -- a 32-bit LEA whose
+     * hardware result is 0. */
     if (long_mode_64()) {
         int64_t a = modrm_resolve64(modrm_byte);
         if (cpu->pagefault) return 0;
-        if ((uint64_t)a > 0xFFFFFFFFull) {
+        if ((uint64_t)a > 0xFFFFFFFFull &&
+            (cpu->prefixes & PREFIX_MASK_SEGMENT) != SEG_PREFIX_ZERO) {
             unimplemented_instruction(
                 "modrm: a 64-bit effective address above 4 GiB in a 32-bit-operand form"
                 " (S6-S10 widen the bodies; results/x86-64-plan.md ss5.1)");
@@ -799,6 +808,17 @@ int64_t modrm_resolve64(int32_t modrm_byte)
 
     if (rip_relative) {
         /* RIP-relative addresses do not take a segment base (DS is implied) */
+        return offset;
+    }
+
+    /* THE LEA SENTINEL.  instr16_8D_mem/instr32_8D_mem set SEG_PREFIX_ZERO (7) in the segment
+     * field so that the 32-bit resolver adds no base (LEA computes an address and does not
+     * read memory); get_seg_prefix maps that value to 0 for the same reason.  `segment_prefix`
+     * does NOT -- it asserts -- so this resolver must handle the sentinel BEFORE calling it.
+     * MEASURED as the reason this branch exists (results/x86-64-idt64.md): the amd64 guest's
+     * first long-mode `lea` (instr32_8D_mem, dispatch os_index 1) reached segment_prefix with
+     * prefixes 7 and aborted the host at modrm.c:38. */
+    if ((cpu->prefixes & PREFIX_MASK_SEGMENT) == SEG_PREFIX_ZERO) {
         return offset;
     }
 

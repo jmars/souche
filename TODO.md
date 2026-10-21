@@ -780,14 +780,29 @@ measures the MODE (without `--long-mode` it delegates zero).  **The new gate is
 INVERTED (they must now RUN), and `uop_cache_selftest`'s S5 refusal arm is RETIRED with its reason
 measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate's counter pair on real
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
-**THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**  The named gaps the next session should take, in
-order: (1) **the 64-bit IDT gate decode + interrupt frame** — the amd64 kernel reaches
-`eip=0x100208 cs=0x10 cr0=0x80050033 cr3=0x4f76000` and stops at `call_interrupt_vector: invalid gate
-type`; the hypothesis (S12 §3.3) is the 64-bit descriptor's offset composition, and the STATE tail
-already prints `idtr`; (2) the 64-bit GDT/TSS/IST paths, SYSCALL/SYSRET, then SWAPGS (needs an
-authored dispatch arm — `0F 01 /5` has no reference-table entry); (3) the amd64 initramfs + the
-userspace milestone, with the QEMU leg as the second reference; (4) the engines' OWN arms (the uop
-decoder's long mode, then the JIT's recipes) — the differential is the gate that would judge them.
+**THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
+
+**THE IDT64 UNIT IS LANDED AND ITS BRIEF'S HYPOTHESIS WAS WRONG (2026-10-19).**  `results/x86-64-idt64.md`
+is its report.  The gate-type stop at `eip=0x100208` was **not** the 64-bit descriptor's offset
+composition (S12 §3.3's hypothesis): the port was inventing a #GP on `mov ss, ax` with a NULL selector,
+which is legal in 64-bit mode at CPL 0 (QEMU's `helper_load_seg` condition, the kernel's own
+`head_64.S:334-356` entry).  Closing that and five further MEASURED defects (0x81 imm32 group, 0xCB
+retfq, the LEA sentinel's host abort, a 32-bit LEA above 4 GiB, the cmovcc family, REX.B dropped on
+opcode-implied registers, the accumulator-immediate forms, `FF /2` call r/m64) moved the pinned guest
+from **30,594 to 626,389 instructions** — into the decompressor's C code.  **The 64-bit interrupt
+frame is still NOT validated**: no deliverable interrupt has been reached (every stop is a fault whose
+stage-1 IDT entry is null, where hardware triple-faults too), and `gate-x86-64.sh`'s
+`stop-is-the-64bit-interrupt-frame` step asserts the STOP, not a frame.  Corpus 63 → 68 cases, all
+green on all three engines; the four M0 pins are unmoved.
+
+The named gaps the next session should take, in order: (1) **`rep movsb` raising a #GP the hardware
+would not** — the guest's current stop, `eip=0x4f3cd4d bytes f3 a6 … cr2=0`, so the string path's
+segment/prefix handling is the first probe; (2) the 64-bit GDT/TSS/IST paths, SYSCALL/SYSRET, then
+SWAPGS (needs an authored dispatch arm — `0F 01 /5` has no reference-table entry); (3) the amd64
+initramfs + the userspace milestone, with the QEMU leg as the second reference; (4) the engines' OWN
+arms (the uop decoder's long mode, then the JIT's recipes) — the differential is the gate that would
+judge them.  Still open from this unit: the 64-bit interrupt frame, `far_return`'s 32-bit `eip` (a
+RETF target above 4 GiB and a CPL-changing RETF are named stops), `/3 callf` and `/5 jmpf`.
 
 **ALL FOURTEEN SLICES (S0-S13) ARE LANDED.**  The rest of this section is the reconnaissance record
 and is not made stale by S0-S13.

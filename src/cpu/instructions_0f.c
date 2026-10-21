@@ -209,12 +209,28 @@ static void lgdt(int32_t addr, int32_t mask)
 	}
 	int32_t size = safe_read16(addr);
 	if (cpu->pagefault) return;
-	int32_t offset = safe_read32s(addr + 2);
-	if (cpu->pagefault) return;
+	/* S11/S12 GAP CLOSED: in 64-bit mode LGDT/LIDT take a TEN-BYTE operand -- a 2-byte limit and
+	 * an EIGHT-byte base (SDM).  Reading a 32-bit base here kept only the low half of a kernel's
+	 * high-half IDT address, so the descriptor read came from the wrong page and
+	 * `call_interrupt_vector` saw garbage -- which is exactly the amd64 guest's
+	 * `invalid gate type` stop (results/x86-64-idt64.md). */
+	int64_t offset;
+	if (long_mode_64()) {
+		uint32_t low = (uint32_t)safe_read32s(addr + 2);
+		uint32_t high;
+		if (cpu->pagefault) return;
+		high = (uint32_t)safe_read32s(addr + 6);
+		if (cpu->pagefault) return;
+		offset = (int64_t)(((uint64_t)high << 32) | low);
+	}
+	else {
+		offset = (int64_t)safe_read32s(addr + 2);
+		if (cpu->pagefault) return;
+	}
 	cpu->gdtr_size = size;
 	/* widened in S3: a base with bit 31 set is an ADDRESS above 2 GiB, not a negative
 	 * number, so it must not sign-extend into the 64-bit field */
-	cpu->gdtr_offset = (uint32_t)offset & (uint32_t)mask;
+	cpu->gdtr_offset = (uint64_t)offset & (uint64_t)(uint32_t)mask;
 }
 void instr16_0F01_2_mem(int32_t addr) { lgdt(addr, 0xFFFFFF); }
 void instr32_0F01_2_mem(int32_t addr) { lgdt(addr, -1); }
@@ -238,10 +254,26 @@ static void lidt(int32_t addr, int32_t mask)
 	}
 	int32_t size = safe_read16(addr);
 	if (cpu->pagefault) return;
-	int32_t offset = safe_read32s(addr + 2);
-	if (cpu->pagefault) return;
+	/* S11/S12 GAP CLOSED: in 64-bit mode LGDT/LIDT take a TEN-BYTE operand -- a 2-byte limit and
+	 * an EIGHT-byte base (SDM).  Reading a 32-bit base here kept only the low half of a kernel's
+	 * high-half IDT address, so the descriptor read came from the wrong page and
+	 * `call_interrupt_vector` saw garbage -- which is exactly the amd64 guest's
+	 * `invalid gate type` stop (results/x86-64-idt64.md). */
+	int64_t offset;
+	if (long_mode_64()) {
+		uint32_t low = (uint32_t)safe_read32s(addr + 2);
+		uint32_t high;
+		if (cpu->pagefault) return;
+		high = (uint32_t)safe_read32s(addr + 6);
+		if (cpu->pagefault) return;
+		offset = (int64_t)(((uint64_t)high << 32) | low);
+	}
+	else {
+		offset = (int64_t)safe_read32s(addr + 2);
+		if (cpu->pagefault) return;
+	}
 	cpu->idtr_size = size;
-	cpu->idtr_offset = (uint32_t)offset & (uint32_t)mask;
+	cpu->idtr_offset = (uint64_t)offset & (uint64_t)(uint32_t)mask;
 }
 void instr16_0F01_3_mem(int32_t addr) { lidt(addr, 0xFFFFFF); }
 void instr32_0F01_3_mem(int32_t addr) { lidt(addr, -1); }
