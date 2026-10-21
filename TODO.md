@@ -782,6 +782,25 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE RELOC UNIT IS A MEASUREMENT: NO PORT DEFECT IN THE POST-DECOMPRESSION PATH (2026-10-19).**
+`results/x86-64-reloc.md` is its report, and it CORRECTS the wide unit's headline: "the decompression
+completes, all 8,388,607 bytes" was **my own 8 MiB scan ceiling**, not the image's end -- re-measured
+with a 32 MiB scan, the last non-zero byte is at 0x2DFBC4F (48.2 MB) at a 2.4 G budget.  The
+decompressed image is a real 26 MB ELF64 (e_phoff 0x40, e_phnum 5, phdr0 p_vaddr 0xffffffff81000000,
+p_paddr 0x1000000, p_filesz 0x18E6498) whose five PT_LOAD segments' p_filesz SUM TO 59,661,968 bytes
+(~57 MB, heavily overlapping).  The guest is inside `parse_elf`'s `memmove(p_paddr, output+p_offset,
+p_filesz)`, one byte per iteration: the copy loop is 0x4F399A8..0x4F399E5, called from 0x4F3A36E,
+state at 0x4F58588, and its destination index climbs MONOTONICALLY (1.0 MB at 14 M instructions,
+4.3 MB at 300 M, 22.6 MB at 1.8 G, 31.4 MB at 2.4 G) -- PROGRESSING, NOT STUCK.  Three candidate
+defects (an unbounded memmove, garbage p_filesz from a bad malloc, the stub never reaching parse_elf
+because "Decompressing Linux..." is missing from the serial) were each REFUTED by measurement before
+any code was touched; the third by reading misc.h: `debug_putstr` is a no-op unless
+CONFIG_X86_VERBOSE_BOOTUP, so those messages are compiled out of the Debian kernel.  **NO SOURCE FILE
+CHANGED**; the whole battery was re-run on the probe-free build and every pin is unmoved.
+NEXT: a ~5 G instruction run to catch `head_64.S`'s `jmp *%rax` into the kernel (parse_elf should
+finish near 3.5 G), with the cost named: the guest's byte-wise memmove is ~2.3 G instructions, so a
+boot is ~5 G instructions / ~25 minutes of wall clock at the observed rate.
+
 **THE WIDE UNIT IS LANDED: THE GUEST DECOMPRESSES THE WHOLE KERNEL (2026-10-19).**
 `results/x86-64-wide.md` is its report.  The "widen the bodies" gap was **four layers**, not one:
 `modrm_resolve` now returns `int64_t` and no longer bounds an answer above 4 GiB; the eleven
@@ -833,11 +852,10 @@ stage-1 IDT entry is null, where hardware triple-faults too), and `gate-x86-64.s
 `stop-is-the-64bit-interrupt-frame` step asserts the STOP, not a frame.  Corpus 63 → 68 cases, all
 green on all three engines; the four M0 pins are unmoved.
 
-The named gaps the next session should take, in order: (1) **the decompressor's
-post-decompression path** — the guest now has NO stop (1.5 G instructions, `unimplemented=0`) and
-sits at `eip=0x4f3a36e` after producing the whole 8 MiB kernel, so the next measurement is the
-relocation copy's destination range (the extent-scan instrument, applied to `0x4780000`, which read
-475,321 and did not move) and the decompressed kernel's entry point; (2) the 64-bit GDT/TSS/IST
+The named gaps the next session should take, in order: (1) **the jump into the decompressed
+kernel** — `parse_elf`'s ~57 MB byte-wise memmove should finish near 3.5 G instructions, so a ~5 G
+run with the "first eip inside 0x1000000..0x2000000" trigger catches `head_64.S`'s `jmp *%rax`; the
+cost (a ~5 G-instruction boot) is the guest's own memmove, not the port's; (2) the 64-bit GDT/TSS/IST
 paths, SYSCALL/SYSRET, then
 SWAPGS (needs an authored dispatch arm — `0F 01 /5` has no reference-table entry); (3) the amd64
 initramfs + the userspace milestone, with the QEMU leg as the second reference; (4) the engines' OWN
