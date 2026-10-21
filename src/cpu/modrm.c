@@ -88,7 +88,16 @@ int32_t get_seg(int32_t segment)
      * warns about `cpu->segment_is_null[segment]` (a false positive -- every caller
      * passes a segment index in [0,7]) */
     bool *is_null = cpu->segment_is_null;
-    if (is_null[segment]) {
+    /* 64-BIT MODE DOES NOT CHECK THE NULL FLAG.  In 64-bit mode DS/ES/SS are loaded with
+     * NULL selectors as a matter of course (the kernel's own entry point does it,
+     * exceptions.c's switch_seg note), their bases are architecturally 0, and a memory
+     * access through them performs no segment-validity check at all -- so the #GP below
+     * cannot fire there.  MEASURED as the amd64 guest's stop (results/x86-64-rep.md): the
+     * decompressor's `repe cmpsb` (f3 a6) at 0x4F3CD4D reached this function through
+     * STR_CMPS's `get_seg(ES)` with ES null, and the port raised #GP(0) into a stage-1 IDT
+     * that has no #GP gate.  FS/GS are covered by the same rule: their base comes from the
+     * MSR, and a null selector does not make the base absent. */
+    if (is_null[segment] && !long_mode_64()) {
         DBG_ASSERT(segment != CS && segment != SS);
         /* the dbg_log! and dbg_trace() are dropped -- no log channel in this port */
         trigger_gp(0);

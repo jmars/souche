@@ -367,6 +367,93 @@ static void r5f_arm(uint32_t faulting_eip, uint32_t handler_eip)
     cpu->pagefault = false;
 }
 
+/* ================================================================== *
+ * TEST 1b -- a #PF taken through a real 64-BIT IDT: the 16-byte gate and the 8-byte frame
+ *
+ * TWO PROPERTIES, each with its own way of failing:
+ *
+ *   - THE STRIDE.  The IDT below has a gate at vector 14 ONLY, written at the 16-byte
+ *     stride.  A delivery that walks `vector << 3` reads vector 7's slot -- a null
+ *     descriptor -- and stops instead of delivering.  MEASURED as the amd64 guest's real
+ *     stop (results/x86-64-rep.md): the decompressor's stage-2 IDT has a #PF gate at
+ *     vector 14 and the port read slot 7.
+ *   - THE OFFSET'S HIGH HALF and THE FRAME.  The gate's handler address is 0x123458000, so
+ *     a 32-bit offset decode delivers to 0x23458000 (the test reads cpu->instruction_pointer,
+ *     which is 64-bit); and the frame's four words are read back at 8-byte offsets, so a
+ *     4-byte push puts the error code, RIP, CS and RFLAGS in the wrong places.
+ *
+ * The interrupted CS is 0x08 (the fixture's 32-bit code segment) while the GATE's selector
+ * is 0x18, which is rewritten here with L=1 -- so the delivery also has to leave long mode
+ * ON, and a delivery that cleared it would fail the last check.
+ * ================================================================== */
+#define IDT64_BASE  0x13000 /* clear of the fixture's own IDT (IDT_BASE) and its tables */
+#define IDT64_LIMIT 0xEF /* 15 gates of 16 bytes */
+#define HANDLER64   0x123458000ull
+
+#define PML4_64 0x12000
+
+static void test_pagefault_delivery_64bit(void)
+{
+    machine_setup(false);
+
+    /* FOUR-LEVEL PAGING, because long mode requires it: PML4[0] -> PDPT[0] -> PD[0] = a 2 MiB
+     * identity page, so the GDT/IDT/stack/handler stay reachable while 0xFFFF0000 (PML4 index
+     * 511) is absent.  CR4.PAE must be set -- paging.c asserts it for the 4-level walk. */
+    wr64(PML4_64 + 0, (uint64_t)(PAE_PDPT | PAGE_TABLE_PRESENT_MASK));
+    wr64(PAE_PDPT + 0, (uint64_t)(PAE_PD | PAGE_TABLE_PRESENT_MASK));
+    wr64(PAE_PD + 0, (uint64_t)(PAGE_TABLE_PSE_MASK | PAGE_TABLE_PRESENT_MASK | PAGE_TABLE_RW_MASK));
+    cpu->cr[3] = PML4_64;
+    cpu->cr[4] = CR4_PAE;
+    set_cr0(cpu->cr[0] | CR0_PG);
+    CHECK(!cpu->pagefault);
+
+    /* the GATE: vector 14 only, 16-byte stride, type 0xF (trap), P=1, DPL 0, IST 0, and the
+     * handler's HIGH half in bytes 8-11 */
+    wr64((uint32_t)IDT64_BASE + 14 * 16,
+         (HANDLER64 & 0xFFFF) | ((uint64_t)SEL_CODE2 << 16) | ((uint64_t)0x8F << 40) |
+             (((HANDLER64 >> 16) & 0xFFFF) << 48));
+    wr64((uint32_t)IDT64_BASE + 14 * 16 + 8, HANDLER64 >> 32);
+    cpu->idtr_offset = IDT64_BASE;
+    cpu->idtr_size = IDT64_LIMIT;
+
+    /* a 64-bit code segment at SEL_CODE2: flags 0xA = G=1, D=0, L=1 */
+    wr64((uint32_t)GDT_BASE + 3 * 8, make_desc(0, 0xFFFFF, 0x9A, 0xA));
+
+    /* long mode, with the interrupted CS still the fixture's 0x08 */
+    cpu->efer |= EFER_LMA;
+    cpu->is_64 = true;
+    cpu->instruction_pointer = 0x7004;
+    cpu->previous_ip = 0x7000;
+    cpu->pagefault = false;
+    CHECK(long_mode_64());
+
+    /* the DELIVERY is what is under test, so the fault is raised directly: the walk has its
+     * own gate (tests/gate-long-mode.sh) and would need its own absent 4-level entry. */
+    trigger_pagefault(0xFFFF0000ull, false, false, false, false, false);
+
+    /* the fault's own side effect, and the delivery: the FULL 64-bit offset */
+    CHECK_EQ(cpu->cr[2], (int32_t)0xFFFF0000);
+    CHECK_EQ(cpu->instruction_pointer, (uint64_t)HANDLER64);
+    CHECK_EQ(cpu->sreg[CS], SEL_CODE2);
+    CHECK(long_mode_64()); /* the gate's CS has L=1: the machine is still in 64-bit mode */
+
+    /* THE FRAME: four qwords -- error code, the REWOUND rip, the interrupted CS, RFLAGS */
+    CHECK_EQ(read_reg64(ESP), (uint64_t)STACK_TOP - 32);
+    uint64_t frame = read_reg64(ESP);
+    CHECK_EQ(safe_read64_addr((int64_t)frame + 0), 0);            /* #PF error code: P=0 W=0 U=0 */
+    CHECK_EQ(safe_read64_addr((int64_t)frame + 8), 0x7000);       /* the re-executed rip */
+    CHECK_EQ(safe_read64_addr((int64_t)frame + 16), SEL_CODE);    /* the interrupted CS */
+    CHECK((safe_read64_addr((int64_t)frame + 24) & FLAG_DIRECTION) == 0);
+
+    /* THE STRIDE, ABLE TO FAIL: the same gate read at the 8-byte stride is slot 7's null
+     * descriptor.  The check is the arithmetic the port used to do, so it fails if the
+     * delivery ever goes back to `vector << 3` -- the address it would read is not the
+     * address the gate is at. */
+    CHECK_EQ((uint64_t)(cpu->idtr_offset + (uint32_t)(14 << 3)), (uint64_t)IDT64_BASE + 0x70);
+    CHECK((uint64_t)(cpu->idtr_offset + (uint32_t)(14 << 3)) != (uint64_t)IDT64_BASE + 14 * 16);
+    CHECK_EQ(safe_read64_addr((int64_t)(IDT64_BASE + (14 << 3))), 0); /* that slot is null */
+}
+
 static void test_dispatcher_fault_flag(void)
 {
     uint32_t before;
@@ -1302,6 +1389,7 @@ static void test_m1c_opcodes(void)
 int main(void)
 {
     RUN(test_pagefault_delivery_and_iret, "#PF through an IDT, the frame, the iret return");
+    RUN(test_pagefault_delivery_64bit, "a #PF through a 16-byte 64-bit gate: stride, offset high half, 8-byte frame");
     RUN(test_dispatcher_fault_flag,
         "R5F: the dispatcher's read of the fault flag (same-page handler, control, fetch fault)");
     RUN(test_gp_delivery, "#GP/#UD frames, both gate sizes");

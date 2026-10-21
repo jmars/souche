@@ -42,7 +42,8 @@
 #include "string.h"
 #include "uop_cache.h" /* PERF-4/M2: the fast path's write-side invalidation (plan ss4.1) */
 
-#include "arith.h"   /* cmp8/cmp16/cmp32 */
+#include "arith.h"   /* cmp8/cmp16/cmp32/cmp64 */
+#include "flags.h"   /* getzf -- the 64-bit path's repe/repne exit */
 #include "memory.h"  /* read*_no_mmap_check, write*_no_mmap_or_dirty_check, in_mapped_range,
                       * memcpy_into_svga_lfb, in_svga_lfb */
 #include "misc_instr.h" /* set_reg_asize */
@@ -74,12 +75,194 @@ enum string_size {
     STR_B,
     STR_W,
     STR_D,
+    STR_Q, /* 8 bytes -- REX.W on A5/A7/AB/AD/AF in 64-bit mode.  UNREACHABLE outside long
+            * mode: only the 0x2NN arms pass it, and dispatch_os_index answers 2 only when
+            * EFER.LMA and CS.L are both set (modrm.c). */
 };
 enum string_rep {
     STR_REP_NONE,
     STR_REP_Z,
     STR_REP_NZ,
 };
+
+/* ================================================================== *
+ * THE 64-BIT PATH -- the same five string operations at long mode's widths
+ *
+ * WHY A SECOND PATH RATHER THAN A WIDER FIRST ONE: every register and every address in
+ * `string_instruction` below is int32_t, and the 32-bit machine must stay byte-identical
+ * (the M0 transcript is the contract).  So long mode gets its own implementation and the
+ * 32-bit one is not touched.  What the 64-bit path must get right, and the corpus cases
+ * that judge each (tests/nasm64/str-*):
+ *
+ *   - RSI/RDI/RCX are 64-BIT (`str/movs-64`, `str/cmps-64`), and 0x67 narrows them to
+ *     32 bits with the ZERO-EXTENDING write-back the architecture specifies (`str/asize-67`);
+ *   - DF selects the direction and the step is the OPERAND width (`str/movs-64`'s DF=1 arm);
+ *   - REX.W makes the operand 8 bytes -- MOVSQ/CMPSQ/STOSQ/LODSQ/SCASQ (`str/stos-64`,
+ *     `str/lods-64`, `str/scas-64`);
+ *   - repe/repne exit on ZF after a comparison, and the count written back is the number of
+ *     iterations NOT performed (`str/cmps-64` runs RCX above 2^32 for exactly this);
+ *   - A FAULT KEEPS THE PARTIAL EFFECTS: the registers reflect the iterations that
+ *     completed, and RCX still counts the faulting one, because the instruction is
+ *     re-executed after the handler's iret (plan ss8/R3).
+ *
+ * WHAT IS *NOT* HERE, NAMED: the page-bounded FAST path (string_instruction's bulk
+ * memcpy/memset).  Long mode runs one iteration per loop pass through the safe accessors,
+ * which is the SLOW path's semantics exactly; the fast path is an optimisation whose
+ * absence costs speed, never correctness.  results/x86-64-rep.md ss6 records it as a gap
+ * with the reason (no instrument can distinguish the two paths -- they must agree).
+ * ================================================================== */
+
+static uint64_t string64_reg(bool asize_32, int32_t reg)
+{
+    return asize_32 ? (uint64_t)(uint32_t)read_reg32(reg) : read_reg64(reg);
+}
+
+static void string64_set_reg(bool asize_32, int32_t reg, uint64_t value)
+{
+    /* a 32-bit address size ZERO-EXTENDS the write-back, as every 32-bit write does */
+    if (asize_32) write_reg32(reg, (int32_t)(uint32_t)value);
+    else write_reg64(reg, value);
+}
+
+static int64_t string64_read(int64_t addr, int32_t size_bytes)
+{
+    switch (size_bytes) {
+    case 1: return (int64_t)safe_read8_addr(addr);
+    case 2: return (int64_t)safe_read16_addr(addr);
+    case 4: return (int64_t)safe_read32_addr(addr);
+    default: return (int64_t)safe_read64_addr(addr);
+    }
+}
+
+static void string64_write(int64_t addr, int32_t size_bytes, uint64_t value)
+{
+    switch (size_bytes) {
+    case 1: safe_write8_addr(addr, (int32_t)(value & 0xFF)); break;
+    case 2: safe_write16_addr(addr, (int32_t)(value & 0xFFFF)); break;
+    case 4: safe_write32_addr(addr, (int32_t)(uint32_t)value); break;
+    default: safe_write64_addr(addr, value); break;
+    }
+}
+
+static void string_instruction64(int32_t ds_or_prefix,
+                                 enum string_op instruction,
+                                 enum string_size size,
+                                 enum string_rep rep)
+{
+    bool asize_32 = is_asize_32();
+    int32_t size_bytes = size == STR_B ? 1 : size == STR_W ? 2 : size == STR_D ? 4 : 8;
+    uint64_t asize_mask = asize_32 ? 0xFFFFFFFFull : ~(uint64_t)0;
+    int64_t increment = ((cpu->flags & FLAG_DIRECTION) != 0 ? -1 : 1) * size_bytes;
+    bool do_rep = rep == STR_REP_Z || rep == STR_REP_NZ;
+
+    /* TWO DIFFERENT QUESTIONS, and conflating them is the bug this comment exists to stop:
+     * "has an ES:(E)DI operand" (CMPS and SCAS READ through it and still advance DI) is not
+     * "writes memory" (only MOVS/STOS/INS store).  MEASURED: the first draft keyed the DI
+     * side off the STORE, so `repe cmpsb` compared against address 0 and left RDI alone --
+     * tests/nasm64/str-cmps-count-64 caught it (expected rdi 0x100121, got 0x100120). */
+    bool uses_esi = instruction == STR_MOVS || instruction == STR_CMPS ||
+                    instruction == STR_LODS || instruction == STR_OUTS;
+    bool uses_edi = instruction == STR_MOVS || instruction == STR_CMPS ||
+                    instruction == STR_STOS || instruction == STR_SCAS || instruction == STR_INS;
+
+    uint64_t count = do_rep ? (string64_reg(asize_32, ECX) & asize_mask) : 1;
+    if (do_rep && count == 0) return;
+
+    int64_t ds = 0;
+    if (uses_esi) {
+        ds = get_seg(ds_or_prefix);
+        if (cpu->pagefault) return;
+    }
+    int64_t es = 0;
+    if (uses_edi) {
+        es = get_seg(ES);
+        if (cpu->pagefault) return;
+    }
+
+    int32_t port = 0;
+    if (instruction == STR_INS || instruction == STR_OUTS) {
+        port = read_reg16(DX);
+        if (!test_privileges_for_io(port, size_bytes)) return;
+    }
+
+    uint64_t src = uses_esi ? (string64_reg(asize_32, ESI) & asize_mask) : 0;
+    uint64_t dst = uses_edi ? (string64_reg(asize_32, EDI) & asize_mask) : 0;
+    uint64_t data = (instruction == STR_STOS || instruction == STR_SCAS) ? read_reg64(EAX) : 0;
+
+    for (;;) {
+        int64_t src_val = 0;
+        int64_t dst_val = 0;
+
+        if (instruction == STR_INS) {
+            /* check the fault *before* reading the port (upstream's order) */
+            writable_or_pagefault((int32_t)(es + (int64_t)dst), size_bytes);
+            if (cpu->pagefault) break;
+        }
+        if (uses_esi) {
+            src_val = string64_read(ds + (int64_t)src, size_bytes);
+            if (cpu->pagefault) break;
+        }
+        else if (instruction == STR_STOS || instruction == STR_SCAS) {
+            src_val = (int64_t)data;
+        }
+        else { /* STR_INS */
+            src_val = size_bytes == 1 ? io_port_read8(port)
+                    : size_bytes == 2 ? io_port_read16(port)
+                                      : io_port_read32(port);
+        }
+
+        if (instruction == STR_CMPS || instruction == STR_SCAS) {
+            dst_val = string64_read(es + (int64_t)dst, size_bytes);
+            if (cpu->pagefault) break;
+        }
+        else if (instruction == STR_OUTS) {
+            if (size_bytes == 1) io_port_write8(port, src_val);
+            else if (size_bytes == 2) io_port_write16(port, src_val);
+            else io_port_write32(port, src_val);
+        }
+        else if (instruction == STR_LODS) {
+            /* the ACCUMULATOR is the destination and it keeps the operand width: a LODSQ
+             * fills all eight bytes of RAX, a LODSD zero-extends (write_reg32's rule) */
+            if (size_bytes == 1) write_reg8(AL, src_val);
+            else if (size_bytes == 2) write_reg16(AX, src_val);
+            else if (size_bytes == 4) write_reg32(EAX, src_val);
+            else write_reg64(EAX, (uint64_t)src_val);
+        }
+        else { /* STR_MOVS | STR_STOS | STR_INS */
+            string64_write(es + (int64_t)dst, size_bytes, (uint64_t)src_val);
+            if (cpu->pagefault) break;
+        }
+
+        /* the step is the OPERAND width, in the DF direction, at the address size */
+        dst = uses_edi ? (uint64_t)((int64_t)dst + increment) & asize_mask : dst;
+        src = uses_esi ? (uint64_t)((int64_t)src + increment) & asize_mask : src;
+
+        if (instruction == STR_CMPS || instruction == STR_SCAS) {
+            if (size_bytes == 1) cmp8(src_val, dst_val);
+            else if (size_bytes == 2) cmp16(src_val, dst_val);
+            else if (size_bytes == 4) cmp32(src_val, dst_val);
+            else cmp64(src_val, dst_val);
+        }
+
+        count -= 1;
+
+        bool finished;
+        if (!do_rep) finished = true;
+        else if (count == 0) finished = true;
+        else if ((instruction == STR_CMPS || instruction == STR_SCAS) && rep == STR_REP_Z) {
+            finished = !getzf();
+        }
+        else if ((instruction == STR_CMPS || instruction == STR_SCAS) && rep == STR_REP_NZ) {
+            finished = getzf();
+        }
+        else finished = false;
+        if (finished) break;
+    }
+
+    if (uses_edi) string64_set_reg(asize_32, EDI, dst);
+    if (uses_esi) string64_set_reg(asize_32, ESI, src);
+    if (do_rep) string64_set_reg(asize_32, ECX, count);
+}
 
 /* We implement all string instructions here and rely on the inliner on doing its job of
  * optimising away anything known at compile time (check with `wasm-dis build/v86.wasm`) */
@@ -89,6 +272,13 @@ static void string_instruction(bool is_asize_32,
                                enum string_size size,
                                enum string_rep rep)
 {
+    /* 64-BIT MODE: one implementation, above, because every register and address here is
+     * int32_t and long mode's are not.  Outside long mode this line is dead. */
+    if (long_mode_64()) {
+        string_instruction64(ds_or_prefix, instruction, size, rep);
+        return;
+    }
+
     int32_t asize_mask = is_asize_32 ? -1 : 0xFFFF;
 
     int32_t direction = (cpu->flags & FLAG_DIRECTION) != 0 ? -1 : 1;
@@ -123,7 +313,10 @@ static void string_instruction(bool is_asize_32,
     switch (size) {
     case STR_B: size_bytes = 1; size_mask = 0xFF; break;
     case STR_W: size_bytes = 2; size_mask = 0xFFFF; break;
-    default:    size_bytes = 4; size_mask = -1; break;
+    case STR_D: size_bytes = 4; size_mask = -1; break;
+    /* STR_Q cannot reach the 32-bit path (see the enum); naming it rather than letting it
+     * fall into STR_D's arm keeps the two paths' widths from drifting silently */
+    default: DBG_ASSERT(false); size_bytes = 4; size_mask = -1; break;
     }
 
     int32_t increment = direction * size_bytes;
@@ -481,6 +674,21 @@ static void string_instruction(bool is_asize_32,
         set_reg_asize(is_asize_32, ECX, (int32_t)count);
     }
 }
+
+/* THE 8-BYTE (REX.W) FORMS -- string.rs has none, because upstream has no long mode.  The
+ * names follow its scheme so the emitter's availability scan finds them by name. */
+void movsq_rep(bool is_asize_32, int32_t seg) { string_instruction(is_asize_32, seg, STR_MOVS, STR_Q, STR_REP_Z); }
+void movsq_no_rep(bool is_asize_32, int32_t seg) { string_instruction(is_asize_32, seg, STR_MOVS, STR_Q, STR_REP_NONE); }
+void cmpsq_repz(bool is_asize_32, int32_t seg) { string_instruction(is_asize_32, seg, STR_CMPS, STR_Q, STR_REP_Z); }
+void cmpsq_repnz(bool is_asize_32, int32_t seg) { string_instruction(is_asize_32, seg, STR_CMPS, STR_Q, STR_REP_NZ); }
+void cmpsq_no_rep(bool is_asize_32, int32_t seg) { string_instruction(is_asize_32, seg, STR_CMPS, STR_Q, STR_REP_NONE); }
+void stosq_rep(bool is_asize_32) { string_instruction(is_asize_32, 0, STR_STOS, STR_Q, STR_REP_Z); }
+void stosq_no_rep(bool is_asize_32) { string_instruction(is_asize_32, 0, STR_STOS, STR_Q, STR_REP_NONE); }
+void lodsq_rep(bool is_asize_32, int32_t seg) { string_instruction(is_asize_32, seg, STR_LODS, STR_Q, STR_REP_Z); }
+void lodsq_no_rep(bool is_asize_32, int32_t seg) { string_instruction(is_asize_32, seg, STR_LODS, STR_Q, STR_REP_NONE); }
+void scasq_repz(bool is_asize_32) { string_instruction(is_asize_32, 0, STR_SCAS, STR_Q, STR_REP_Z); }
+void scasq_repnz(bool is_asize_32) { string_instruction(is_asize_32, 0, STR_SCAS, STR_Q, STR_REP_NZ); }
+void scasq_no_rep(bool is_asize_32) { string_instruction(is_asize_32, 0, STR_SCAS, STR_Q, STR_REP_NONE); }
 
 /* string.rs:516-536 */
 void movsb_rep(bool is_asize_32, int32_t seg) { string_instruction(is_asize_32, seg, STR_MOVS, STR_B, STR_REP_Z); }

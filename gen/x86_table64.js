@@ -343,6 +343,8 @@ const x86_table64 = [
 	{ opcode: 0x33 }, /* xor r64, r/m64 */
 	{ opcode: 0x39 }, /* cmp r/m64, r64 */
 	{ opcode: 0x3B }, /* cmp r64, r/m64 */
+	{ opcode: 0x98 }, /* cdqe -- sign-extend EAX into RAX (S7's list, landed here) */
+	{ opcode: 0x99 }, /* cqo  -- the sign of RAX into RDX */
 	{ opcode: 0x81 }, /* the imm32 group: the same eight sub-ops, immediate SIGN-EXTENDED */
 	/* THE ACCUMULATOR-IMMEDIATE FORMS (0x05/0x0D/0x15/0x1D/0x25/0x2D/0x35/0x3D).  Named stops
 	 * until the amd64 guest reached `48 25` (results/x86-64-idt64.md); alu/accumulator-imm32

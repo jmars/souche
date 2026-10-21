@@ -159,6 +159,18 @@ uint64_t safe_read64_addr(int64_t addr);
 void safe_write8_addr(int64_t addr, int32_t value);
 void safe_write64_addr(int64_t addr, uint64_t value);
 
+/* THE 16- AND 32-BIT FORMS AT A 64-BIT ADDRESS (this unit: the rep string family needs
+ * every width at a 64-bit linear address -- `repe cmpsw` at 0x4F3xxxxx is a 2-byte access
+ * whose address does not fit an int32_t projection).  Same page-straddle rule as their
+ * 32-bit-address twins (safe_read16/safe_read32s, paging.c): a word at page offset 0xFFF
+ * and a dword at >= 0xFFD are split into accesses that each lie inside one page.  The
+ * header above said these "arrive with S7"; they did not, and this is the unit that
+ * needed them, so the seat is filled rather than the comment reworded. */
+int32_t safe_read16_addr(int64_t addr);
+int32_t safe_read32_addr(int64_t addr);
+void safe_write16_addr(int64_t addr, int32_t value);
+void safe_write32_addr(int64_t addr, int32_t value);
+
 /* ------------------------------------------------------------------ *
  * safe_read_write* -- the READ-MODIFY-WRITE helpers (cpu.rs:4052, 4073, 4101).
  *

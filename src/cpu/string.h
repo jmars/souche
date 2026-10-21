@@ -22,6 +22,22 @@
 #include "cpu_state.h"
 
 /* string.rs:517-536 -- movs */
+/* THE 8-BYTE (REX.W) FORMS: 0xA5/0xA7/0xAB/0xAD/0xAF with REX.W, i.e. MOVSQ/CMPSQ/STOSQ/
+ * LODSQ/SCASQ.  string.rs has no counterpart (upstream implements no long mode); they share
+ * string_instruction's 64-bit path with the byte/word/dword forms. */
+void movsq_rep(bool is_asize_32, int32_t seg);
+void movsq_no_rep(bool is_asize_32, int32_t seg);
+void cmpsq_repz(bool is_asize_32, int32_t seg);
+void cmpsq_repnz(bool is_asize_32, int32_t seg);
+void cmpsq_no_rep(bool is_asize_32, int32_t seg);
+void stosq_rep(bool is_asize_32);
+void stosq_no_rep(bool is_asize_32);
+void lodsq_rep(bool is_asize_32, int32_t seg);
+void lodsq_no_rep(bool is_asize_32, int32_t seg);
+void scasq_repz(bool is_asize_32);
+void scasq_repnz(bool is_asize_32);
+void scasq_no_rep(bool is_asize_32);
+
 void movsb_rep(bool is_asize_32, int32_t seg);
 void movsw_rep(bool is_asize_32, int32_t seg);
 void movsd_rep(bool is_asize_32, int32_t seg);

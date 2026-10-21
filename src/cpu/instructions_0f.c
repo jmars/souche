@@ -6718,3 +6718,29 @@ void instr32_0FC7_6_reg(int32_t r)
 	cpu->flags = (cpu->flags & ~FLAGS_ALL) | FLAG_CARRY;
 	cpu->flags_changed = 0;
 }
+
+/* 0F C7 /6, MEMORY form, with REX.W: #UD, exactly as the 32-bit arm and the reference's
+ * table (`mem_ud: 1` on the g=6 entry, instructions_0f.c's note above).  The body exists
+ * because the emitter's stop path leaves the resolved address unused and the build treats
+ * that as an error -- the seat has to be filled for the ARM to be complete, not for the
+ * behaviour to change. */
+void instr64_0FC7_6_mem(int64_t addr)
+{
+	(void)addr;
+	trigger_ud();
+}
+
+/* 0F C7 /6 with REX.W: RDRAND r64.  The value is the SAME deterministic generator as the
+ * 32-bit arm (the note above explains why the port removed the host source), composed from
+ * two 32-bit draws LOW FIRST -- upstream has no 64-bit draw to copy (`js::get_rand_int()`
+ * is 32 bits), so the composition is the port's own and is stated here rather than implied.
+ * MEASURED as the amd64 guest's stop (results/x86-64-rep.md): the decompressor's KASLR code
+ * executes `rdrand rax` at 0x4F3DD4C and the 64-bit arm did not exist. */
+void instr64_0FC7_6_reg(int32_t r)
+{
+	uint64_t low = (uint32_t)rdrand_value();
+	uint64_t high = (uint32_t)rdrand_value();
+	write_reg64(r, low | (high << 32));
+	cpu->flags = (cpu->flags & ~FLAGS_ALL) | FLAG_CARRY;
+	cpu->flags_changed = 0;
+}

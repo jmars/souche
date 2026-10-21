@@ -51,6 +51,7 @@
 #include "misc_instr.h"
 #include "modrm.h"
 #include "paging.h"
+#include "string.h" /* the Q-size string entry points (movsq/cmpsq/...) live there */
 
 /* ================================================================== *
  * THE REX PREFIX (0x40-0x4F in long mode)
@@ -744,7 +745,7 @@ void instr64_FF_1_reg(int32_t r1) { write_reg64(r1, (uint64_t)dec64((int64_t)rea
  * S7's.
  * ================================================================== */
 
-static void push64(uint64_t value)
+void push64(uint64_t value)
 {
 	uint64_t rsp = read_reg64(ESP);
 	rsp -= 8;
@@ -1691,124 +1692,34 @@ void instr64_0FBA_7_mem(int64_t addr, int64_t imm)
  * scas/cmps (a repz that ignores ZF loops to the count).
  * ================================================================== */
 
-enum { STR64_NONE = 0, STR64_REP = 1, STR64_REPZ = 2, STR64_REPNZ = 3 };
+/* 0x98 CDQE and 0x99 CQO -- the sign-extension pair at 64 bits (S7's list, never landed;
+ * the amd64 decompressor's `48 98` stopped the machine, results/x86-64-rep.md).  CDQE
+ * sign-extends EAX into RAX (the 32-bit arm's CWDE writes AX only, and its DE arm's
+ * zero-extension is the opposite rule); CQO fills RDX with the sign of RAX. */
+void instr64_98(void) { write_reg64(EAX, (uint64_t)(int64_t)(int32_t)read_reg32(EAX)); }
+void instr64_99(void) { write_reg64(EDX, (uint64_t)((int64_t)read_reg64(EAX) >> 63)); }
 
-static int64_t str64_step(void) { return (cpu->flags & FLAG_DIRECTION) != 0 ? -8 : 8; }
-
-/* the count for one invocation: RCX for a rep form, 1 otherwise */
-static uint64_t str64_count(int rep) { return rep == STR64_NONE ? 1 : read_reg64(ECX); }
-
-static void str64_stos(int rep)
-{
-	int64_t step = str64_step();
-	uint64_t count = str64_count(rep);
-	uint64_t rdi = read_reg64(EDI);
-	uint64_t rax = read_reg64(EAX);
-	while (count != 0) {
-		safe_write64_addr((int64_t)rdi, rax);
-		if (cpu->pagefault) { write_reg64(ECX, count); write_reg64(EDI, rdi); return; }
-		rdi += step;
-		count--;
-	}
-	if (rep != STR64_NONE) write_reg64(ECX, 0); /* a BARE string op must not touch RCX */
-	write_reg64(EDI, rdi);
-}
-
-static void str64_movs(int rep)
-{
-	int64_t step = str64_step();
-	uint64_t count = str64_count(rep);
-	uint64_t rsi = read_reg64(ESI);
-	uint64_t rdi = read_reg64(EDI);
-	while (count != 0) {
-		uint64_t v = safe_read64_addr((int64_t)rsi);
-		if (cpu->pagefault) { write_reg64(ECX, count); write_reg64(ESI, rsi); write_reg64(EDI, rdi); return; }
-		safe_write64_addr((int64_t)rdi, v);
-		if (cpu->pagefault) { write_reg64(ECX, count); write_reg64(ESI, rsi); write_reg64(EDI, rdi); return; }
-		rsi += step;
-		rdi += step;
-		count--;
-	}
-	if (rep != STR64_NONE) write_reg64(ECX, 0); /* a BARE string op must not touch RCX */
-	write_reg64(ESI, rsi);
-	write_reg64(EDI, rdi);
-}
-
-static void str64_lods(int rep)
-{
-	int64_t step = str64_step();
-	uint64_t count = str64_count(rep);
-	uint64_t rsi = read_reg64(ESI);
-	while (count != 0) {
-		uint64_t v = safe_read64_addr((int64_t)rsi);
-		if (cpu->pagefault) { write_reg64(ECX, count); write_reg64(ESI, rsi); return; }
-		write_reg64(EAX, v);
-		rsi += step;
-		count--;
-	}
-	if (rep != STR64_NONE) write_reg64(ECX, 0); /* a BARE string op must not touch RCX */
-	write_reg64(ESI, rsi);
-}
-
-static void str64_scas(int rep)
-{
-	int64_t step = str64_step();
-	uint64_t count = str64_count(rep);
-	uint64_t rdi = read_reg64(EDI);
-	uint64_t rax = read_reg64(EAX);
-	while (count != 0) {
-		int64_t v = (int64_t)safe_read64_addr((int64_t)rdi);
-		if (cpu->pagefault) { write_reg64(ECX, count); write_reg64(EDI, rdi); return; }
-		cmp64((int64_t)rax, v);
-		rdi += step;
-		count--;
-		if (rep == STR64_REPZ && !getzf()) break;
-		if (rep == STR64_REPNZ && getzf()) break;
-	}
-	if (rep != STR64_NONE) write_reg64(ECX, count); /* a BARE string op must not touch RCX */
-	write_reg64(EDI, rdi);
-}
-
-static void str64_cmps(int rep)
-{
-	int64_t step = str64_step();
-	uint64_t count = str64_count(rep);
-	uint64_t rsi = read_reg64(ESI);
-	uint64_t rdi = read_reg64(EDI);
-	while (count != 0) {
-		int64_t a = (int64_t)safe_read64_addr((int64_t)rsi);
-		int64_t b;
-		if (cpu->pagefault) { write_reg64(ECX, count); write_reg64(ESI, rsi); write_reg64(EDI, rdi); return; }
-		b = (int64_t)safe_read64_addr((int64_t)rdi);
-		if (cpu->pagefault) { write_reg64(ECX, count); write_reg64(ESI, rsi); write_reg64(EDI, rdi); return; }
-		cmp64(a, b);
-		rsi += step;
-		rdi += step;
-		count--;
-		if (rep == STR64_REPZ && !getzf()) break;
-		if (rep == STR64_REPNZ && getzf()) break;
-	}
-	if (rep != STR64_NONE) write_reg64(ECX, count); /* a BARE string op must not touch RCX */
-	write_reg64(ESI, rsi);
-	write_reg64(EDI, rdi);
-}
-
-/* the fifteen entry points (five Q opcodes x {no prefix, F3, F2}) */
-void instr64_A5(void) { str64_movs(STR64_NONE); }
-void instr64_F3A5(void) { str64_movs(STR64_REP); }
-void instr64_F2A5(void) { str64_movs(STR64_REP); }
-void instr64_A7(void) { str64_cmps(STR64_NONE); }
-void instr64_F3A7(void) { str64_cmps(STR64_REPZ); }
-void instr64_F2A7(void) { str64_cmps(STR64_REPNZ); }
-void instr64_AB(void) { str64_stos(STR64_NONE); }
-void instr64_F3AB(void) { str64_stos(STR64_REP); }
-void instr64_F2AB(void) { str64_stos(STR64_REP); }
-void instr64_AD(void) { str64_lods(STR64_NONE); }
-void instr64_F3AD(void) { str64_lods(STR64_REP); }
-void instr64_F2AD(void) { str64_lods(STR64_REP); }
-void instr64_AF(void) { str64_scas(STR64_NONE); }
-void instr64_F3AF(void) { str64_scas(STR64_REPZ); }
-void instr64_F2AF(void) { str64_scas(STR64_REPNZ); }
+/* THE FIFTEEN Q-SIZE ENTRY POINTS (five opcodes x {no prefix, F3, F2}).  The IMPLEMENTATION
+ * is string.c's 64-bit path -- this unit replaced the five hand-written `str64_*` loops that
+ * stood here (S9) with calls into it, because the byte/word/dword forms had to gain the same
+ * widths and a second copy of the semantics is a second thing to keep right.  What the S9
+ * bodies got right and the shared path keeps: RCX/RSI/RDI at 64 bits, the DF direction, the
+ * ZF exit for the repe/repne comparison forms, and the partial effects a fault leaves. */
+void instr64_A5(void) { movsq_no_rep(is_asize_32(), segment_prefix(DS)); }
+void instr64_F3A5(void) { movsq_rep(is_asize_32(), segment_prefix(DS)); }
+void instr64_F2A5(void) { movsq_rep(is_asize_32(), segment_prefix(DS)); }
+void instr64_A7(void) { cmpsq_no_rep(is_asize_32(), segment_prefix(DS)); }
+void instr64_F3A7(void) { cmpsq_repz(is_asize_32(), segment_prefix(DS)); }
+void instr64_F2A7(void) { cmpsq_repnz(is_asize_32(), segment_prefix(DS)); }
+void instr64_AB(void) { stosq_no_rep(is_asize_32()); }
+void instr64_F3AB(void) { stosq_rep(is_asize_32()); }
+void instr64_F2AB(void) { stosq_rep(is_asize_32()); }
+void instr64_AD(void) { lodsq_no_rep(is_asize_32(), segment_prefix(DS)); }
+void instr64_F3AD(void) { lodsq_rep(is_asize_32(), segment_prefix(DS)); }
+void instr64_F2AD(void) { lodsq_rep(is_asize_32(), segment_prefix(DS)); }
+void instr64_AF(void) { scasq_no_rep(is_asize_32()); }
+void instr64_F3AF(void) { scasq_repz(is_asize_32()); }
+void instr64_F2AF(void) { scasq_repnz(is_asize_32()); }
 
 /* ------------------------------------------------------------------ *
  * XADD / CMPXCHG / CMPXCHG16B

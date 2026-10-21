@@ -1415,6 +1415,58 @@ static void safe_write32_addr_local(int64_t addr, int32_t value)
     write32(p, value);
 }
 
+int32_t safe_read16_addr(int64_t addr)
+{
+    if (((uint64_t)addr & 0xFFF) == 0xFFF) {
+        int32_t low = safe_read8_addr(addr);
+        if (cpu->pagefault) return 0;
+        int32_t high = safe_read8_addr(addr + 1);
+        if (cpu->pagefault) return 0;
+        return low | high << 8;
+    }
+    uint32_t p = translate_address_read((uint64_t)addr);
+    if (cpu->pagefault) return 0;
+    return read16(p);
+}
+
+int32_t safe_read32_addr(int64_t addr)
+{
+    if (((uint64_t)addr & 0xFFF) >= 0xFFD) {
+        int32_t low = safe_read16_addr(addr);
+        if (cpu->pagefault) return 0;
+        int32_t high = safe_read16_addr(addr + 2);
+        if (cpu->pagefault) return 0;
+        return low | high << 16;
+    }
+    uint32_t p = translate_address_read((uint64_t)addr);
+    if (cpu->pagefault) return 0;
+    return read32s(p);
+}
+
+void safe_write16_addr(int64_t addr, int32_t value)
+{
+    if (((uint64_t)addr & 0xFFF) == 0xFFF) {
+        safe_write8_addr(addr, value & 0xFF);
+        if (cpu->pagefault) return;
+        safe_write8_addr(addr + 1, (value >> 8) & 0xFF);
+        return;
+    }
+    uint32_t p = translate_address_write((uint64_t)addr);
+    if (cpu->pagefault) return;
+    write16(p, value);
+}
+
+void safe_write32_addr(int64_t addr, int32_t value)
+{
+    if (((uint64_t)addr & 0xFFF) >= 0xFFD) {
+        safe_write16_addr(addr, value & 0xFFFF);
+        if (cpu->pagefault) return;
+        safe_write16_addr(addr + 2, (value >> 16) & 0xFFFF);
+        return;
+    }
+    safe_write32_addr_local(addr, value);
+}
+
 uint64_t safe_read64_addr(int64_t addr)
 {
     /* a quadword whose page offset leaves fewer than eight bytes is split into two 32-bit

@@ -26,7 +26,7 @@ echo "== A. EVERY ENGINE AGREES WITH THE HOST on the whole corpus (63 cases each
 for e in interp uop uopjit; do
 	step "corpus-$e" $PYTHON tests/nasm64_run.py --stage run \
 		--actual "$PORT64 {img} {limit} --fixture64 --long-mode on --cpu-engine $e" \
-		--expect counts --expect-counts "green=68 red_unimplemented=0 mismatch=0 error=0" --quiet
+		--expect counts --expect-counts "green=73 red_unimplemented=0 mismatch=0 error=0" --quiet
 done
 
 echo "== B. THE ENGINES' DOCUMENTS ARE BYTE-IDENTICAL (the differential proper)"

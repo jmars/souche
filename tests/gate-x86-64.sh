@@ -23,7 +23,9 @@ KERNEL=tests/images/vmlinuz-6.1.0-50-amd64
 DEB_URL="https://deb.debian.org/debian/pool/main/l/linux/linux-image-6.1.0-50-amd64-unsigned_6.1.176-1_amd64.deb"
 DEB_SHA=439422e41d2dbb840b60b81e3bf5e5955bfa56b7a8c268aec83c9ff882d421e6
 SHA_KERNEL=653421d9774c0de27502ca010d572323b52a5d7141d067b9b04214bd24baca3a
-LIMIT=20000000
+# raised from 20M: the guest now decompresses past 30M instructions before it reaches the
+# 64-bit address bound this gate asserts (results/x86-64-rep.md)
+LIMIT=40000000
 SERIAL=/tmp/gate-x86-64-serial.txt
 LOG=/tmp/gate-x86-64.log
 BOOTLOG=/tmp/gate-x86-64-boot.log
@@ -58,11 +60,17 @@ step "kernel-page-tables-in-ram" sh -c \
 	"grep -q 'cr3=0x4f76000' $BOOTLOG"
 step "kernel-serial-output" sh -c "grep -q 'Probing EDD' $SERIAL"
 
-echo "== D. THE HONEST STOP, ASSERTED BY NAME (the plan's falsifier, recorded)"
-# THE FINDING, and the reason this gate is not green-and-done: the kernel stops at the 64-bit
-# interrupt frame.  The assertion is that it stops THERE -- a stop EARLIER is a regression, and a
-# silent hang is a defect; when the frame lands this step is REPLACED by the userspace assertion.
-step "stop-is-the-64bit-interrupt-frame" sh -c \
+echo "== D. THE HONEST STOP, ASSERTED BY NAME (replaced: the frame LANDED, results/x86-64-rep.md)"
+# THE STEP THIS REPLACES asserted `call_interrupt_vector` in the boot log -- the 64-bit interrupt
+# frame, which the kernel could not deliver through.  That is GONE (MEASURED): the guest now
+# decompresses, its own console prints, and it stops on a 64-bit effective address above 4 GiB
+# that the 32-bit-arm bodies cannot carry.  The assertions are (a) the decompressor's console is
+# ALIVE, which is the milestone the old step could not reach, and (b) the stop is the 4 GiB
+# address bound, so a stop EARLIER (a delivery stop, a refusal, a silent hang) fails here.
+step "decompressor-console-alive" sh -c "grep -q 'Physical KASLR disabled' $SERIAL"
+step "stop-is-the-64bit-address-bound" sh -c \
+	"grep -q 'a 64-bit effective address above 4 GiB' $BOOTLOG"
+must_fail "address-bound-stop-able-to-fail" sh -c \
 	"grep -q 'call_interrupt_vector' $BOOTLOG"
 
 echo

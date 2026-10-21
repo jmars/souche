@@ -1238,6 +1238,84 @@ case("strobits", "cmpxchg16b",
     cmp rax, rax
 """, flags=True)
 
+# --- family 5b: str (this unit) -- the rep string family's LONG-MODE widths ------
+# S9's strobits cases cover the Q opcodes; these four cover what they do not: the
+# COUNTER's width (only observable through the ZF exit -- see the cases), the 0x67
+# address-size override's truncation and zero-extending write-back, and DF.
+case("ctrl", "cdqe-cqo-64",
+     "CDQE/CQO (0x98/0x99 with REX.W) sign-extend a 32-bit value into a 64-bit one: the "
+     "32-bit CWDE arm writes AX only, so the upper half of RAX stays as it was",
+     """\
+    mov rax, 0x1122334480000001
+    cdqe
+    mov rbx, rax
+    mov rax, 0x0000000080000000
+    cdqe
+    cqo
+    mov rcx, rdx
+    mov rax, 0x7FFFFFFFFFFFFFFF
+    cqo
+    mov rsi, rdx
+""")
+case("str", "cmps-count-64",
+     "the REP COUNTER IS RCX, 64 BITS: `repe cmpsb` with RCX = 0x100000002 exits on the "
+     "first mismatch and must leave RCX = 0x100000001.  A 32-bit counter reads ECX = 2, "
+     "exits the same way and writes back RCX = 1 -- one bit of the window apart, and the "
+     "only way to see it without a 2^32-iteration run is the ZF exit",
+     """\
+    mov r11, 0x0123456789ABCDEF
+    mov qword ptr [0x100100], r11
+    mov byte ptr [0x100110], 0xAA
+    mov byte ptr [0x100120], 0xBB
+    mov rsi, 0x100110
+    mov rdi, 0x100120
+    mov rcx, 0x100000002
+    repe cmpsb
+    mov rax, rcx
+""")
+case("str", "scas-count-64",
+     "the same for the SCAS/repne exit: `repne scasb` with RCX = 0x100000003 exits on the "
+     "first MATCH and must leave RCX = 0x100000002 (ZF=1)",
+     """\
+    mov rax, 0xAA
+    mov byte ptr [0x100130], 0xAA
+    mov rdi, 0x100130
+    mov rcx, 0x100000003
+    repne scasb
+    mov rbx, rcx
+""", flags=True)
+case("str", "asize-67",
+     "the 0x67 ADDRESS-SIZE override in 64-bit mode narrows RSI/RDI/RCX to 32 bits and "
+     "the write-back ZERO-EXTENDS: with the high halves of RSI/RDI set, an a32 `rep movsq` "
+     "must read and write at 0x100140/0x100150 (a 64-bit address size would fault) and "
+     "leave RSI = 0x100148, not 0x100000100148",
+     """\
+    mov r11, 0x0123456789ABCDEF
+    mov qword ptr [0x100140], r11
+    mov rsi, 0x100000100140
+    mov rdi, 0x100000100150
+    mov ecx, 1
+    addr32 rep movsq
+    mov r8, rsi
+    mov r9, rdi
+    mov r10, rcx
+""")
+case("str", "df-64",
+     "DF=1 walks the 64-bit RSI/RDI DOWNWARD: a body that always increments copies the "
+     "wrong pair of bytes, and the direction is per-instruction state the harness clears",
+     """\
+    mov r11, 0x0123456789ABCDEF
+    mov qword ptr [0x100160], r11
+    mov r11, 0xFEDCBA9876543210
+    mov qword ptr [0x100168], r11
+    mov rsi, 0x10016F
+    mov rdi, 0x10017F
+    mov rcx, 2
+    std
+    rep movsb
+    cld
+""")
+
 # --- family 6: simd (S10) -------------------------------------------------------
 case("simd", "movq-xmm64",
      "MOVQ between an XMM register and a 64-bit GPR / memory: only the low 8 bytes "
@@ -1319,6 +1397,9 @@ FAMILY_SLICE = {
     "muldiv": "S8",
     "strobits": "S9",
     "simd": "S10",
+    # the rep string family's LONG-MODE widths are outside the plan's slices: S9 landed the
+    # Q opcodes, and the byte/word/dword forms' 64-bit registers were never a slice's.
+    "str": "S9b",
 }
 
 # ------------------------------------------------------------------ #

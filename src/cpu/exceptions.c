@@ -47,6 +47,7 @@
 #include "modrm.h" /* get_seg_cs */
 #include "paging.h"
 #include "string.h" /* test_privileges_for_io's declaration */
+#include "instructions_64.h" /* push64 -- the 8-byte interrupt frame (this unit) */
 
 /* the TSS offsets (cpu.rs:192-212) are in exceptions.h: they are part of the TSS
  * layout contract a task-switch caller (and the M1c test binary's fixture) needs. */
@@ -509,6 +510,14 @@ void call_interrupt_vector(int32_t interrupt, bool is_int, bool has_error_code, 
             return;
         }
 
+        /* THE 64-BIT GATE IS 16 BYTES WIDE, so the stride is `vector << 4` -- the 8-byte
+         * stride below is the 32-bit gate's.  MEASURED, and it CORRECTS
+         * results/x86-64-idt64.md's claim that the IDT at the stop was all-null (see the
+         * offset64 note further down): the stride is the reason a real #PF gate at vector 14
+         * was read as slot 7's null descriptor. */
+        bool lm64 = long_mode_64();
+        int32_t gate_size = lm64 ? 16 : 8;
+
         if ((interrupt << 3 | 7) > cpu->idtr_size) {
             /* THE reachable-path stop for the differential corpus: a multiboot guest
              * (cr0.PE set by the loader, idtr_size 0) taking #DE/#UD lands exactly here,
@@ -520,12 +529,24 @@ void call_interrupt_vector(int32_t interrupt, bool is_int, bool has_error_code, 
 
         int32_t descriptor_address =
             (int32_t)translate_address_system_read(
-                cpu->idtr_offset + (uint32_t)(interrupt << 3));
+                cpu->idtr_offset + (uint32_t)(interrupt * gate_size));
         if (cpu->pagefault) return;
 
         intr_descriptor_t descriptor = intr_descriptor_of_u64((uint64_t)read64s((uint32_t)descriptor_address));
 
         int32_t offset = intr_descriptor_offset(descriptor);
+        /* THE 64-BIT HANDLER ADDRESS: offset_low (bytes 0-1) | offset_middle (bytes 6-7)
+         * << 16 | offset_high (bytes 8-11) << 32.  The low 32 bits are exactly what
+         * intr_descriptor_offset composes (it reads the middle field from bits 32-47 of the
+         * first qword, which is the same place), so only the HIGH half is new here.
+         * MEASURED: the decompressor's #PF gate decodes to 0x4F3F870 with selector 0x0010
+         * and type 0xF (trap, present, DPL 0) -- a deliverable gate, which is what makes the
+         * 64-bit interrupt frame reachable at all. */
+        int64_t offset64 = offset;
+        if (lm64) {
+            uint64_t high_half = (uint64_t)read64s((uint32_t)(descriptor_address + 8));
+            offset64 = (int64_t)((uint64_t)(uint32_t)offset | (high_half << 32));
+        }
         int32_t selector = intr_descriptor_selector(descriptor);
         uint8_t dpl = intr_descriptor_dpl(descriptor);
         uint8_t gate_type = intr_descriptor_gate_type(descriptor);
@@ -609,6 +630,15 @@ void call_interrupt_vector(int32_t interrupt, bool is_int, bool has_error_code, 
 
         if (!seg_descriptor_is_dc(cs_descriptor) && cs_dpl < cpu->cpl) {
             /* inter-privilege-level interrupt (interrupt from vm86 mode) */
+            if (lm64) {
+                /* NAMED STOP: the 64-bit frame's privilege switch (an 8-byte SS/RSP pair from
+                 * the TSS, and the IST stack when the gate selects one) is not implemented.
+                 * The decompressor's faults all arrive at CPL 0 on the same stack, so this is
+                 * a boundary, not a shortcut. */
+                panic_stop("call_interrupt_vector: long mode: a CPL-changing interrupt delivery"
+                           " (the 8-byte SS/RSP frame and the IST stack are not implemented)");
+                return;
+            }
             if ((old_flags & FLAG_VM) != 0 && cs_dpl != 0) {
                 panic_stop("call_interrupt_vector: non-0 CS dpl in vm86 mode (upstream panic \"Unimplemented: #GP handler for non-0 cs segment dpl when in vm86 mode\", cpu.rs:919)");
                 return;
@@ -716,7 +746,7 @@ void call_interrupt_vector(int32_t interrupt, bool is_int, bool has_error_code, 
                 return;
             }
 
-            int32_t bytes_per_arg = intr_descriptor_is_32(descriptor) ? 4 : 2;
+            int32_t bytes_per_arg = lm64 ? 8 : (intr_descriptor_is_32(descriptor) ? 4 : 2);
             int32_t error_code_space = has_error_code ? 1 : 0;
 
             int32_t stack_space = bytes_per_arg * (3 + error_code_space);
@@ -733,7 +763,26 @@ void call_interrupt_vector(int32_t interrupt, bool is_int, bool has_error_code, 
         }
 
         /* XXX: #SS if stack would cross stack limit */
-        if (intr_descriptor_is_32(descriptor)) {
+        if (lm64) {
+            /* THE 64-BIT FRAME: RFLAGS, CS and RIP are EIGHT bytes each (and the error code,
+             * when the vector pushes one, is eight too), which is why the 32-bit arm's
+             * `is_32` test cannot be reused -- a 64-bit gate has the SAME type bit set (0xE/0xF
+             * carry bit 3) and would take the 4-byte path.  MEASURED: this is the frame the
+             * `stop-is-the-64bit-interrupt-frame` step in tests/gate-x86-64.sh could only
+             * assert the STOP of; results/x86-64-rep.md records the delivered frame. */
+            push64(old_flags);
+            DBG_ASSERT(!cpu->pagefault);
+            push64((int32_t)cpu->sreg[CS]);
+            DBG_ASSERT(!cpu->pagefault);
+            push64(cpu->instruction_pointer);
+            DBG_ASSERT(!cpu->pagefault);
+
+            if (has_error_code) {
+                push64(error_code);
+                DBG_ASSERT(!cpu->pagefault);
+            }
+        }
+        else if (intr_descriptor_is_32(descriptor)) {
             push32(old_flags);
             DBG_ASSERT(!cpu->pagefault);
             push32((int32_t)cpu->sreg[CS]);
@@ -776,7 +825,7 @@ void call_interrupt_vector(int32_t interrupt, bool is_int, bool has_error_code, 
         cpu->segment_offsets[CS] = seg_descriptor_base(cs_descriptor);
         cpu->segment_access_bytes[CS] = seg_descriptor_access_byte(cs_descriptor);
 
-        set_instruction_pointer(get_seg_cs() + offset);
+        set_instruction_pointer(get_seg_cs() + (uint64_t)(lm64 ? offset64 : offset));
 
         cpu->flags &= ~FLAG_NT & ~FLAG_VM & ~FLAG_RF & ~FLAG_TRAP;
 

@@ -782,6 +782,26 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE REP UNIT IS LANDED: the guest DECOMPRESSES (2026-10-19).**  `results/x86-64-rep.md` is its
+report.  Part (A): the stop reported as "rep movsb raises a #GP" is `repe cmpsb` (0xA6 is CMPS), and
+the #GP was `get_seg`'s null-segment check, which 64-bit mode does not perform -- the string family
+now has a real 64-bit path (RCX/RSI/RDI at 64 bits, 0x67 narrowing with zero-extending write-back,
+DF, REX.W 8-byte forms, the repe/repne ZF exit, partial effects kept on a fault), S9's five
+hand-written `str64_*` loops replaced by it, and four new corpus cases of which
+`str/cmps-count-64` proves the counter is 64 bits (RCX = 0x100000002 exits on the first mismatch and
+must leave 0x100000001).  The corpus caught a bug in the new code: the ES:DI side was keyed off the
+STORE, so `repe cmpsb` compared against address 0.  Part (B) REFUTES the idt64 report's claim that
+the stage-1 IDT is all-null: the guest's IDT (base 0x4f51050, limit 511) has REAL 16-byte gates at
+vector 14 (#PF, handler 0x4f3f870) and vector 2, and the port read slot 7 for vector 14 because it
+used the 32-bit **8-byte stride** over **16-byte** gates.  Fixed: the stride, the offset's high half,
+and the 8-byte frame (RFLAGS/CS/RIP/error code, 8 bytes each) -- proven by a new `m1c_selftest`
+arm (258 -> 272 checks) whose able-to-fail arm is MEASURED (reverting the stride fails four checks).
+`gate-x86-64.sh`'s `stop-is-the-64bit-interrupt-frame` step is REPLACED as its own comment required:
+the guest no longer stops there, its decompressor console is alive, and it stops at 30,184,930
+instructions on the 64-bit address bound.  0x98/0x99 (CDQE/CQO) and `0F C7 /6` RDRAND r64 were
+closed on the way (RDRAND r64 is what let the guest reach the decompressor).  Corpus 68 -> 73,
+families 6 -> 7, overlay 155 -> 157.  The four M0 pins are unmoved.
+
 **THE IDT64 UNIT IS LANDED AND ITS BRIEF'S HYPOTHESIS WAS WRONG (2026-10-19).**  `results/x86-64-idt64.md`
 is its report.  The gate-type stop at `eip=0x100208` was **not** the 64-bit descriptor's offset
 composition (S12 §3.3's hypothesis): the port was inventing a #GP on `mov ss, ax` with a NULL selector,
@@ -795,9 +815,10 @@ stage-1 IDT entry is null, where hardware triple-faults too), and `gate-x86-64.s
 `stop-is-the-64bit-interrupt-frame` step asserts the STOP, not a frame.  Corpus 63 → 68 cases, all
 green on all three engines; the four M0 pins are unmoved.
 
-The named gaps the next session should take, in order: (1) **`rep movsb` raising a #GP the hardware
-would not** — the guest's current stop, `eip=0x4f3cd4d bytes f3 a6 … cr2=0`, so the string path's
-segment/prefix handling is the first probe; (2) the 64-bit GDT/TSS/IST paths, SYSCALL/SYSRET, then
+The named gaps the next session should take, in order: (1) **the 32-bit-arm bodies cannot carry a
+64-bit effective address** — the guest's current stop, `eip=0x4f3a7e8`, `modrm=0x44 a=0x12cd38220`
+(a scaled 64-bit index: `0x9669c110 << 1`, so the address is legitimate), i.e. the S6-S10 "widen the
+bodies" work; (2) the 64-bit GDT/TSS/IST paths, SYSCALL/SYSRET, then
 SWAPGS (needs an authored dispatch arm — `0F 01 /5` has no reference-table entry); (3) the amd64
 initramfs + the userspace milestone, with the QEMU leg as the second reference; (4) the engines' OWN
 arms (the uop decoder's long mode, then the JIT's recipes) — the differential is the gate that would
