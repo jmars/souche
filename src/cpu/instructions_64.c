@@ -1319,12 +1319,22 @@ void instr64_0FCD(void) { write_reg64(reg_index_b(5), bswap64(read_reg64(reg_ind
 void instr64_0FCE(void) { write_reg64(reg_index_b(6), bswap64(read_reg64(reg_index_b(6)))); }
 void instr64_0FCF(void) { write_reg64(reg_index_b(7), bswap64(read_reg64(reg_index_b(7)))); }
 
-/* 0x0F BA /4../7 BT/BTS/BTR/BTC.  REGISTER operands mask the bit index to 0x3F; MEMORY operands
- * do NOT -- the SDM addresses a memory bit as a bit STRING: the byte is `addr + (bit >> 3)` and
- * the bit inside it is `bit & 7` (the 32-bit bodies' bt_mem/btc_mem/btr_mem/bts_mem scheme,
- * arith.c).  ROUND 2 (SF 2): round 1 masked to 0x3F for BOTH forms, which is WRONG BY
- * CONSTRUCTION for memory -- a guest-reachable imm8 in [64,255] selected the wrong bit and, for
- * BTS/BTR/BTC, WROTE THE WRONG BYTE.  The register forms keep the mask. */
+/* 0x0F BA /4../7 BT/BTS/BTR/BTC with an IMMEDIATE bit offset.  THE SDM'S RULE, settled by the
+ * review and MEASURED against the host: for the IMMEDIATE form the processor IGNORES the high
+ * order bits -- the offset is MASKED to the operand width (`imm & 63` at 64 bits) and THEN
+ * addressed byte-granularly (`addr + (bit >> 3)`, bit `& 7`).
+ *
+ * THE HISTORY, because three readings were argued in this lane: S8 round 2 fixed these bodies to
+ * an UNMASKED byte-granular bit string on the review's then-reading ("offset DIV 64 selects the
+ * qword"); the host disagreed with that AND with the qword reading (MEASURED: `bts qword [r8],
+ * 100` wrote 0x10 at 0x100304 = byte 4, bit 4, i.e. 100 & 0x3F = 36); S9 round 2 settles it as
+ * MASK-THEN-BYTE-GRANULAR, which is what the host does and what the SDM's immediate-form note
+ * says.
+ *
+ * CONTRAST FOR THE FUTURE: the REGISTER-SOURCE form (`0F AB/B3/BB/A3`) is the OPPOSITE rule --
+ * the offset there is SIGNED and byte-granular and NOT masked (MEASURED: +100 -> byte +12,
+ * -100 -> byte -13 bit 4).  Those bodies are not landed; when they are, they must not copy this
+ * masking. */
 static void bt_mem_flags(int32_t byte_value, int32_t bit)
 {
 	cpu->flags_changed &= ~FLAG_CARRY;
@@ -1350,14 +1360,14 @@ void instr64_0FBA_7_reg(int32_t r1, int64_t imm)
 
 void instr64_0FBA_4_mem(int64_t addr, int64_t imm)
 {
-	int32_t bit = (int32_t)imm;
+	int32_t bit = (int32_t)imm & 63; /* the immediate form's offset is masked to the operand width */
 	int32_t b = safe_read8_addr(addr + (bit >> 3));
 	if (cpu->pagefault) return;
 	bt_mem_flags(b, bit);
 }
 void instr64_0FBA_5_mem(int64_t addr, int64_t imm)
 {
-	int32_t bit = (int32_t)imm;
+	int32_t bit = (int32_t)imm & 63; /* the immediate form's offset is masked to the operand width */
 	int32_t b = safe_read8_addr(addr + (bit >> 3));
 	if (cpu->pagefault) return;
 	bt_mem_flags(b, bit);
@@ -1365,7 +1375,7 @@ void instr64_0FBA_5_mem(int64_t addr, int64_t imm)
 }
 void instr64_0FBA_6_mem(int64_t addr, int64_t imm)
 {
-	int32_t bit = (int32_t)imm;
+	int32_t bit = (int32_t)imm & 63; /* the immediate form's offset is masked to the operand width */
 	int32_t b = safe_read8_addr(addr + (bit >> 3));
 	if (cpu->pagefault) return;
 	bt_mem_flags(b, bit);
@@ -1373,7 +1383,7 @@ void instr64_0FBA_6_mem(int64_t addr, int64_t imm)
 }
 void instr64_0FBA_7_mem(int64_t addr, int64_t imm)
 {
-	int32_t bit = (int32_t)imm;
+	int32_t bit = (int32_t)imm & 63; /* the immediate form's offset is masked to the operand width */
 	int32_t b = safe_read8_addr(addr + (bit >> 3));
 	if (cpu->pagefault) return;
 	bt_mem_flags(b, bit);
@@ -1415,7 +1425,7 @@ static void str64_stos(int rep)
 		rdi += step;
 		count--;
 	}
-	write_reg64(ECX, 0);
+	if (rep != STR64_NONE) write_reg64(ECX, 0); /* a BARE string op must not touch RCX */
 	write_reg64(EDI, rdi);
 }
 
@@ -1434,7 +1444,7 @@ static void str64_movs(int rep)
 		rdi += step;
 		count--;
 	}
-	write_reg64(ECX, 0);
+	if (rep != STR64_NONE) write_reg64(ECX, 0); /* a BARE string op must not touch RCX */
 	write_reg64(ESI, rsi);
 	write_reg64(EDI, rdi);
 }
@@ -1451,7 +1461,7 @@ static void str64_lods(int rep)
 		rsi += step;
 		count--;
 	}
-	write_reg64(ECX, 0);
+	if (rep != STR64_NONE) write_reg64(ECX, 0); /* a BARE string op must not touch RCX */
 	write_reg64(ESI, rsi);
 }
 
@@ -1470,7 +1480,7 @@ static void str64_scas(int rep)
 		if (rep == STR64_REPZ && !getzf()) break;
 		if (rep == STR64_REPNZ && getzf()) break;
 	}
-	write_reg64(ECX, count);
+	if (rep != STR64_NONE) write_reg64(ECX, count); /* a BARE string op must not touch RCX */
 	write_reg64(EDI, rdi);
 }
 
@@ -1493,7 +1503,7 @@ static void str64_cmps(int rep)
 		if (rep == STR64_REPZ && !getzf()) break;
 		if (rep == STR64_REPNZ && getzf()) break;
 	}
-	write_reg64(ECX, count);
+	if (rep != STR64_NONE) write_reg64(ECX, count); /* a BARE string op must not touch RCX */
 	write_reg64(ESI, rsi);
 	write_reg64(EDI, rdi);
 }
@@ -1524,8 +1534,8 @@ void instr64_F2AF(void) { str64_scas(STR64_REPNZ); }
  *
  * CMPXCHG16B: a 16-byte atomic against RDX:RAX, exchanging RCX:RBX; and the SDM's ALIGNMENT
  * rule -- a misaligned memory operand is #GP(0), not a split access.  The corpus's operand is
- * 16-byte aligned; the misaligned arm is a NAMED, instrumented-by-hand path (results/x86-64-s9.md
- * ss6 states which).
+ * 16-byte aligned, so the MISALIGNED ARM IS DRIVEN BY NOTHING (round 2 corrected an earlier
+ * comment that claimed otherwise); results/x86-64-s9.md ss5 names it un-instrumented.
  * ------------------------------------------------------------------ */
 
 void instr64_0FC1_mem(int64_t addr, int32_t r)
@@ -1582,14 +1592,19 @@ void instr64_0FC7_1_mem(int64_t addr)
 	uint64_t lo = safe_read64_addr(addr);
 	uint64_t hi = safe_read64_addr(addr + 8);
 	if (cpu->pagefault) return;
+	/* ROUND 2 (SF 3): CMPXCHG16B leaves CF/PF/AF/SF/OF UNAFFECTED (MEASURED: a prior PF=1/CF=0
+	 * survive a mismatch), so ZF is MATERIALISED here and the others are left alone -- calling
+	 * cmp64 would mark all six stale and let the getters recompute them from this comparison. */
 	if (lo == read_reg64(EAX) && hi == read_reg64(EDX)) {
-		cmp64((int64_t)read_reg64(EAX), (int64_t)lo); /* ZF=1 */
+		cpu->flags_changed &= ~FLAG_ZERO;
+		cpu->flags |= FLAG_ZERO;
 		safe_write64_addr(addr, read_reg64(EBX));
 		if (cpu->pagefault) return;
 		safe_write64_addr(addr + 8, read_reg64(ECX));
 	}
 	else {
-		cmp64((int64_t)read_reg64(EAX), (int64_t)lo); /* ZF=0 */
+		cpu->flags_changed &= ~FLAG_ZERO;
+		cpu->flags &= ~FLAG_ZERO;
 		write_reg64(EAX, lo);
 		write_reg64(EDX, hi);
 	}

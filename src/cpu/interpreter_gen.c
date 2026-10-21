@@ -4916,6 +4916,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0xA5:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a string op in long mode is not implemented (66 A5 would otherwise run MOVSQ -- the arms split on F2/F3 only)");
+			return;
+		}
 		uint8_t prefixes_ = cpu->prefixes;
 		if ((prefixes_ & PREFIX_F2) != 0) {
 			instr16_F2A5();
@@ -4932,6 +4936,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x1A5:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a string op in long mode is not implemented (66 A5 would otherwise run MOVSQ -- the arms split on F2/F3 only)");
+			return;
+		}
 		uint8_t prefixes_ = cpu->prefixes;
 		if ((prefixes_ & PREFIX_F2) != 0) {
 			instr32_F2A5();
@@ -4988,6 +4996,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0xA7:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a string op in long mode is not implemented (see 0xA5)");
+			return;
+		}
 		uint8_t prefixes_ = cpu->prefixes;
 		if ((prefixes_ & PREFIX_F2) != 0) {
 			instr16_F2A7();
@@ -5005,6 +5017,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x1A7:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a string op in long mode is not implemented (see 0xA5)");
+			return;
+		}
 		uint8_t prefixes_ = cpu->prefixes;
 		if ((prefixes_ & PREFIX_F2) != 0) {
 			instr32_F2A7();
@@ -5096,6 +5112,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0xAB:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a string op in long mode is not implemented (see 0xA5)");
+			return;
+		}
 		uint8_t prefixes_ = cpu->prefixes;
 		if ((prefixes_ & PREFIX_F2) != 0) {
 			instr16_F2AB();
@@ -5112,6 +5132,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x1AB:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a string op in long mode is not implemented (see 0xA5)");
+			return;
+		}
 		uint8_t prefixes_ = cpu->prefixes;
 		if ((prefixes_ & PREFIX_F2) != 0) {
 			instr32_F2AB();
@@ -5167,6 +5191,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0xAD:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a string op in long mode is not implemented (see 0xA5)");
+			return;
+		}
 		uint8_t prefixes_ = cpu->prefixes;
 		if ((prefixes_ & PREFIX_F2) != 0) {
 			instr16_F2AD();
@@ -5183,6 +5211,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x1AD:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a string op in long mode is not implemented (see 0xA5)");
+			return;
+		}
 		uint8_t prefixes_ = cpu->prefixes;
 		if ((prefixes_ & PREFIX_F2) != 0) {
 			instr32_F2AD();
@@ -5238,6 +5270,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0xAF:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a string op in long mode is not implemented (see 0xA5)");
+			return;
+		}
 		uint8_t prefixes_ = cpu->prefixes;
 		if ((prefixes_ & PREFIX_F2) != 0) {
 			instr16_F2AF();
@@ -5254,6 +5290,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x1AF:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a string op in long mode is not implemented (see 0xA5)");
+			return;
+		}
 		uint8_t prefixes_ = cpu->prefixes;
 		if ((prefixes_ & PREFIX_F2) != 0) {
 			instr32_F2AF();

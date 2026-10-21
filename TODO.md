@@ -686,6 +686,28 @@ encodings.  NOT landed, named in the report: the `rep` forms' ZF exit and the DF
 case), `cmpxchg`'s register form, bswap's other seven encodings (S8's gap), and the string ops'
 fault partial-effects (out of the corpus by rule, a stated choice).
 
+**S9 ROUND 2 (2026-10-19): two blockers and three should-fix.**
+(BLOCKER 1) **The imm8 `_mem` BT bodies were unmasked**: the SDM ignores the immediate's high order
+bits, so the offset is **masked to the operand width (`& 63`) and THEN byte-granular** — round 1
+used an unmasked `bit >> 3`, so a guest-reachable imm8 in [64,255] read the wrong CF and wrote the
+wrong byte for BTS/BTR/BTC.  The corpus arm is now **bit 100** (`100 & 63 = 36` → byte 4, bit 4 →
+`0x10` at `0x100304`), MEASURED red with the mask removed; round 1's bit-20 arm was blind between
+all three readings.  **The contrast is recorded**: the register-source form (`0F AB/B3/BB/A3`) is
+the OPPOSITE rule (signed, byte-granular, unmasked) and must not copy this masking.
+(BLOCKER 2) **The five BARE string forms clobbered RCX** — a no-rep `stosq`/`movsq`/`lodsq`/
+`scasq`/`cmpsq` must not touch it (MEASURED: seeded rcx, host keeps it, port returned 0), and the
+corpus was blind because its prologue zeroes RCX.  The count store is now guarded by
+`rep != STR64_NONE` and `strobits-bare-string-preserves-rcx` SEEDS RCX.  (SF 3) `cmpxchg16b`'s
+CF/PF/AF/SF/OF are **UNAFFECTED**, not undefined (MEASURED: a prior PF=1/CF=0 survive a mismatch):
+ZF is materialised and the case compares the full `0x8D5` again.  (SF 4) Four artifact-contradicted
+claims corrected — including **the commit message's own error**: it said S9 landed bswap's seven
+encodings and shld/shrd, and this diff touches neither (shld/shrd are S8's; bswap's seven remain
+un-instrumented).  (SF 5) §5 now names the register-source BT family, `A4/A6/AC/AE`, shld/shrd imm8
+and cmpxchg16b's not-equal arm; and the **`66`-prefix fall-through recurred** (`66 A5` ran MOVSQ) —
+closed by `narrow64` on the five string opcodes.  (NTH 6) the generator's case comment stated the
+refuted rule as fact; corrected.  Family 5 is **8/8**, the whole corpus `green=60
+red_unimplemented=3`, and the battery is unmoved.
+
 **S10-S13 REMAIN**: the SSE family, the system layer, the guest and the engines' long-mode arms.
 The rest of this section is the reconnaissance record and is not made stale by S0-S9.
 

@@ -1063,12 +1063,13 @@ case("strobits", "bt-mem-imm8",
     mov rax, 0x0000000000000000
     mov qword ptr [0x100300], rax
     mov qword ptr [0x100308], rax
-    # BIT 20: inside the first qword, where the byte-granular (addr + bit/8) and the
-    # qword-granular (addr + (bit/64)*8) readings AGREE -- so the case instruments the memory
-    # form without asserting the >=64 rule, which this host MEASURED differently from both
-    # readings (results/x86-64-s9.md ss6 records the contradiction as an OPEN finding).
-    bts qword ptr [r8], 20
-    bt qword ptr [r8], 20
+    # BIT 100, the SETTLED RULE (round 2): the IMMEDIATE bit offset is MASKED to the operand
+    # width and THEN addressed byte-granularly -- 100 & 63 = 36 -> byte 4, bit 4, so the host
+    # writes 0x10 at 0x100304.  This is the arm that distinguishes the rule from the two earlier
+    # readings (unmasked byte-granular -> byte 12; qword-granular -> qword 1); the first version
+    # of this case used bit 20, where all three agree, and was BLIND between them.
+    bts qword ptr [r8], 100
+    bt qword ptr [r8], 100
     pushfq
     pop qword ptr [0x100200]
     and dword ptr [0x100200], 0x1
@@ -1076,6 +1077,25 @@ case("strobits", "bt-mem-imm8",
     btr qword ptr [r8], 4
     btc qword ptr [r8], 5
     cmp rax, rax
+""")
+case("strobits", "bare-string-preserves-rcx",
+     "a BARE (no-rep) stosq/movsq/lodsq/scasq/cmpsq must NOT touch RCX: the prologue zeroes it, "
+     "so a case that does not SEED it cannot see a body that writes 0 (round-2 BLOCKER 2)",
+     """\
+    mov rcx, 0x1234567890ABCDEF
+    mov rdi, 0x100100
+    mov rax, 0x1122334455667788
+    stosq
+    mov rsi, 0x100100
+    mov rdi, 0x100140
+    movsq
+    mov rsi, 0x100100
+    lodsq
+    mov rdi, 0x100100
+    scasq
+    mov rsi, 0x100100
+    mov rdi, 0x100140
+    cmpsq
 """)
 case("strobits", "xadd-64",
      "XADD exchanges and adds an 8-byte operand",

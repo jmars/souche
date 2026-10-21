@@ -78,7 +78,7 @@ must_fail() { # must_fail <name> <cmd...> -- the able-to-fail arm of an assertio
 
 echo "== A. --long-mode OFF is still the 32-bit machine (S2's refusal, by name, S4's counts)"
 step "off-is-32bit" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_OFF" \
-	--expect counts --expect-counts "green=0 red_unimplemented=62 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=0 red_unimplemented=63 mismatch=0 error=0" --quiet
 # a count assertion alone would also pass on 57 of anything, so the census's own line is
 # checked: the refusal must NAME the reason
 step "off-refusal-names-the-reason" sh -c \
@@ -112,7 +112,7 @@ step "family-1-green" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_
 	--filter '^mov-' --expect counts \
 	--expect-counts "green=12 red_unimplemented=0 mismatch=0 error=0" --quiet
 step "whole-corpus-no-mismatch" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
-	--expect counts --expect-counts "green=59 red_unimplemented=3 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=60 red_unimplemented=3 mismatch=0 error=0" --quiet
 must_fail "whole-corpus-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
 	--actual "$ACTUAL_ON" --expect counts --expect-counts "green=57 mismatch=0" --quiet
 
@@ -293,14 +293,23 @@ step "alu-div-zero-reaches-DE" sh -c \
 echo "== F6. S9: STRING / BIT / ATOMIC AT 64 BITS (family 5, 7/7)"
 step "strobits-family" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
 	--filter '^strobits-' --expect counts \
-	--expect-counts "green=7 red_unimplemented=0 mismatch=0 error=0" --quiet
+	--expect-counts "green=8 red_unimplemented=0 mismatch=0 error=0" --quiet
 must_fail "strobits-family-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
 	--actual "$ACTUAL_ON" --filter '^strobits-' --expect counts \
-	--expect-counts "green=6 mismatch=0" --quiet
+	--expect-counts "green=7 mismatch=0" --quiet
 # the 16-byte atomic and the string Q forms each get their own named step: they are the two
 # places a 32-bit width would hide (a 4-byte stosq, an 8-byte cmpxchg16b)
 step "cmpxchg16b-16-byte" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
 	--filter 'cmpxchg16b' --expect counts \
+	--expect-counts "green=1 red_unimplemented=0 mismatch=0 error=0" --quiet
+# ROUND 2's two blockers, each a named step with its mutant MEASURED: the BT memory IMMEDIATE
+# offset is masked to the operand width (unmasking turns it red), and a BARE string op must not
+# touch RCX (a clobbering body turns it red).
+step "bt-mem-imm-masked" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
+	--filter 'bt-mem' --expect counts \
+	--expect-counts "green=1 red_unimplemented=0 mismatch=0 error=0" --quiet
+step "bare-string-preserves-rcx" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
+	--filter 'bare-string' --expect counts \
 	--expect-counts "green=1 red_unimplemented=0 mismatch=0 error=0" --quiet
 step "rep-stosq-movsq" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
 	--filter 'stos-movs' --expect counts \
