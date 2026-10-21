@@ -477,6 +477,25 @@ static int32_t do_page_walk64(uint64_t addr,
     DBG_ASSERT((cr0 & CR0_PG) != 0); /* long mode implies paging */
     DBG_ASSERT((cr4 & CR4_PAE) != 0); /* ... and PAE: CR4.PAE is the IA-32e entry condition */
 
+    /* S11: THE CANONICALITY CHECK, and it is a #GP, not a #PF (SDM: "if the linear address is not
+     * canonical the processor generates a general-protection exception").  S5 RECORDED THE DEFECT
+     * THIS CLOSES: the four index masks below take (addr >> 39/30/21/12) & 0x1FF, so a
+     * non-canonical address is silently ALIASED onto its low 48 bits -- and an identity-mapped
+     * machine makes that alias a MAPPED PAGE, i.e. a successful translation to the wrong-but-real
+     * page instead of the fault hardware takes.  Bits 63:48 must all equal bit 47.
+     *
+     * The check is here, at the walk's entry, rather than in the accessors: every long-mode
+     * translation passes through this function, and a guest cannot reach a long-mode address any
+     * other way. */
+    {
+        uint64_t upper = addr >> 47;
+        if (upper != 0 && upper != 0x1FFFFull) {
+            trigger_gp(0);
+            cpu->pagefault = true; /* the abort channel: the instruction must not act on the 0 */
+            return 0;
+        }
+    }
+
     /* LEVEL 4 -- the PML4, whose base is CR3 */
     uint32_t pml4_addr = ((uint32_t)cpu->cr[3] & 0xFFFFF000u) +
                          (uint32_t)(((addr >> 39) & 0x1FFu) * 8u);
@@ -511,11 +530,36 @@ static int32_t do_page_walk64(uint64_t addr,
         return 0;
     }
     if ((pdpte & PAGE_TABLE_PSE_MASK) != 0) {
-        unimplemented_instruction(
-            "page walk: a 1 GiB page (PDPTE.PS) in long mode is S11's (plan ss6 S5 says"
-            " 4 KiB pages only)");
-        cpu->pagefault = true;
-        return 0;
+        /* S11: A 1 GiB PAGE.  The frame is bits 51:30 and the offset is bits 29:0; the RW/US/NX
+         * bits are the PDPTE's own.  The 32-bit physical bound still applies (a frame at or above
+         * 4 GiB stops by name below), and the A/D bits are updated on the PDPTE. */
+        if ((pdpte & 0x000FFFFFC0000000ull) >= 0x100000000ull) {
+            char stop_[160];
+            snprintf(stop_, sizeof(stop_),
+                     "page walk: the 1 GiB frame 0x%llx is above the port's 32-bit physical model"
+                     " (plan ss5.1)", (unsigned long long)(pdpte & 0x000FFFFFC0000000ull));
+            unimplemented_instruction(stop_);
+            cpu->pagefault = true;
+            return 0;
+        }
+        allow_write = (pdpte & PAGE_TABLE_RW_MASK) != 0;
+        allow_user = (pdpte & PAGE_TABLE_USER_MASK) != 0;
+        no_exec = (pdpte & PAGE_TABLE_NX_MASK) != 0;
+        global = (pdpte & PAGE_TABLE_GLOBAL_MASK) != 0;
+        bool kernel_write_override_1g = !user && (cr0 & CR0_WP) == 0;
+        if ((for_writing && !allow_write && !kernel_write_override_1g) ||
+            (user && !allow_user) || (is_instruction_fetch && no_exec)) {
+            if (side_effects) trigger_pagefault(addr, true, for_writing, user, is_instruction_fetch, false);
+            cpu->pagefault = true;
+            return 0;
+        }
+        if (side_effects) {
+            uint64_t new_pdpte = pdpte | PAGE_TABLE_ACCESSED_MASK |
+                                 (for_writing ? PAGE_TABLE_DIRTY_MASK : 0u);
+            if (new_pdpte != pdpte) write8(pdpt_addr, (int32_t)(uint32_t)(new_pdpte & 0xFFu));
+        }
+        high = (uint32_t)(pdpte & 0x000FFFFFC0000000ull) | ((uint32_t)addr & 0x3FFFFFFFu);
+        goto tlb_entry; /* the shared TLB composition at the bottom */
     }
     no_exec = (pdpte & PAGE_TABLE_NX_MASK) != 0;
 
@@ -537,11 +581,34 @@ static int32_t do_page_walk64(uint64_t addr,
         return 0;
     }
     if ((pde & PAGE_TABLE_PSE_MASK) != 0) {
-        unimplemented_instruction(
-            "page walk: a 2 MiB page (PDE.PS) in long mode is S11's (plan ss6 S5 says"
-            " 4 KiB pages only)");
-        cpu->pagefault = true;
-        return 0;
+        /* S11: A 2 MiB PAGE.  Frame bits 51:21, offset bits 20:0; RW/US/NX from the PDE. */
+        if ((pde & 0x000FFFFFFFE00000ull) >= 0x100000000ull) {
+            char stop_[160];
+            snprintf(stop_, sizeof(stop_),
+                     "page walk: the 2 MiB frame 0x%llx is above the port's 32-bit physical model"
+                     " (plan ss5.1)", (unsigned long long)(pde & 0x000FFFFFFFE00000ull));
+            unimplemented_instruction(stop_);
+            cpu->pagefault = true;
+            return 0;
+        }
+        allow_write = (pde & PAGE_TABLE_RW_MASK) != 0;
+        allow_user = (pde & PAGE_TABLE_USER_MASK) != 0;
+        no_exec = (pde & PAGE_TABLE_NX_MASK) != 0;
+        global = (pde & PAGE_TABLE_GLOBAL_MASK) != 0;
+        bool kernel_write_override_2m = !user && (cr0 & CR0_WP) == 0;
+        if ((for_writing && !allow_write && !kernel_write_override_2m) ||
+            (user && !allow_user) || (is_instruction_fetch && no_exec)) {
+            if (side_effects) trigger_pagefault(addr, true, for_writing, user, is_instruction_fetch, false);
+            cpu->pagefault = true;
+            return 0;
+        }
+        if (side_effects) {
+            uint64_t new_pde = pde | PAGE_TABLE_ACCESSED_MASK |
+                               (for_writing ? PAGE_TABLE_DIRTY_MASK : 0u);
+            if (new_pde != pde) write8(pd_addr, (int32_t)(uint32_t)(new_pde & 0xFFu));
+        }
+        high = (uint32_t)(pde & 0x000FFFFFFFE00000ull) | ((uint32_t)addr & 0x1FFFFFu);
+        goto tlb_entry;
     }
     no_exec |= (pde & PAGE_TABLE_NX_MASK) != 0;
     global = (pde & PAGE_TABLE_GLOBAL_MASK) != 0;
@@ -595,6 +662,8 @@ static int32_t do_page_walk64(uint64_t addr,
 
     high = (uint32_t)pte & 0xFFFFF000u;
 
+tlb_entry:
+    ; /* the shared TLB composition: reached by the 4 KiB path and by the two large-page arms */
     int32_t info_bits = TLB_VALID | (for_writing ? 0 : TLB_READONLY) |
                         (allow_user ? 0 : TLB_NO_USER) |
                         (in_mapped_range(high) ? TLB_IN_MAPPED_RANGE : 0) |

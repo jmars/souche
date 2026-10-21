@@ -726,8 +726,29 @@ byte-identical).  NOT covered, named in the report: **xmm8-15 as OPERANDS** (rep
 and **every other SSE/SSE2 encoding** plus x87's own D8-DF (no 64-bit arm: with REX.W they stop by
 name — a declared boundary, not an oversight).
 
-**S11-S13 REMAIN**: the system layer, the guest and the engines' long-mode arms.  The rest of this
-section is the reconnaissance record and is not made stale by S0-S10.
+**S11 IS LANDED IN PART (2026-10-19): THE SYSTEM LAYER — the walk and the MSR set, with the rest
+NAMED AS GAPS.**  `results/x86-64-s11.md` is its report.  **Landed**: the walk now **composes 1 GiB
+and 2 MiB pages** (S5 had named stops for both) with the 32-bit physical bound on each frame; a
+**canonicality check at the walk's entry** raises **`#GP(0)`** — closing the defect S5 recorded, where
+the index masks silently ALIASED a non-canonical address onto its low 48 bits and the identity map
+made that alias a MAPPED page; and the **MSR set**: `FS_BASE`/`GS_BASE`/`KERNEL_GS_BASE` (the bases
+write `segment_offsets[FS/GS]`, the slots S3 widened for exactly this — plus a pre-existing defect
+fixed on the way: the port's old `IA32_KERNEL_GS_BASE` placeholder was defined as 0xC0000101, i.e.
+GS_BASE's number) and `STAR`/`LSTAR`/`FMASK` (stored and read back so the SYSCALL seat exists).
+**THE GATE IS A NEW `tests/gate-long-mode-sys.sh`, one MUTATION PROBE PER LANDED RULE** (5/0): a 1 GiB
+PDPTE must run clean, a non-canonical address must fault with a CANONICAL control that runs clean, and
+`wrmsr(FS_BASE)` must move the base the STATE tail reports — and **two of those probes were VACUOUS
+in their first version and were fixed by measurement** (a moffs64 above 4 GiB hits the port's own
+moffs bound before the walk; a "a document was printed" assertion is also true of a FAULTING run).
+Two of `gate-long-mode.sh`'s arms were **INVERTED** accordingly (the 1 GiB/2 MiB named stops became
+"must compose").  **NAMED GAPS, each with its missing instrument**: SYSCALL/SYSRET (MSRs modelled,
+ENCODINGS not implemented — the probe needs a kernel-style image, which is S12's), **SWAPGS** (0F 01
+/5 has NO entry in v86's table, so the generated dispatch cannot carry it — an emitter extension),
+the **64-bit GDT/IDT/TSS/IST and interrupt frame** (the largest remaining piece, and S12's first
+item), the long-mode TLB's page-flag split, the `#PF` I/D bits, and S9's register-source BT family.
+
+**S12-S13 REMAIN**: the guest (the amd64 pin + the boot gate) and the engines' long-mode arms.  The
+rest of this section is the reconnaissance record and is not made stale by S0-S11.
 
 Not implemented, and deliberately **not** listed as a non-goal: it is wanted one day. It is recorded
 here so the next reader inherits the reconnaissance instead of re-deriving it.

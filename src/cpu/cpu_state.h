@@ -154,6 +154,16 @@
 #define CR4_OSXMMEXCPT (1 << 10)
 #define CR4_SMEP (1 << 20)
 #define MSR_EFER        0xC0000080u /* as int32 this is negative: keep unsigned */
+/* S11: the long-mode MSR set the system layer needs.  STAR/LSTAR/FMASK are SYSCALL's (named a
+ * GAP in this slice: the encodings are not landed, the registers are modelled so a later slice
+ * has a seat that already round-trips); FS/GS/KERNEL_GS_BASE are the segment bases long mode
+ * keeps in MSRs rather than in descriptors, and they ARE landed here. */
+#define MSR_STAR        0xC0000081u
+#define MSR_LSTAR       0xC0000082u
+#define MSR_FMASK       0xC0000084u
+#define MSR_FS_BASE     0xC0000100u
+#define MSR_GS_BASE     0xC0000101u
+#define MSR_KERNEL_GS_BASE 0xC0000102u
 #define EFER_NXE        ((uint64_t)1 << 11)
 /* S2 (results/x86-64-plan.md ss3.5.2, C5): the three long-mode control bits of the SAME
  * register.  EFER_NXE was the only defined bit, which is why a guest's EFER.LME was dead
@@ -415,6 +425,16 @@ typedef struct cpu_state {
 
     f80_t fpu_st[8]; /* 1152 */
     uint64_t efer;   /* 1280 */
+    /* S11: the long-mode MSR set.  FS/GS bases are NOT here -- they are segment_offsets[FS/GS]
+     * (widened in S3 for exactly this); KERNEL_GS_BASE has no other home, and SWAPGS is the
+     * instruction that swaps it with GS_BASE.  STAR/LSTAR/FMASK are stored and read back so the
+     * SYSCALL seat exists, and the SYSCALL/SYSRET ENCODINGS are a named gap (results/x86-64-s11.md
+     * ss5) -- a register that round-trips is not an instruction that works, and the report says
+     * which is which. */
+    uint64_t kernel_gs_base;
+    uint64_t star;
+    uint64_t lstar;
+    uint64_t fmask;
     uint64_t pat;    /* 1288 */
 
     /* ---- M1a addition: the page-fault flag (see the plumbing note below). ---- */

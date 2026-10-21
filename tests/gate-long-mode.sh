@@ -143,12 +143,17 @@ step "walk-pt-level-matters" sh -c \
 	"$PORT64 $MUT/pt-base-repointed.img 20000000 --fixture64 --long-mode on 2>&1 | grep -q 'past the end of guest RAM'"
 # (3) PDPTE.PS = 1 -> a 1 GiB page: a NAMED stop naming S11.
 patch pdpt-1gib c7050050100003601000 c7050050100083601000
-step "walk-1gib-named-stop" sh -c \
-	"$PORT64 $MUT/pdpt-1gib.img 20000000 --fixture64 --long-mode on 2>&1 | grep -q 'a 1 GiB page (PDPTE.PS) in long mode is S11'"
+# S11 REPLACED THE 1 GiB STOP WITH THE REAL COMPOSITION, so this arm is INVERTED: the same
+# mutation must now RUN CLEAN.  tests/gate-long-mode-sys.sh owns the rule's own probe.
+step "walk-1gib-composes" sh -c \
+	"$PORT64 $MUT/pdpt-1gib.img 20000000 --fixture64 --long-mode on > $MUT/1g2.out 2>&1; \
+	 grep -q 'BEGIN JSON' $MUT/1g2.out && ! grep -q '(signal SIG' $MUT/1g2.out"
 # (4) PDE.PS = 1 -> a 2 MiB page: a NAMED stop naming S11.
 patch pde-2mib c7050060100003701000 c7050060100083701000
-step "walk-2mib-named-stop" sh -c \
-	"$PORT64 $MUT/pde-2mib.img 20000000 --fixture64 --long-mode on 2>&1 | grep -q 'a 2 MiB page (PDE.PS) in long mode is S11'"
+# ... and the same for the 2 MiB arm (S11 composes it too)
+step "walk-2mib-composes" sh -c \
+	"$PORT64 $MUT/pde-2mib.img 20000000 --fixture64 --long-mode on > $MUT/2m.out 2>&1; \
+	 grep -q 'BEGIN JSON' $MUT/2m.out && ! grep -q '(signal SIG' $MUT/2m.out"
 # (4b) the PD base is repointed ABOVE guest RAM (MEMORY_SIZE = 0x200000, src/main.c:68): a
 # page-table read must be BOUNDED by memory_size, not handed to read64s -- the second HOST
 # out-of-bounds read this slice found (results/x86-64-s5.md ss6.6).  The patched instruction is

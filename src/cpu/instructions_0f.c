@@ -6336,6 +6336,31 @@ void instr_0F30(void)
 	int32_t high = read_reg32(EDX);
 
 	switch (index) {
+	/* S11: THE FOUR SEGMENT/MSR AREAS.  In long mode the FS and GS bases live in MSRs, not in
+	 * descriptors, and the segment_offsets[] slots S3 widened are where this port keeps them --
+	 * so `wrmsr(FS_BASE)` writes the base the address generator already reads, and a guest's
+	 * `mov rax, fs:[0]` follows it.  KERNEL_GS_BASE is the other half of SWAPGS. */
+	case (int32_t)MSR_FS_BASE: {
+		cpu->segment_offsets[FS] = ((uint64_t)(uint32_t)high << 32) | (uint64_t)(uint32_t)low;
+	}
+		break;
+	case (int32_t)MSR_GS_BASE: {
+		cpu->segment_offsets[GS] = ((uint64_t)(uint32_t)high << 32) | (uint64_t)(uint32_t)low;
+	}
+		break;
+	case (int32_t)MSR_KERNEL_GS_BASE: {
+		cpu->kernel_gs_base = ((uint64_t)(uint32_t)high << 32) | (uint64_t)(uint32_t)low;
+	}
+		break;
+	case (int32_t)MSR_STAR:
+		cpu->star = ((uint64_t)(uint32_t)high << 32) | (uint64_t)(uint32_t)low;
+		break;
+	case (int32_t)MSR_LSTAR:
+		cpu->lstar = ((uint64_t)(uint32_t)high << 32) | (uint64_t)(uint32_t)low;
+		break;
+	case (int32_t)MSR_FMASK:
+		cpu->fmask = ((uint64_t)(uint32_t)high << 32) | (uint64_t)(uint32_t)low;
+		break;
 	case (int32_t)MSR_EFER: {
 		uint64_t value = ((uint64_t)(uint32_t)high << 32) | (uint64_t)(uint32_t)low;
 		/* upstream: dbg_assert!(value & !EFER_NXE == 0, "Unimplemented EFER bits") --
@@ -6388,7 +6413,6 @@ void instr_0F30(void)
 	case MISC_FEATURE_ENABLES: break; /* Linux 4 */
 	case IA32_MISC_ENABLE: break;     /* Enable Misc. Processor Features */
 	case IA32_MCG_CAP: break;         /* netbsd */
-	case IA32_KERNEL_GS_BASE: break;  /* only used in 64 bit mode (by SWAPGS) */
 	case IA32_PERFEVTSEL0:      /* fallthrough */
 	case IA32_PERFEVTSEL1: break; /* linux/9legacy */
 	case IA32_PMC0:      /* fallthrough */
@@ -6457,6 +6481,21 @@ void instr_0F32(void)
 		high = (int32_t)(val >> 32);
 	}
 		break;
+	case (int32_t)MSR_FS_BASE:
+		low = (int32_t)cpu->segment_offsets[FS];
+		high = (int32_t)(cpu->segment_offsets[FS] >> 32);
+		break;
+	case (int32_t)MSR_GS_BASE:
+		low = (int32_t)cpu->segment_offsets[GS];
+		high = (int32_t)(cpu->segment_offsets[GS] >> 32);
+		break;
+	case (int32_t)MSR_KERNEL_GS_BASE:
+		low = (int32_t)cpu->kernel_gs_base;
+		high = (int32_t)(cpu->kernel_gs_base >> 32);
+		break;
+	case (int32_t)MSR_STAR: low = (int32_t)cpu->star; high = (int32_t)(cpu->star >> 32); break;
+	case (int32_t)MSR_LSTAR: low = (int32_t)cpu->lstar; high = (int32_t)(cpu->lstar >> 32); break;
+	case (int32_t)MSR_FMASK: low = (int32_t)cpu->fmask; high = (int32_t)(cpu->fmask >> 32); break;
 	case IA32_SYSENTER_CS: low = cpu->sysenter_cs; break;
 	case IA32_SYSENTER_EIP: low = cpu->sysenter_eip; break;
 	case IA32_SYSENTER_ESP: low = cpu->sysenter_esp; break;
