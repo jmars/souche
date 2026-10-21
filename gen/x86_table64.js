@@ -155,7 +155,8 @@ const x86_table64 = [
 	{ opcode: 0x78 }, { opcode: 0x79 }, { opcode: 0x7A }, { opcode: 0x7B },
 	{ opcode: 0x7C }, { opcode: 0x7D }, { opcode: 0x7E }, { opcode: 0x7F },
 
-	{ opcode: 0x63 },  /* movsxd r64, r/m32 (S7) */
+	{ opcode: 0x63, narrow64: "0x63 without REX.W is MOVSXD at 16 or 32 bits, which is not"
+	                          + " implemented (ARPL does not exist in 64-bit mode)" }, /* movsxd r64, r/m32 (S7) */
 	{ opcode: 0x87 },  /* xchg r/m64, r64 (S7) */
 	{ opcode: 0x8D },  /* lea r64, m (S7; custom_modrm_resolve, like the 32-bit body) */
 	/* 0xC3 / 0xE8 / 0xE9 are ALREADY here as default-64 entries with no body (S5's shutter);
@@ -294,30 +295,30 @@ const x86_table64 = [
 	{ opcode: 0xF7 }, /* the group: /2 not /3 neg (the rest are S8's) */
 
 	/* ---------------- the stack and the stop, all default-64 ---------------- */
-	{ opcode: 0x50, default64: true }, /* push r0 */
-	{ opcode: 0x51, default64: true },
-	{ opcode: 0x52, default64: true },
-	{ opcode: 0x53, default64: true },
-	{ opcode: 0x54, default64: true },
-	{ opcode: 0x55, default64: true },
-	{ opcode: 0x56, default64: true },
-	{ opcode: 0x57, default64: true },
-	{ opcode: 0x58, default64: true }, /* pop r0 */
-	{ opcode: 0x59, default64: true },
-	{ opcode: 0x5A, default64: true },
-	{ opcode: 0x5B, default64: true },
-	{ opcode: 0x5C, default64: true },
-	{ opcode: 0x5D, default64: true },
-	{ opcode: 0x5E, default64: true },
-	{ opcode: 0x5F, default64: true },
-	{ opcode: 0x68, default64: true }, /* push imm32 (sign-extended to 64 in long mode) */
-	{ opcode: 0x6A, default64: true }, /* push imm8  (ditto) */
-	{ opcode: 0x9C, default64: true }, /* pushf -> pushfq */
-	{ opcode: 0x9D, default64: true }, /* popf  -> popfq */
+	{ opcode: 0x50, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true }, /* push r0 */
+	{ opcode: 0x51, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true },
+	{ opcode: 0x52, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true },
+	{ opcode: 0x53, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true },
+	{ opcode: 0x54, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true },
+	{ opcode: 0x55, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true },
+	{ opcode: 0x56, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true },
+	{ opcode: 0x57, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true },
+	{ opcode: 0x58, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true }, /* pop r0 */
+	{ opcode: 0x59, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true },
+	{ opcode: 0x5A, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true },
+	{ opcode: 0x5B, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true },
+	{ opcode: 0x5C, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true },
+	{ opcode: 0x5D, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true },
+	{ opcode: 0x5E, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true },
+	{ opcode: 0x5F, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true },
+	{ opcode: 0x68, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true }, /* push imm32 (sign-extended to 64 in long mode) */
+	{ opcode: 0x6A, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true }, /* push imm8  (ditto) */
+	{ opcode: 0x9C, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true }, /* pushf -> pushfq */
+	{ opcode: 0x9D, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true }, /* popf  -> popfq */
 	{ opcode: 0xF4 },                 /* hlt: no operand, but the corpus's epilogue needs it and
 	                                   * its 32-bit body is mode-independent (cpu->in_hlt).  Here
 	                                   * so the 0x2NN arm exists and the census counts it. */
-	{ opcode: 0xEB, default64: true }, /* jmp rel8: the target arithmetic is 64-bit in long mode
+	{ opcode: 0xEB, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true }, /* jmp rel8: the target arithmetic is 64-bit in long mode
 	                                   * (the corpus's `jmp loop`) */
 
 	/* ------------------------------------------------------------------ *
@@ -337,15 +338,15 @@ const x86_table64 = [
 	 * stops by name instead of running), which is the safe direction, and S6/S7 replace it
 	 * with per-sub-opcode arms.
 	 * ------------------------------------------------------------------ */
-	{ opcode: 0x8F, default64: true }, /* pop r/m64                 -- S7 */
+	{ opcode: 0x8F, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true }, /* pop r/m64                 -- S7 */
 	{ opcode: 0xC2, default64: true }, /* ret imm16                 -- S7 */
-	{ opcode: 0xC3, default64: true }, /* ret                       -- S7 */
+	{ opcode: 0xC3, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true }, /* ret                       -- S7 */
 	{ opcode: 0xCA, default64: true }, /* retf imm16                -- S7/S11 */
 	{ opcode: 0xCB, default64: true }, /* retf                      -- S7/S11 */
 	{ opcode: 0xCF, default64: true }, /* iretd -> iretq            -- S11 */
-	{ opcode: 0xE8, default64: true }, /* call rel32                -- S7 */
-	{ opcode: 0xE9, default64: true }, /* jmp rel32                 -- S7 */
-	{ opcode: 0xFF, default64: true }, /* /0 inc and /1 dec are S6's bodies and /4 jmp r/m64
+	{ opcode: 0xE8, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true }, /* call rel32                -- S7 */
+	{ opcode: 0xE9, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true }, /* jmp rel32                 -- S7 */
+	{ opcode: 0xFF, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true }, /* /0 inc and /1 dec are S6's bodies and /4 jmp r/m64
 	                                   * is S7's; /2 call r/m, /3 callf, /5 jmpf and /6 push
 	                                   * r/m stay NAMED STOPS -- automatic: the availability
 	                                   * scan emits a stop for a sub-op with no body. */

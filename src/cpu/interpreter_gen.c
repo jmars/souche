@@ -25,8 +25,8 @@
  * reached this way still stops by name, exactly as the unprefixed encoding does.
  * See gen/interpreter_c.js, C-side difference 3.
  *
- * 2104 call sites, 38 of them unimplemented at the time this
- * file was generated (2070 instr* symbols defined in the port's sources).
+ * 2104 call sites, 22 of them unimplemented at the time this
+ * file was generated (2086 instr* symbols defined in the port's sources).
  */
 
 #include "cpu.h"
@@ -1935,11 +1935,19 @@ void run_instruction(int32_t opcode)
 
 	case 0x50:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr16_50();
 	}
 	break;
 	case 0x150:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr32_50();
 	}
 	break;
@@ -1950,11 +1958,19 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x51:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr16_51();
 	}
 	break;
 	case 0x151:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr32_51();
 	}
 	break;
@@ -1965,11 +1981,19 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x52:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr16_52();
 	}
 	break;
 	case 0x152:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr32_52();
 	}
 	break;
@@ -1980,11 +2004,19 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x53:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr16_53();
 	}
 	break;
 	case 0x153:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr32_53();
 	}
 	break;
@@ -1995,11 +2027,19 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x54:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr16_54();
 	}
 	break;
 	case 0x154:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr32_54();
 	}
 	break;
@@ -2010,11 +2050,19 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x55:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr16_55();
 	}
 	break;
 	case 0x155:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr32_55();
 	}
 	break;
@@ -2025,11 +2073,19 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x56:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr16_56();
 	}
 	break;
 	case 0x156:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr32_56();
 	}
 	break;
@@ -2040,11 +2096,19 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x57:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr16_57();
 	}
 	break;
 	case 0x157:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr32_57();
 	}
 	break;
@@ -2055,11 +2119,19 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x58:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr16_58();
 	}
 	break;
 	case 0x158:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr32_58();
 	}
 	break;
@@ -2070,11 +2142,19 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x59:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr16_59();
 	}
 	break;
 	case 0x159:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr32_59();
 	}
 	break;
@@ -2085,11 +2165,19 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x5A:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr16_5A();
 	}
 	break;
 	case 0x15A:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr32_5A();
 	}
 	break;
@@ -2100,11 +2188,19 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x5B:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr16_5B();
 	}
 	break;
 	case 0x15B:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr32_5B();
 	}
 	break;
@@ -2115,11 +2211,19 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x5C:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr16_5C();
 	}
 	break;
 	case 0x15C:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr32_5C();
 	}
 	break;
@@ -2130,11 +2234,19 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x5D:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr16_5D();
 	}
 	break;
 	case 0x15D:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr32_5D();
 	}
 	break;
@@ -2145,11 +2257,19 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x5E:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr16_5E();
 	}
 	break;
 	case 0x15E:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr32_5E();
 	}
 	break;
@@ -2160,11 +2280,19 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x5F:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr16_5F();
 	}
 	break;
 	case 0x15F:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr32_5F();
 	}
 	break;
@@ -2268,6 +2396,10 @@ void run_instruction(int32_t opcode)
 	case 0x63:
 	case 0x163:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: 0x63 without REX.W is MOVSXD at 16 or 32 bits, which is not implemented (ARPL does not exist in 64-bit mode)");
+			return;
+		}
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		if (modrm_byte < 0xC0) {
@@ -2346,6 +2478,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x68:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		int32_t imm = read_imm16();
 		if (cpu->pagefault) return;
 		instr16_68(imm);
@@ -2353,6 +2489,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x168:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		int32_t imm = read_imm32s();
 		if (cpu->pagefault) return;
 		instr32_68(imm);
@@ -2409,6 +2549,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x6A:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		int32_t imm = read_imm8s();
 		if (cpu->pagefault) return;
 		instr16_6A(imm);
@@ -2416,6 +2560,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x16A:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		int32_t imm = read_imm8s();
 		if (cpu->pagefault) return;
 		instr32_6A(imm);
@@ -2614,8 +2762,9 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x270:
 	{
-		unimplemented_instruction("instructions::instr64_70");
-		return;
+		int64_t imm = read_imm8s();
+		if (cpu->pagefault) return;
+		instr64_70(imm);
 	}
 	break;
 	case 0x71:
@@ -2634,8 +2783,9 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x271:
 	{
-		unimplemented_instruction("instructions::instr64_71");
-		return;
+		int64_t imm = read_imm8s();
+		if (cpu->pagefault) return;
+		instr64_71(imm);
 	}
 	break;
 	case 0x72:
@@ -2654,8 +2804,9 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x272:
 	{
-		unimplemented_instruction("instructions::instr64_72");
-		return;
+		int64_t imm = read_imm8s();
+		if (cpu->pagefault) return;
+		instr64_72(imm);
 	}
 	break;
 	case 0x73:
@@ -2674,8 +2825,9 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x273:
 	{
-		unimplemented_instruction("instructions::instr64_73");
-		return;
+		int64_t imm = read_imm8s();
+		if (cpu->pagefault) return;
+		instr64_73(imm);
 	}
 	break;
 	case 0x74:
@@ -2694,8 +2846,9 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x274:
 	{
-		unimplemented_instruction("instructions::instr64_74");
-		return;
+		int64_t imm = read_imm8s();
+		if (cpu->pagefault) return;
+		instr64_74(imm);
 	}
 	break;
 	case 0x75:
@@ -2714,8 +2867,9 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x275:
 	{
-		unimplemented_instruction("instructions::instr64_75");
-		return;
+		int64_t imm = read_imm8s();
+		if (cpu->pagefault) return;
+		instr64_75(imm);
 	}
 	break;
 	case 0x76:
@@ -2734,8 +2888,9 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x276:
 	{
-		unimplemented_instruction("instructions::instr64_76");
-		return;
+		int64_t imm = read_imm8s();
+		if (cpu->pagefault) return;
+		instr64_76(imm);
 	}
 	break;
 	case 0x77:
@@ -2754,8 +2909,9 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x277:
 	{
-		unimplemented_instruction("instructions::instr64_77");
-		return;
+		int64_t imm = read_imm8s();
+		if (cpu->pagefault) return;
+		instr64_77(imm);
 	}
 	break;
 	case 0x78:
@@ -2774,8 +2930,9 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x278:
 	{
-		unimplemented_instruction("instructions::instr64_78");
-		return;
+		int64_t imm = read_imm8s();
+		if (cpu->pagefault) return;
+		instr64_78(imm);
 	}
 	break;
 	case 0x79:
@@ -2794,8 +2951,9 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x279:
 	{
-		unimplemented_instruction("instructions::instr64_79");
-		return;
+		int64_t imm = read_imm8s();
+		if (cpu->pagefault) return;
+		instr64_79(imm);
 	}
 	break;
 	case 0x7A:
@@ -2814,8 +2972,9 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x27A:
 	{
-		unimplemented_instruction("instructions::instr64_7A");
-		return;
+		int64_t imm = read_imm8s();
+		if (cpu->pagefault) return;
+		instr64_7A(imm);
 	}
 	break;
 	case 0x7B:
@@ -2834,8 +2993,9 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x27B:
 	{
-		unimplemented_instruction("instructions::instr64_7B");
-		return;
+		int64_t imm = read_imm8s();
+		if (cpu->pagefault) return;
+		instr64_7B(imm);
 	}
 	break;
 	case 0x7C:
@@ -2854,8 +3014,9 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x27C:
 	{
-		unimplemented_instruction("instructions::instr64_7C");
-		return;
+		int64_t imm = read_imm8s();
+		if (cpu->pagefault) return;
+		instr64_7C(imm);
 	}
 	break;
 	case 0x7D:
@@ -2874,8 +3035,9 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x27D:
 	{
-		unimplemented_instruction("instructions::instr64_7D");
-		return;
+		int64_t imm = read_imm8s();
+		if (cpu->pagefault) return;
+		instr64_7D(imm);
 	}
 	break;
 	case 0x7E:
@@ -2894,8 +3056,9 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x27E:
 	{
-		unimplemented_instruction("instructions::instr64_7E");
-		return;
+		int64_t imm = read_imm8s();
+		if (cpu->pagefault) return;
+		instr64_7E(imm);
 	}
 	break;
 	case 0x7F:
@@ -2914,8 +3077,9 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x27F:
 	{
-		unimplemented_instruction("instructions::instr64_7F");
-		return;
+		int64_t imm = read_imm8s();
+		if (cpu->pagefault) return;
+		instr64_7F(imm);
 	}
 	break;
 	case 0x80:
@@ -4281,6 +4445,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x8F:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		switch (modrm_byte >> 3 & 7) {
@@ -4303,6 +4471,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x18F:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		switch (modrm_byte >> 3 & 7) {
@@ -4555,11 +4727,19 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x9C:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr16_9C();
 	}
 	break;
 	case 0x19C:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr32_9C();
 	}
 	break;
@@ -4570,11 +4750,19 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x9D:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr16_9D();
 	}
 	break;
 	case 0x19D:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr32_9D();
 	}
 	break;
@@ -5763,12 +5951,20 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0xC3:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr16_C3();
 		after_block_boundary();
 	}
 	break;
 	case 0x1C3:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		instr32_C3();
 		after_block_boundary();
 	}
@@ -8446,6 +8642,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0xE8:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		int32_t imm = read_imm16();
 		if (cpu->pagefault) return;
 		instr16_E8(imm);
@@ -8454,6 +8654,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x1E8:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		int32_t imm = read_imm32s();
 		if (cpu->pagefault) return;
 		instr32_E8(imm);
@@ -8470,6 +8674,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0xE9:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		int32_t imm = read_imm16();
 		if (cpu->pagefault) return;
 		instr16_E9(imm);
@@ -8477,6 +8685,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x1E9:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		int32_t imm = read_imm32s();
 		if (cpu->pagefault) return;
 		instr32_E9(imm);
@@ -8530,6 +8742,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0xEB:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		int32_t imm = read_imm8s();
 		if (cpu->pagefault) return;
 		instr16_EB(imm);
@@ -8537,6 +8753,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x1EB:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		int32_t imm = read_imm8s();
 		if (cpu->pagefault) return;
 		instr32_EB(imm);
@@ -9263,6 +9483,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0xFF:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		switch (modrm_byte >> 3 & 7) {
@@ -9362,6 +9586,10 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x1FF:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)");
+			return;
+		}
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		switch (modrm_byte >> 3 & 7) {

@@ -549,10 +549,19 @@ case("ctrl", "jcc-64",
 .end:
 """)
 case("ctrl", "call-ret-64",
-     "a call/ret pair in 64-bit mode pushes and pops an 8-BYTE return address: a "
-     "4-byte push desynchronises rsp and the stack window",
+     "a call/ret pair in 64-bit mode pushes and pops an 8-BYTE return address: a 4-byte push "
+     "desynchronises rsp and the stack window -- and the SENTINEL below makes even a "
+     "SYMMETRIC 4+4 pair visible, because the high half of the return slot would still hold it",
      """\
     mov rax, 0x1111111111111111
+    # ROUND 2 (should-fix 4): the return slot is pre-loaded with a NONZERO sentinel.  The
+    # prologue's `push 0 / popfq` leaves [0x101FF8] zero, so a SYMMETRIC four-byte call+ret
+    # pair (push 4, pop 4) returns correctly and leaves the slot byte-identical to the
+    # eight-byte pair's -- the review MEASURED that blindness.  With the sentinel an 8-byte
+    # push overwrites all eight bytes with the return address, while a 4-byte push leaves the
+    # high half = 0xDEADBEEFDEADBEEF, which the compared window carries.
+    mov rdx, 0xDEADBEEFDEADBEEF
+    mov qword ptr [0x101FF8], rdx
     call .helper
     jmp .after
 .helper:
@@ -560,6 +569,38 @@ case("ctrl", "call-ret-64",
     ret
 .after:
     mov qword ptr [0x100200], rax
+""")
+case("ctrl", "jcc-rexw",
+     "a REX.W byte before a jcc rel8 is legal and IGNORED by hardware, but it selects the "
+     "64-bit arm of the dispatch key -- so this case is the one that proves the 0x27x arms "
+     "CALL their bodies instead of stopping (round-1 blocker: the sixteen jcc bodies were "
+     "unreachable because the availability scan could not see macro-generated definitions)",
+     """\
+    mov rax, 1
+    # BOTH SIDES: a REX.W jcc that is NOT taken and one that IS, so a body that never branches
+    # (or always branches) mismatches.  MEASURED: the first version of this case had only a
+    # not-taken branch, and a mutant that made the jne body do nothing stayed GREEN.
+    cmp rax, 1
+    .byte 0x48
+    jne .bad
+    mov rbx, 0x1111111111111111
+    cmp rax, 2
+    .byte 0x48
+    je .bad2
+    mov rcx, 0x3333333333333333
+    cmp rax, 2
+    .byte 0x48
+    jne .taken
+    mov rsi, 0x5555555555555555
+.taken:
+    mov rdx, 0x4444444444444444
+    jmp .done
+.bad:
+    mov rbx, 0x2222222222222222
+    jmp .done
+.bad2:
+    mov rcx, 0x6666666666666666
+.done:
 """)
 case("ctrl", "push-pop-64",
      "push/pop are 8 bytes wide in 64-bit mode: the stack window records two 8-byte "

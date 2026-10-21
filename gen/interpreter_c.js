@@ -519,6 +519,30 @@ function group_by_opcode() {
  * reached.  So the guard goes on the 0xNN AND 0x1NN arms as well, and it tests the MODE, not
  * the operand size: in 32-bit and compatibility modes those arms run exactly as before (the
  * stub's own compat-mode `0xEA` far jump is the case that keeps it honest). */
+/* ROUND 2 (S7): THE NARROW-FORM GUARD.  `narrow64` is a message, and the guard it emits is a
+ * NAMED STOP on the 0xNN and 0x1NN arms ONLY -- the 0x2NN arm keeps whatever the overlay gave
+ * it (a real body for 0x63, a stop for the default-64 group).  It exists for two measured
+ * reasons:
+ *
+ *  - 0x63: in 64-bit mode the encoding is MOVSXD at the width the operand size selects, so a
+ *    BARE `63 /r` (key 1) and a `66 63 /r` (key 0) are movsxd r32/r16 -- and their 32-bit arms
+ *    are ARPL, which does not exist in long mode.  S7's first version DELETED S5 round 2's
+ *    guard with the stop64 entry it replaced, so both narrow forms executed ARPL (MEASURED by
+ *    the review on the host: bare `63 c0` is movsxd r32, `66 63` r16).
+ *  - the default-64 group under a 0x66: hardware HONOURS `66 50` as a TWO-BYTE push (the
+ *    reviewer's caution -- a blanket "ignore 66" would be wrong), and the port's 16-bit stack
+ *    path runs through `adjust_stack_reg`, which is `write_reg32(ESP, ...)` and therefore
+ *    ZEROES RSP's high half in long mode.  A named stop is the honest answer until the 16-bit
+ *    stack forms are ported at 64 bits; refusing a legal instruction is visible, truncating RSP
+ *    is not.
+ */
+function long_mode_narrow_guard(entry) {
+	return [`if (long_mode_64()) {`,
+		`\tunimplemented_instruction("long mode: ${entry.narrow64}");`,
+		"\treturn;",
+		"}"];
+}
+
 function long_mode_guard(entry) {
 	if (entry.stop64) {
 		return [`if (long_mode_64()) {`,
@@ -594,9 +618,11 @@ function switch_cases(by_opcode, is_0f) {
 
 		const guard_entry = overlay64.get(opcode);
 		const needs_guard = !is_0f && guard_entry && (guard_entry.invalid64 || guard_entry.stop64);
+		const needs_narrow = !is_0f && guard_entry && guard_entry.narrow64;
 		for (const block of blocks) {
 			for (const label of block.labels) out.push(`case ${label}:`);
 			out.push("{");
+			if (needs_narrow) out.push(...indent(long_mode_narrow_guard(guard_entry), 1));
 			if (needs_guard) out.push(...indent(long_mode_guard(guard_entry), 1));
 			out.push(...indent(block.body, 1));
 			out.push("}", "break;");

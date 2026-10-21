@@ -598,6 +598,26 @@ named stop), `ret imm16`/`retf`/`iretq`/`call r/m`/`callf`/`jmpf` (S11's far tra
 fourteen cmovcc/setcc conditions, and `xchg`'s MEMORY form (the body exists, no case grades it —
 unproven, stated).
 
+**S7 ROUND 2 (2026-10-19): two blockers and two should-fix from the review, all fixed.**
+(BLOCKER 1) **The sixteen jcc rel8 bodies were DEAD CODE**: `JMPCC8` generated them and the
+emitter's availability scan is TEXTUAL (`^void[ \t]+(instr…)[(]`), so the scan reported them
+absent and every `0x27x` arm emitted a named stop — MEASURED as zero calls to `instr64_7x` in the
+tree.  FIX: the sixteen are spelled out (the THIRD firing of this trap — `MOV_IMM64` in S5,
+`ALU_IMM8` in S6 — so it is now stated as a rule: a body the emitter must see is a
+`void <name>(…)` line at column 0, never a macro), with a gate step asserting 16 calls in the
+GENERATED file and a new `ctrl-jcc-rexw` case that takes the `0x27x` arms on both sides of the
+branch (a mutant that never branches turns it red).  (BLOCKER 2) S7 had **deleted S5 round 2's
+guard on `0x63`**, so bare `63 /r` and `66 63 /r` executed ARPL, which does not exist in 64-bit
+mode; a new overlay kind `narrow64` puts a NAMED STOP on the narrow arms (hardware makes them
+movsxd r32/r16, which no case grades) while `REX.W` keeps the real body.  (SHOULD-FIX 3) The `0x66`
+forms of the default-64 group fell through to their 16-bit arms; hardware HONOURS `66 50` as a
+two-byte push, but the port's 16-bit stack path runs through `adjust_stack_reg`, i.e.
+`write_reg32(ESP, …)`, which would ZERO RSP's high half — so the whole group is a NAMED STOP with
+that reason.  (SHOULD-FIX 4) `ctrl-call-ret-64` was blind to a SYMMETRIC four-byte call+ret pair
+(the prologue pre-zeroed the return slot): the case now pre-loads it with a sentinel, and a
+4-byte-push mutant is MEASURED red on `mem[101FF8] = 0xFFFFFFFFDEADBEEF`.  Family 3 is **13/13**,
+the whole corpus `green=38 red_unimplemented=21`, and the battery is unmoved.
+
 **S8-S13 REMAIN**: mul/div/shifts, the remaining ISA families, the system layer, the guest and the
 engines' long-mode arms.  The rest of this section is the reconnaissance record and is not made
 stale by S0-S7.

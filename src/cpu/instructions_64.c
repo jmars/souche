@@ -866,28 +866,32 @@ void instr64_FF_4_reg(int32_t r1) { set_instruction_pointer(read_reg64(r1)); }
  * (misc_instr.h); ctrl-jcc-64 (S6 side-effect green) and every other family-3 branch run
  * through these.  The target arithmetic is the 64-bit cursor plus the sign-extended rel8.
  * ------------------------------------------------------------------ */
-#define JMPCC8(OP, COND)                                                               \
-	void instr64_##OP(int32_t imm)                                                     \
-	{                                                                                  \
-		if (COND) set_instruction_pointer(cpu->instruction_pointer + (int64_t)imm);     \
-	}
-
-JMPCC8(70, test_o())
-JMPCC8(71, test_no())
-JMPCC8(72, test_b())
-JMPCC8(73, test_nb())
-JMPCC8(74, test_z())
-JMPCC8(75, test_nz())
-JMPCC8(76, test_be())
-JMPCC8(77, test_nbe())
-JMPCC8(78, test_s())
-JMPCC8(79, test_ns())
-JMPCC8(7A, test_p())
-JMPCC8(7B, test_np())
-JMPCC8(7C, test_l())
-JMPCC8(7D, test_nl())
-JMPCC8(7E, test_le())
-JMPCC8(7F, test_nle())
+/* SPELLED OUT, NOT MACRO-GENERATED, and the reason is MEASURED rather than stylistic: the
+ * emitter's availability scan is TEXTUAL (`gen/interpreter_c.js` matches
+ * `^void[ \t]+(instr...)[(]` at the start of a line), so a body produced by a macro is
+ * INVISIBLE to it.  Round 1 wrote these sixteen with a JMPCC8 macro, the scan reported them
+ * absent, every `case 0x27x:` emitted `unimplemented_instruction("instructions::instr64_7x")`,
+ * and the review measured ZERO calls to instr64_7x in the tree -- sixteen bodies nobody could
+ * reach and sixteen stops that refused the encoding.  (The same trap took MOV_IMM64 in S5 and
+ * ALU_IMM8 in S6; three times is a rule, not an accident, which is why the report states it.)
+ * The scan's contract is "a definition is a line that starts with `void <name>(`", and these
+ * sixteen lines satisfy it. */
+void instr64_70(int32_t imm) { if (test_o()) set_instruction_pointer(cpu->instruction_pointer + (int64_t)imm); }
+void instr64_71(int32_t imm) { if (test_no()) set_instruction_pointer(cpu->instruction_pointer + (int64_t)imm); }
+void instr64_72(int32_t imm) { if (test_b()) set_instruction_pointer(cpu->instruction_pointer + (int64_t)imm); }
+void instr64_73(int32_t imm) { if (test_nb()) set_instruction_pointer(cpu->instruction_pointer + (int64_t)imm); }
+void instr64_74(int32_t imm) { if (test_z()) set_instruction_pointer(cpu->instruction_pointer + (int64_t)imm); }
+void instr64_75(int32_t imm) { if (test_nz()) set_instruction_pointer(cpu->instruction_pointer + (int64_t)imm); }
+void instr64_76(int32_t imm) { if (test_be()) set_instruction_pointer(cpu->instruction_pointer + (int64_t)imm); }
+void instr64_77(int32_t imm) { if (test_nbe()) set_instruction_pointer(cpu->instruction_pointer + (int64_t)imm); }
+void instr64_78(int32_t imm) { if (test_s()) set_instruction_pointer(cpu->instruction_pointer + (int64_t)imm); }
+void instr64_79(int32_t imm) { if (test_ns()) set_instruction_pointer(cpu->instruction_pointer + (int64_t)imm); }
+void instr64_7A(int32_t imm) { if (test_p()) set_instruction_pointer(cpu->instruction_pointer + (int64_t)imm); }
+void instr64_7B(int32_t imm) { if (test_np()) set_instruction_pointer(cpu->instruction_pointer + (int64_t)imm); }
+void instr64_7C(int32_t imm) { if (test_l()) set_instruction_pointer(cpu->instruction_pointer + (int64_t)imm); }
+void instr64_7D(int32_t imm) { if (test_nl()) set_instruction_pointer(cpu->instruction_pointer + (int64_t)imm); }
+void instr64_7E(int32_t imm) { if (test_le()) set_instruction_pointer(cpu->instruction_pointer + (int64_t)imm); }
+void instr64_7F(int32_t imm) { if (test_nle()) set_instruction_pointer(cpu->instruction_pointer + (int64_t)imm); }
 
 /* ------------------------------------------------------------------ *
  * LEA (0x8D) -- the ONE instruction whose address computation is the RESULT.  It is
