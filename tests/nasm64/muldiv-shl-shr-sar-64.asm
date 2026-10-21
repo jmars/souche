@@ -124,6 +124,18 @@ body_start:
     shl rax, cl
     shr rbx, cl
     sar rcx, cl
+    # S8: the DEFINED flags of this case's last flag-setting operation, masked to
+    # the bits the SDM defines for it (0xD5); the undefined ones are excluded by RULE
+    # (plan ss2.1.5), not by luck -- results/x86-64-s8.md ss4.
+    pushfq
+    pop qword ptr [0x100080]
+    and dword ptr [0x100080], 0xC5
+    and dword ptr [rsp - 8], 0xC5
+    # ... and the rflags ELEMENT is compared with MASK_ARITH unconditionally, so the
+    # body ends with a flag-DEFINING instruction that touches no register: `cmp rax, rax`
+    # defines all six.  Without it the element would compare the undefined bits of the
+    # case's own last operation against the host (the S6 round-2 AF lesson, at the element).
+    cmp rax, rax
     mov qword ptr [0x100000], rax
     mov qword ptr [0x100008], rcx
     mov qword ptr [0x100010], rdx

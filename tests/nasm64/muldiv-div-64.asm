@@ -121,6 +121,11 @@ body_start:
     xor edx, edx
     mov rcx, 0x10
     div rcx
+    # ... and the rflags ELEMENT is compared with MASK_ARITH unconditionally, so the
+    # body ends with a flag-DEFINING instruction that touches no register: `cmp rax, rax`
+    # defines all six.  Without it the element would compare the undefined bits of the
+    # case's own last operation against the host (the S6 round-2 AF lesson, at the element).
+    cmp rax, rax
     mov qword ptr [0x100000], rax
     mov qword ptr [0x100008], rcx
     mov qword ptr [0x100010], rdx

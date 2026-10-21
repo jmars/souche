@@ -103,7 +103,7 @@ echo "== D. the 0x2NN overlay's census (routed arms / named stops) AS NUMBERS"
 # the default-64 named stops (ret/call/jmp/pop r-m/iret) that S6-S11 replace; a slice that
 # lands one EDITS THIS LINE, which is the record of what it landed.
 step "overlay-census" sh -c \
-	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 136 overlay entries, 96 routed to instr64 bodies, 22 of those call sites unimplemented'"
+	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 141 overlay entries, 101 routed to instr64 bodies, 32 of those call sites unimplemented'"
 must_fail "overlay-census-able-to-fail" sh -c \
 	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 0 overlay entries'"
 
@@ -112,7 +112,7 @@ step "family-1-green" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_
 	--filter '^mov-' --expect counts \
 	--expect-counts "green=12 red_unimplemented=0 mismatch=0 error=0" --quiet
 step "whole-corpus-no-mismatch" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
-	--expect counts --expect-counts "green=38 red_unimplemented=21 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=50 red_unimplemented=9 mismatch=0 error=0" --quiet
 must_fail "whole-corpus-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
 	--actual "$ACTUAL_ON" --expect counts --expect-counts "green=57 mismatch=0" --quiet
 
@@ -232,7 +232,7 @@ echo "== F3. S6: THE ALU FAMILY AT 64 BITS, WITH ITS FLAGS (family 2, case by ca
 # therefore RED BY NAME.  The counts are the assertion -- family 2's own census.
 step "alu-family" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
 	--filter '^alu-' --expect counts \
-	--expect-counts "green=10 red_unimplemented=1 mismatch=0 error=0" --quiet
+	--expect-counts "green=11 red_unimplemented=0 mismatch=0 error=0" --quiet
 must_fail "alu-family-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
 	--actual "$ACTUAL_ON" --filter '^alu-' --expect counts \
 	--expect-counts "green=12 mismatch=0" --quiet
@@ -257,10 +257,29 @@ step "ctrl-call-ret" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_O
 	--filter 'call-ret' --expect counts \
 	--expect-counts "green=1 red_unimplemented=0 mismatch=0 error=0" --quiet
 
+echo "== F5. S8: MUL/DIV/SHIFTS AT 64 BITS (family 4, 11/11 -- ALL GREEN)"
+step "muldiv-family" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
+	--filter '^muldiv-' --expect counts \
+	--expect-counts "green=11 red_unimplemented=0 mismatch=0 error=0" --quiet
+must_fail "muldiv-family-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
+	--actual "$ACTUAL_ON" --filter '^muldiv-' --expect counts \
+	--expect-counts "green=10 mismatch=0" --quiet
+# the 128-bit product is the slice's headline: mul-128's own counts, so a regression in the high
+# half is a NAMED step rather than a corpus statistic
+step "mul-128-high-half" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
+	--filter 'mul-128' --expect counts \
+	--expect-counts "green=1 red_unimplemented=0 mismatch=0 error=0" --quiet
+# and the #DE case is the DIVIDE-ERROR path (alu-div-zero is S6's fault case; this asserts that
+# the div-family's own error path is exercised at 64 bits)
+step "div64-runs" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
+	--filter 'muldiv-div-64' --expect counts \
+	--expect-counts "green=1 red_unimplemented=0 mismatch=0 error=0" --quiet
+
 # the ONE red case must be red for the named reason (div is S8's), not for a silent mismatch
-step "alu-div-zero-names-S8" sh -c \
-	"$PORT64 $POISON 20000000 --fixture64 --long-mode on >/dev/null 2>&1; \
-	 $PORT64 build/nasm64/alu-div-zero.img 20000000 --fixture64 --long-mode on 2>&1 | grep -q 'instr64_F7_6'" 
+# S8 landed DIV, so the S6-era arm that required a named stop on instr64_F7_6 is INVERTED: the
+# fault case must now reach the #DE (a SIGFPE document), not a stop.
+step "alu-div-zero-reaches-DE" sh -c \
+	"$PORT64 build/nasm64/alu-div-zero.img 20000000 --fixture64 --long-mode on 2>&1 | grep -q '(signal SIGFPE)'" 
 
 echo "== G. the bound NAMES THE FRAME, and the unmutated image produces neither stop nor fault"
 step "above-4gib-names-the-frame" sh -c \

@@ -118,6 +118,21 @@ const x86_table64_0f = [
 	{ opcode: 0xB7 }, /* movzx r64, r/m16 */
 	{ opcode: 0xBE }, /* movsx r64, r/m8 */
 	{ opcode: 0xBF }, /* movsx r64, r/m16 */
+	/* S8: the 0F-qualified arithmetic/bit family (family 4's cases) */
+	{ opcode: 0xAF }, /* imul r64, r/m64 */
+	{ opcode: 0xA5 }, /* shld r/m64, r64, cl */
+	{ opcode: 0xAD }, /* shrd r/m64, r64, cl */
+	{ opcode: 0xBC }, /* bsf r64, r/m64 */
+	{ opcode: 0xBD }, /* bsr r64, r/m64 */
+	{ opcode: 0xBA }, /* the bt/bts/btr/btc imm8 group */
+	{ opcode: 0xC8 }, /* bswap r64 (0F C8+r: eight opcodes, one body each) */
+	{ opcode: 0xC9 },
+	{ opcode: 0xCA },
+	{ opcode: 0xCB },
+	{ opcode: 0xCC },
+	{ opcode: 0xCD },
+	{ opcode: 0xCE },
+	{ opcode: 0xCF },
 ];
 
 const x86_table64 = [
@@ -291,6 +306,14 @@ const x86_table64 = [
 	{ opcode: 0x39 }, /* cmp r/m64, r64 */
 	{ opcode: 0x3B }, /* cmp r64, r/m64 */
 	{ opcode: 0x83 }, /* the imm8 group: /0 add /1 or /2 adc /3 sbb /4 and /5 sub /6 xor /7 cmp */
+	/* S8: the shift group (0xD1 by 1, 0xD3 by CL, 0xC1 by imm8) and the three-operand IMULs.
+	 * RCL/RCR (/2,/3) stay NAMED STOPS: no corpus case, and their carry-in rule is its own
+	 * instrument (results/x86-64-s8.md ss6). */
+	{ opcode: 0xC1 },
+	{ opcode: 0xD1 },
+	{ opcode: 0xD3 },
+	{ opcode: 0x69 }, /* imul r64, r/m64, imm32 */
+	{ opcode: 0x6B }, /* imul r64, r/m64, imm8  */
 	{ opcode: 0x85 }, /* test r/m64, r64 */
 	{ opcode: 0xF7 }, /* the group: /2 not /3 neg (the rest are S8's) */
 

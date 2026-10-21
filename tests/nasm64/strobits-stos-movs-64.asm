@@ -125,6 +125,9 @@ body_start:
     mov rdi, 0x100140
     mov ecx, 2
     rep movsq
+    cmp rax, rax
+    cmp rax, rax
+    cmp rax, rax
     mov qword ptr [0x100000], rax
     mov qword ptr [0x100008], rcx
     mov qword ptr [0x100010], rdx

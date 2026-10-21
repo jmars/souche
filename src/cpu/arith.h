@@ -129,6 +129,28 @@ void test64(int64_t x, int64_t y);
 int64_t or64(int64_t x, int64_t y);
 int64_t xor64(int64_t x, int64_t y);
 
+/* S8: mul/div (the 128-bit intermediates) and the shifts/rotates/bit ops at 64 bits.  The
+ * count is MASKED BY THE CALLER (0x3F), exactly as the 32-bit bodies' `& 31` is. */
+void mul64(uint64_t source_operand);
+void imul64(int64_t source_operand);
+int64_t imul_reg64(int64_t operand1, int64_t operand2);
+bool div64_without_fault(uint64_t source_operand);
+void div64(uint64_t source_operand);
+bool idiv64_without_fault(int64_t source_operand);
+void idiv64(int64_t source_operand);
+uint64_t shl64(uint64_t dest_operand, int32_t count);
+uint64_t shr64(uint64_t dest_operand, int32_t count);
+uint64_t sar64(uint64_t dest_operand, int32_t count);
+uint64_t rol64(uint64_t dest_operand, int32_t count);
+uint64_t ror64(uint64_t dest_operand, int32_t count);
+uint64_t shld64(uint64_t dest_operand, uint64_t source_operand, int32_t count);
+uint64_t shrd64(uint64_t dest_operand, uint64_t source_operand, int32_t count);
+uint64_t bsf64(uint64_t source_operand, bool *zero);
+uint64_t bsr64(uint64_t source_operand, bool *zero);
+bool bt64(uint64_t value, int32_t bit);
+uint64_t bts64(uint64_t value, int32_t bit, bool set_it);
+uint64_t bswap64(uint64_t value);
+
 /* ---- rotate / rotate-through-carry (arith.rs:440-637) ---- */
 int32_t rol8(int32_t dest_operand, int32_t count);
 int32_t rol16(int32_t dest_operand, int32_t count);

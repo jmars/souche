@@ -713,6 +713,18 @@ case("muldiv", "mul-128",
     mov rax, 0x100000000
     mov rcx, 0x100000000
     mul rcx
+    # S8: the DEFINED flags of this case's last flag-setting operation, masked to
+    # the bits the SDM defines for it (0x801); the undefined ones are excluded by RULE
+    # (plan ss2.1.5), not by luck -- results/x86-64-s8.md ss4.
+    pushfq
+    pop qword ptr [0x100080]
+    and dword ptr [0x100080], 0x801
+    and dword ptr [rsp - 8], 0x801
+    # ... and the rflags ELEMENT is compared with MASK_ARITH unconditionally, so the
+    # body ends with a flag-DEFINING instruction that touches no register: `cmp rax, rax`
+    # defines all six.  Without it the element would compare the undefined bits of the
+    # case's own last operation against the host (the S6 round-2 AF lesson, at the element).
+    cmp rax, rax
 """)
 case("muldiv", "imul-one",
      "the one-operand IMUL sign-extends its 128-bit product into RDX:RAX, and a "
@@ -721,6 +733,18 @@ case("muldiv", "imul-one",
     mov rax, 0xFFFFFFFFFFFFFFFF
     mov rcx, 0x100000000
     imul rcx
+    # S8: the DEFINED flags of this case's last flag-setting operation, masked to
+    # the bits the SDM defines for it (0x801); the undefined ones are excluded by RULE
+    # (plan ss2.1.5), not by luck -- results/x86-64-s8.md ss4.
+    pushfq
+    pop qword ptr [0x100080]
+    and dword ptr [0x100080], 0x801
+    and dword ptr [rsp - 8], 0x801
+    # ... and the rflags ELEMENT is compared with MASK_ARITH unconditionally, so the
+    # body ends with a flag-DEFINING instruction that touches no register: `cmp rax, rax`
+    # defines all six.  Without it the element would compare the undefined bits of the
+    # case's own last operation against the host (the S6 round-2 AF lesson, at the element).
+    cmp rax, rax
 """)
 case("muldiv", "imul-two-three",
      "the two- and three-operand IMUL forms write a 64-bit destination from a 64-bit "
@@ -731,6 +755,18 @@ case("muldiv", "imul-two-three",
     imul rax, rcx
     imul rbx, rax, 3
     imul rdx, rcx, -1
+    # S8: the DEFINED flags of this case's last flag-setting operation, masked to
+    # the bits the SDM defines for it (0x801); the undefined ones are excluded by RULE
+    # (plan ss2.1.5), not by luck -- results/x86-64-s8.md ss4.
+    pushfq
+    pop qword ptr [0x100080]
+    and dword ptr [0x100080], 0x801
+    and dword ptr [rsp - 8], 0x801
+    # ... and the rflags ELEMENT is compared with MASK_ARITH unconditionally, so the
+    # body ends with a flag-DEFINING instruction that touches no register: `cmp rax, rax`
+    # defines all six.  Without it the element would compare the undefined bits of the
+    # case's own last operation against the host (the S6 round-2 AF lesson, at the element).
+    cmp rax, rax
 """)
 case("muldiv", "div-64",
      "DIV r64 divides the 128-bit RDX:RAX dividend: a 64-bit quotient above 2^32 is "
@@ -740,6 +776,11 @@ case("muldiv", "div-64",
     xor edx, edx
     mov rcx, 0x10
     div rcx
+    # ... and the rflags ELEMENT is compared with MASK_ARITH unconditionally, so the
+    # body ends with a flag-DEFINING instruction that touches no register: `cmp rax, rax`
+    # defines all six.  Without it the element would compare the undefined bits of the
+    # case's own last operation against the host (the S6 round-2 AF lesson, at the element).
+    cmp rax, rax
 """)
 case("muldiv", "idiv-64",
      "IDIV r64 with a negative dividend: the 64-bit radix point is what makes the "
@@ -749,6 +790,11 @@ case("muldiv", "idiv-64",
     mov rdx, 0xFFFFFFFFFFFFFFFF
     mov rcx, 0x02
     idiv rcx
+    # ... and the rflags ELEMENT is compared with MASK_ARITH unconditionally, so the
+    # body ends with a flag-DEFINING instruction that touches no register: `cmp rax, rax`
+    # defines all six.  Without it the element would compare the undefined bits of the
+    # case's own last operation against the host (the S6 round-2 AF lesson, at the element).
+    cmp rax, rax
 """)
 case("muldiv", "shl-shr-sar-64",
      "SHL/SHR/SAR at 64 bits: a shift count above 31 is defined only at 64 bits (at "
@@ -761,6 +807,18 @@ case("muldiv", "shl-shr-sar-64",
     shl rax, cl
     shr rbx, cl
     sar rcx, cl
+    # S8: the DEFINED flags of this case's last flag-setting operation, masked to
+    # the bits the SDM defines for it (0xD5); the undefined ones are excluded by RULE
+    # (plan ss2.1.5), not by luck -- results/x86-64-s8.md ss4.
+    pushfq
+    pop qword ptr [0x100080]
+    and dword ptr [0x100080], 0xC5
+    and dword ptr [rsp - 8], 0xC5
+    # ... and the rflags ELEMENT is compared with MASK_ARITH unconditionally, so the
+    # body ends with a flag-DEFINING instruction that touches no register: `cmp rax, rax`
+    # defines all six.  Without it the element would compare the undefined bits of the
+    # case's own last operation against the host (the S6 round-2 AF lesson, at the element).
+    cmp rax, rax
 """)
 case("muldiv", "shifts-imm64",
      "shifts by an immediate at 64 bits, including the count-0 case that must leave "
@@ -773,7 +831,19 @@ case("muldiv", "shifts-imm64",
     sar rbx, 32
     mov rcx, 0x123456789ABCDEF0
     shl rcx, 0
-""", flags=True)
+    # S8: the DEFINED flags of this case's last flag-setting operation, masked to
+    # the bits the SDM defines for it (0xD5); the undefined ones are excluded by RULE
+    # (plan ss2.1.5), not by luck -- results/x86-64-s8.md ss4.
+    pushfq
+    pop qword ptr [0x100080]
+    and dword ptr [0x100080], 0xC5
+    and dword ptr [rsp - 8], 0xC5
+    # ... and the rflags ELEMENT is compared with MASK_ARITH unconditionally, so the
+    # body ends with a flag-DEFINING instruction that touches no register: `cmp rax, rax`
+    # defines all six.  Without it the element would compare the undefined bits of the
+    # case's own last operation against the host (the S6 round-2 AF lesson, at the element).
+    cmp rax, rax
+""")
 case("muldiv", "rol-ror-64",
      "ROTATE at 64 bits: the bit rotated out of position 63 re-enters at position 0 "
      "(at 32 bits it re-enters at 0 of the low half)",
@@ -784,6 +854,18 @@ case("muldiv", "rol-ror-64",
     ror rbx, 1
     mov rcx, rax
     rol rcx, 63
+    # S8: the DEFINED flags of this case's last flag-setting operation, masked to
+    # the bits the SDM defines for it (0x1); the undefined ones are excluded by RULE
+    # (plan ss2.1.5), not by luck -- results/x86-64-s8.md ss4.
+    pushfq
+    pop qword ptr [0x100080]
+    and dword ptr [0x100080], 0x1
+    and dword ptr [rsp - 8], 0x1
+    # ... and the rflags ELEMENT is compared with MASK_ARITH unconditionally, so the
+    # body ends with a flag-DEFINING instruction that touches no register: `cmp rax, rax`
+    # defines all six.  Without it the element would compare the undefined bits of the
+    # case's own last operation against the host (the S6 round-2 AF lesson, at the element).
+    cmp rax, rax
 """)
 case("muldiv", "bt-bts-btr-btc-64",
      "the bit-test group addresses bit 63 of a 64-bit operand: at 32 bits, bit 63 "
@@ -794,7 +876,19 @@ case("muldiv", "bt-bts-btr-btc-64",
     bts rax, 0
     btr rax, 63
     btc rax, 1
-""", flags=True)
+    # S8: the DEFINED flags of this case's last flag-setting operation, masked to
+    # the bits the SDM defines for it (0x1); the undefined ones are excluded by RULE
+    # (plan ss2.1.5), not by luck -- results/x86-64-s8.md ss4.
+    pushfq
+    pop qword ptr [0x100080]
+    and dword ptr [0x100080], 0x1
+    and dword ptr [rsp - 8], 0x1
+    # ... and the rflags ELEMENT is compared with MASK_ARITH unconditionally, so the
+    # body ends with a flag-DEFINING instruction that touches no register: `cmp rax, rax`
+    # defines all six.  Without it the element would compare the undefined bits of the
+    # case's own last operation against the host (the S6 round-2 AF lesson, at the element).
+    cmp rax, rax
+""")
 case("muldiv", "bsf-bsr-bswap",
      "BSF/BSR find bit 63 only in a 64-bit operand, and BSWAP reverses all 8 bytes",
      """\
@@ -803,7 +897,19 @@ case("muldiv", "bsf-bsr-bswap",
     bsr rcx, rax
     mov rdx, 0x1122334455667788
     bswap rdx
-""", flags=True)
+    # S8: the DEFINED flags of this case's last flag-setting operation, masked to
+    # the bits the SDM defines for it (0x40); the undefined ones are excluded by RULE
+    # (plan ss2.1.5), not by luck -- results/x86-64-s8.md ss4.
+    pushfq
+    pop qword ptr [0x100080]
+    and dword ptr [0x100080], 0x40
+    and dword ptr [rsp - 8], 0x40
+    # ... and the rflags ELEMENT is compared with MASK_ARITH unconditionally, so the
+    # body ends with a flag-DEFINING instruction that touches no register: `cmp rax, rax`
+    # defines all six.  Without it the element would compare the undefined bits of the
+    # case's own last operation against the host (the S6 round-2 AF lesson, at the element).
+    cmp rax, rax
+""")
 case("muldiv", "shld-shrd",
      "SHLD/SHRD concatenate TWO 64-bit operands: the shifted-in bits come from the "
      "other 64-bit register, not from its low half",
@@ -813,7 +919,19 @@ case("muldiv", "shld-shrd",
     mov rcx, 1
     shld rax, rbx, cl
     shrd rbx, rax, cl
-""", flags=True)
+    # S8: the DEFINED flags of this case's last flag-setting operation, masked to
+    # the bits the SDM defines for it (0x8C5); the undefined ones are excluded by RULE
+    # (plan ss2.1.5), not by luck -- results/x86-64-s8.md ss4.
+    pushfq
+    pop qword ptr [0x100080]
+    and dword ptr [0x100080], 0x8C5
+    and dword ptr [rsp - 8], 0x8C5
+    # ... and the rflags ELEMENT is compared with MASK_ARITH unconditionally, so the
+    # body ends with a flag-DEFINING instruction that touches no register: `cmp rax, rax`
+    # defines all six.  Without it the element would compare the undefined bits of the
+    # case's own last operation against the host (the S6 round-2 AF lesson, at the element).
+    cmp rax, rax
+""")
 
 # --- family 5: strobits (S9) ----------------------------------------------------
 case("strobits", "stos-movs-64",
@@ -828,6 +946,9 @@ case("strobits", "stos-movs-64",
     mov rdi, 0x100140
     mov ecx, 2
     rep movsq
+    cmp rax, rax
+    cmp rax, rax
+    cmp rax, rax
 """)
 case("strobits", "scas-cmps-64",
      "SCASQ/CMP SQ compare 8-byte elements and set the flags from the 64-bit "

@@ -8,6 +8,8 @@
  * INT_MIN/-1 guards that Rust's `checked_div` gives for free).
  */
 
+#include <stdint.h> /* S8: INT64_MAX/INT64_MIN for the signed #DE bound */
+
 #include "arith.h"
 
 #include "cpu_state.h"
@@ -770,6 +772,290 @@ void idiv32(int32_t source_operand)
     if (!idiv32_without_fault(source_operand)) {
         trigger_de();
     }
+}
+
+/* ================================================================== *
+ * S8: MUL / IMUL / DIV / IDIV AND THE SHIFTS AT 64 BITS
+ *
+ * THE 128-BIT INTERMEDIATES ARE `unsigned __int128` / `__int128`, and that is the plan ss8's
+ * "decide in S8 by measurement" answered by the toolchain rather than by taste: both APE targets
+ * (x86-64 and aarch64) provide it, the build's flags (-Wall -Wextra -Werror, no -pedantic)
+ * accept it, and the alternative -- a hand-rolled 64x64->128 through 32-bit halves -- is the
+ * place a carry is dropped.  A `long double` or a double would round; a two-halves routine would
+ * be a second arithmetic to get wrong.
+ * ================================================================== */
+
+void mul64(uint64_t source_operand)
+{
+    uint64_t dest_operand = read_reg64(EAX);
+    unsigned __int128 result = (unsigned __int128)dest_operand * (unsigned __int128)source_operand;
+    uint64_t result_low = (uint64_t)result;
+    uint64_t result_high = (uint64_t)(result >> 64);
+    write_reg64(EAX, result_low);
+    write_reg64(EDX, result_high);
+    set_last_result((int64_t)result_low, OPSIZE_64);
+    /* CF and OF are the DEFINED ones for MUL: set iff the high half is significant */
+    if (result_high == 0) {
+        cpu->flags &= ~1 & ~FLAG_OVERFLOW;
+    }
+    else {
+        cpu->flags |= 1 | FLAG_OVERFLOW;
+    }
+    /* SF/ZF/AF/PF are UNDEFINED for MUL (SDM): they are marked stale, never computed */
+    cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
+}
+
+void imul64(int64_t source_operand)
+{
+    int64_t dest_operand = (int64_t)read_reg64(EAX);
+    __int128 result = (__int128)dest_operand * (__int128)source_operand;
+    uint64_t result_low = (uint64_t)result;
+    uint64_t result_high = (uint64_t)((unsigned __int128)result >> 64);
+    write_reg64(EAX, result_low);
+    write_reg64(EDX, result_high);
+    set_last_result((int64_t)result_low, OPSIZE_64);
+    /* CF/OF are set iff the high half is not the SIGN EXTENSION of the low half */
+    if (result_high == ((uint64_t)((int64_t)result_low >> 63))) {
+        cpu->flags &= ~1 & ~FLAG_OVERFLOW;
+    }
+    else {
+        cpu->flags |= 1 | FLAG_OVERFLOW;
+    }
+    cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
+}
+
+int64_t imul_reg64(int64_t operand1, int64_t operand2)
+{
+    __int128 result = (__int128)operand1 * (__int128)operand2;
+    uint64_t result_low = (uint64_t)result;
+    uint64_t result_high = (uint64_t)((unsigned __int128)result >> 64);
+    set_last_result((int64_t)result_low, OPSIZE_64);
+    if (result_high == ((uint64_t)((int64_t)result_low >> 63))) {
+        cpu->flags &= ~1 & ~FLAG_OVERFLOW;
+    }
+    else {
+        cpu->flags |= 1 | FLAG_OVERFLOW;
+    }
+    cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
+    return (int64_t)result_low;
+}
+
+bool div64_without_fault(uint64_t source_operand)
+{
+    uint64_t target_low = read_reg64(EAX);
+    uint64_t target_high = read_reg64(EDX);
+    unsigned __int128 target_operand = ((unsigned __int128)target_high << 64) | target_low;
+    if (source_operand == 0) {
+        return false;
+    }
+    unsigned __int128 result = target_operand / source_operand;
+    /* THE DIVIDE-ERROR CONDITION: the quotient must fit the destination (SDM #DE) */
+    if (result > (unsigned __int128)0xFFFFFFFFFFFFFFFFull) {
+        return false;
+    }
+    unsigned __int128 modulo = target_operand % source_operand;
+    write_reg64(EAX, (uint64_t)result);
+    write_reg64(EDX, (uint64_t)modulo);
+    return true;
+}
+
+void div64(uint64_t source_operand)
+{
+    if (!div64_without_fault(source_operand)) {
+        trigger_de();
+    }
+}
+
+bool idiv64_without_fault(int64_t source_operand)
+{
+    int64_t target_low = (int64_t)read_reg64(EAX);
+    int64_t target_high = (int64_t)read_reg64(EDX);
+    __int128 target_operand = ((__int128)target_high << 64) | (unsigned __int128)target_low;
+    if (source_operand == 0) {
+        return false;
+    }
+    __int128 result = target_operand / (__int128)source_operand;
+    __int128 modulo = target_operand % (__int128)source_operand;
+    /* the signed #DE: the quotient must be representable in 64 bits.  INT64_MIN / -1 is the
+     * corner that C's `/` would trap on -- __int128 holds it, so the check is the only guard. */
+    if (result > (__int128)INT64_MAX || result < (__int128)INT64_MIN) {
+        return false;
+    }
+    write_reg64(EAX, (uint64_t)(int64_t)result);
+    write_reg64(EDX, (uint64_t)(int64_t)modulo);
+    return true;
+}
+
+void idiv64(int64_t source_operand)
+{
+    if (!idiv64_without_fault(source_operand)) {
+        trigger_de();
+    }
+}
+
+/* the shifts and rotates at 64 bits: the SAME rules as the 32-bit bodies, at the operand width,
+ * with the count ALREADY MASKED by the caller (0x3F for a 64-bit operand -- the mask lives at
+ * the call site, exactly as the 32-bit bodies' `& 31` does).  AF is UNDEFINED for every shift
+ * and rotate (SDM), and OF only for a count of 1 -- so the corpus masks those bits out where the
+ * count is not 1 (results/x86-64-s8.md ss4). */
+uint64_t shl64(uint64_t dest_operand, int32_t count)
+{
+    DBG_ASSERT(count >= 0 && count < 64);
+    if (count == 0) {
+        return dest_operand;
+    }
+    uint64_t result = dest_operand << count;
+    set_last_result((int64_t)result, OPSIZE_64);
+    cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
+    int32_t b = (int32_t)(dest_operand >> (64 - count) & 1);
+    cpu->flags = (cpu->flags & ~1 & ~FLAG_OVERFLOW) | b |
+                 (((b ^ (int32_t)(result >> 63)) << 11) & FLAG_OVERFLOW);
+    return result;
+}
+
+uint64_t shr64(uint64_t dest_operand, int32_t count)
+{
+    DBG_ASSERT(count >= 0 && count < 64);
+    if (count == 0) {
+        return dest_operand;
+    }
+    uint64_t result = dest_operand >> count;
+    set_last_result((int64_t)result, OPSIZE_64);
+    cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
+    cpu->flags = (cpu->flags & ~1 & ~FLAG_OVERFLOW) |
+                 (int32_t)((dest_operand >> (count - 1)) & 1) |
+                 ((int32_t)(dest_operand >> 63) << 11 & FLAG_OVERFLOW);
+    return result;
+}
+
+uint64_t sar64(uint64_t dest_operand, int32_t count)
+{
+    DBG_ASSERT(count >= 0 && count < 64);
+    if (count == 0) {
+        return dest_operand;
+    }
+    int64_t v = (int64_t)dest_operand;
+    int64_t result = v >> count; /* arithmetic shift on the signed value */
+    set_last_result(result, OPSIZE_64);
+    cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
+    cpu->flags = (cpu->flags & ~1 & ~FLAG_OVERFLOW) | (int32_t)((dest_operand >> (count - 1)) & 1);
+    return (uint64_t)result;
+}
+
+uint64_t rol64(uint64_t dest_operand, int32_t count)
+{
+    DBG_ASSERT(count >= 0 && count < 64);
+    if (count == 0) {
+        return dest_operand;
+    }
+    uint64_t result = (dest_operand << count) | (dest_operand >> (64 - count));
+    set_last_result((int64_t)result, OPSIZE_64);
+    /* ROL/ROR touch ONLY CF and OF (SDM): SF/ZF/AF/PF are left alone */
+    cpu->flags_changed &= ~(FLAG_CARRY | FLAG_OVERFLOW);
+    cpu->flags = (cpu->flags & ~1 & ~FLAG_OVERFLOW) | (int32_t)(result & 1) |
+                 (((int32_t)(result >> 63) ^ (int32_t)(result & 1)) << 11 & FLAG_OVERFLOW);
+    return result;
+}
+
+uint64_t ror64(uint64_t dest_operand, int32_t count)
+{
+    DBG_ASSERT(count >= 0 && count < 64);
+    if (count == 0) {
+        return dest_operand;
+    }
+    uint64_t result = (dest_operand >> count) | (dest_operand << (64 - count));
+    set_last_result((int64_t)result, OPSIZE_64);
+    cpu->flags_changed &= ~(FLAG_CARRY | FLAG_OVERFLOW);
+    cpu->flags = (cpu->flags & ~1 & ~FLAG_OVERFLOW) | (int32_t)((result >> 63) & 1) |
+                 (((int32_t)(result >> 63) ^ (int32_t)((result >> 62) & 1)) << 11 & FLAG_OVERFLOW);
+    return result;
+}
+
+uint64_t shld64(uint64_t dest_operand, uint64_t source_operand, int32_t count)
+{
+    DBG_ASSERT(count >= 0 && count < 64);
+    if (count == 0) {
+        return dest_operand;
+    }
+    uint64_t result = (dest_operand << count) | (source_operand >> (64 - count));
+    set_last_result((int64_t)result, OPSIZE_64);
+    cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
+    int32_t b = (int32_t)((dest_operand >> (64 - count)) & 1);
+    cpu->flags = (cpu->flags & ~1 & ~FLAG_OVERFLOW) | b |
+                 (((b ^ (int32_t)(result >> 63)) << 11) & FLAG_OVERFLOW);
+    return result;
+}
+
+uint64_t shrd64(uint64_t dest_operand, uint64_t source_operand, int32_t count)
+{
+    DBG_ASSERT(count >= 0 && count < 64);
+    if (count == 0) {
+        return dest_operand;
+    }
+    uint64_t result = (dest_operand >> count) | (source_operand << (64 - count));
+    set_last_result((int64_t)result, OPSIZE_64);
+    cpu->flags_changed = FLAGS_ALL & ~1 & ~FLAG_OVERFLOW;
+    int32_t b = (int32_t)((dest_operand >> (count - 1)) & 1);
+    cpu->flags = (cpu->flags & ~1 & ~FLAG_OVERFLOW) | b |
+                 ((((int32_t)(dest_operand >> 63) ^ (int32_t)(result >> 63)) << 11) & FLAG_OVERFLOW);
+    return result;
+}
+
+/* BSF/BSR set ZF and leave EVERY other flag undefined; a zero source leaves the destination
+ * UNCHANGED and sets ZF (SDM). */
+uint64_t bsf64(uint64_t source_operand, bool *zero)
+{
+    if (source_operand == 0) {
+        *zero = true;
+        return 0;
+    }
+    *zero = false;
+    int32_t i = 0;
+    while (((source_operand >> i) & 1) == 0) i++;
+    return (uint64_t)i;
+}
+
+uint64_t bsr64(uint64_t source_operand, bool *zero)
+{
+    if (source_operand == 0) {
+        *zero = true;
+        return 0;
+    }
+    *zero = false;
+    int32_t i = 63;
+    while (((source_operand >> i) & 1) == 0) i--;
+    return (uint64_t)i;
+}
+
+/* BT/BTS/BTR/BTC: CF receives the bit; the other arithmetic flags are UNDEFINED.  The bit index
+ * is masked by the OPERAND SIZE (0x3F at 64 bits) for a register operand, and NOT masked for a
+ * memory operand (the SDM's "bit offset beyond the operand selects a word in memory" rule) --
+ * the corpus uses register operands only (results/x86-64-s8.md ss6). */
+bool bt64(uint64_t value, int32_t bit)
+{
+    cpu->flags_changed &= ~FLAG_CARRY;
+    bool set = ((value >> (bit & 63)) & 1) != 0;
+    cpu->flags = (cpu->flags & ~1) | (set ? 1 : 0);
+    return set;
+}
+
+uint64_t bts64(uint64_t value, int32_t bit, bool set_it)
+{
+    bt64(value, bit);
+    if (set_it) {
+        return value | ((uint64_t)1 << (bit & 63));
+    }
+    return value & ~((uint64_t)1 << (bit & 63));
+}
+
+/* BSWAP: no flags at all. */
+uint64_t bswap64(uint64_t value)
+{
+    uint64_t r = 0;
+    for (int i = 0; i < 8; i++) {
+        r |= ((value >> (8 * i)) & 0xFF) << (8 * (7 - i));
+    }
+    return r;
 }
 
 /* ------------------------------------------------------------------ *

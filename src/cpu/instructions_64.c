@@ -1039,3 +1039,328 @@ void instr64_0FBF_mem(int64_t addr, int32_t r)
 	write_reg64(r, (uint64_t)(int64_t)x);
 }
 void instr64_0FBF_reg(int32_t r1, int32_t r) { write_reg64(r, (uint64_t)(int64_t)(int16_t)read_reg16(r1)); }
+
+/* ================================================================== *
+ * S8 -- MUL / IMUL / DIV / IDIV AND THE SHIFTS AT 64 BITS
+ *
+ * THE SILENT-WRONG SURFACES, named whether or not they bite (results/x86-64-s8.md ss5):
+ *   1. the 128-bit product's HIGH HALF (RDX) -- a 64x64 multiply done in 64 bits drops it;
+ *   2. the SIGN EXTENSION of IMUL's operands -- a 32-bit operand widened zero-extended gives
+ *      the wrong product for negative values;
+ *   3. the DIVIDE-ERROR condition and its PRIORITY -- #DE when the divisor is 0 OR the quotient
+ *      does not fit, and it must fire BEFORE any register is written (the corpus's alu-div-zero
+ *      and muldiv-idiv-64 rely on the untouched-register half);
+ *   4. the COUNT MASK -- 0x3F at 64 bits, not 0x1F; a mask taken from the 32-bit body shifts by
+ *      the wrong amount for counts 32..63;
+ *   5. the FLAGS AT COUNT 0 -- every shift leaves ALL flags unchanged, so a body that computes
+ *      them unconditionally diverges (the corpus's `shl rcx, 0` is the case).
+ * ================================================================== */
+
+/* 0xF7 /4 MUL r/m64 -> RDX:RAX (family 4: muldiv-mul-128) */
+void instr64_F7_4_mem(int64_t addr)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	mul64(x);
+}
+void instr64_F7_4_reg(int32_t r1) { mul64(read_reg64(r1)); }
+
+/* 0xF7 /5 IMUL r/m64 (one-operand, signed; muldiv-imul-one) */
+void instr64_F7_5_mem(int64_t addr)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	imul64((int64_t)x);
+}
+void instr64_F7_5_reg(int32_t r1) { imul64((int64_t)read_reg64(r1)); }
+
+/* 0xF7 /6 DIV r/m64 and /7 IDIV r/m64 (muldiv-div-64, muldiv-idiv-64) */
+void instr64_F7_6_mem(int64_t addr)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	div64(x);
+}
+void instr64_F7_6_reg(int32_t r1) { div64(read_reg64(r1)); }
+void instr64_F7_7_mem(int64_t addr)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	idiv64((int64_t)x);
+}
+void instr64_F7_7_reg(int32_t r1) { idiv64((int64_t)read_reg64(r1)); }
+
+/* 0x0F AF IMUL r64, r/m64 (two-operand; muldiv-imul-two-three) */
+void instr64_0FAF_mem(int64_t addr, int32_t r)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	write_reg64(r, (uint64_t)imul_reg64((int64_t)read_reg64(r), x));
+}
+void instr64_0FAF_reg(int32_t r1, int32_t r)
+{
+	write_reg64(r, (uint64_t)imul_reg64((int64_t)read_reg64(r), (int64_t)read_reg64(r1)));
+}
+
+/* 0x69 / 0x6B IMUL r64, r/m64, imm32|imm8 (three-operand; the same case) */
+void instr64_69_mem(int64_t addr, int32_t r, int64_t imm)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	write_reg64(r, (uint64_t)imul_reg64(x, imm));
+}
+void instr64_69_reg(int32_t r1, int32_t r, int64_t imm)
+{
+	write_reg64(r, (uint64_t)imul_reg64((int64_t)read_reg64(r1), imm));
+}
+void instr64_6B_mem(int64_t addr, int32_t r, int64_t imm)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	write_reg64(r, (uint64_t)imul_reg64(x, imm));
+}
+void instr64_6B_reg(int32_t r1, int32_t r, int64_t imm)
+{
+	write_reg64(r, (uint64_t)imul_reg64((int64_t)read_reg64(r1), imm));
+}
+
+/* ------------------------------------------------------------------ *
+ * THE SHIFT GROUP (0xD1 = by 1, 0xD3 = by CL, 0xC1 = by imm8): /4 shl /5 shr /7 sar, and the
+ * rotate group's /0 rol /1 ror.  THE COUNT IS MASKED HERE with 0x3F -- the 64-bit mask -- and
+ * every body passes the masked count through, so count 0 leaves the flags ALONE (each wrapper
+ * returns early on 0).  RCL/RCR (/2, /3) are NAMED STOPS: no corpus case, and their carry-in
+ * rule is its own instrument.
+ * ------------------------------------------------------------------ */
+#define SHIFT64_CALL(FN, VAL, CNT) (FN)((VAL), (CNT))
+
+void instr64_D1_0_reg(int32_t r1) { write_reg64(r1, rol64(read_reg64(r1), 1)); }
+void instr64_D1_1_reg(int32_t r1) { write_reg64(r1, ror64(read_reg64(r1), 1)); }
+void instr64_D1_4_reg(int32_t r1) { write_reg64(r1, shl64(read_reg64(r1), 1)); }
+void instr64_D1_5_reg(int32_t r1) { write_reg64(r1, shr64(read_reg64(r1), 1)); }
+void instr64_D1_7_reg(int32_t r1) { write_reg64(r1, sar64(read_reg64(r1), 1)); }
+void instr64_D1_0_mem(int64_t addr)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, rol64(x, 1));
+}
+void instr64_D1_1_mem(int64_t addr)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, ror64(x, 1));
+}
+void instr64_D1_4_mem(int64_t addr)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, shl64(x, 1));
+}
+void instr64_D1_5_mem(int64_t addr)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, shr64(x, 1));
+}
+void instr64_D1_7_mem(int64_t addr)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, sar64(x, 1));
+}
+
+void instr64_D3_0_reg(int32_t r1) { write_reg64(r1, rol64(read_reg64(r1), read_reg8(CL) & 63)); }
+void instr64_D3_1_reg(int32_t r1) { write_reg64(r1, ror64(read_reg64(r1), read_reg8(CL) & 63)); }
+void instr64_D3_4_reg(int32_t r1) { write_reg64(r1, shl64(read_reg64(r1), read_reg8(CL) & 63)); }
+void instr64_D3_5_reg(int32_t r1) { write_reg64(r1, shr64(read_reg64(r1), read_reg8(CL) & 63)); }
+void instr64_D3_7_reg(int32_t r1) { write_reg64(r1, sar64(read_reg64(r1), read_reg8(CL) & 63)); }
+void instr64_D3_0_mem(int64_t addr)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, rol64(x, read_reg8(CL) & 63));
+}
+void instr64_D3_1_mem(int64_t addr)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, ror64(x, read_reg8(CL) & 63));
+}
+void instr64_D3_4_mem(int64_t addr)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, shl64(x, read_reg8(CL) & 63));
+}
+void instr64_D3_5_mem(int64_t addr)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, shr64(x, read_reg8(CL) & 63));
+}
+void instr64_D3_7_mem(int64_t addr)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, sar64(x, read_reg8(CL) & 63));
+}
+
+void instr64_C1_0_reg(int32_t r1, int64_t imm) { write_reg64(r1, rol64(read_reg64(r1), (int32_t)imm & 63)); }
+void instr64_C1_1_reg(int32_t r1, int64_t imm) { write_reg64(r1, ror64(read_reg64(r1), (int32_t)imm & 63)); }
+void instr64_C1_4_reg(int32_t r1, int64_t imm) { write_reg64(r1, shl64(read_reg64(r1), (int32_t)imm & 63)); }
+void instr64_C1_5_reg(int32_t r1, int64_t imm) { write_reg64(r1, shr64(read_reg64(r1), (int32_t)imm & 63)); }
+void instr64_C1_7_reg(int32_t r1, int64_t imm) { write_reg64(r1, sar64(read_reg64(r1), (int32_t)imm & 63)); }
+void instr64_C1_0_mem(int64_t addr, int64_t imm)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, rol64(x, (int32_t)imm & 63));
+}
+void instr64_C1_1_mem(int64_t addr, int64_t imm)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, ror64(x, (int32_t)imm & 63));
+}
+void instr64_C1_4_mem(int64_t addr, int64_t imm)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, shl64(x, (int32_t)imm & 63));
+}
+void instr64_C1_5_mem(int64_t addr, int64_t imm)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, shr64(x, (int32_t)imm & 63));
+}
+void instr64_C1_7_mem(int64_t addr, int64_t imm)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, sar64(x, (int32_t)imm & 63));
+}
+
+/* 0x0F A5 SHLD r/m64, r64, CL and 0x0F AD SHRD (muldiv-shld-shrd) */
+void instr64_0FA5_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, shld64(x, read_reg64(r), read_reg8(CL) & 63));
+}
+void instr64_0FA5_reg(int32_t r1, int32_t r)
+{
+	write_reg64(r1, shld64(read_reg64(r1), read_reg64(r), read_reg8(CL) & 63));
+}
+void instr64_0FAD_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, shrd64(x, read_reg64(r), read_reg8(CL) & 63));
+}
+void instr64_0FAD_reg(int32_t r1, int32_t r)
+{
+	write_reg64(r1, shrd64(read_reg64(r1), read_reg64(r), read_reg8(CL) & 63));
+}
+
+/* 0x0F BC BSF and 0x0F BD BSR (muldiv-bsf-bsr-bswap): ZF is the ONLY defined flag, and a zero
+ * source leaves the destination UNCHANGED. */
+static void bsf_bsr_flags(bool zero)
+{
+	/* MATERIALIZE ZF; do NOT mark it stale.  A stale bit makes getzf() recompute the flag from
+	 * the PREVIOUS operation's lazy operands, which is a WRONG answer rather than an undefined
+	 * one -- MEASURED: with `flags_changed = FLAG_ZERO` the port reported ZF=1 after a `bsr`
+	 * whose source was 0x8000000000000000 (the stale operands were the prologue's `xor eax,eax`),
+	 * against the host's ZF=0. */
+	cpu->flags_changed &= ~FLAG_ZERO;
+	cpu->flags = (cpu->flags & ~FLAG_ZERO) | (zero ? FLAG_ZERO : 0);
+}
+void instr64_0FBC_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	bool zero;
+	if (cpu->pagefault) return;
+	uint64_t v = bsf64(x, &zero);
+	if (!zero) write_reg64(r, v);
+	bsf_bsr_flags(zero);
+}
+void instr64_0FBC_reg(int32_t r1, int32_t r)
+{
+	bool zero;
+	uint64_t v = bsf64(read_reg64(r1), &zero);
+	if (!zero) write_reg64(r, v);
+	bsf_bsr_flags(zero);
+}
+void instr64_0FBD_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	bool zero;
+	if (cpu->pagefault) return;
+	uint64_t v = bsr64(x, &zero);
+	if (!zero) write_reg64(r, v);
+	bsf_bsr_flags(zero);
+}
+void instr64_0FBD_reg(int32_t r1, int32_t r)
+{
+	bool zero;
+	uint64_t v = bsr64(read_reg64(r1), &zero);
+	if (!zero) write_reg64(r, v);
+	bsf_bsr_flags(zero);
+}
+
+/* 0x0F C8+r BSWAP r64 (eight opcodes, one body each -- the register is the opcode's low bits
+ * plus REX.B).  BSWAP touches NO flags. */
+void instr64_0FC8(void) { write_reg64(reg_index_b(0), bswap64(read_reg64(reg_index_b(0)))); }
+void instr64_0FC9(void) { write_reg64(reg_index_b(1), bswap64(read_reg64(reg_index_b(1)))); }
+void instr64_0FCA(void) { write_reg64(reg_index_b(2), bswap64(read_reg64(reg_index_b(2)))); }
+void instr64_0FCB(void) { write_reg64(reg_index_b(3), bswap64(read_reg64(reg_index_b(3)))); }
+void instr64_0FCC(void) { write_reg64(reg_index_b(4), bswap64(read_reg64(reg_index_b(4)))); }
+void instr64_0FCD(void) { write_reg64(reg_index_b(5), bswap64(read_reg64(reg_index_b(5)))); }
+void instr64_0FCE(void) { write_reg64(reg_index_b(6), bswap64(read_reg64(reg_index_b(6)))); }
+void instr64_0FCF(void) { write_reg64(reg_index_b(7), bswap64(read_reg64(reg_index_b(7)))); }
+
+/* 0x0F BA /4../7 BT/BTS/BTR/BTC r/m64, imm8 (muldiv-bt-bts-btr-btc-64).  CF is the only defined
+ * flag; the bit index is masked to 0x3F for a register operand. */
+void instr64_0FBA_4_reg(int32_t r1, int64_t imm) { bt64(read_reg64(r1), (int32_t)imm); }
+void instr64_0FBA_5_reg(int32_t r1, int64_t imm)
+{
+	write_reg64(r1, bts64(read_reg64(r1), (int32_t)imm, true));
+}
+void instr64_0FBA_6_reg(int32_t r1, int64_t imm)
+{
+	write_reg64(r1, bts64(read_reg64(r1), (int32_t)imm, false));
+}
+void instr64_0FBA_7_reg(int32_t r1, int64_t imm)
+{
+	uint64_t v = read_reg64(r1);
+	bool set = bt64(v, (int32_t)imm);
+	write_reg64(r1, set ? (v & ~((uint64_t)1 << ((int32_t)imm & 63)))
+	                    : (v | ((uint64_t)1 << ((int32_t)imm & 63))));
+}
+void instr64_0FBA_4_mem(int64_t addr, int64_t imm)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	bt64(x, (int32_t)imm);
+}
+void instr64_0FBA_5_mem(int64_t addr, int64_t imm)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, bts64(x, (int32_t)imm, true));
+}
+void instr64_0FBA_6_mem(int64_t addr, int64_t imm)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, bts64(x, (int32_t)imm, false));
+}
+void instr64_0FBA_7_mem(int64_t addr, int64_t imm)
+{
+	uint64_t x = safe_read64_addr(addr);
+	bool set;
+	if (cpu->pagefault) return;
+	set = bt64(x, (int32_t)imm);
+	safe_write64_addr(addr, set ? (x & ~((uint64_t)1 << ((int32_t)imm & 63)))
+	                           : (x | ((uint64_t)1 << ((int32_t)imm & 63))));
+}

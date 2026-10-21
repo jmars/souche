@@ -618,9 +618,36 @@ that reason.  (SHOULD-FIX 4) `ctrl-call-ret-64` was blind to a SYMMETRIC four-by
 4-byte-push mutant is MEASURED red on `mem[101FF8] = 0xFFFFFFFFDEADBEEF`.  Family 3 is **13/13**,
 the whole corpus `green=38 red_unimplemented=21`, and the battery is unmoved.
 
-**S8-S13 REMAIN**: mul/div/shifts, the remaining ISA families, the system layer, the guest and the
+**S8 IS LANDED (2026-10-19): MUL / DIV / SHIFTS AT 64 BITS — ALL ELEVEN FAMILY-4 CASES GREEN.**
+`results/x86-64-s8.md` is its report.  The 64-bit `MUL`/`IMUL`/`DIV`/`IDIV` produce the full
+**RDX:RAX 128-bit** result through `unsigned __int128`/`__int128` (the plan §8 open question answered
+by the toolchain: both APE targets have it, and a hand-rolled 64×64→128 is where a carry is
+dropped), with the **divide-error condition** intact and its priority kept — `#DE` when the divisor
+is 0 or the quotient does not fit, fired **before** any register write, and `INT64_MIN / -1` held in
+`__int128` so the bound check is the only guard.  The shift/rotate group works at 64 bits with the
+**0x3F** count mask (not 0x1F), the count-0 flags-unchanged rule, and `SHLD`/`SHRD` taking their
+shifted-in bits from the other 64-bit register.  **THE DEFINED-ONLY RULE IS APPLIED, NOT JUST
+STATED**: every family-4 case now stores its flags word masked to the bits its own last operation
+defines (MUL/IMUL `0x801`, BSF/BSR `0x40`, BT `0x1`, ROL/ROR `0x1`, shifts `0xC5`, SHLD/SHRD
+`0x8C5`, DIV/IDIV **no store** — all six undefined) and ends with `cmp rax, rax`, a flag-defining
+instruction that touches no register, because the document's `rflags` element is compared with
+`MASK_ARITH` unconditionally; the undefined bits are therefore excluded BY RULE and named.
+Whole corpus with `--long-mode on`: **`green=50 red_unimplemented=9 mismatch=0 error=0`**; family 4
+**11/11**, family 2 now **11/0** (`alu-div-zero` reaches its `#DE` — DIV exists), families 1/3
+unmoved, the flag-off machine unmoved.  A defect this slice found in its own first version, worth
+carrying: `bsf_bsr_flags`/`bt64`/`rol64`/`ror64` wrote the flag value **and marked the bit stale**,
+so the getter recomputed it from the PREVIOUS operation's lazy operands — a WRONG answer, not an
+undefined one (MEASURED: ZF=1 after a `bsr` of `0x8000000000000000` against the host's ZF=0); the
+fix is to MATERIALIZE (`flags_changed &= ~BIT`), the mirror image of the `flags_add` family.  The
+symmetric mutant is measured too: a `mul64` writing the low half into both RAX and RDX turns
+`mul-128` red.  NOT landed, named in the report: `RCL`/`RCR` (no case), the 8/16-bit MUL/DIV (the 66
+forms are S7's `narrow64` stop), seven of bswap's eight register encodings and `BT`'s MEMORY form
+(bodies exist, **no case grades them** — unproven), the register forms `0F A3/AB/B3/BB`, and
+`SHLD`/`SHRD` by imm8.
+
+**S9-S13 REMAIN**: the string/bit/atomic ops, the SSE family, the system layer, the guest and the
 engines' long-mode arms.  The rest of this section is the reconnaissance record and is not made
-stale by S0-S7.
+stale by S0-S8.
 
 Not implemented, and deliberately **not** listed as a non-goal: it is wanted one day. It is recorded
 here so the next reader inherits the reconnaissance instead of re-deriving it.
