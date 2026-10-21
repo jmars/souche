@@ -123,6 +123,15 @@ body_start:
     ror rbx, 1
     mov rcx, rax
     rol rcx, 63
+    # ROUND 2 (SF 3): ROR by imm8 (0xC1 /1) -- the report claimed it and only C1 /0 was encoded;
+    # and (SF 5) a COUNT-1 snapshot, where OF IS DEFINED, so the OF rule at count 1 stops being
+    # un-compared.  AF is undefined for a rotate, hence 0x8C5.
+    ror rdx, 3
+    rol rsi, 1
+    pushfq
+    pop qword ptr [0x100218]
+    and dword ptr [0x100218], 0x8C5
+    and dword ptr [rsp - 8], 0x8C5
     # S8: the DEFINED flags of this case's last flag-setting operation, masked to
     # the bits the SDM defines for it (0x1); the undefined ones are excluded by RULE
     # (plan ss2.1.5), not by luck -- results/x86-64-s8.md ss4.

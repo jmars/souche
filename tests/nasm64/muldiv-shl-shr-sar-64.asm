@@ -124,6 +124,14 @@ body_start:
     shl rax, cl
     shr rbx, cl
     sar rcx, cl
+    # ROUND 2 (SF 5): a COUNT-1 shift, where OF is DEFINED -- without this the case's last op
+    # has count != 1 and the mask legitimately drops OF, leaving the OF rule at count 1
+    # un-compared.  AF is undefined for a shift, hence 0x8C5.
+    shl rdi, 1
+    pushfq
+    pop qword ptr [0x100218]
+    and dword ptr [0x100218], 0x8C5
+    and dword ptr [rsp - 8], 0x8C5
     # S8: the DEFINED flags of this case's last flag-setting operation, masked to
     # the bits the SDM defines for it (0xD5); the undefined ones are excluded by RULE
     # (plan ss2.1.5), not by luck -- results/x86-64-s8.md ss4.

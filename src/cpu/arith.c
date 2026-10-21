@@ -870,7 +870,11 @@ bool idiv64_without_fault(int64_t source_operand)
 {
     int64_t target_low = (int64_t)read_reg64(EAX);
     int64_t target_high = (int64_t)read_reg64(EDX);
-    __int128 target_operand = ((__int128)target_high << 64) | (unsigned __int128)target_low;
+    /* ROUND 2 (NTH 7): built in UNSIGNED and cast once -- `(__int128)target_high << 64` shifts a
+     * negative value into the sign bit, which is C UB of exactly the class idiv32's own comment
+     * (arith.c's `(target_high as i64) << 32` note) says it exists to avoid. */
+    __int128 target_operand =
+        (__int128)(((unsigned __int128)(uint64_t)target_high << 64) | (unsigned __int128)(uint64_t)target_low);
     if (source_operand == 0) {
         return false;
     }
@@ -949,8 +953,12 @@ uint64_t rol64(uint64_t dest_operand, int32_t count)
         return dest_operand;
     }
     uint64_t result = (dest_operand << count) | (dest_operand >> (64 - count));
-    set_last_result((int64_t)result, OPSIZE_64);
-    /* ROL/ROR touch ONLY CF and OF (SDM): SF/ZF/AF/PF are left alone */
+    /* ROUND 2 (BLOCKER 1): NO set_last_result HERE.  ROL/ROR leave SF/ZF/AF/PF UNAFFECTED
+     * (SDM), and those getters recompute from `last_result` -- so overwriting it with the
+     * rotate result makes a later `jz` read ZF from the ROTATED value instead of the previous
+     * arithmetic operation's.  The 32-bit mirrors (rol32/ror32) never call set_last_result for
+     * exactly this reason; round 1 added it here and broke the "unaffected" rule.  CF/OF are
+     * materialized below, so nothing in this body reads last_result. */
     cpu->flags_changed &= ~(FLAG_CARRY | FLAG_OVERFLOW);
     cpu->flags = (cpu->flags & ~1 & ~FLAG_OVERFLOW) | (int32_t)(result & 1) |
                  (((int32_t)(result >> 63) ^ (int32_t)(result & 1)) << 11 & FLAG_OVERFLOW);
@@ -964,7 +972,7 @@ uint64_t ror64(uint64_t dest_operand, int32_t count)
         return dest_operand;
     }
     uint64_t result = (dest_operand >> count) | (dest_operand << (64 - count));
-    set_last_result((int64_t)result, OPSIZE_64);
+    /* ... and the same for ROR (BLOCKER 1, see rol64). */
     cpu->flags_changed &= ~(FLAG_CARRY | FLAG_OVERFLOW);
     cpu->flags = (cpu->flags & ~1 & ~FLAG_OVERFLOW) | (int32_t)((result >> 63) & 1) |
                  (((int32_t)(result >> 63) ^ (int32_t)((result >> 62) & 1)) << 11 & FLAG_OVERFLOW);

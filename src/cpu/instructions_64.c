@@ -1319,8 +1319,18 @@ void instr64_0FCD(void) { write_reg64(reg_index_b(5), bswap64(read_reg64(reg_ind
 void instr64_0FCE(void) { write_reg64(reg_index_b(6), bswap64(read_reg64(reg_index_b(6)))); }
 void instr64_0FCF(void) { write_reg64(reg_index_b(7), bswap64(read_reg64(reg_index_b(7)))); }
 
-/* 0x0F BA /4../7 BT/BTS/BTR/BTC r/m64, imm8 (muldiv-bt-bts-btr-btc-64).  CF is the only defined
- * flag; the bit index is masked to 0x3F for a register operand. */
+/* 0x0F BA /4../7 BT/BTS/BTR/BTC.  REGISTER operands mask the bit index to 0x3F; MEMORY operands
+ * do NOT -- the SDM addresses a memory bit as a bit STRING: the byte is `addr + (bit >> 3)` and
+ * the bit inside it is `bit & 7` (the 32-bit bodies' bt_mem/btc_mem/btr_mem/bts_mem scheme,
+ * arith.c).  ROUND 2 (SF 2): round 1 masked to 0x3F for BOTH forms, which is WRONG BY
+ * CONSTRUCTION for memory -- a guest-reachable imm8 in [64,255] selected the wrong bit and, for
+ * BTS/BTR/BTC, WROTE THE WRONG BYTE.  The register forms keep the mask. */
+static void bt_mem_flags(int32_t byte_value, int32_t bit)
+{
+	cpu->flags_changed &= ~FLAG_CARRY;
+	cpu->flags = (cpu->flags & ~1) | ((byte_value >> (bit & 7)) & 1);
+}
+
 void instr64_0FBA_4_reg(int32_t r1, int64_t imm) { bt64(read_reg64(r1), (int32_t)imm); }
 void instr64_0FBA_5_reg(int32_t r1, int64_t imm)
 {
@@ -1337,30 +1347,35 @@ void instr64_0FBA_7_reg(int32_t r1, int64_t imm)
 	write_reg64(r1, set ? (v & ~((uint64_t)1 << ((int32_t)imm & 63)))
 	                    : (v | ((uint64_t)1 << ((int32_t)imm & 63))));
 }
+
 void instr64_0FBA_4_mem(int64_t addr, int64_t imm)
 {
-	uint64_t x = safe_read64_addr(addr);
+	int32_t bit = (int32_t)imm;
+	int32_t b = safe_read8_addr(addr + (bit >> 3));
 	if (cpu->pagefault) return;
-	bt64(x, (int32_t)imm);
+	bt_mem_flags(b, bit);
 }
 void instr64_0FBA_5_mem(int64_t addr, int64_t imm)
 {
-	uint64_t x = safe_read64_addr(addr);
+	int32_t bit = (int32_t)imm;
+	int32_t b = safe_read8_addr(addr + (bit >> 3));
 	if (cpu->pagefault) return;
-	safe_write64_addr(addr, bts64(x, (int32_t)imm, true));
+	bt_mem_flags(b, bit);
+	safe_write8_addr(addr + (bit >> 3), b | (1 << (bit & 7)));
 }
 void instr64_0FBA_6_mem(int64_t addr, int64_t imm)
 {
-	uint64_t x = safe_read64_addr(addr);
+	int32_t bit = (int32_t)imm;
+	int32_t b = safe_read8_addr(addr + (bit >> 3));
 	if (cpu->pagefault) return;
-	safe_write64_addr(addr, bts64(x, (int32_t)imm, false));
+	bt_mem_flags(b, bit);
+	safe_write8_addr(addr + (bit >> 3), b & ~(1 << (bit & 7)));
 }
 void instr64_0FBA_7_mem(int64_t addr, int64_t imm)
 {
-	uint64_t x = safe_read64_addr(addr);
-	bool set;
+	int32_t bit = (int32_t)imm;
+	int32_t b = safe_read8_addr(addr + (bit >> 3));
 	if (cpu->pagefault) return;
-	set = bt64(x, (int32_t)imm);
-	safe_write64_addr(addr, set ? (x & ~((uint64_t)1 << ((int32_t)imm & 63)))
-	                           : (x | ((uint64_t)1 << ((int32_t)imm & 63))));
+	bt_mem_flags(b, bit);
+	safe_write8_addr(addr + (bit >> 3), b ^ (1 << (bit & 7)));
 }

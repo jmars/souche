@@ -122,6 +122,9 @@ body_start:
     imul rax, rcx
     imul rbx, rax, 3
     imul rdx, rcx, -1
+    # ROUND 2 (SF 3): the imm32 THREE-OPERAND form (0x69) -- MEASURED absent from every corpus
+    # image before this line, so the imm32 sign-extension path was un-instrumented
+    imul rdi, rcx, 0x12345678
     # S8: the DEFINED flags of this case's last flag-setting operation, masked to
     # the bits the SDM defines for it (0x801); the undefined ones are excluded by RULE
     # (plan ss2.1.5), not by luck -- results/x86-64-s8.md ss4.

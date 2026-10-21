@@ -726,6 +726,16 @@ case("muldiv", "mul-128",
     # case's own last operation against the host (the S6 round-2 AF lesson, at the element).
     cmp rax, rax
 """)
+case("muldiv", "idiv-overflow",
+     "IDIV's OTHER #DE condition: the quotient must fit 64 bits and INT64_MIN / -1 does not -- a "
+     "range check that is DELETED leaves this case green (round-2 SF 4).  The divisor is not "
+     "zero, so it isolates the quotient bound from the divide-by-zero branch",
+     """\
+    mov rax, 0x8000000000000000
+    mov rdx, 0xFFFFFFFFFFFFFFFF
+    mov rcx, -1
+    idiv rcx
+""", fault="DE")
 case("muldiv", "imul-one",
      "the one-operand IMUL sign-extends its 128-bit product into RDX:RAX, and a "
      "negative 64-bit factor is only negative at 64 bits",
@@ -755,6 +765,9 @@ case("muldiv", "imul-two-three",
     imul rax, rcx
     imul rbx, rax, 3
     imul rdx, rcx, -1
+    # ROUND 2 (SF 3): the imm32 THREE-OPERAND form (0x69) -- MEASURED absent from every corpus
+    # image before this line, so the imm32 sign-extension path was un-instrumented
+    imul rdi, rcx, 0x12345678
     # S8: the DEFINED flags of this case's last flag-setting operation, masked to
     # the bits the SDM defines for it (0x801); the undefined ones are excluded by RULE
     # (plan ss2.1.5), not by luck -- results/x86-64-s8.md ss4.
@@ -807,6 +820,14 @@ case("muldiv", "shl-shr-sar-64",
     shl rax, cl
     shr rbx, cl
     sar rcx, cl
+    # ROUND 2 (SF 5): a COUNT-1 shift, where OF is DEFINED -- without this the case's last op
+    # has count != 1 and the mask legitimately drops OF, leaving the OF rule at count 1
+    # un-compared.  AF is undefined for a shift, hence 0x8C5.
+    shl rdi, 1
+    pushfq
+    pop qword ptr [0x100218]
+    and dword ptr [0x100218], 0x8C5
+    and dword ptr [rsp - 8], 0x8C5
     # S8: the DEFINED flags of this case's last flag-setting operation, masked to
     # the bits the SDM defines for it (0xD5); the undefined ones are excluded by RULE
     # (plan ss2.1.5), not by luck -- results/x86-64-s8.md ss4.
@@ -831,6 +852,14 @@ case("muldiv", "shifts-imm64",
     sar rbx, 32
     mov rcx, 0x123456789ABCDEF0
     shl rcx, 0
+    # ROUND 2 (SF 5): a COUNT-1 shift, where OF is DEFINED -- without this the case's last op
+    # has count != 1 and the mask legitimately drops OF, leaving the OF rule at count 1
+    # un-compared.  AF is undefined for a shift, hence 0x8C5.
+    shl rdi, 1
+    pushfq
+    pop qword ptr [0x100218]
+    and dword ptr [0x100218], 0x8C5
+    and dword ptr [rsp - 8], 0x8C5
     # S8: the DEFINED flags of this case's last flag-setting operation, masked to
     # the bits the SDM defines for it (0xD5); the undefined ones are excluded by RULE
     # (plan ss2.1.5), not by luck -- results/x86-64-s8.md ss4.
@@ -854,6 +883,15 @@ case("muldiv", "rol-ror-64",
     ror rbx, 1
     mov rcx, rax
     rol rcx, 63
+    # ROUND 2 (SF 3): ROR by imm8 (0xC1 /1) -- the report claimed it and only C1 /0 was encoded;
+    # and (SF 5) a COUNT-1 snapshot, where OF IS DEFINED, so the OF rule at count 1 stops being
+    # un-compared.  AF is undefined for a rotate, hence 0x8C5.
+    ror rdx, 3
+    rol rsi, 1
+    pushfq
+    pop qword ptr [0x100218]
+    and dword ptr [0x100218], 0x8C5
+    and dword ptr [rsp - 8], 0x8C5
     # S8: the DEFINED flags of this case's last flag-setting operation, masked to
     # the bits the SDM defines for it (0x1); the undefined ones are excluded by RULE
     # (plan ss2.1.5), not by luck -- results/x86-64-s8.md ss4.
@@ -908,6 +946,29 @@ case("muldiv", "bsf-bsr-bswap",
     # body ends with a flag-DEFINING instruction that touches no register: `cmp rax, rax`
     # defines all six.  Without it the element would compare the undefined bits of the
     # case's own last operation against the host (the S6 round-2 AF lesson, at the element).
+    cmp rax, rax
+""")
+case("muldiv", "rol-preserves-flags",
+     "ROL/ROR leave SF/ZF/AF/PF UNAFFECTED (SDM): a `sub` sets them and the rotate must NOT "
+     "touch them -- a lazy-flags engine that overwrites last_result with the rotate result makes "
+     "a later jz read ZF from the ROTATED value (round-2 BLOCKER 1)",
+     """\
+    mov rax, 0x100000000
+    mov r9, rax
+    # THE ROTATE MUST OPERATE ON A DIFFERENT REGISTER whose result is NONZERO, or the mutant and
+    # the fix agree by accident: MEASURED -- rotating the just-zeroed r9 leaves last_result = 0,
+    # so a clobbering engine still recomputes ZF=1 and the case cannot fail.
+    mov rdx, 0x8000000000000001
+    sub r9, rax
+    rol rdx, 1
+    # the UNAFFECTED flags, snapshotted AFTER the rotate: ZF/SF/PF must still be the SUB's
+    # (ZF=1, SF=0, PF=1), while the rotate's own result is 3 (ZF=0) -- so a clobbering engine
+    # reports ZF=0 and mismatches.  CF is the rotate's and OF is defined at count 1; AF is
+    # undefined for a rotate, hence 0x8C5.  r9 is W2's witness (a 32-bit engine cannot reach it).
+    pushfq
+    pop qword ptr [0x100080]
+    and dword ptr [0x100080], 0x8C5
+    and dword ptr [rsp - 8], 0x8C5
     cmp rax, rax
 """)
 case("muldiv", "shld-shrd",

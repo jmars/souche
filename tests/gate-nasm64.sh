@@ -29,14 +29,14 @@
 #      only for them -- run.js:497-505 -- and are C4's subject.)
 #   D. THE RED CENSUS, AS COUNTS: every corpus case run against the CURRENT binary must
 #      stop with a named `v86c: unimplemented: <symbol>`; the SUMMARY NUMBERS are asserted
-#      (green=0 red_unimplemented=59 mismatch=0 error=0 -- 58 since S6 added the
+#      (green=0 red_unimplemented=61 mismatch=0 error=0 -- 58 since S6 added the
 #      alu-pop-rsp case), NOT a shape.  Round 2, fix 6:
 #      asserting "the stop exists" cannot tell progress from catastrophe (MEASURED: an
 #      `--expect any`-style permissive verdict returns rc 0 with mismatch=55/55).
 #   D2. THE COUNT ASSERTION'S ABLE-TO-FAIL ARM: the same step with DELIBERATELY WRONG
 #      counts must FAIL.  An assertion that cannot fail is not an assertion.
 #   D3. THE NOT-RED ARM (round 2's BLOCKER, B1): a bare `--stage run` against a leg that
-#      PRODUCES DOCUMENTS must return a SUMMARY and green=59.  Before the fix this raised
+#      PRODUCES DOCUMENTS must return a SUMMARY and green=61.  Before the fix this raised
 #      UnboundLocalError at the first case that stopped being red -- which is exactly the
 #      form step D has -- so the harness would have been dead on arrival for S5.
 #
@@ -100,7 +100,7 @@ $PYTHON tests/nasm64_run.py --stage fixtures --perturb-field reg \
 	--perturb-dir build/nasm64/perturb-reg --quiet >/tmp/gate-nasm64-fixtures.log 2>&1 \
 	|| { echo "FAIL perturb-reg fixtures"; exit 1; }
 step "perturb-reg" $PYTHON tests/nasm64_run.py --stage run --reuse-fixtures \
-	--fixture-dir build/nasm64/perturb-reg --exclude '(div-zero|ud2)' \
+	--fixture-dir build/nasm64/perturb-reg --exclude '(div-zero|ud2|idiv-overflow)' \
 	--actual "$ACTUAL_NATIVE" --expect all-failing --expect-field 'reg64[0]' --quiet
 
 echo "== C3. one perturbed comparison-window word per fixture: every case must mismatch"
@@ -108,7 +108,7 @@ $PYTHON tests/nasm64_run.py --stage fixtures --perturb-field mem \
 	--perturb-dir build/nasm64/perturb-mem --quiet >/tmp/gate-nasm64-fixtures.log 2>&1 \
 	|| { echo "FAIL perturb-mem fixtures"; exit 1; }
 step "perturb-mem" $PYTHON tests/nasm64_run.py --stage run --reuse-fixtures \
-	--fixture-dir build/nasm64/perturb-mem --exclude '(div-zero|ud2)' \
+	--fixture-dir build/nasm64/perturb-mem --exclude '(div-zero|ud2|idiv-overflow)' \
 	--actual "$ACTUAL_NATIVE" --expect all-failing --expect-field 'mem[100000]' --quiet
 
 echo "== C4. one perturbed rip in the FAULT cases (the only cases whose rip is compared)"
@@ -116,7 +116,7 @@ $PYTHON tests/nasm64_run.py --stage fixtures --perturb-field rip \
 	--perturb-dir build/nasm64/perturb-rip --quiet >/tmp/gate-nasm64-fixtures.log 2>&1 \
 	|| { echo "FAIL perturb-rip fixtures"; exit 1; }
 step "perturb-rip" $PYTHON tests/nasm64_run.py --stage run --reuse-fixtures \
-	--fixture-dir build/nasm64/perturb-rip --filter '(div-zero|ud2)' \
+	--fixture-dir build/nasm64/perturb-rip --filter '(div-zero|ud2|idiv-overflow)' \
 	--actual "$ACTUAL_NATIVE" --expect all-failing --expect-field 'exception rip' --quiet
 
 echo "== C5. the EMPTIED-STACK arm (round 2, fix 2): a stack popped empty must read all-invalid"
@@ -145,7 +145,7 @@ must_fail "emptied-stack-arm-negative" stack_arm 0x0AAA
 
 echo "== D. THE RED CENSUS AS COUNTS: every case against the CURRENT binary"
 step "red-census-counts" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_PORT" \
-	--expect counts --expect-counts "green=0 red_unimplemented=59 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=0 red_unimplemented=61 mismatch=0 error=0" --quiet
 if grep -q '^\[+\] SUMMARY' $LOG; then
 	PASS=$((PASS+1))
 	echo "ok   red-census printed a SUMMARY"
@@ -161,7 +161,7 @@ must_fail "red-census-counts-arm" $PYTHON tests/nasm64_run.py --stage run \
 
 echo "== D3. the NOT-RED arm: a bare --stage run against a document-producing leg"
 step "not-red-arm" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_NATIVE" \
-	--expect counts --expect-counts "green=59 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=61 mismatch=0 error=0" --quiet
 
 echo
 echo "[+] gate-nasm64: $PASS passed, $FAIL failed"

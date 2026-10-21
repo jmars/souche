@@ -78,7 +78,7 @@ must_fail() { # must_fail <name> <cmd...> -- the able-to-fail arm of an assertio
 
 echo "== A. --long-mode OFF is still the 32-bit machine (S2's refusal, by name, S4's counts)"
 step "off-is-32bit" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_OFF" \
-	--expect counts --expect-counts "green=0 red_unimplemented=59 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=0 red_unimplemented=61 mismatch=0 error=0" --quiet
 # a count assertion alone would also pass on 57 of anything, so the census's own line is
 # checked: the refusal must NAME the reason
 step "off-refusal-names-the-reason" sh -c \
@@ -112,7 +112,7 @@ step "family-1-green" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_
 	--filter '^mov-' --expect counts \
 	--expect-counts "green=12 red_unimplemented=0 mismatch=0 error=0" --quiet
 step "whole-corpus-no-mismatch" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
-	--expect counts --expect-counts "green=50 red_unimplemented=9 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=52 red_unimplemented=9 mismatch=0 error=0" --quiet
 must_fail "whole-corpus-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
 	--actual "$ACTUAL_ON" --expect counts --expect-counts "green=57 mismatch=0" --quiet
 
@@ -260,10 +260,10 @@ step "ctrl-call-ret" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_O
 echo "== F5. S8: MUL/DIV/SHIFTS AT 64 BITS (family 4, 11/11 -- ALL GREEN)"
 step "muldiv-family" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
 	--filter '^muldiv-' --expect counts \
-	--expect-counts "green=11 red_unimplemented=0 mismatch=0 error=0" --quiet
+	--expect-counts "green=13 red_unimplemented=0 mismatch=0 error=0" --quiet
 must_fail "muldiv-family-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
 	--actual "$ACTUAL_ON" --filter '^muldiv-' --expect counts \
-	--expect-counts "green=10 mismatch=0" --quiet
+	--expect-counts "green=12 mismatch=0" --quiet
 # the 128-bit product is the slice's headline: mul-128's own counts, so a regression in the high
 # half is a NAMED step rather than a corpus statistic
 step "mul-128-high-half" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
@@ -273,6 +273,15 @@ step "mul-128-high-half" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTU
 # the div-family's own error path is exercised at 64 bits)
 step "div64-runs" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
 	--filter 'muldiv-div-64' --expect counts \
+	--expect-counts "green=1 red_unimplemented=0 mismatch=0 error=0" --quiet
+# ROUND 2'S TWO NEW INSTRUMENTS, each with its mutant MEASURED: the rotate's "unaffected flags"
+# rule (a clobbering rol64 turns it red) and IDIV's QUOTIENT-overflow #DE (deleting the range
+# check turns it red).  A named step each, so a regression is not a corpus statistic.
+step "rol-preserves-flags" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
+	--filter 'rol-preserves' --expect counts \
+	--expect-counts "green=1 red_unimplemented=0 mismatch=0 error=0" --quiet
+step "idiv-overflow-DE" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
+	--filter 'idiv-overflow' --expect counts \
 	--expect-counts "green=1 red_unimplemented=0 mismatch=0 error=0" --quiet
 
 # the ONE red case must be red for the named reason (div is S8's), not for a silent mismatch

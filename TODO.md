@@ -645,6 +645,27 @@ forms are S7's `narrow64` stop), seven of bswap's eight register encodings and `
 (bodies exist, **no case grades them** — unproven), the register forms `0F A3/AB/B3/BB`, and
 `SHLD`/`SHRD` by imm8.
 
+**S8 ROUND 2 (2026-10-19): one blocker, four should-fix, two nice-to-have, all fixed.**
+(BLOCKER 1) **`rol64`/`ror64` clobbered the lazy-flag operands**: both called `set_last_result`, so
+a `sub`'s stale ZF/SF/PF/AF were recomputed from the ROTATE result — but the SDM says ROL/ROR leave
+them UNAFFECTED.  The fix deletes the call (the 32-bit `rol32`/`ror32` never made it), and the new
+`muldiv-rol-preserves-flags` case proves it — MEASURED red under the clobbering mutant, green under
+the fix; its FIRST version could not fail (it rotated the just-zeroed register, so the mutant agreed
+by accident), which is this lane's third "arm that cannot fail".  (SF 2) The **`BT` MEMORY forms
+were wrong by construction**, not "unproven": the SDM does not mask a memory bit base (`addr +
+(bit>>3)`, bit `& 7`), and round 1 masked `bit & 63`, so a guest-reachable imm8 in [64,255] picked
+the wrong bit and BTS/BTR/BTC WROTE THE WRONG BYTE; the four `_mem` bodies now use the byte-granular
+scheme (still un-instrumented by a case, and stated).  (SF 3) Two paths the report claimed and
+nothing drove: the **imm32 three-operand IMUL** (`48 69` appeared in NO corpus image) and `C1 /1`
+(ror by imm8) — both now encoded in the cases.  (SF 4) IDIV's **quotient-overflow `#DE`** had no
+case, so a mutant with the range check deleted stayed green; `muldiv-idiv-overflow` (`INT64_MIN /
+-1`) now fails it (MEASURED).  (SF 5) The **defined `OF`-at-count-1** rule was un-compared (every
+case's last op had count != 1); count-1 snapshots were added to three cases.  (NTH 6/7) The report's
+body count is **68, not 60**, §6 now names the **30 `_mem` bodies without cases** (and that no
+`flags.c` diff exists in this slice), and `idiv64`'s `(__int128)high << 64` UB — the class
+`idiv32`'s own comment exists to avoid — is built in `unsigned __int128`.  Family 4 is **13/13**,
+the whole corpus `green=52 red_unimplemented=9`, and the battery is unmoved.
+
 **S9-S13 REMAIN**: the string/bit/atomic ops, the SSE family, the system layer, the guest and the
 engines' long-mode arms.  The rest of this section is the reconnaissance record and is not made
 stale by S0-S8.
