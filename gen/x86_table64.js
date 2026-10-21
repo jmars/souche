@@ -133,6 +133,10 @@ const x86_table64_0f = [
 	{ opcode: 0xCD },
 	{ opcode: 0xCE },
 	{ opcode: 0xCF },
+	/* S9: the atomic family */
+	{ opcode: 0xB1 }, /* cmpxchg r/m64, r64 */
+	{ opcode: 0xC1 }, /* xadd r/m64, r64 */
+	{ opcode: 0xC7 }, /* the group: /1 is cmpxchg16b */
 ];
 
 const x86_table64 = [
@@ -174,6 +178,9 @@ const x86_table64 = [
 	                          + " implemented (ARPL does not exist in 64-bit mode)" }, /* movsxd r64, r/m32 (S7) */
 	{ opcode: 0x87 },  /* xchg r/m64, r64 (S7) */
 	{ opcode: 0x8D },  /* lea r64, m (S7; custom_modrm_resolve, like the 32-bit body) */
+	/* S9: the string Q forms (movs/cmps/stos/lods/scas).  The F3/F2 arms are the emitter's
+	 * prefix split of the SAME opcode, so each gets its own instr64_F3NN / instr64_F2NN body. */
+	{ opcode: 0xA5 }, { opcode: 0xA7 }, { opcode: 0xAB }, { opcode: 0xAD }, { opcode: 0xAF },
 	/* 0xC3 / 0xE8 / 0xE9 are ALREADY here as default-64 entries with no body (S5's shutter);
 	 * S7 gives them their bodies, and 0xC2 / 0xCA / 0xCB / 0xCF stay named stops. */
 

@@ -666,9 +666,28 @@ body count is **68, not 60**, §6 now names the **30 `_mem` bodies without cases
 `idiv32`'s own comment exists to avoid — is built in `unsigned __int128`.  Family 4 is **13/13**,
 the whole corpus `green=52 red_unimplemented=9`, and the battery is unmoved.
 
-**S9-S13 REMAIN**: the string/bit/atomic ops, the SSE family, the system layer, the guest and the
-engines' long-mode arms.  The rest of this section is the reconnaissance record and is not made
-stale by S0-S8.
+**S9 IS LANDED (2026-10-19): STRING, BIT AND ATOMIC AT 64 BITS — ALL SEVEN FAMILY-5 CASES GREEN.**
+`results/x86-64-s9.md` is its report.  The 64-bit string ops (`movs`/`stos`/`lods`/`scas`/`cmps`
+with their `rep`/`repz`/`repnz` forms over a 64-bit **RCX/RSI/RDI**) are **their own loop** in
+`instructions_64.c`, not a widened `string.c` (that file's shared body runs addresses and count
+through `int32_t`); `xadd`/`cmpxchg` and **`cmpxchg16b`** (16 bytes against RDX:RAX exchanging
+RCX:RBX, with the SDM's **alignment `#GP`**) are in too.  Family 5 is **7/7** — the six plus a new
+`bt-mem-imm8`, which is the **first instrument for the BT MEMORY form** S8's round 2 fixed.  A
+defect this slice found in its own first version: the `cmpxchg16b` case compared a **PF** the SDM
+leaves undefined (only ZF is defined) — the port's derived PF was 1, the host's 0, four fields
+failed; fixed by masking to ZF and normalising the `rflags` element.  **AN OPEN FINDING, recorded
+rather than papered over**: the BT **memory** `imm8 >= 64` rule is contested — S8's round 2 fixed
+the bodies to a BYTE-granular bit string, the review's text says the offset DIV 64 selects the
+QWORD, and **this host agreed with neither** (MEASURED: `bts qword [r8], 100` wrote `0x10` at
+byte 4, i.e. as if masked to `0x3F`), so the shipped case uses bit 20, where all three readings
+agree, and the `>= 64` behaviour needs a spec re-read before any of them is claimed.  Whole corpus
+with `--long-mode on`: **`green=59 red_unimplemented=3 mismatch=0 error=0`** — the 3 are S10's SSE
+encodings.  NOT landed, named in the report: the `rep` forms' ZF exit and the DF=1 direction (no
+case), `cmpxchg`'s register form, bswap's other seven encodings (S8's gap), and the string ops'
+fault partial-effects (out of the corpus by rule, a stated choice).
+
+**S10-S13 REMAIN**: the SSE family, the system layer, the guest and the engines' long-mode arms.
+The rest of this section is the reconnaissance record and is not made stale by S0-S9.
 
 Not implemented, and deliberately **not** listed as a non-goal: it is wanted one day. It is recorded
 here so the next reader inherits the reconnaissance instead of re-deriving it.

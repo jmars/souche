@@ -1379,3 +1379,223 @@ void instr64_0FBA_7_mem(int64_t addr, int64_t imm)
 	bt_mem_flags(b, bit);
 	safe_write8_addr(addr + (bit >> 3), b ^ (1 << (bit & 7)));
 }
+
+/* ================================================================== *
+ * S9 -- STRING, BIT AND ATOMIC AT 64 BITS
+ *
+ * THE STRING OPS ARE THEIR OWN LOOP HERE, not a widened string.c: that file's
+ * `string_instruction` runs its addresses and its count through int32_t throughout (a 32-bit
+ * ASIZE model), so a 64-bit form would mean widening the shared body for every op and size --
+ * and the corpus's six cases need exactly the Q forms.  The rules implemented are the SDM's:
+ * the SOURCE is RSI, the DESTINATION RDI, the COUNT RCX, the accumulator RAX, the step is
+ * +8/-8 by DF, and `rep` (F3 for movs/stos/lods) repeats RCX times while `repz`/`repnz`
+ * (F3/F2 for scas/cmps) also stop on the ZF condition.
+ *
+ * THE SILENT-WRONG SURFACES: a 32-bit RCX/RDI/RSI (a `rep stosq` of 4 would write 4 bytes and
+ * advance by 4); the DIRECTION flag (a body that always increments); and the ZF-exit of
+ * scas/cmps (a repz that ignores ZF loops to the count).
+ * ================================================================== */
+
+enum { STR64_NONE = 0, STR64_REP = 1, STR64_REPZ = 2, STR64_REPNZ = 3 };
+
+static int64_t str64_step(void) { return (cpu->flags & FLAG_DIRECTION) != 0 ? -8 : 8; }
+
+/* the count for one invocation: RCX for a rep form, 1 otherwise */
+static uint64_t str64_count(int rep) { return rep == STR64_NONE ? 1 : read_reg64(ECX); }
+
+static void str64_stos(int rep)
+{
+	int64_t step = str64_step();
+	uint64_t count = str64_count(rep);
+	uint64_t rdi = read_reg64(EDI);
+	uint64_t rax = read_reg64(EAX);
+	while (count != 0) {
+		safe_write64_addr((int64_t)rdi, rax);
+		if (cpu->pagefault) { write_reg64(ECX, count); write_reg64(EDI, rdi); return; }
+		rdi += step;
+		count--;
+	}
+	write_reg64(ECX, 0);
+	write_reg64(EDI, rdi);
+}
+
+static void str64_movs(int rep)
+{
+	int64_t step = str64_step();
+	uint64_t count = str64_count(rep);
+	uint64_t rsi = read_reg64(ESI);
+	uint64_t rdi = read_reg64(EDI);
+	while (count != 0) {
+		uint64_t v = safe_read64_addr((int64_t)rsi);
+		if (cpu->pagefault) { write_reg64(ECX, count); write_reg64(ESI, rsi); write_reg64(EDI, rdi); return; }
+		safe_write64_addr((int64_t)rdi, v);
+		if (cpu->pagefault) { write_reg64(ECX, count); write_reg64(ESI, rsi); write_reg64(EDI, rdi); return; }
+		rsi += step;
+		rdi += step;
+		count--;
+	}
+	write_reg64(ECX, 0);
+	write_reg64(ESI, rsi);
+	write_reg64(EDI, rdi);
+}
+
+static void str64_lods(int rep)
+{
+	int64_t step = str64_step();
+	uint64_t count = str64_count(rep);
+	uint64_t rsi = read_reg64(ESI);
+	while (count != 0) {
+		uint64_t v = safe_read64_addr((int64_t)rsi);
+		if (cpu->pagefault) { write_reg64(ECX, count); write_reg64(ESI, rsi); return; }
+		write_reg64(EAX, v);
+		rsi += step;
+		count--;
+	}
+	write_reg64(ECX, 0);
+	write_reg64(ESI, rsi);
+}
+
+static void str64_scas(int rep)
+{
+	int64_t step = str64_step();
+	uint64_t count = str64_count(rep);
+	uint64_t rdi = read_reg64(EDI);
+	uint64_t rax = read_reg64(EAX);
+	while (count != 0) {
+		int64_t v = (int64_t)safe_read64_addr((int64_t)rdi);
+		if (cpu->pagefault) { write_reg64(ECX, count); write_reg64(EDI, rdi); return; }
+		cmp64((int64_t)rax, v);
+		rdi += step;
+		count--;
+		if (rep == STR64_REPZ && !getzf()) break;
+		if (rep == STR64_REPNZ && getzf()) break;
+	}
+	write_reg64(ECX, count);
+	write_reg64(EDI, rdi);
+}
+
+static void str64_cmps(int rep)
+{
+	int64_t step = str64_step();
+	uint64_t count = str64_count(rep);
+	uint64_t rsi = read_reg64(ESI);
+	uint64_t rdi = read_reg64(EDI);
+	while (count != 0) {
+		int64_t a = (int64_t)safe_read64_addr((int64_t)rsi);
+		int64_t b;
+		if (cpu->pagefault) { write_reg64(ECX, count); write_reg64(ESI, rsi); write_reg64(EDI, rdi); return; }
+		b = (int64_t)safe_read64_addr((int64_t)rdi);
+		if (cpu->pagefault) { write_reg64(ECX, count); write_reg64(ESI, rsi); write_reg64(EDI, rdi); return; }
+		cmp64(a, b);
+		rsi += step;
+		rdi += step;
+		count--;
+		if (rep == STR64_REPZ && !getzf()) break;
+		if (rep == STR64_REPNZ && getzf()) break;
+	}
+	write_reg64(ECX, count);
+	write_reg64(ESI, rsi);
+	write_reg64(EDI, rdi);
+}
+
+/* the fifteen entry points (five Q opcodes x {no prefix, F3, F2}) */
+void instr64_A5(void) { str64_movs(STR64_NONE); }
+void instr64_F3A5(void) { str64_movs(STR64_REP); }
+void instr64_F2A5(void) { str64_movs(STR64_REP); }
+void instr64_A7(void) { str64_cmps(STR64_NONE); }
+void instr64_F3A7(void) { str64_cmps(STR64_REPZ); }
+void instr64_F2A7(void) { str64_cmps(STR64_REPNZ); }
+void instr64_AB(void) { str64_stos(STR64_NONE); }
+void instr64_F3AB(void) { str64_stos(STR64_REP); }
+void instr64_F2AB(void) { str64_stos(STR64_REP); }
+void instr64_AD(void) { str64_lods(STR64_NONE); }
+void instr64_F3AD(void) { str64_lods(STR64_REP); }
+void instr64_F2AD(void) { str64_lods(STR64_REP); }
+void instr64_AF(void) { str64_scas(STR64_NONE); }
+void instr64_F3AF(void) { str64_scas(STR64_REPZ); }
+void instr64_F2AF(void) { str64_scas(STR64_REPNZ); }
+
+/* ------------------------------------------------------------------ *
+ * XADD / CMPXCHG / CMPXCHG16B
+ *
+ * CMPXCHG's rule: compare RAX with the destination; equal -> ZF=1 and the destination takes the
+ * source; not equal -> ZF=0 and RAX takes the destination.  The OTHER arithmetic flags come from
+ * the comparison (RAX - destination), which is what cmp64 computes.
+ *
+ * CMPXCHG16B: a 16-byte atomic against RDX:RAX, exchanging RCX:RBX; and the SDM's ALIGNMENT
+ * rule -- a misaligned memory operand is #GP(0), not a split access.  The corpus's operand is
+ * 16-byte aligned; the misaligned arm is a NAMED, instrumented-by-hand path (results/x86-64-s9.md
+ * ss6 states which).
+ * ------------------------------------------------------------------ */
+
+void instr64_0FC1_mem(int64_t addr, int32_t r)
+{
+	uint64_t dest = safe_read64_addr(addr);
+	uint64_t src = read_reg64(r);
+	if (cpu->pagefault) return;
+	uint64_t sum = (uint64_t)add64((int64_t)dest, (int64_t)src);
+	write_reg64(r, dest); /* xadd leaves the OLD destination in the register */
+	safe_write64_addr(addr, sum);
+}
+void instr64_0FC1_reg(int32_t r1, int32_t r)
+{
+	uint64_t dest = read_reg64(r1);
+	uint64_t src = read_reg64(r);
+	uint64_t sum = (uint64_t)add64((int64_t)dest, (int64_t)src);
+	write_reg64(r, dest);
+	write_reg64(r1, sum);
+}
+
+void instr64_0FB1_mem(int64_t addr, int32_t r)
+{
+	uint64_t dest = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	if (read_reg64(EAX) == dest) {
+		cmp64((int64_t)read_reg64(EAX), (int64_t)dest); /* ZF=1 */
+		safe_write64_addr(addr, read_reg64(r));
+	}
+	else {
+		cmp64((int64_t)read_reg64(EAX), (int64_t)dest); /* ZF=0 */
+		write_reg64(EAX, dest);
+	}
+}
+void instr64_0FB1_reg(int32_t r1, int32_t r)
+{
+	uint64_t dest = read_reg64(r1);
+	if (read_reg64(EAX) == dest) {
+		cmp64((int64_t)read_reg64(EAX), (int64_t)dest);
+		write_reg64(r1, read_reg64(r));
+	}
+	else {
+		cmp64((int64_t)read_reg64(EAX), (int64_t)dest);
+		write_reg64(EAX, dest);
+	}
+}
+
+/* 0F C7 /1 cmpxchg16b m128 */
+void instr64_0FC7_1_mem(int64_t addr)
+{
+	if (((uint64_t)addr & 15) != 0) {
+		trigger_gp(0); /* the SDM's alignment rule */
+		return;
+	}
+	uint64_t lo = safe_read64_addr(addr);
+	uint64_t hi = safe_read64_addr(addr + 8);
+	if (cpu->pagefault) return;
+	if (lo == read_reg64(EAX) && hi == read_reg64(EDX)) {
+		cmp64((int64_t)read_reg64(EAX), (int64_t)lo); /* ZF=1 */
+		safe_write64_addr(addr, read_reg64(EBX));
+		if (cpu->pagefault) return;
+		safe_write64_addr(addr + 8, read_reg64(ECX));
+	}
+	else {
+		cmp64((int64_t)read_reg64(EAX), (int64_t)lo); /* ZF=0 */
+		write_reg64(EAX, lo);
+		write_reg64(EDX, hi);
+	}
+}
+void instr64_0FC7_1_reg(int32_t r1)
+{
+	(void)r1;
+	trigger_gp(0); /* a register operand is #UD on hardware; #GP is this port's stop for it */
+}

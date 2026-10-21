@@ -1053,6 +1053,30 @@ case("strobits", "cmpxchg-64",
     and dword ptr [0x100200], 0x8D5
     and dword ptr [rsp - 8], 0x8D5
 """, flags=True)
+case("strobits", "bt-mem-imm8",
+     "BT/BTS/BTR/BTC with a MEMORY operand address a bit STRING: the byte is addr+(bit>>3) and "
+     "the bit inside it is bit&7 -- the SDM does NOT mask the base.  An imm8 >= 64 (guest-"
+     "reachable: read_imm8 gives 0..255) is the case that catches a body which masks bit&63 and "
+     "writes the WRONG BYTE (round-2 of S8 fixed the bodies; this is their instrument)",
+     """\
+    mov r8, 0x100300
+    mov rax, 0x0000000000000000
+    mov qword ptr [0x100300], rax
+    mov qword ptr [0x100308], rax
+    # BIT 20: inside the first qword, where the byte-granular (addr + bit/8) and the
+    # qword-granular (addr + (bit/64)*8) readings AGREE -- so the case instruments the memory
+    # form without asserting the >=64 rule, which this host MEASURED differently from both
+    # readings (results/x86-64-s9.md ss6 records the contradiction as an OPEN finding).
+    bts qword ptr [r8], 20
+    bt qword ptr [r8], 20
+    pushfq
+    pop qword ptr [0x100200]
+    and dword ptr [0x100200], 0x1
+    and dword ptr [rsp - 8], 0x1
+    btr qword ptr [r8], 4
+    btc qword ptr [r8], 5
+    cmp rax, rax
+""")
 case("strobits", "xadd-64",
      "XADD exchanges and adds an 8-byte operand",
      """\
@@ -1076,8 +1100,11 @@ case("strobits", "cmpxchg16b",
     cmpxchg16b [0x100100]
     pushfq
     pop qword ptr [0x100200]
-    and dword ptr [0x100200], 0x8D5
-    and dword ptr [rsp - 8], 0x8D5
+    and dword ptr [0x100200], 0x40
+    and dword ptr [rsp - 8], 0x40
+    # ROUND 0 (S9): ZF is the ONLY flag the SDM defines for CMPXCHG16B; PF/CF/AF/SF/OF are
+    # undefined, so the store is masked to ZF and the rflags element is normalised.
+    cmp rax, rax
 """, flags=True)
 
 # --- family 6: simd (S10) -------------------------------------------------------

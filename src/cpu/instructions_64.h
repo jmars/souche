@@ -287,3 +287,16 @@ void instr64_0FCC(void);
 void instr64_0FCD(void);
 void instr64_0FCE(void);
 void instr64_0FCF(void);
+
+/* S9: string Q forms (five opcodes x {none, F3, F2}) and the atomic family */
+void instr64_A5(void); void instr64_F3A5(void); void instr64_F2A5(void);
+void instr64_A7(void); void instr64_F3A7(void); void instr64_F2A7(void);
+void instr64_AB(void); void instr64_F3AB(void); void instr64_F2AB(void);
+void instr64_AD(void); void instr64_F3AD(void); void instr64_F2AD(void);
+void instr64_AF(void); void instr64_F3AF(void); void instr64_F2AF(void);
+void instr64_0FB1_mem(int64_t addr, int32_t r);
+void instr64_0FB1_reg(int32_t r1, int32_t r);
+void instr64_0FC1_mem(int64_t addr, int32_t r);
+void instr64_0FC1_reg(int32_t r1, int32_t r);
+void instr64_0FC7_1_mem(int64_t addr);
+void instr64_0FC7_1_reg(int32_t r1);

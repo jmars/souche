@@ -128,8 +128,11 @@ body_start:
     cmpxchg16b [0x100100]
     pushfq
     pop qword ptr [0x100200]
-    and dword ptr [0x100200], 0x8D5
-    and dword ptr [rsp - 8], 0x8D5
+    and dword ptr [0x100200], 0x40
+    and dword ptr [rsp - 8], 0x40
+    # ROUND 0 (S9): ZF is the ONLY flag the SDM defines for CMPXCHG16B; PF/CF/AF/SF/OF are
+    # undefined, so the store is masked to ZF and the rflags element is normalised.
+    cmp rax, rax
     mov qword ptr [0x100000], rax
     mov qword ptr [0x100008], rcx
     mov qword ptr [0x100010], rdx

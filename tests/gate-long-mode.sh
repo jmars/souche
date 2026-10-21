@@ -78,7 +78,7 @@ must_fail() { # must_fail <name> <cmd...> -- the able-to-fail arm of an assertio
 
 echo "== A. --long-mode OFF is still the 32-bit machine (S2's refusal, by name, S4's counts)"
 step "off-is-32bit" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_OFF" \
-	--expect counts --expect-counts "green=0 red_unimplemented=61 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=0 red_unimplemented=62 mismatch=0 error=0" --quiet
 # a count assertion alone would also pass on 57 of anything, so the census's own line is
 # checked: the refusal must NAME the reason
 step "off-refusal-names-the-reason" sh -c \
@@ -103,7 +103,7 @@ echo "== D. the 0x2NN overlay's census (routed arms / named stops) AS NUMBERS"
 # the default-64 named stops (ret/call/jmp/pop r-m/iret) that S6-S11 replace; a slice that
 # lands one EDITS THIS LINE, which is the record of what it landed.
 step "overlay-census" sh -c \
-	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 141 overlay entries, 101 routed to instr64 bodies, 32 of those call sites unimplemented'"
+	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 146 overlay entries, 106 routed to instr64 bodies, 34 of those call sites unimplemented'"
 must_fail "overlay-census-able-to-fail" sh -c \
 	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 0 overlay entries'"
 
@@ -112,7 +112,7 @@ step "family-1-green" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_
 	--filter '^mov-' --expect counts \
 	--expect-counts "green=12 red_unimplemented=0 mismatch=0 error=0" --quiet
 step "whole-corpus-no-mismatch" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
-	--expect counts --expect-counts "green=52 red_unimplemented=9 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=59 red_unimplemented=3 mismatch=0 error=0" --quiet
 must_fail "whole-corpus-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
 	--actual "$ACTUAL_ON" --expect counts --expect-counts "green=57 mismatch=0" --quiet
 
@@ -289,6 +289,22 @@ step "idiv-overflow-DE" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUA
 # fault case must now reach the #DE (a SIGFPE document), not a stop.
 step "alu-div-zero-reaches-DE" sh -c \
 	"$PORT64 build/nasm64/alu-div-zero.img 20000000 --fixture64 --long-mode on 2>&1 | grep -q '(signal SIGFPE)'" 
+
+echo "== F6. S9: STRING / BIT / ATOMIC AT 64 BITS (family 5, 7/7)"
+step "strobits-family" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
+	--filter '^strobits-' --expect counts \
+	--expect-counts "green=7 red_unimplemented=0 mismatch=0 error=0" --quiet
+must_fail "strobits-family-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
+	--actual "$ACTUAL_ON" --filter '^strobits-' --expect counts \
+	--expect-counts "green=6 mismatch=0" --quiet
+# the 16-byte atomic and the string Q forms each get their own named step: they are the two
+# places a 32-bit width would hide (a 4-byte stosq, an 8-byte cmpxchg16b)
+step "cmpxchg16b-16-byte" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
+	--filter 'cmpxchg16b' --expect counts \
+	--expect-counts "green=1 red_unimplemented=0 mismatch=0 error=0" --quiet
+step "rep-stosq-movsq" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
+	--filter 'stos-movs' --expect counts \
+	--expect-counts "green=1 red_unimplemented=0 mismatch=0 error=0" --quiet
 
 echo "== G. the bound NAMES THE FRAME, and the unmutated image produces neither stop nor fault"
 step "above-4gib-names-the-frame" sh -c \
