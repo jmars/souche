@@ -45,6 +45,7 @@
 #include "arith.h" /* S6: add64/sub64/... -- the ONE set of flag cores at OPSIZE_64 */
 #include "cpu.h"
 #include "flags.h"
+#include "sse_instr.h" /* S10: transition_fpu_to_mmx, the MMX/x87 state handoff */
 #include "instructions.h" /* S5a: run_prefix_instruction, handle_irqs (declared there) */
 #include "memory.h"
 #include "misc_instr.h"
@@ -1613,4 +1614,84 @@ void instr64_0FC7_1_reg(int32_t r1)
 {
 	(void)r1;
 	trigger_gp(0); /* a register operand is #UD on hardware; #GP is this port's stop for it */
+}
+
+/* ================================================================== *
+ * S10 -- x87 / MMX / SSE / SSE2 IN LONG MODE: THE ADDRESSING AND THE REX FIELDS
+ *
+ * The plan's S10 row: "the addressing and the REX register fields, semantics unchanged".  The
+ * SEMANTICS are the 32-bit bodies' (instructions_0f.c / fpu.c / sse_instr.c); what a 64-bit arm
+ * adds is (a) the 64-bit operand a REX.W prefix selects, (b) the REX.B/REX.R register fields,
+ * and (c) the 64-bit address path the shared `modrm_resolve64` already provides -- the five
+ * family-6 cases that were already green went green in S6 for exactly that reason.
+ *
+ * THE TWO ENCODINGS THAT CHANGED MEANING, and they are the whole of this slice's new bodies:
+ *   0F 6E  MOVD mm, r/m32   -- with REX.W it is MOVQ mm, r/m64 (a 64-BIT source)
+ *   0F 2A  CVTSI2SD xmm, r/m32 -- with REX.W the integer source is 64 BITS
+ * A 32-bit body here would take the low half of the operand and produce a plausible wrong value.
+ * ================================================================== */
+
+void instr64_0F6E_reg(int32_t r1, int32_t r2)
+{
+	write_mmx_reg64(r2, read_reg64(r1));
+	transition_fpu_to_mmx();
+}
+void instr64_0F6E_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	write_mmx_reg64(r, x);
+	transition_fpu_to_mmx();
+}
+
+void instr64_0F2A_reg(int32_t r1, int32_t r2)
+{
+	write_xmm_f64(r2, (double)(int64_t)read_reg64(r1));
+	transition_fpu_to_mmx();
+}
+void instr64_0F2A_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	write_xmm_f64(r, (double)(int64_t)x);
+	transition_fpu_to_mmx();
+}
+
+/* the PREFIXED forms the corpus actually uses: `movq xmm, r64` is 66 0F 6E with REX.W, and
+ * `cvtsi2sd xmm, r64` is F2 0F 2A with REX.W -- so the arms that matter are the 66/F2 ones, and
+ * the bare forms above are their REX.W-without-prefix siblings (a `movq mm, r64`). */
+void instr64_660F6E_reg(int32_t r1, int32_t r2)
+{
+	write_xmm128_2(r2, read_reg64(r1), 0);
+	transition_fpu_to_mmx();
+}
+void instr64_660F6E_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	write_xmm128_2(r, x, 0);
+	transition_fpu_to_mmx();
+}
+void instr64_F20F2A_reg(int32_t r1, int32_t r2)
+{
+	write_xmm_f64(r2, (double)(int64_t)read_reg64(r1));
+	transition_fpu_to_mmx();
+}
+void instr64_F20F2A_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	write_xmm_f64(r, (double)(int64_t)x);
+	transition_fpu_to_mmx();
+}
+
+/* `movq r64, xmm` is 66 0F 7E with REX.W: the DESTINATION is 64 bits, so the 32-bit body (which
+ * writes reg32 and zero-extends the high half) would drop the upper half of the xmm register. */
+void instr64_660F7E_reg(int32_t r1, int32_t r2)
+{
+	write_reg64(r1, read_xmm64s(r2));
+}
+void instr64_660F7E_mem(int64_t addr, int32_t r)
+{
+	safe_write64_addr(addr, read_xmm64s(r));
 }

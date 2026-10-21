@@ -25,8 +25,8 @@
  * reached this way still stops by name, exactly as the unprefixed encoding does.
  * See gen/interpreter_c.js, C-side difference 3.
  *
- * 2205 call sites, 34 of them unimplemented at the time this
- * file was generated (2175 instr* symbols defined in the port's sources).
+ * 2231 call sites, 50 of them unimplemented at the time this
+ * file was generated (2185 instr* symbols defined in the port's sources).
  */
 
 #include "cpu.h"
@@ -11673,8 +11673,61 @@ void run_instruction0f(int32_t opcode)
 	break;
 	case 0x22A:
 	{
-		unimplemented_instruction("long mode: 0F 2A has no 64-bit arm in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		uint8_t prefixes_ = cpu->prefixes;
+		if ((prefixes_ & PREFIX_66) != 0) {
+			if (!task_switch_test_mmx()) {
+				return;
+			}
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions_0f::instr64_660F2A_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions_0f::instr64_660F2A_reg");
+				return;
+			}
+		}
+		else if ((prefixes_ & PREFIX_F2) != 0) {
+			if (!task_switch_test_mmx()) {
+				return;
+			}
+			if (modrm_byte < 0xC0) {
+				int64_t addr = modrm_resolve64(modrm_byte);
+				if (cpu->pagefault) return;
+				instr64_F20F2A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+			}
+			else {
+				instr64_F20F2A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+			}
+		}
+		else if ((prefixes_ & PREFIX_F3) != 0) {
+			if (!task_switch_test_mmx()) {
+				return;
+			}
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions_0f::instr64_F30F2A_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions_0f::instr64_F30F2A_reg");
+				return;
+			}
+		}
+		else {
+			if (!task_switch_test_mmx()) {
+				return;
+			}
+			if (modrm_byte < 0xC0) {
+				int64_t addr = modrm_resolve64(modrm_byte);
+				if (cpu->pagefault) return;
+				instr64_0F2A_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+			}
+			else {
+				instr64_0F2A_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+			}
+		}
 	}
 	break;
 	case 0x2B:
@@ -14161,8 +14214,35 @@ void run_instruction0f(int32_t opcode)
 	break;
 	case 0x26E:
 	{
-		unimplemented_instruction("long mode: 0F 6E has no 64-bit arm in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		uint8_t prefixes_ = cpu->prefixes;
+		if ((prefixes_ & PREFIX_66) != 0) {
+			if (!task_switch_test_mmx()) {
+				return;
+			}
+			if (modrm_byte < 0xC0) {
+				int64_t addr = modrm_resolve64(modrm_byte);
+				if (cpu->pagefault) return;
+				instr64_660F6E_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+			}
+			else {
+				instr64_660F6E_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+			}
+		}
+		else {
+			if (!task_switch_test_mmx()) {
+				return;
+			}
+			if (modrm_byte < 0xC0) {
+				int64_t addr = modrm_resolve64(modrm_byte);
+				if (cpu->pagefault) return;
+				instr64_0F6E_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+			}
+			else {
+				instr64_0F6E_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+			}
+		}
 	}
 	break;
 	case 0x6F:
@@ -15050,8 +15130,48 @@ void run_instruction0f(int32_t opcode)
 	break;
 	case 0x27E:
 	{
-		unimplemented_instruction("long mode: 0F 7E has no 64-bit arm in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		uint8_t prefixes_ = cpu->prefixes;
+		if ((prefixes_ & PREFIX_66) != 0) {
+			if (!task_switch_test_mmx()) {
+				return;
+			}
+			if (modrm_byte < 0xC0) {
+				int64_t addr = modrm_resolve64(modrm_byte);
+				if (cpu->pagefault) return;
+				instr64_660F7E_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+			}
+			else {
+				instr64_660F7E_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+			}
+		}
+		else if ((prefixes_ & PREFIX_F3) != 0) {
+			if (!task_switch_test_mmx()) {
+				return;
+			}
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions_0f::instr64_F30F7E_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions_0f::instr64_F30F7E_reg");
+				return;
+			}
+		}
+		else {
+			if (!task_switch_test_mmx()) {
+				return;
+			}
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions_0f::instr64_0F7E_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions_0f::instr64_0F7E_reg");
+				return;
+			}
+		}
 	}
 	break;
 	case 0x7F:
@@ -17887,8 +18007,61 @@ void run_instruction0f(int32_t opcode)
 	break;
 	case 0x2D6:
 	{
-		unimplemented_instruction("long mode: 0F D6 has no 64-bit arm in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		uint8_t prefixes_ = cpu->prefixes;
+		if ((prefixes_ & PREFIX_66) != 0) {
+			if (!task_switch_test_mmx()) {
+				return;
+			}
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions_0f::instr64_660FD6_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions_0f::instr64_660FD6_reg");
+				return;
+			}
+		}
+		else if ((prefixes_ & PREFIX_F2) != 0) {
+			if (!task_switch_test_mmx()) {
+				return;
+			}
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions_0f::instr64_F20FD6_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions_0f::instr64_F20FD6_reg");
+				return;
+			}
+		}
+		else if ((prefixes_ & PREFIX_F3) != 0) {
+			if (!task_switch_test_mmx()) {
+				return;
+			}
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions_0f::instr64_F30FD6_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions_0f::instr64_F30FD6_reg");
+				return;
+			}
+		}
+		else {
+			if (!task_switch_test_mmx()) {
+				return;
+			}
+			if (modrm_byte < 0xC0) {
+				unimplemented_instruction("instructions_0f::instr64_0FD6_mem");
+				return;
+			}
+			else {
+				unimplemented_instruction("instructions_0f::instr64_0FD6_reg");
+				return;
+			}
+		}
 	}
 	break;
 	case 0xD7:

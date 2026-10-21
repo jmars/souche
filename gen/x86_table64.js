@@ -133,6 +133,12 @@ const x86_table64_0f = [
 	{ opcode: 0xCD },
 	{ opcode: 0xCE },
 	{ opcode: 0xCF },
+	/* S10: the two encodings whose operand width a REX.W changes (semantics otherwise S8's) */
+	{ opcode: 0x6E }, /* movd/movq mm, r/m -- REX.W makes the source 64 bits */
+	{ opcode: 0x2A }, /* cvtsi2sd xmm, r/m -- REX.W makes the integer source 64 bits */
+	{ opcode: 0x7E }, /* movd/movq r/m, mm/xmm -- the store half of the pair above */
+	{ opcode: 0xD6 }, /* movq xmm, r/m64 (66 0F D6) -- the case's store of xmm0 to memory */
+
 	/* S9: the atomic family */
 	{ opcode: 0xB1 }, /* cmpxchg r/m64, r64 */
 	{ opcode: 0xC1 }, /* xadd r/m64, r64 */

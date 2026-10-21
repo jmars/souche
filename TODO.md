@@ -708,8 +708,26 @@ closed by `narrow64` on the five string opcodes.  (NTH 6) the generator's case c
 refuted rule as fact; corrected.  Family 5 is **8/8**, the whole corpus `green=60
 red_unimplemented=3`, and the battery is unmoved.
 
-**S10-S13 REMAIN**: the SSE family, the system layer, the guest and the engines' long-mode arms.
-The rest of this section is the reconnaissance record and is not made stale by S0-S9.
+**S10 IS LANDED (2026-10-19): x87/MMX/SSE/SSE2 IN LONG MODE — THE WHOLE 63-CASE CORPUS IS GREEN.**
+`results/x86-64-s10.md` is its report.  The slice is the plan's "the addressing and the REX register
+fields, semantics unchanged": the long-mode **addressing** was already shared (S6's mode-aware
+`modrm_resolve` is what turned five of the six family-6 cases green), and what landed here is the
+**operand WIDTH** a REX.W selects — six bodies for `0F 6E`/`66 0F 6E` (movq mm/xmm, r/m64),
+`0F 2A`/`F2 0F 2A` (cvtsi2sd with a 64-bit integer source) and `0F 7E`/`66 0F 7E` (movq r/m64,
+mm/xmm).  **ONE STATE CORRECTION**: `reg_xmm[8]` → `reg_xmm[16]` — long mode has sixteen SSE
+registers and a REX.B/REX.R field selects 8-15, an index the eight-slot array could not hold, so
+the accessors would have written OUT OF BOUNDS (a guest-reachable host corruption); the plan's §4
+"`reg_xmm[8]` UNCHANGED" predates the REX register fields being reachable.  MEASURED asymmetry: a
+mutant `movq r64, xmm` body writing reg32 (the 32-bit shape) turns `simd-movq-xmm64` red.  The
+whole corpus with `--long-mode on` is now **`green=63 red_unimplemented=0 mismatch=0 error=0`**,
+family 6 is 6/6, and the 32-bit FPU/MMX/SSE tests did NOT move (nasm 118/118, transcript
+byte-identical).  NOT covered, named in the report: **xmm8-15 as OPERANDS** (representable, no case
+— un-instrumented), the bare `0F 6E/7E/2A` forms and the mm-side memory forms (bodies, no cases),
+and **every other SSE/SSE2 encoding** plus x87's own D8-DF (no 64-bit arm: with REX.W they stop by
+name — a declared boundary, not an oversight).
+
+**S11-S13 REMAIN**: the system layer, the guest and the engines' long-mode arms.  The rest of this
+section is the reconnaissance record and is not made stale by S0-S10.
 
 Not implemented, and deliberately **not** listed as a non-goal: it is wanted one day. It is recorded
 here so the next reader inherits the reconnaissance instead of re-deriving it.

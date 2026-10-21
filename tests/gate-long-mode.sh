@@ -103,7 +103,7 @@ echo "== D. the 0x2NN overlay's census (routed arms / named stops) AS NUMBERS"
 # the default-64 named stops (ret/call/jmp/pop r-m/iret) that S6-S11 replace; a slice that
 # lands one EDITS THIS LINE, which is the record of what it landed.
 step "overlay-census" sh -c \
-	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 146 overlay entries, 106 routed to instr64 bodies, 34 of those call sites unimplemented'"
+	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 146 overlay entries, 106 routed to instr64 bodies, 50 of those call sites unimplemented'"
 must_fail "overlay-census-able-to-fail" sh -c \
 	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 0 overlay entries'"
 
@@ -112,7 +112,7 @@ step "family-1-green" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_
 	--filter '^mov-' --expect counts \
 	--expect-counts "green=12 red_unimplemented=0 mismatch=0 error=0" --quiet
 step "whole-corpus-no-mismatch" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
-	--expect counts --expect-counts "green=60 red_unimplemented=3 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=63 red_unimplemented=0 mismatch=0 error=0" --quiet
 must_fail "whole-corpus-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
 	--actual "$ACTUAL_ON" --expect counts --expect-counts "green=57 mismatch=0" --quiet
 
@@ -313,6 +313,23 @@ step "bare-string-preserves-rcx" $PYTHON tests/nasm64_run.py --stage run --actua
 	--expect-counts "green=1 red_unimplemented=0 mismatch=0 error=0" --quiet
 step "rep-stosq-movsq" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
 	--filter 'stos-movs' --expect counts \
+	--expect-counts "green=1 red_unimplemented=0 mismatch=0 error=0" --quiet
+
+echo "== F7. S10: x87/MMX/SSE/SSE2 IN LONG MODE (family 6, 6/6 -- and the WHOLE CORPUS is green)"
+step "simd-family" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
+	--filter '^simd-' --expect counts \
+	--expect-counts "green=6 red_unimplemented=0 mismatch=0 error=0" --quiet
+must_fail "simd-family-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
+	--actual "$ACTUAL_ON" --filter '^simd-' --expect counts \
+	--expect-counts "green=5 mismatch=0" --quiet
+# the two encodings whose OPERAND WIDTH a REX.W changes, each as its own named step: a 32-bit body
+# here takes the low half and produces a plausible wrong value (MEASURED: a 32-bit write in the
+# movq r64,xmm body turns the case red)
+step "movq-xmm64-width" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
+	--filter 'movq-xmm64' --expect counts \
+	--expect-counts "green=1 red_unimplemented=0 mismatch=0 error=0" --quiet
+step "cvtsi2sd-64-width" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
+	--filter 'cvtsi2sd' --expect counts \
 	--expect-counts "green=1 red_unimplemented=0 mismatch=0 error=0" --quiet
 
 echo "== G. the bound NAMES THE FRAME, and the unmutated image produces neither stop nor fault"

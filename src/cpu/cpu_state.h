@@ -391,7 +391,13 @@ typedef struct cpu_state {
     uint8_t fpu_stack_empty; /* 816 */
     int32_t mxcsr;         /* 824 */
 
-    reg128 reg_xmm[8];     /* 832 */
+    /* S10: WIDENED from 8 to 16.  Long mode has SIXTEEN SSE registers, and a REX.B/REX.R
+     * register field selects 8-15 -- an index the eight-slot array could not hold, so the
+     * accessors would have written OUT OF BOUNDS (a guest-reachable host corruption, the class
+     * this tree refuses).  Indices 0-7 keep their meaning and every 32-bit path is unchanged;
+     * the plan's ss4 "reg_xmm[8] UNCHANGED" was written before the REX register fields were
+     * reachable, and this is the correction (results/x86-64-s10.md ss2). */
+    reg128 reg_xmm[16];    /* 832 */
     uint64_t current_tsc;  /* 960 */
     uint64_t reg_pdpte[4]; /* 968 -- loaded by load_pdpte; interpreted by the PAE walk */
 

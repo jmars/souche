@@ -300,3 +300,15 @@ void instr64_0FC1_mem(int64_t addr, int32_t r);
 void instr64_0FC1_reg(int32_t r1, int32_t r);
 void instr64_0FC7_1_mem(int64_t addr);
 void instr64_0FC7_1_reg(int32_t r1);
+
+/* S10: the two SSE/MMX encodings whose operand WIDTH changes with REX.W */
+void instr64_0F6E_reg(int32_t r1, int32_t r2);
+void instr64_0F6E_mem(int64_t addr, int32_t r);
+void instr64_0F2A_reg(int32_t r1, int32_t r2);
+void instr64_0F2A_mem(int64_t addr, int32_t r);
+void instr64_660F6E_reg(int32_t r1, int32_t r2);
+void instr64_660F6E_mem(int64_t addr, int32_t r);
+void instr64_F20F2A_reg(int32_t r1, int32_t r2);
+void instr64_F20F2A_mem(int64_t addr, int32_t r);
+void instr64_660F7E_reg(int32_t r1, int32_t r2);
+void instr64_660F7E_mem(int64_t addr, int32_t r);
