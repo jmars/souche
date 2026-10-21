@@ -1315,9 +1315,24 @@ void uop_run(uint32_t phys_addr)
 	 *      32-bit rules; cpu_selftest's S5 arm puts LMA there by hand and requires this
 	 *      stop (the plan's "an untested seat is indistinguishable from an absent one").
 	 * The 64-bit decode is S13's, and its gate is the engine differential. */
+	/* S13: THE LONG-MODE DELEGATION.  This decoder reads the stream with 32-bit rules (0x40-0x4F
+	 * are INC/DEC to `dec_prefix`, so a REX byte would desynchronise every following length), and
+	 * giving it real long-mode arms is a SECOND decoder -- REX, the three-valued key, a third
+	 * modrm extractor, the 64-bit operand semantics -- i.e. S5-S10 again inside this file.  What
+	 * lands instead is the plan ss3.4 shape: THE CACHE DELEGATES THE WHOLE BATCH TO THE
+	 * INTERPRETER, counted as a fallback, so a 64-bit guest RUNS on the `uop`/`uopjit` engines
+	 * (slowly, with zero caching) instead of being refused, and the 64-bit ENGINE DIFFERENTIAL
+	 * becomes a real instrument (interp vs uop vs uopjit over the whole corpus).
+	 *
+	 * WHAT THIS IS NOT: a claim that the cache runs long mode.  The counters say otherwise
+	 * (`fallback_runs` grows by one per long-mode batch, `blocks compiled` does not move), and
+	 * results/x86-64-s13.md names the decoder arms as the gap.  The refusal that STAYS is the
+	 * capability declaration: with --long-mode absent no engine declares IA-32e and the S2
+	 * transition refusal still fires by name. */
 	if ((cpu->efer & EFER_LMA) != 0) {
-		unimplemented_instruction(
-			"uop cache: the 64-bit decoder is S13's; long mode runs on the interpreter only");
+		uop_stats.long_mode_batches++;
+		uop_stats.fallback_runs++;
+		interpreted_run(phys);
 		return;
 	}
 
@@ -1656,6 +1671,10 @@ void uop_stats_print(void)
 	uint64_t total = executed + uop_stats.fallback_instr;
 	uint64_t lookups = uop_stats.lookups;
 
+	/* S13: the LONG-MODE DELEGATIONS, printed beside the fallbacks: the one number that says
+	 * whether this cache is running long mode or handing it to the interpreter. */
+	fprintf(stderr, "uop-cache: long-mode batches delegated to the interpreter: %llu\n",
+	        (unsigned long long)uop_stats.long_mode_batches);
 	fprintf(stderr,
 		"uop-cache: lookups %llu (hits %llu = %.2f%%, decodes %llu, decode-fails %llu)\n",
 		(unsigned long long)lookups,

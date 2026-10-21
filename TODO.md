@@ -768,9 +768,29 @@ one — that the 64-bit offset composition, not the type test, is the suspect), 
 probes, SYSCALL/SYSRET and SWAPGS (S11's gaps), the amd64 initramfs and its evidence printing, and
 the QEMU leg.
 
-**S13 REMAINS**: the engines' long-mode arms (the uop decoder + the JIT recipes, gated by the 64-bit
-engine differential).  The rest of this section is the reconnaissance record and is not made stale by
-S0-S12.
+**S13 IS LANDED (2026-10-19): THE ENGINES — THE 64-BIT DIFFERENTIAL IS REAL.**  `results/x86-64-s13.md`
+is its report and carries THE LANE'S FINAL STATE.  All three engines now RUN IA-32e: the interpreter
+natively, and `uop`/`uopjit` by **DELEGATING each long-mode batch to the interpreter** (counted as
+`long-mode batches delegated to the interpreter`, and printed — a claim with no counter would be a
+gap), so the differential S5 recorded as VACUOUS is now an instrument: **each engine is 63/63 green
+against the host, and the three engines' documents are BYTE-IDENTICAL** (v2 array + STATE tail) for
+six cases spanning the six families, with an able-to-fail arm and a control that proves the counter
+measures the MODE (without `--long-mode` it delegates zero).  **The new gate is
+`tests/gate-x86-64-diff.sh` (13/0)**; `gate-long-mode.sh`'s three S5-era "the engines refuse" arms are
+INVERTED (they must now RUN), and `uop_cache_selftest`'s S5 refusal arm is RETIRED with its reason
+measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate's counter pair on real
+images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
+**THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**  The named gaps the next session should take, in
+order: (1) **the 64-bit IDT gate decode + interrupt frame** — the amd64 kernel reaches
+`eip=0x100208 cs=0x10 cr0=0x80050033 cr3=0x4f76000` and stops at `call_interrupt_vector: invalid gate
+type`; the hypothesis (S12 §3.3) is the 64-bit descriptor's offset composition, and the STATE tail
+already prints `idtr`; (2) the 64-bit GDT/TSS/IST paths, SYSCALL/SYSRET, then SWAPGS (needs an
+authored dispatch arm — `0F 01 /5` has no reference-table entry); (3) the amd64 initramfs + the
+userspace milestone, with the QEMU leg as the second reference; (4) the engines' OWN arms (the uop
+decoder's long mode, then the JIT's recipes) — the differential is the gate that would judge them.
+
+**ALL FOURTEEN SLICES (S0-S13) ARE LANDED.**  The rest of this section is the reconnaissance record
+and is not made stale by S0-S13.
 
 Not implemented, and deliberately **not** listed as a non-goal: it is wanted one day. It is recorded
 here so the next reader inherits the reconnaissance instead of re-deriving it.

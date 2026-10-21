@@ -371,6 +371,7 @@ typedef struct uop_stats {
 	uint64_t uops_executed;  /* uops run through an executor */
 	uint64_t fallback_steps; /* instructions run by the reference's own loop body (uop_step) */
 	uint64_t fallback_runs;  /* full interpreted_run calls */
+	uint64_t long_mode_batches; /* S13: the batches DELEGATED because the machine is in IA-32e */
 	uint64_t fallback_instr; /* the instructions those interpreted_run calls executed */
 	uint64_t flushes;        /* reference batch ends reproduced */
 	uint64_t discards;       /* fetch faults that dropped a batch's count (cpu.c:145) */

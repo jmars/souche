@@ -85,15 +85,20 @@ step "off-refusal-names-the-reason" sh -c \
 	"$PORT64 $POISON 20000000 --fixture64 2>&1 | grep -q \"EFER.LME asks for IA-32e, and cpu backend 'uopjit' cannot run long mode\""
 
 echo "== B. the capability is the engine's: a NAMED engine without it refuses by name"
-step "uopjit-refuses-long-mode" sh -c \
-	"$PORT64 $POISON 20000000 --fixture64 --long-mode on --cpu-engine uopjit 2>&1 | grep -q \"cannot run long mode\""
+# S13 INVERTED THIS ARM: the uop/uopjit engines now DECLARE IA-32e and DELEGATE each long-mode
+# batch to the interpreter (uop_cache.c), so the assertion is that the same probe RUNS.
+step "uopjit-runs-long-mode" sh -c \
+	"$PORT64 $POISON 20000000 --fixture64 --long-mode on --cpu-engine uopjit | grep -q 'BEGIN JSON'"
 # the able-to-fail arm: the same probe on the interpreter (which CAN run it) finds no refusal
-must_fail "uopjit-refusal-is-not-universal" sh -c \
-	"$PORT64 $POISON 20000000 --fixture64 --long-mode on 2>&1 | grep -q 'cannot run long mode'"
+must_fail "uopjit-no-longer-refuses" sh -c \
+	"$PORT64 $POISON 20000000 --fixture64 --long-mode on --cpu-engine uopjit 2>&1 | grep -q 'cannot run long mode'"
 
-echo "== C. the uop DECODER's own long-mode refusal (its selftest arm)"
-step "uop-decoder-refusal" sh -c \
-	"./build/cpu_uop_selftest 2>&1 | grep -q 'PASS S5: the uop decoder refuses long mode'"
+echo "== C. the uop cache's long-mode DELEGATION (S5's decoder refusal, replaced by S13)"
+# S13 inverted this step: the decoder no longer stops, it DELEGATES the batch -- and the instrument
+# is the counter pair in tests/gate-x86-64-diff.sh (which runs on real images, not a sandbox).
+step "uop-delegates-long-mode" sh -c \
+	"$PORT64 $POISON 20000000 --fixture64 --long-mode on --cpu-engine uop --uop-cache-stats \
+	 2>&1 >/dev/null | grep -q 'long-mode batches delegated to the interpreter: [1-9]'"
 
 echo "== D. the 0x2NN overlay's census (routed arms / named stops) AS NUMBERS"
 # MEASURED at S7: 136 overlay entries, 96 routed arms, 38 unimplemented call sites.  The 38 are
@@ -355,10 +360,12 @@ m = re.search(r\"\\\"efer\\\": \\\"0x([0-9a-f]+)\\\"\", t)
 sys.exit(0 if m and (int(m.group(1), 16) & 0x400) else 1)'"
 # THE DIFFERENTIAL IS VACUOUS, and this is the mechanical form of the claim: the OTHER two
 # engines cannot produce a long-mode state at all, so there is no second document to compare.
-step "differential-vacuous-uop" sh -c \
-	"$PORT64 $POISON 20000000 --fixture64 --long-mode on --cpu-engine uop 2>&1 | grep -q \"cpu backend 'uop' cannot run long mode\""
-step "differential-vacuous-jit" sh -c \
-	"$PORT64 $POISON 20000000 --fixture64 --long-mode on --cpu-engine uopjit 2>&1 | grep -q \"cpu backend 'uopjit' cannot run long mode\""
+# S13: THE DIFFERENTIAL IS NO LONGER VACUOUS -- both other engines RUN the mode (by delegation),
+# and tests/gate-x86-64-diff.sh is the instrument that compares them byte for byte.
+step "differential-real-uop" sh -c \
+	"$PORT64 $POISON 20000000 --fixture64 --long-mode on --cpu-engine uop | grep -q 'BEGIN JSON'"
+step "differential-real-jit" sh -c \
+	"$PORT64 $POISON 20000000 --fixture64 --long-mode on --cpu-engine uopjit | grep -q 'BEGIN JSON'"
 
 echo
 echo "[+] gate-long-mode: $PASS passed, $FAIL failed"

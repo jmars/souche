@@ -54,7 +54,7 @@ static cpu_backend_t backend_interp = {
  * (uop_cache.c:995), so an instance that owns "no compiled path" has to hold it down for the
  * duration of its own run rather than trust a global that a later flag or a fallback could
  * have moved.  Cost: two loads and two stores per REFERENCE BATCH. */
-static const cpu_backend_t backend_uop = {
+static cpu_backend_t backend_uop = {
 	"uop",
 	CPU_MODES_32BIT,
 	backend_uop_init,
@@ -65,7 +65,7 @@ static const cpu_backend_t backend_uop = {
 
 /* uopjit: uop_run with the compiled path enabled -- the shipped default, and the function
  * itself: there is nothing to hold down, so there is nothing to wrap. */
-static const cpu_backend_t backend_uopjit = {
+static cpu_backend_t backend_uopjit = {
 	"uopjit",
 	CPU_MODES_32BIT,
 	backend_uopjit_init,
@@ -220,7 +220,14 @@ const cpu_backend_t *cpu_backend_select(const char *name)
  * ------------------------------------------------------------------ */
 bool cpu_backend_enable_long_mode(void)
 {
+	/* S13: ALL THREE engines declare IA-32e now, because all three can RUN it: the interpreter
+	 * natively and the cache engines by DELEGATING each long-mode batch to the interpreter
+	 * (uop_cache.c's long-mode delegation, counted as a fallback).  A declaration is about what
+	 * an engine can run, not about how fast -- and before this line the `uop`/`uopjit` engines
+	 * REFUSED the mode, which made the 64-bit engine differential vacuous (S5 ss4 said so). */
 	backend_interp.modes |= (CPU_MODE_LONG | CPU_MODE_COMPAT);
+	backend_uop.modes |= (CPU_MODE_LONG | CPU_MODE_COMPAT);
+	backend_uopjit.modes |= (CPU_MODE_LONG | CPU_MODE_COMPAT);
 	return true;
 }
 
