@@ -747,8 +747,30 @@ ENCODINGS not implemented — the probe needs a kernel-style image, which is S12
 the **64-bit GDT/IDT/TSS/IST and interrupt frame** (the largest remaining piece, and S12's first
 item), the long-mode TLB's page-flag split, the `#PF` I/D bits, and S9's register-source BT family.
 
-**S12-S13 REMAIN**: the guest (the amd64 pin + the boot gate) and the engines' long-mode arms.  The
-rest of this section is the reconnaissance record and is not made stale by S0-S11.
+**S12 IS LANDED IN PART (2026-10-19): THE amd64 GUEST BOOTS INTO LONG MODE AND STOPS AT A NAMED
+PIECE.**  `results/x86-64-s12.md` is its report.  A **pinned Debian amd64 kernel** (the same 6.1.0-50
+source the PAE-L3 lane pins, one architecture different; .deb URL + sha256 and the vmlinuz sha256
+recorded, the 8.2 MB image committed beside `vmlinuz-i386`) boots on the port under `--long-mode on`,
+**enters long mode, builds its own page tables and executes 64-bit code** — `eip=0x100208 cs=0x10
+cr0=0x80050033 cr3=0x4f76000`, its own serial line `Probing EDD … ok` — and then stops at
+**`call_interrupt_vector: invalid gate type`**, i.e. the **64-bit IDT gate / interrupt frame** that
+S11 named as its first item.  That is the plan's own falsifier ("the corpus-green-but-guest-dead
+case"), recorded with the guest's evidence and **not** a lowered gate.  **THE BOOT PATH NEEDED NO
+CODE CHANGE** (plan §5.3's INTERPRETATION is now MEASURED: the kernel's own setup enters IA-32e
+through the writes S2's refusal guards), so the binary did not move.  **A measured vehicle bound**:
+with the default 64 MiB the kernel's PML4 lands at 0x4f76000, ABOVE guest RAM, and S11's table-read
+bound stops it by name — the gate pins `--memory 256` and says why.  **THE GATE IS NEW:
+`tests/gate-x86-64.sh` (7/0)** — the pin, the flag-off refusal, the progress assertions
+(cs/cr3/serial) and **the honest stop asserted BY NAME** (a stop earlier is a regression; when the
+interrupt frame lands that step is replaced by the userspace assertion, visibly).  NAMED GAPS before
+userspace: the 64-bit IDT gate decode + interrupt frame (the stop; with the hypothesis — stated as
+one — that the 64-bit offset composition, not the type test, is the suspect), the 64-bit GDT/TSS/IST
+probes, SYSCALL/SYSRET and SWAPGS (S11's gaps), the amd64 initramfs and its evidence printing, and
+the QEMU leg.
+
+**S13 REMAINS**: the engines' long-mode arms (the uop decoder + the JIT recipes, gated by the 64-bit
+engine differential).  The rest of this section is the reconnaissance record and is not made stale by
+S0-S12.
 
 Not implemented, and deliberately **not** listed as a non-goal: it is wanted one day. It is recorded
 here so the next reader inherits the reconnaissance instead of re-deriving it.
