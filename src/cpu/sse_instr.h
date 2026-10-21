@@ -36,12 +36,12 @@
 void transition_fpu_to_mmx(void);
 
 /* sse_instr.rs:4-27 -- the mov* family */
-void mov_r_m64(int32_t addr, int32_t r);
-void movl_r128_m64(int32_t addr, int32_t r);
+void mov_r_m64(int64_t addr, int32_t r);
+void movl_r128_m64(int64_t addr, int32_t r);
 void mov_r_r128(int32_t r1, int32_t r2);
-void mov_r_m128(int32_t addr, int32_t r);
+void mov_r_m128(int64_t addr, int32_t r);
 void mov_rm_r128(reg128 source, int32_t r);
-void movh_r128_m64(int32_t addr, int32_t r);
+void movh_r128_m64(int64_t addr, int32_t r);
 
 /* sse_instr.rs:29-63 -- pand/pandn/pxor/por over xmm */
 void pand_r128(reg128 source, int32_t r);

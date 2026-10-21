@@ -120,7 +120,7 @@ int64_t read_imm64(void);
 int64_t read_moffs64(void);
 
 /* cpu.rs:3122-3130 + modrm.rs:4-133 */
-int32_t modrm_resolve(int32_t modrm_byte);
+int64_t modrm_resolve(int32_t modrm_byte);
 
 /* S5a: THE 64-BIT ADDRESS GENERATOR (plan correction W1).  modrm_resolve() above returns an
  * int32_t because the 32-bit forms wrap at 32 bits; a long-mode effective address is 64 bits

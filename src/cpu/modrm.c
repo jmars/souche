@@ -599,46 +599,33 @@ int32_t resolve_modrm32_(int32_t modrm_byte)
     }
 }
 
-/* cpu.rs:3122-3130 */
-int32_t modrm_resolve(int32_t modrm_byte)
+/* cpu.rs:3122-3130
+ *
+ * THIS UNIT WIDENED IT TO int64_t AND REMOVED THE 4 GiB BOUND.  The bound existed because
+ * "every 32-bit-arm body takes an int32_t address" -- a statement about the BODIES, and the
+ * bodies were the thing to fix (results/x86-64-wide.md): in long mode an instruction with NO
+ * REX.W still computes a 64-bit effective address and uses it as a 64-bit LINEAR address, so
+ * the 0x1NN/0x0NN arms must carry it.  Every `_mem` body now takes `int64_t addr` and every
+ * accessor dispatches to its 64-bit-address twin, so the answer travels whole.
+ *
+ * MEASURED as the reason: the amd64 decompressor stopped at `eip=0x4f3a7e8`, `modrm=0x44`,
+ * `prefixes=0x0000` (no REX at all) with `a=0x12cd38220` = `0x9669c110 << 1` -- a legitimate
+ * 64-bit effective address from a scaled 64-bit index, refused by the bound.
+ *
+ * THE LEA CARVE-OUT STAYS (SEG_PREFIX_ZERO, the sentinel instr16_8D_mem/instr32_8D_mem set):
+ * a 32-bit LEA stores the LOW 32 BITS of the effective address, so its caller truncates --
+ * that is the instruction's own semantics.  `lea` never reaches the accessors, so it takes the
+ * 32-bit projection explicitly in its own body rather than through this resolver. */
+int64_t modrm_resolve(int32_t modrm_byte)
 {
-    /* S5a: THE 32-BIT-ARM ENTRY POINT IS MODE-AWARE, and it has to be.  Every modrm-bearing
+    /* the 32-bit arm entry point is MODE-AWARE, and it has to be: every modrm-bearing
      * instruction in long mode generates its address with 64-BIT rules (RIP-relative, a 64-bit
-     * SIB base, a full-width displacement) -- INCLUDING the instructions with no REX.W, which
-     * dispatch to the 0x1NN/0xNN arms.  `movdqa xmm0, [rip+disp]` (66 0F 6F, no REX) or `push
-     * qword [mem]` (FF /6 with REX, whose arm is S7's) land here, and computing their address
-     * with the 32-bit resolver turns RIP-relative into DISP32-ABSOLUTE: a valid-looking address
-     * in the wrong page, i.e. the silent-wrong class again.
-     *
-     * MEASURED as the reason this exists: before it, four corpus cases that use only
-     * no-REX.W encodings (`simd-movdqa-64`, `simd-fpu-mmx-64`, `simd-fild-fistp64`,
-     * `ctrl-push-pop-64`) reported MISMATCHES instead of the named stops their slices should
-     * produce -- the bodies ran and read the wrong addresses.
-     *
-     * THE BOUND, stated: this returns int32_t because every 32-bit-arm body takes an int32_t
-     * address.  In long mode the resolver's answer is 64-bit, so a linear address above 4 GiB
-     * STOPS BY NAME instead of being truncated (S7/S10 widen the bodies; the port's physical
-     * model is 32 bits, so the address bound is the model's own -- plan ss5.1).  The 0x2NN
-     * arms call modrm_resolve64 directly and are not affected by the bound.
-     *
-     * THE LEA CARVE-OUT (SEG_PREFIX_ZERO, the sentinel instr16_8D_mem/instr32_8D_mem set): LEA
-     * is not a memory access -- its 32-bit form stores the LOW 32 BITS of the effective
-     * address, so truncating is the instruction's own semantics, not a silent wrap of an
-     * access.  MEASURED as the reason the condition has a second half (results/x86-64-idt64.md):
-     * the amd64 decompressor's `lea r10d, [r9 + rdi]` with r9=0xFFF72000, rdi=0x8E000 sums to
-     * exactly 0x100000000 and stopped the machine at guest 0x8BD1B2 -- a 32-bit LEA whose
-     * hardware result is 0. */
+     * SIB base, a full-width displacement) -- INCLUDING the instructions with no REX.W.
+     * MEASURED as the reason this branch exists: before it, four corpus cases that use only
+     * no-REX.W encodings (simd-movdqa-64, simd-fpu-mmx-64, simd-fild-fistp64,
+     * ctrl-push-pop-64) reported MISMATCHES -- the bodies ran and read the wrong addresses. */
     if (long_mode_64()) {
-        int64_t a = modrm_resolve64(modrm_byte);
-        if (cpu->pagefault) return 0;
-        if ((uint64_t)a > 0xFFFFFFFFull &&
-            (cpu->prefixes & PREFIX_MASK_SEGMENT) != SEG_PREFIX_ZERO) {
-            unimplemented_instruction(
-                "modrm: a 64-bit effective address above 4 GiB in a 32-bit-operand form"
-                " (S6-S10 widen the bodies; results/x86-64-plan.md ss5.1)");
-            return 0;
-        }
-        return (int32_t)(uint32_t)a;
+        return modrm_resolve64(modrm_byte);
     }
     if (is_asize_32()) {
         return resolve_modrm32(modrm_byte);

@@ -1326,7 +1326,7 @@ int32_t btr_reg(int32_t bit_base, int32_t bit_offset)
     return bit_base & ~(int32_t)(1u << bit_offset);
 }
 
-void bt_mem(int32_t virt_addr, int32_t bit_offset)
+void bt_mem(int64_t virt_addr, int32_t bit_offset)
 {
     int32_t bit_base = safe_read8(virt_addr + (bit_offset >> 3));
     if (cpu->pagefault) {
@@ -1336,7 +1336,7 @@ void bt_mem(int32_t virt_addr, int32_t bit_offset)
     cpu->flags = (cpu->flags & ~1) | (bit_base >> bit_offset & 1);
     cpu->flags_changed &= ~1;
 }
-void btc_mem(int32_t virt_addr, int32_t bit_offset)
+void btc_mem(int64_t virt_addr, int32_t bit_offset)
 {
     uint32_t phys_addr = translate_address_write(virt_addr + (bit_offset >> 3));
     if (cpu->pagefault) {
@@ -1348,7 +1348,7 @@ void btc_mem(int32_t virt_addr, int32_t bit_offset)
     cpu->flags_changed &= ~1;
     write8(phys_addr, bit_base ^ (int32_t)(1u << bit_offset));
 }
-void btr_mem(int32_t virt_addr, int32_t bit_offset)
+void btr_mem(int64_t virt_addr, int32_t bit_offset)
 {
     uint32_t phys_addr = translate_address_write(virt_addr + (bit_offset >> 3));
     if (cpu->pagefault) {
@@ -1360,7 +1360,7 @@ void btr_mem(int32_t virt_addr, int32_t bit_offset)
     cpu->flags_changed &= ~1;
     write8(phys_addr, bit_base & ~(int32_t)(1u << bit_offset));
 }
-void bts_mem(int32_t virt_addr, int32_t bit_offset)
+void bts_mem(int64_t virt_addr, int32_t bit_offset)
 {
     uint32_t phys_addr = translate_address_write(virt_addr + (bit_offset >> 3));
     if (cpu->pagefault) {

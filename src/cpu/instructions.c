@@ -125,28 +125,28 @@ void segment_prefix_op(int32_t seg)
  * 0x00-0x3F -- the ALU group, the segment prefixes and the BCD ops
  * ================================================================== */
 
-void instr_00_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE8(addr, add8(x_, read_reg8(r))); }
+void instr_00_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE8(addr, add8(x_, read_reg8(r))); }
 void instr_00_reg(int32_t r1, int32_t r) { write_reg8(r1, add8(read_reg8(r1), read_reg8(r))); }
-void instr16_01_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE16(addr, add16(x_, read_reg16(r))); }
+void instr16_01_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE16(addr, add16(x_, read_reg16(r))); }
 void instr16_01_reg(int32_t r1, int32_t r) { write_reg16(r1, add16(read_reg16(r1), read_reg16(r))); }
-void instr32_01_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE32(addr, add32(x_, read_reg32(r))); }
+void instr32_01_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE32(addr, add32(x_, read_reg32(r))); }
 void instr32_01_reg(int32_t r1, int32_t r) { write_reg32(r1, add32(read_reg32(r1), read_reg32(r))); }
 
-void instr_02_mem(int32_t addr, int32_t r)
+void instr_02_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read8(addr);
     if (cpu->pagefault) return;
     write_reg8(r, add8(read_reg8(r), x));
 }
 void instr_02_reg(int32_t r1, int32_t r) { write_reg8(r, add8(read_reg8(r), read_reg8(r1))); }
-void instr16_03_mem(int32_t addr, int32_t r)
+void instr16_03_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
     write_reg16(r, add16(read_reg16(r), x));
 }
 void instr16_03_reg(int32_t r1, int32_t r) { write_reg16(r, add16(read_reg16(r), read_reg16(r1))); }
-void instr32_03_mem(int32_t addr, int32_t r)
+void instr32_03_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
@@ -180,28 +180,28 @@ void instr32_07(void)
     adjust_stack_reg(4);
 }
 
-void instr_08_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE8(addr, or8(x_, read_reg8(r))); }
+void instr_08_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE8(addr, or8(x_, read_reg8(r))); }
 void instr_08_reg(int32_t r1, int32_t r) { write_reg8(r1, or8(read_reg8(r1), read_reg8(r))); }
-void instr16_09_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE16(addr, or16(x_, read_reg16(r))); }
+void instr16_09_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE16(addr, or16(x_, read_reg16(r))); }
 void instr16_09_reg(int32_t r1, int32_t r) { write_reg16(r1, or16(read_reg16(r1), read_reg16(r))); }
-void instr32_09_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE32(addr, or32(x_, read_reg32(r))); }
+void instr32_09_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE32(addr, or32(x_, read_reg32(r))); }
 void instr32_09_reg(int32_t r1, int32_t r) { write_reg32(r1, or32(read_reg32(r1), read_reg32(r))); }
 
-void instr_0A_mem(int32_t addr, int32_t r)
+void instr_0A_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read8(addr);
     if (cpu->pagefault) return;
     write_reg8(r, or8(read_reg8(r), x));
 }
 void instr_0A_reg(int32_t r1, int32_t r) { write_reg8(r, or8(read_reg8(r), read_reg8(r1))); }
-void instr16_0B_mem(int32_t addr, int32_t r)
+void instr16_0B_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
     write_reg16(r, or16(read_reg16(r), x));
 }
 void instr16_0B_reg(int32_t r1, int32_t r) { write_reg16(r, or16(read_reg16(r), read_reg16(r1))); }
-void instr32_0B_mem(int32_t addr, int32_t r)
+void instr32_0B_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
@@ -229,28 +229,28 @@ void instr32_0F(void)
     run_instruction0f_32(opcode);
 }
 
-void instr_10_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE8(addr, adc8(x_, read_reg8(r))); }
+void instr_10_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE8(addr, adc8(x_, read_reg8(r))); }
 void instr_10_reg(int32_t r1, int32_t r) { write_reg8(r1, adc8(read_reg8(r1), read_reg8(r))); }
-void instr16_11_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE16(addr, adc16(x_, read_reg16(r))); }
+void instr16_11_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE16(addr, adc16(x_, read_reg16(r))); }
 void instr16_11_reg(int32_t r1, int32_t r) { write_reg16(r1, adc16(read_reg16(r1), read_reg16(r))); }
-void instr32_11_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE32(addr, adc32(x_, read_reg32(r))); }
+void instr32_11_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE32(addr, adc32(x_, read_reg32(r))); }
 void instr32_11_reg(int32_t r1, int32_t r) { write_reg32(r1, adc32(read_reg32(r1), read_reg32(r))); }
 
-void instr_12_mem(int32_t addr, int32_t r)
+void instr_12_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read8(addr);
     if (cpu->pagefault) return;
     write_reg8(r, adc8(read_reg8(r), x));
 }
 void instr_12_reg(int32_t r1, int32_t r) { write_reg8(r, adc8(read_reg8(r), read_reg8(r1))); }
-void instr16_13_mem(int32_t addr, int32_t r)
+void instr16_13_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
     write_reg16(r, adc16(read_reg16(r), x));
 }
 void instr16_13_reg(int32_t r1, int32_t r) { write_reg16(r, adc16(read_reg16(r), read_reg16(r1))); }
-void instr32_13_mem(int32_t addr, int32_t r)
+void instr32_13_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
@@ -284,28 +284,28 @@ void instr32_17(void)
     adjust_stack_reg(4);
 }
 
-void instr_18_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE8(addr, sbb8(x_, read_reg8(r))); }
+void instr_18_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE8(addr, sbb8(x_, read_reg8(r))); }
 void instr_18_reg(int32_t r1, int32_t r) { write_reg8(r1, sbb8(read_reg8(r1), read_reg8(r))); }
-void instr16_19_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE16(addr, sbb16(x_, read_reg16(r))); }
+void instr16_19_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE16(addr, sbb16(x_, read_reg16(r))); }
 void instr16_19_reg(int32_t r1, int32_t r) { write_reg16(r1, sbb16(read_reg16(r1), read_reg16(r))); }
-void instr32_19_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE32(addr, sbb32(x_, read_reg32(r))); }
+void instr32_19_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE32(addr, sbb32(x_, read_reg32(r))); }
 void instr32_19_reg(int32_t r1, int32_t r) { write_reg32(r1, sbb32(read_reg32(r1), read_reg32(r))); }
 
-void instr_1A_mem(int32_t addr, int32_t r)
+void instr_1A_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read8(addr);
     if (cpu->pagefault) return;
     write_reg8(r, sbb8(read_reg8(r), x));
 }
 void instr_1A_reg(int32_t r1, int32_t r) { write_reg8(r, sbb8(read_reg8(r), read_reg8(r1))); }
-void instr16_1B_mem(int32_t addr, int32_t r)
+void instr16_1B_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
     write_reg16(r, sbb16(read_reg16(r), x));
 }
 void instr16_1B_reg(int32_t r1, int32_t r) { write_reg16(r, sbb16(read_reg16(r), read_reg16(r1))); }
-void instr32_1B_mem(int32_t addr, int32_t r)
+void instr32_1B_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
@@ -339,28 +339,28 @@ void instr32_1F(void)
     adjust_stack_reg(4);
 }
 
-void instr_20_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE8(addr, and8(x_, read_reg8(r))); }
+void instr_20_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE8(addr, and8(x_, read_reg8(r))); }
 void instr_20_reg(int32_t r1, int32_t r) { write_reg8(r1, and8(read_reg8(r1), read_reg8(r))); }
-void instr16_21_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE16(addr, and16(x_, read_reg16(r))); }
+void instr16_21_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE16(addr, and16(x_, read_reg16(r))); }
 void instr16_21_reg(int32_t r1, int32_t r) { write_reg16(r1, and16(read_reg16(r1), read_reg16(r))); }
-void instr32_21_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE32(addr, and32(x_, read_reg32(r))); }
+void instr32_21_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE32(addr, and32(x_, read_reg32(r))); }
 void instr32_21_reg(int32_t r1, int32_t r) { write_reg32(r1, and32(read_reg32(r1), read_reg32(r))); }
 
-void instr_22_mem(int32_t addr, int32_t r)
+void instr_22_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read8(addr);
     if (cpu->pagefault) return;
     write_reg8(r, and8(read_reg8(r), x));
 }
 void instr_22_reg(int32_t r1, int32_t r) { write_reg8(r, and8(read_reg8(r), read_reg8(r1))); }
-void instr16_23_mem(int32_t addr, int32_t r)
+void instr16_23_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
     write_reg16(r, and16(read_reg16(r), x));
 }
 void instr16_23_reg(int32_t r1, int32_t r) { write_reg16(r, and16(read_reg16(r), read_reg16(r1))); }
-void instr32_23_mem(int32_t addr, int32_t r)
+void instr32_23_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
@@ -375,28 +375,28 @@ void instr32_25(int32_t imm32) { write_reg32(EAX, and32(read_reg32(EAX), imm32))
 void instr_26(void) { segment_prefix_op(ES); }
 void instr_27(void) { bcd_daa(); }
 
-void instr_28_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE8(addr, sub8(x_, read_reg8(r))); }
+void instr_28_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE8(addr, sub8(x_, read_reg8(r))); }
 void instr_28_reg(int32_t r1, int32_t r) { write_reg8(r1, sub8(read_reg8(r1), read_reg8(r))); }
-void instr16_29_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE16(addr, sub16(x_, read_reg16(r))); }
+void instr16_29_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE16(addr, sub16(x_, read_reg16(r))); }
 void instr16_29_reg(int32_t r1, int32_t r) { write_reg16(r1, sub16(read_reg16(r1), read_reg16(r))); }
-void instr32_29_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE32(addr, sub32(x_, read_reg32(r))); }
+void instr32_29_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE32(addr, sub32(x_, read_reg32(r))); }
 void instr32_29_reg(int32_t r1, int32_t r) { write_reg32(r1, sub32(read_reg32(r1), read_reg32(r))); }
 
-void instr_2A_mem(int32_t addr, int32_t r)
+void instr_2A_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read8(addr);
     if (cpu->pagefault) return;
     write_reg8(r, sub8(read_reg8(r), x));
 }
 void instr_2A_reg(int32_t r1, int32_t r) { write_reg8(r, sub8(read_reg8(r), read_reg8(r1))); }
-void instr16_2B_mem(int32_t addr, int32_t r)
+void instr16_2B_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
     write_reg16(r, sub16(read_reg16(r), x));
 }
 void instr16_2B_reg(int32_t r1, int32_t r) { write_reg16(r, sub16(read_reg16(r), read_reg16(r1))); }
-void instr32_2B_mem(int32_t addr, int32_t r)
+void instr32_2B_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
@@ -411,28 +411,28 @@ void instr32_2D(int32_t imm32) { write_reg32(EAX, sub32(read_reg32(EAX), imm32))
 void instr_2E(void) { segment_prefix_op(CS); }
 void instr_2F(void) { bcd_das(); }
 
-void instr_30_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE8(addr, xor8(x_, read_reg8(r))); }
+void instr_30_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE8(addr, xor8(x_, read_reg8(r))); }
 void instr_30_reg(int32_t r1, int32_t r) { write_reg8(r1, xor8(read_reg8(r1), read_reg8(r))); }
-void instr16_31_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE16(addr, xor16(x_, read_reg16(r))); }
+void instr16_31_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE16(addr, xor16(x_, read_reg16(r))); }
 void instr16_31_reg(int32_t r1, int32_t r) { write_reg16(r1, xor16(read_reg16(r1), read_reg16(r))); }
-void instr32_31_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE32(addr, xor32(x_, read_reg32(r))); }
+void instr32_31_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE32(addr, xor32(x_, read_reg32(r))); }
 void instr32_31_reg(int32_t r1, int32_t r) { write_reg32(r1, xor32(read_reg32(r1), read_reg32(r))); }
 
-void instr_32_mem(int32_t addr, int32_t r)
+void instr_32_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read8(addr);
     if (cpu->pagefault) return;
     write_reg8(r, xor8(read_reg8(r), x));
 }
 void instr_32_reg(int32_t r1, int32_t r) { write_reg8(r, xor8(read_reg8(r), read_reg8(r1))); }
-void instr16_33_mem(int32_t addr, int32_t r)
+void instr16_33_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
     write_reg16(r, xor16(read_reg16(r), x));
 }
 void instr16_33_reg(int32_t r1, int32_t r) { write_reg16(r, xor16(read_reg16(r), read_reg16(r1))); }
-void instr32_33_mem(int32_t addr, int32_t r)
+void instr32_33_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
@@ -447,21 +447,21 @@ void instr32_35(int32_t imm32) { write_reg32(EAX, xor32(read_reg32(EAX), imm32))
 void instr_36(void) { segment_prefix_op(SS); }
 void instr_37(void) { bcd_aaa(); }
 
-void instr_38_mem(int32_t addr, int32_t r)
+void instr_38_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read8(addr);
     if (cpu->pagefault) return;
     cmp8(x, read_reg8(r));
 }
 void instr_38_reg(int32_t r1, int32_t r) { cmp8(read_reg8(r1), read_reg8(r)); }
-void instr16_39_mem(int32_t addr, int32_t r)
+void instr16_39_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
     cmp16(x, read_reg16(r));
 }
 void instr16_39_reg(int32_t r1, int32_t r) { cmp16(read_reg16(r1), read_reg16(r)); }
-void instr32_39_mem(int32_t addr, int32_t r)
+void instr32_39_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
@@ -469,21 +469,21 @@ void instr32_39_mem(int32_t addr, int32_t r)
 }
 void instr32_39_reg(int32_t r1, int32_t r) { cmp32(read_reg32(r1), read_reg32(r)); }
 
-void instr_3A_mem(int32_t addr, int32_t r)
+void instr_3A_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read8(addr);
     if (cpu->pagefault) return;
     cmp8(read_reg8(r), x);
 }
 void instr_3A_reg(int32_t r1, int32_t r) { cmp8(read_reg8(r), read_reg8(r1)); }
-void instr16_3B_mem(int32_t addr, int32_t r)
+void instr16_3B_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
     cmp16(read_reg16(r), x);
 }
 void instr16_3B_reg(int32_t r1, int32_t r) { cmp16(read_reg16(r), read_reg16(r1)); }
-void instr32_3B_mem(int32_t addr, int32_t r)
+void instr32_3B_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
@@ -609,7 +609,7 @@ void instr_62_reg(int32_t _r2, int32_t _r)
     (void)_r;
     DBG_ASSERT(false);
 }
-void instr_62_mem(int32_t _addr, int32_t _r)
+void instr_62_mem(int64_t _addr, int32_t _r)
 {
     (void)_addr;
     (void)_r;
@@ -631,7 +631,7 @@ int32_t arpl(int32_t seg, int32_t r16)
     }
 }
 
-void instr_63_mem(int32_t addr, int32_t r)
+void instr_63_mem(int64_t addr, int32_t r)
 {
     if (!cpu->protected_mode || vm86_mode()) {
         /* dbg_log!("arpl #ud") dropped */
@@ -680,7 +680,7 @@ void instr32_68(int32_t imm32)
     if (cpu->pagefault) return;
 }
 
-void instr16_69_mem(int32_t addr, int32_t r, int32_t imm)
+void instr16_69_mem(int64_t addr, int32_t r, int32_t imm)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
@@ -690,7 +690,7 @@ void instr16_69_reg(int32_t r1, int32_t r, int32_t imm)
 {
     write_reg16(r, imul_reg16(read_reg16(r1), imm));
 }
-void instr32_69_mem(int32_t addr, int32_t r, int32_t imm)
+void instr32_69_mem(int64_t addr, int32_t r, int32_t imm)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
@@ -712,7 +712,7 @@ void instr32_6A(int32_t imm8)
     if (cpu->pagefault) return;
 }
 
-void instr16_6B_mem(int32_t addr, int32_t r, int32_t imm)
+void instr16_6B_mem(int64_t addr, int32_t r, int32_t imm)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
@@ -722,7 +722,7 @@ void instr16_6B_reg(int32_t r1, int32_t r, int32_t imm)
 {
     write_reg16(r, imul_reg16(read_reg16(r1), imm));
 }
-void instr32_6B_mem(int32_t addr, int32_t r, int32_t imm)
+void instr32_6B_mem(int64_t addr, int32_t r, int32_t imm)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
@@ -796,66 +796,66 @@ void instr32_7F(int32_t imm8) { jmpcc32(!test_le(), imm8); }
  * 4 and/5 sub/6 xor/7 cmp)
  * ================================================================== */
 
-void instr_80_0_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, add8(x_, imm)); }
+void instr_80_0_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, add8(x_, imm)); }
 void instr_80_0_reg(int32_t r1, int32_t imm) { write_reg8(r1, add8(read_reg8(r1), imm)); }
-void instr_80_1_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, or8(x_, imm)); }
+void instr_80_1_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, or8(x_, imm)); }
 void instr_80_1_reg(int32_t r1, int32_t imm) { write_reg8(r1, or8(read_reg8(r1), imm)); }
-void instr_80_2_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, adc8(x_, imm)); }
+void instr_80_2_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, adc8(x_, imm)); }
 void instr_80_2_reg(int32_t r1, int32_t imm) { write_reg8(r1, adc8(read_reg8(r1), imm)); }
-void instr_80_3_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, sbb8(x_, imm)); }
+void instr_80_3_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, sbb8(x_, imm)); }
 void instr_80_3_reg(int32_t r1, int32_t imm) { write_reg8(r1, sbb8(read_reg8(r1), imm)); }
-void instr_80_4_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, and8(x_, imm)); }
+void instr_80_4_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, and8(x_, imm)); }
 void instr_80_4_reg(int32_t r1, int32_t imm) { write_reg8(r1, and8(read_reg8(r1), imm)); }
-void instr_80_5_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, sub8(x_, imm)); }
+void instr_80_5_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, sub8(x_, imm)); }
 void instr_80_5_reg(int32_t r1, int32_t imm) { write_reg8(r1, sub8(read_reg8(r1), imm)); }
-void instr_80_6_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, xor8(x_, imm)); }
+void instr_80_6_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, xor8(x_, imm)); }
 void instr_80_6_reg(int32_t r1, int32_t imm) { write_reg8(r1, xor8(read_reg8(r1), imm)); }
 void instr_80_7_reg(int32_t r, int32_t imm) { cmp8(read_reg8(r), imm); }
-void instr_80_7_mem(int32_t addr, int32_t imm)
+void instr_80_7_mem(int64_t addr, int32_t imm)
 {
     int32_t x = safe_read8(addr);
     if (cpu->pagefault) return;
     cmp8(x, imm);
 }
 
-void instr16_81_0_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, add16(x_, imm)); }
+void instr16_81_0_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, add16(x_, imm)); }
 void instr16_81_0_reg(int32_t r1, int32_t imm) { write_reg16(r1, add16(read_reg16(r1), imm)); }
-void instr16_81_1_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, or16(x_, imm)); }
+void instr16_81_1_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, or16(x_, imm)); }
 void instr16_81_1_reg(int32_t r1, int32_t imm) { write_reg16(r1, or16(read_reg16(r1), imm)); }
-void instr16_81_2_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, adc16(x_, imm)); }
+void instr16_81_2_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, adc16(x_, imm)); }
 void instr16_81_2_reg(int32_t r1, int32_t imm) { write_reg16(r1, adc16(read_reg16(r1), imm)); }
-void instr16_81_3_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, sbb16(x_, imm)); }
+void instr16_81_3_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, sbb16(x_, imm)); }
 void instr16_81_3_reg(int32_t r1, int32_t imm) { write_reg16(r1, sbb16(read_reg16(r1), imm)); }
-void instr16_81_4_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, and16(x_, imm)); }
+void instr16_81_4_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, and16(x_, imm)); }
 void instr16_81_4_reg(int32_t r1, int32_t imm) { write_reg16(r1, and16(read_reg16(r1), imm)); }
-void instr16_81_5_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, sub16(x_, imm)); }
+void instr16_81_5_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, sub16(x_, imm)); }
 void instr16_81_5_reg(int32_t r1, int32_t imm) { write_reg16(r1, sub16(read_reg16(r1), imm)); }
-void instr16_81_6_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, xor16(x_, imm)); }
+void instr16_81_6_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, xor16(x_, imm)); }
 void instr16_81_6_reg(int32_t r1, int32_t imm) { write_reg16(r1, xor16(read_reg16(r1), imm)); }
 void instr16_81_7_reg(int32_t r, int32_t imm) { cmp16(read_reg16(r), imm); }
-void instr16_81_7_mem(int32_t addr, int32_t imm)
+void instr16_81_7_mem(int64_t addr, int32_t imm)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
     cmp16(x, imm);
 }
 
-void instr32_81_0_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, add32(x_, imm)); }
+void instr32_81_0_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, add32(x_, imm)); }
 void instr32_81_0_reg(int32_t r1, int32_t imm) { write_reg32(r1, add32(read_reg32(r1), imm)); }
-void instr32_81_1_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, or32(x_, imm)); }
+void instr32_81_1_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, or32(x_, imm)); }
 void instr32_81_1_reg(int32_t r1, int32_t imm) { write_reg32(r1, or32(read_reg32(r1), imm)); }
-void instr32_81_2_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, adc32(x_, imm)); }
+void instr32_81_2_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, adc32(x_, imm)); }
 void instr32_81_2_reg(int32_t r1, int32_t imm) { write_reg32(r1, adc32(read_reg32(r1), imm)); }
-void instr32_81_3_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, sbb32(x_, imm)); }
+void instr32_81_3_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, sbb32(x_, imm)); }
 void instr32_81_3_reg(int32_t r1, int32_t imm) { write_reg32(r1, sbb32(read_reg32(r1), imm)); }
-void instr32_81_4_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, and32(x_, imm)); }
+void instr32_81_4_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, and32(x_, imm)); }
 void instr32_81_4_reg(int32_t r1, int32_t imm) { write_reg32(r1, and32(read_reg32(r1), imm)); }
-void instr32_81_5_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, sub32(x_, imm)); }
+void instr32_81_5_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, sub32(x_, imm)); }
 void instr32_81_5_reg(int32_t r1, int32_t imm) { write_reg32(r1, sub32(read_reg32(r1), imm)); }
-void instr32_81_6_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, xor32(x_, imm)); }
+void instr32_81_6_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, xor32(x_, imm)); }
 void instr32_81_6_reg(int32_t r1, int32_t imm) { write_reg32(r1, xor32(read_reg32(r1), imm)); }
 void instr32_81_7_reg(int32_t r, int32_t imm) { cmp32(read_reg32(r), imm); }
-void instr32_81_7_mem(int32_t addr, int32_t imm)
+void instr32_81_7_mem(int64_t addr, int32_t imm)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
@@ -863,22 +863,22 @@ void instr32_81_7_mem(int32_t addr, int32_t imm)
 }
 
 /* 0x82 is the undocumented alias of 0x80 (same bodies upstream) */
-void instr_82_0_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, add8(x_, imm)); }
+void instr_82_0_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, add8(x_, imm)); }
 void instr_82_0_reg(int32_t r1, int32_t imm) { write_reg8(r1, add8(read_reg8(r1), imm)); }
-void instr_82_1_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, or8(x_, imm)); }
+void instr_82_1_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, or8(x_, imm)); }
 void instr_82_1_reg(int32_t r1, int32_t imm) { write_reg8(r1, or8(read_reg8(r1), imm)); }
-void instr_82_2_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, adc8(x_, imm)); }
+void instr_82_2_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, adc8(x_, imm)); }
 void instr_82_2_reg(int32_t r1, int32_t imm) { write_reg8(r1, adc8(read_reg8(r1), imm)); }
-void instr_82_3_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, sbb8(x_, imm)); }
+void instr_82_3_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, sbb8(x_, imm)); }
 void instr_82_3_reg(int32_t r1, int32_t imm) { write_reg8(r1, sbb8(read_reg8(r1), imm)); }
-void instr_82_4_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, and8(x_, imm)); }
+void instr_82_4_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, and8(x_, imm)); }
 void instr_82_4_reg(int32_t r1, int32_t imm) { write_reg8(r1, and8(read_reg8(r1), imm)); }
-void instr_82_5_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, sub8(x_, imm)); }
+void instr_82_5_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, sub8(x_, imm)); }
 void instr_82_5_reg(int32_t r1, int32_t imm) { write_reg8(r1, sub8(read_reg8(r1), imm)); }
-void instr_82_6_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, xor8(x_, imm)); }
+void instr_82_6_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, xor8(x_, imm)); }
 void instr_82_6_reg(int32_t r1, int32_t imm) { write_reg8(r1, xor8(read_reg8(r1), imm)); }
 void instr_82_7_reg(int32_t r, int32_t imm) { cmp8(read_reg8(r), imm); }
-void instr_82_7_mem(int32_t addr, int32_t imm)
+void instr_82_7_mem(int64_t addr, int32_t imm)
 {
     int32_t x = safe_read8(addr);
     if (cpu->pagefault) return;
@@ -887,44 +887,44 @@ void instr_82_7_mem(int32_t addr, int32_t imm)
 
 /* the 8-bit sign-extended immediate forms: the immediate is masked to 16 bits in the
  * 16-bit case (upstream's `imm & 0xFFFF`) and used whole in the 32-bit case */
-void instr16_83_0_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, add16(x_, imm & 0xFFFF)); }
+void instr16_83_0_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, add16(x_, imm & 0xFFFF)); }
 void instr16_83_0_reg(int32_t r1, int32_t imm) { write_reg16(r1, add16(read_reg16(r1), imm & 0xFFFF)); }
-void instr16_83_1_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, or16(x_, imm & 0xFFFF)); }
+void instr16_83_1_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, or16(x_, imm & 0xFFFF)); }
 void instr16_83_1_reg(int32_t r1, int32_t imm) { write_reg16(r1, or16(read_reg16(r1), imm & 0xFFFF)); }
-void instr16_83_2_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, adc16(x_, imm & 0xFFFF)); }
+void instr16_83_2_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, adc16(x_, imm & 0xFFFF)); }
 void instr16_83_2_reg(int32_t r1, int32_t imm) { write_reg16(r1, adc16(read_reg16(r1), imm & 0xFFFF)); }
-void instr16_83_3_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, sbb16(x_, imm & 0xFFFF)); }
+void instr16_83_3_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, sbb16(x_, imm & 0xFFFF)); }
 void instr16_83_3_reg(int32_t r1, int32_t imm) { write_reg16(r1, sbb16(read_reg16(r1), imm & 0xFFFF)); }
-void instr16_83_4_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, and16(x_, imm & 0xFFFF)); }
+void instr16_83_4_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, and16(x_, imm & 0xFFFF)); }
 void instr16_83_4_reg(int32_t r1, int32_t imm) { write_reg16(r1, and16(read_reg16(r1), imm & 0xFFFF)); }
-void instr16_83_5_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, sub16(x_, imm & 0xFFFF)); }
+void instr16_83_5_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, sub16(x_, imm & 0xFFFF)); }
 void instr16_83_5_reg(int32_t r1, int32_t imm) { write_reg16(r1, sub16(read_reg16(r1), imm & 0xFFFF)); }
-void instr16_83_6_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, xor16(x_, imm & 0xFFFF)); }
+void instr16_83_6_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, xor16(x_, imm & 0xFFFF)); }
 void instr16_83_6_reg(int32_t r1, int32_t imm) { write_reg16(r1, xor16(read_reg16(r1), imm & 0xFFFF)); }
 void instr16_83_7_reg(int32_t r, int32_t imm) { cmp16(read_reg16(r), imm & 0xFFFF); }
-void instr16_83_7_mem(int32_t addr, int32_t imm)
+void instr16_83_7_mem(int64_t addr, int32_t imm)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
     cmp16(x, imm & 0xFFFF);
 }
 
-void instr32_83_0_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, add32(x_, imm)); }
+void instr32_83_0_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, add32(x_, imm)); }
 void instr32_83_0_reg(int32_t r1, int32_t imm) { write_reg32(r1, add32(read_reg32(r1), imm)); }
-void instr32_83_1_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, or32(x_, imm)); }
+void instr32_83_1_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, or32(x_, imm)); }
 void instr32_83_1_reg(int32_t r1, int32_t imm) { write_reg32(r1, or32(read_reg32(r1), imm)); }
-void instr32_83_2_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, adc32(x_, imm)); }
+void instr32_83_2_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, adc32(x_, imm)); }
 void instr32_83_2_reg(int32_t r1, int32_t imm) { write_reg32(r1, adc32(read_reg32(r1), imm)); }
-void instr32_83_3_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, sbb32(x_, imm)); }
+void instr32_83_3_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, sbb32(x_, imm)); }
 void instr32_83_3_reg(int32_t r1, int32_t imm) { write_reg32(r1, sbb32(read_reg32(r1), imm)); }
-void instr32_83_4_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, and32(x_, imm)); }
+void instr32_83_4_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, and32(x_, imm)); }
 void instr32_83_4_reg(int32_t r1, int32_t imm) { write_reg32(r1, and32(read_reg32(r1), imm)); }
-void instr32_83_5_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, sub32(x_, imm)); }
+void instr32_83_5_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, sub32(x_, imm)); }
 void instr32_83_5_reg(int32_t r1, int32_t imm) { write_reg32(r1, sub32(read_reg32(r1), imm)); }
-void instr32_83_6_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, xor32(x_, imm)); }
+void instr32_83_6_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, xor32(x_, imm)); }
 void instr32_83_6_reg(int32_t r1, int32_t imm) { write_reg32(r1, xor32(read_reg32(r1), imm)); }
 void instr32_83_7_reg(int32_t r, int32_t imm) { cmp32(read_reg32(r), imm); }
-void instr32_83_7_mem(int32_t addr, int32_t imm)
+void instr32_83_7_mem(int64_t addr, int32_t imm)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
@@ -935,21 +935,21 @@ void instr32_83_7_mem(int32_t addr, int32_t imm)
  * 0x84-0x8F -- test, xchg, mov, lea, mov sreg, pop mem
  * ================================================================== */
 
-void instr_84_mem(int32_t addr, int32_t r)
+void instr_84_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read8(addr);
     if (cpu->pagefault) return;
     test8(x, read_reg8(r));
 }
 void instr_84_reg(int32_t r1, int32_t r) { test8(read_reg8(r1), read_reg8(r)); }
-void instr16_85_mem(int32_t addr, int32_t r)
+void instr16_85_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
     test16(x, read_reg16(r));
 }
 void instr16_85_reg(int32_t r1, int32_t r) { test16(read_reg16(r1), read_reg16(r)); }
-void instr32_85_mem(int32_t addr, int32_t r)
+void instr32_85_mem(int64_t addr, int32_t r)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
@@ -957,47 +957,47 @@ void instr32_85_mem(int32_t addr, int32_t r)
 }
 void instr32_85_reg(int32_t r1, int32_t r) { test32(read_reg32(r1), read_reg32(r)); }
 
-void instr_86_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE8(addr, xchg8(x_, r)); }
+void instr_86_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE8(addr, xchg8(x_, r)); }
 void instr_86_reg(int32_t r1, int32_t r) { write_reg8(r1, xchg8(read_reg8(r1), r)); }
-void instr16_87_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE16(addr, xchg16(x_, r)); }
+void instr16_87_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE16(addr, xchg16(x_, r)); }
 void instr16_87_reg(int32_t r1, int32_t r) { write_reg16(r1, xchg16(read_reg16(r1), r)); }
-void instr32_87_mem(int32_t addr, int32_t r) { SAFE_READ_WRITE32(addr, xchg32(x_, r)); }
+void instr32_87_mem(int64_t addr, int32_t r) { SAFE_READ_WRITE32(addr, xchg32(x_, r)); }
 void instr32_87_reg(int32_t r1, int32_t r) { write_reg32(r1, xchg32(read_reg32(r1), r)); }
 
 void instr_88_reg(int32_t r2, int32_t r) { write_reg8(r2, read_reg8(r)); }
-void instr_88_mem(int32_t addr, int32_t r)
+void instr_88_mem(int64_t addr, int32_t r)
 {
     safe_write8(addr, read_reg8(r));
     if (cpu->pagefault) return;
 }
 void instr16_89_reg(int32_t r2, int32_t r) { write_reg16(r2, read_reg16(r)); }
-void instr16_89_mem(int32_t addr, int32_t r)
+void instr16_89_mem(int64_t addr, int32_t r)
 {
     safe_write16(addr, read_reg16(r));
     if (cpu->pagefault) return;
 }
 void instr32_89_reg(int32_t r2, int32_t r) { write_reg32(r2, read_reg32(r)); }
-void instr32_89_mem(int32_t addr, int32_t r)
+void instr32_89_mem(int64_t addr, int32_t r)
 {
     safe_write32(addr, read_reg32(r));
     if (cpu->pagefault) return;
 }
 
-void instr_8A_mem(int32_t addr, int32_t r)
+void instr_8A_mem(int64_t addr, int32_t r)
 {
     int32_t v = safe_read8(addr);
     if (cpu->pagefault) return;
     write_reg8(r, v);
 }
 void instr_8A_reg(int32_t r1, int32_t r) { write_reg8(r, read_reg8(r1)); }
-void instr16_8B_mem(int32_t addr, int32_t r)
+void instr16_8B_mem(int64_t addr, int32_t r)
 {
     int32_t v = safe_read16(addr);
     if (cpu->pagefault) return;
     write_reg16(r, v);
 }
 void instr16_8B_reg(int32_t r1, int32_t r) { write_reg16(r, read_reg16(r1)); }
-void instr32_8B_mem(int32_t addr, int32_t r)
+void instr32_8B_mem(int64_t addr, int32_t r)
 {
     int32_t v = safe_read32s(addr);
     if (cpu->pagefault) return;
@@ -1021,7 +1021,7 @@ void instr16_8C_reg(int32_t r, int32_t seg)
         write_reg16(r, (int32_t)cpu->sreg[seg]);
     }
 }
-void instr16_8C_mem(int32_t addr, int32_t seg)
+void instr16_8C_mem(int64_t addr, int32_t seg)
 {
     if (instr_8C_check_sreg(seg)) {
         safe_write16(addr, (int32_t)cpu->sreg[seg]);
@@ -1034,7 +1034,7 @@ void instr32_8C_reg(int32_t r, int32_t seg)
         write_reg32(r, (int32_t)cpu->sreg[seg]);
     }
 }
-void instr32_8C_mem(int32_t addr, int32_t seg)
+void instr32_8C_mem(int64_t addr, int32_t seg)
 {
     if (instr_8C_check_sreg(seg)) {
         safe_write16(addr, (int32_t)cpu->sreg[seg]);
@@ -1049,14 +1049,14 @@ void instr16_8D_reg(int32_t _r, int32_t _r2)
     (void)_r2;
     trigger_ud();
 }
-void instr16_8D_mem(int32_t modrm_byte, int32_t r)
+void instr16_8D_mem(int64_t modrm_byte, int32_t r)
 {
     /* lea */
     cpu->prefixes |= SEG_PREFIX_ZERO;
     /* upstream is `if let Ok(addr) = modrm_resolve(...) { write_reg16(r, addr) }` -- the
      * fault is NOT propagated out of lea, it only suppresses the register write (the
      * instruction is over either way; the dispatcher's pagefault flag still says so). */
-    int32_t addr = modrm_resolve(modrm_byte);
+    int64_t addr = modrm_resolve(modrm_byte);
     if (!cpu->pagefault) {
         write_reg16(r, addr);
     }
@@ -1068,19 +1068,19 @@ void instr32_8D_reg(int32_t _r, int32_t _r2)
     (void)_r2;
     trigger_ud();
 }
-void instr32_8D_mem(int32_t modrm_byte, int32_t r)
+void instr32_8D_mem(int64_t modrm_byte, int32_t r)
 {
     /* lea */
     /* override prefix, so modrm_resolve does not return the segment part */
     cpu->prefixes |= SEG_PREFIX_ZERO;
-    int32_t addr = modrm_resolve(modrm_byte);
+    int64_t addr = modrm_resolve(modrm_byte);
     if (!cpu->pagefault) {
         write_reg32(r, addr);
     }
     cpu->prefixes = 0;
 }
 
-void instr_8E_mem(int32_t addr, int32_t r)
+void instr_8E_mem(int64_t addr, int32_t r)
 {
     if (r == ES || r == SS || r == DS || r == FS || r == GS) {
         int32_t selector = safe_read16(addr);
@@ -1104,12 +1104,12 @@ void instr_8E_reg(int32_t r1, int32_t r)
     }
 }
 
-void instr16_8F_0_mem(int32_t modrm_byte)
+void instr16_8F_0_mem(int64_t modrm_byte)
 {
     /* pop */
     /* Update esp *before* resolving the address */
     adjust_stack_reg(2);
-    int32_t addr = modrm_resolve(modrm_byte);
+    int64_t addr = modrm_resolve(modrm_byte);
     if (cpu->pagefault) {
         /* a pagefault happened, reset esp */
         adjust_stack_reg(-2);
@@ -1123,11 +1123,11 @@ void instr16_8F_0_mem(int32_t modrm_byte)
     adjust_stack_reg(2);
 }
 void instr16_8F_0_reg(int32_t r) { int32_t v = pop16(); if (cpu->pagefault) return; write_reg16(r, v); }
-void instr32_8F_0_mem(int32_t modrm_byte)
+void instr32_8F_0_mem(int64_t modrm_byte)
 {
     /* Update esp *before* resolving the address */
     adjust_stack_reg(4);
-    int32_t addr = modrm_resolve(modrm_byte);
+    int64_t addr = modrm_resolve(modrm_byte);
     if (cpu->pagefault) {
         /* a pagefault happened, reset esp */
         adjust_stack_reg(-4);
@@ -1293,7 +1293,7 @@ void instr_9F(void)
 void instr_A0(int32_t moffs)
 {
     /* mov */
-    int32_t addr = get_seg_prefix_ds(moffs);
+    int64_t addr = get_seg_prefix_ds(moffs);
     if (cpu->pagefault) return;
     int32_t data = safe_read8(addr);
     if (cpu->pagefault) return;
@@ -1301,7 +1301,7 @@ void instr_A0(int32_t moffs)
 }
 void instr16_A1(int32_t moffs)
 {
-    int32_t addr = get_seg_prefix_ds(moffs);
+    int64_t addr = get_seg_prefix_ds(moffs);
     if (cpu->pagefault) return;
     int32_t data = safe_read16(addr);
     if (cpu->pagefault) return;
@@ -1309,7 +1309,7 @@ void instr16_A1(int32_t moffs)
 }
 void instr32_A1(int32_t moffs)
 {
-    int32_t addr = get_seg_prefix_ds(moffs);
+    int64_t addr = get_seg_prefix_ds(moffs);
     if (cpu->pagefault) return;
     int32_t data = safe_read32s(addr);
     if (cpu->pagefault) return;
@@ -1318,21 +1318,21 @@ void instr32_A1(int32_t moffs)
 void instr_A2(int32_t moffs)
 {
     /* mov */
-    int32_t addr = get_seg_prefix_ds(moffs);
+    int64_t addr = get_seg_prefix_ds(moffs);
     if (cpu->pagefault) return;
     safe_write8(addr, read_reg8(AL));
     if (cpu->pagefault) return;
 }
 void instr16_A3(int32_t moffs)
 {
-    int32_t addr = get_seg_prefix_ds(moffs);
+    int64_t addr = get_seg_prefix_ds(moffs);
     if (cpu->pagefault) return;
     safe_write16(addr, read_reg16(AX));
     if (cpu->pagefault) return;
 }
 void instr32_A3(int32_t moffs)
 {
-    int32_t addr = get_seg_prefix_ds(moffs);
+    int64_t addr = get_seg_prefix_ds(moffs);
     if (cpu->pagefault) return;
     safe_write32(addr, read_reg32(EAX));
     if (cpu->pagefault) return;
@@ -1441,55 +1441,55 @@ void instr32_BF(int32_t imm) { write_reg32(reg_index_b(7), imm); }
  * leave, int/int3/into, iret
  * ================================================================== */
 
-void instr_C0_0_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, rol8(x_, imm & 31)); }
+void instr_C0_0_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, rol8(x_, imm & 31)); }
 void instr_C0_0_reg(int32_t r1, int32_t imm) { write_reg8(r1, rol8(read_reg8(r1), imm & 31)); }
-void instr_C0_1_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, ror8(x_, imm & 31)); }
+void instr_C0_1_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, ror8(x_, imm & 31)); }
 void instr_C0_1_reg(int32_t r1, int32_t imm) { write_reg8(r1, ror8(read_reg8(r1), imm & 31)); }
-void instr_C0_2_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, rcl8(x_, imm & 31)); }
+void instr_C0_2_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, rcl8(x_, imm & 31)); }
 void instr_C0_2_reg(int32_t r1, int32_t imm) { write_reg8(r1, rcl8(read_reg8(r1), imm & 31)); }
-void instr_C0_3_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, rcr8(x_, imm & 31)); }
+void instr_C0_3_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, rcr8(x_, imm & 31)); }
 void instr_C0_3_reg(int32_t r1, int32_t imm) { write_reg8(r1, rcr8(read_reg8(r1), imm & 31)); }
-void instr_C0_4_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, shl8(x_, imm & 31)); }
+void instr_C0_4_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, shl8(x_, imm & 31)); }
 void instr_C0_4_reg(int32_t r1, int32_t imm) { write_reg8(r1, shl8(read_reg8(r1), imm & 31)); }
-void instr_C0_5_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, shr8(x_, imm & 31)); }
+void instr_C0_5_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, shr8(x_, imm & 31)); }
 void instr_C0_5_reg(int32_t r1, int32_t imm) { write_reg8(r1, shr8(read_reg8(r1), imm & 31)); }
-void instr_C0_6_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, shl8(x_, imm & 31)); }
+void instr_C0_6_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, shl8(x_, imm & 31)); }
 void instr_C0_6_reg(int32_t r1, int32_t imm) { write_reg8(r1, shl8(read_reg8(r1), imm & 31)); }
-void instr_C0_7_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, sar8(x_, imm & 31)); }
+void instr_C0_7_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE8(addr, sar8(x_, imm & 31)); }
 void instr_C0_7_reg(int32_t r1, int32_t imm) { write_reg8(r1, sar8(read_reg8(r1), imm & 31)); }
 
-void instr16_C1_0_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, rol16(x_, imm & 31)); }
+void instr16_C1_0_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, rol16(x_, imm & 31)); }
 void instr16_C1_0_reg(int32_t r1, int32_t imm) { write_reg16(r1, rol16(read_reg16(r1), imm & 31)); }
-void instr16_C1_1_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, ror16(x_, imm & 31)); }
+void instr16_C1_1_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, ror16(x_, imm & 31)); }
 void instr16_C1_1_reg(int32_t r1, int32_t imm) { write_reg16(r1, ror16(read_reg16(r1), imm & 31)); }
-void instr16_C1_2_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, rcl16(x_, imm & 31)); }
+void instr16_C1_2_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, rcl16(x_, imm & 31)); }
 void instr16_C1_2_reg(int32_t r1, int32_t imm) { write_reg16(r1, rcl16(read_reg16(r1), imm & 31)); }
-void instr16_C1_3_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, rcr16(x_, imm & 31)); }
+void instr16_C1_3_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, rcr16(x_, imm & 31)); }
 void instr16_C1_3_reg(int32_t r1, int32_t imm) { write_reg16(r1, rcr16(read_reg16(r1), imm & 31)); }
-void instr16_C1_4_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, shl16(x_, imm & 31)); }
+void instr16_C1_4_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, shl16(x_, imm & 31)); }
 void instr16_C1_4_reg(int32_t r1, int32_t imm) { write_reg16(r1, shl16(read_reg16(r1), imm & 31)); }
-void instr16_C1_5_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, shr16(x_, imm & 31)); }
+void instr16_C1_5_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, shr16(x_, imm & 31)); }
 void instr16_C1_5_reg(int32_t r1, int32_t imm) { write_reg16(r1, shr16(read_reg16(r1), imm & 31)); }
-void instr16_C1_6_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, shl16(x_, imm & 31)); }
+void instr16_C1_6_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, shl16(x_, imm & 31)); }
 void instr16_C1_6_reg(int32_t r1, int32_t imm) { write_reg16(r1, shl16(read_reg16(r1), imm & 31)); }
-void instr16_C1_7_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, sar16(x_, imm & 31)); }
+void instr16_C1_7_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE16(addr, sar16(x_, imm & 31)); }
 void instr16_C1_7_reg(int32_t r1, int32_t imm) { write_reg16(r1, sar16(read_reg16(r1), imm & 31)); }
 
-void instr32_C1_0_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, rol32(x_, imm & 31)); }
+void instr32_C1_0_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, rol32(x_, imm & 31)); }
 void instr32_C1_0_reg(int32_t r1, int32_t imm) { write_reg32(r1, rol32(read_reg32(r1), imm & 31)); }
-void instr32_C1_1_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, ror32(x_, imm & 31)); }
+void instr32_C1_1_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, ror32(x_, imm & 31)); }
 void instr32_C1_1_reg(int32_t r1, int32_t imm) { write_reg32(r1, ror32(read_reg32(r1), imm & 31)); }
-void instr32_C1_2_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, rcl32(x_, imm & 31)); }
+void instr32_C1_2_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, rcl32(x_, imm & 31)); }
 void instr32_C1_2_reg(int32_t r1, int32_t imm) { write_reg32(r1, rcl32(read_reg32(r1), imm & 31)); }
-void instr32_C1_3_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, rcr32(x_, imm & 31)); }
+void instr32_C1_3_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, rcr32(x_, imm & 31)); }
 void instr32_C1_3_reg(int32_t r1, int32_t imm) { write_reg32(r1, rcr32(read_reg32(r1), imm & 31)); }
-void instr32_C1_4_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, shl32(x_, imm & 31)); }
+void instr32_C1_4_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, shl32(x_, imm & 31)); }
 void instr32_C1_4_reg(int32_t r1, int32_t imm) { write_reg32(r1, shl32(read_reg32(r1), imm & 31)); }
-void instr32_C1_5_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, shr32(x_, imm & 31)); }
+void instr32_C1_5_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, shr32(x_, imm & 31)); }
 void instr32_C1_5_reg(int32_t r1, int32_t imm) { write_reg32(r1, shr32(read_reg32(r1), imm & 31)); }
-void instr32_C1_6_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, shl32(x_, imm & 31)); }
+void instr32_C1_6_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, shl32(x_, imm & 31)); }
 void instr32_C1_6_reg(int32_t r1, int32_t imm) { write_reg32(r1, shl32(read_reg32(r1), imm & 31)); }
-void instr32_C1_7_mem(int32_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, sar32(x_, imm & 31)); }
+void instr32_C1_7_mem(int64_t addr, int32_t imm) { SAFE_READ_WRITE32(addr, sar32(x_, imm & 31)); }
 void instr32_C1_7_reg(int32_t r1, int32_t imm) { write_reg32(r1, sar32(read_reg32(r1), imm & 31)); }
 
 void instr16_C2(int32_t imm16)
@@ -1531,28 +1531,28 @@ void instr32_C3(void)
 }
 
 void instr16_C4_reg(int32_t _unused1, int32_t _unused2) { (void)_unused1; (void)_unused2; trigger_ud(); }
-void instr16_C4_mem(int32_t addr, int32_t r) { lss16(addr, r, ES); }
+void instr16_C4_mem(int64_t addr, int32_t r) { lss16(addr, r, ES); }
 void instr32_C4_reg(int32_t _unused1, int32_t _unused2) { (void)_unused1; (void)_unused2; trigger_ud(); }
-void instr32_C4_mem(int32_t addr, int32_t r) { lss32(addr, r, ES); }
+void instr32_C4_mem(int64_t addr, int32_t r) { lss32(addr, r, ES); }
 void instr16_C5_reg(int32_t _unused1, int32_t _unused2) { (void)_unused1; (void)_unused2; trigger_ud(); }
-void instr16_C5_mem(int32_t addr, int32_t r) { lss16(addr, r, DS); }
+void instr16_C5_mem(int64_t addr, int32_t r) { lss16(addr, r, DS); }
 void instr32_C5_reg(int32_t _unused1, int32_t _unused2) { (void)_unused1; (void)_unused2; trigger_ud(); }
-void instr32_C5_mem(int32_t addr, int32_t r) { lss32(addr, r, DS); }
+void instr32_C5_mem(int64_t addr, int32_t r) { lss32(addr, r, DS); }
 
 void instr_C6_0_reg(int32_t r, int32_t imm) { write_reg8(r, imm); }
-void instr_C6_0_mem(int32_t addr, int32_t imm)
+void instr_C6_0_mem(int64_t addr, int32_t imm)
 {
     safe_write8(addr, imm);
     if (cpu->pagefault) return;
 }
 void instr16_C7_0_reg(int32_t r, int32_t imm) { write_reg16(r, imm); }
-void instr16_C7_0_mem(int32_t addr, int32_t imm)
+void instr16_C7_0_mem(int64_t addr, int32_t imm)
 {
     safe_write16(addr, imm);
     if (cpu->pagefault) return;
 }
 void instr32_C7_0_reg(int32_t r, int32_t imm) { write_reg32(r, imm); }
-void instr32_C7_0_mem(int32_t addr, int32_t imm)
+void instr32_C7_0_mem(int64_t addr, int32_t imm)
 {
     safe_write32(addr, imm);
     if (cpu->pagefault) return;
@@ -1653,106 +1653,106 @@ void instr32_CF(void)
  * salc and xlat
  * ================================================================== */
 
-void instr_D0_0_mem(int32_t addr) { SAFE_READ_WRITE8(addr, rol8(x_, 1)); }
+void instr_D0_0_mem(int64_t addr) { SAFE_READ_WRITE8(addr, rol8(x_, 1)); }
 void instr_D0_0_reg(int32_t r1) { write_reg8(r1, rol8(read_reg8(r1), 1)); }
-void instr_D0_1_mem(int32_t addr) { SAFE_READ_WRITE8(addr, ror8(x_, 1)); }
+void instr_D0_1_mem(int64_t addr) { SAFE_READ_WRITE8(addr, ror8(x_, 1)); }
 void instr_D0_1_reg(int32_t r1) { write_reg8(r1, ror8(read_reg8(r1), 1)); }
-void instr_D0_2_mem(int32_t addr) { SAFE_READ_WRITE8(addr, rcl8(x_, 1)); }
+void instr_D0_2_mem(int64_t addr) { SAFE_READ_WRITE8(addr, rcl8(x_, 1)); }
 void instr_D0_2_reg(int32_t r1) { write_reg8(r1, rcl8(read_reg8(r1), 1)); }
-void instr_D0_3_mem(int32_t addr) { SAFE_READ_WRITE8(addr, rcr8(x_, 1)); }
+void instr_D0_3_mem(int64_t addr) { SAFE_READ_WRITE8(addr, rcr8(x_, 1)); }
 void instr_D0_3_reg(int32_t r1) { write_reg8(r1, rcr8(read_reg8(r1), 1)); }
-void instr_D0_4_mem(int32_t addr) { SAFE_READ_WRITE8(addr, shl8(x_, 1)); }
+void instr_D0_4_mem(int64_t addr) { SAFE_READ_WRITE8(addr, shl8(x_, 1)); }
 void instr_D0_4_reg(int32_t r1) { write_reg8(r1, shl8(read_reg8(r1), 1)); }
-void instr_D0_5_mem(int32_t addr) { SAFE_READ_WRITE8(addr, shr8(x_, 1)); }
+void instr_D0_5_mem(int64_t addr) { SAFE_READ_WRITE8(addr, shr8(x_, 1)); }
 void instr_D0_5_reg(int32_t r1) { write_reg8(r1, shr8(read_reg8(r1), 1)); }
-void instr_D0_6_mem(int32_t addr) { SAFE_READ_WRITE8(addr, shl8(x_, 1)); }
+void instr_D0_6_mem(int64_t addr) { SAFE_READ_WRITE8(addr, shl8(x_, 1)); }
 void instr_D0_6_reg(int32_t r1) { write_reg8(r1, shl8(read_reg8(r1), 1)); }
-void instr_D0_7_mem(int32_t addr) { SAFE_READ_WRITE8(addr, sar8(x_, 1)); }
+void instr_D0_7_mem(int64_t addr) { SAFE_READ_WRITE8(addr, sar8(x_, 1)); }
 void instr_D0_7_reg(int32_t r1) { write_reg8(r1, sar8(read_reg8(r1), 1)); }
 
-void instr16_D1_0_mem(int32_t addr) { SAFE_READ_WRITE16(addr, rol16(x_, 1)); }
+void instr16_D1_0_mem(int64_t addr) { SAFE_READ_WRITE16(addr, rol16(x_, 1)); }
 void instr16_D1_0_reg(int32_t r1) { write_reg16(r1, rol16(read_reg16(r1), 1)); }
-void instr16_D1_1_mem(int32_t addr) { SAFE_READ_WRITE16(addr, ror16(x_, 1)); }
+void instr16_D1_1_mem(int64_t addr) { SAFE_READ_WRITE16(addr, ror16(x_, 1)); }
 void instr16_D1_1_reg(int32_t r1) { write_reg16(r1, ror16(read_reg16(r1), 1)); }
-void instr16_D1_2_mem(int32_t addr) { SAFE_READ_WRITE16(addr, rcl16(x_, 1)); }
+void instr16_D1_2_mem(int64_t addr) { SAFE_READ_WRITE16(addr, rcl16(x_, 1)); }
 void instr16_D1_2_reg(int32_t r1) { write_reg16(r1, rcl16(read_reg16(r1), 1)); }
-void instr16_D1_3_mem(int32_t addr) { SAFE_READ_WRITE16(addr, rcr16(x_, 1)); }
+void instr16_D1_3_mem(int64_t addr) { SAFE_READ_WRITE16(addr, rcr16(x_, 1)); }
 void instr16_D1_3_reg(int32_t r1) { write_reg16(r1, rcr16(read_reg16(r1), 1)); }
-void instr16_D1_4_mem(int32_t addr) { SAFE_READ_WRITE16(addr, shl16(x_, 1)); }
+void instr16_D1_4_mem(int64_t addr) { SAFE_READ_WRITE16(addr, shl16(x_, 1)); }
 void instr16_D1_4_reg(int32_t r1) { write_reg16(r1, shl16(read_reg16(r1), 1)); }
-void instr16_D1_5_mem(int32_t addr) { SAFE_READ_WRITE16(addr, shr16(x_, 1)); }
+void instr16_D1_5_mem(int64_t addr) { SAFE_READ_WRITE16(addr, shr16(x_, 1)); }
 void instr16_D1_5_reg(int32_t r1) { write_reg16(r1, shr16(read_reg16(r1), 1)); }
-void instr16_D1_6_mem(int32_t addr) { SAFE_READ_WRITE16(addr, shl16(x_, 1)); }
+void instr16_D1_6_mem(int64_t addr) { SAFE_READ_WRITE16(addr, shl16(x_, 1)); }
 void instr16_D1_6_reg(int32_t r1) { write_reg16(r1, shl16(read_reg16(r1), 1)); }
-void instr16_D1_7_mem(int32_t addr) { SAFE_READ_WRITE16(addr, sar16(x_, 1)); }
+void instr16_D1_7_mem(int64_t addr) { SAFE_READ_WRITE16(addr, sar16(x_, 1)); }
 void instr16_D1_7_reg(int32_t r1) { write_reg16(r1, sar16(read_reg16(r1), 1)); }
 
-void instr32_D1_0_mem(int32_t addr) { SAFE_READ_WRITE32(addr, rol32(x_, 1)); }
+void instr32_D1_0_mem(int64_t addr) { SAFE_READ_WRITE32(addr, rol32(x_, 1)); }
 void instr32_D1_0_reg(int32_t r1) { write_reg32(r1, rol32(read_reg32(r1), 1)); }
-void instr32_D1_1_mem(int32_t addr) { SAFE_READ_WRITE32(addr, ror32(x_, 1)); }
+void instr32_D1_1_mem(int64_t addr) { SAFE_READ_WRITE32(addr, ror32(x_, 1)); }
 void instr32_D1_1_reg(int32_t r1) { write_reg32(r1, ror32(read_reg32(r1), 1)); }
-void instr32_D1_2_mem(int32_t addr) { SAFE_READ_WRITE32(addr, rcl32(x_, 1)); }
+void instr32_D1_2_mem(int64_t addr) { SAFE_READ_WRITE32(addr, rcl32(x_, 1)); }
 void instr32_D1_2_reg(int32_t r1) { write_reg32(r1, rcl32(read_reg32(r1), 1)); }
-void instr32_D1_3_mem(int32_t addr) { SAFE_READ_WRITE32(addr, rcr32(x_, 1)); }
+void instr32_D1_3_mem(int64_t addr) { SAFE_READ_WRITE32(addr, rcr32(x_, 1)); }
 void instr32_D1_3_reg(int32_t r1) { write_reg32(r1, rcr32(read_reg32(r1), 1)); }
-void instr32_D1_4_mem(int32_t addr) { SAFE_READ_WRITE32(addr, shl32(x_, 1)); }
+void instr32_D1_4_mem(int64_t addr) { SAFE_READ_WRITE32(addr, shl32(x_, 1)); }
 void instr32_D1_4_reg(int32_t r1) { write_reg32(r1, shl32(read_reg32(r1), 1)); }
-void instr32_D1_5_mem(int32_t addr) { SAFE_READ_WRITE32(addr, shr32(x_, 1)); }
+void instr32_D1_5_mem(int64_t addr) { SAFE_READ_WRITE32(addr, shr32(x_, 1)); }
 void instr32_D1_5_reg(int32_t r1) { write_reg32(r1, shr32(read_reg32(r1), 1)); }
-void instr32_D1_6_mem(int32_t addr) { SAFE_READ_WRITE32(addr, shl32(x_, 1)); }
+void instr32_D1_6_mem(int64_t addr) { SAFE_READ_WRITE32(addr, shl32(x_, 1)); }
 void instr32_D1_6_reg(int32_t r1) { write_reg32(r1, shl32(read_reg32(r1), 1)); }
-void instr32_D1_7_mem(int32_t addr) { SAFE_READ_WRITE32(addr, sar32(x_, 1)); }
+void instr32_D1_7_mem(int64_t addr) { SAFE_READ_WRITE32(addr, sar32(x_, 1)); }
 void instr32_D1_7_reg(int32_t r1) { write_reg32(r1, sar32(read_reg32(r1), 1)); }
 
-void instr_D2_0_mem(int32_t addr) { SAFE_READ_WRITE8(addr, rol8(x_, read_reg8(CL) & 31)); }
+void instr_D2_0_mem(int64_t addr) { SAFE_READ_WRITE8(addr, rol8(x_, read_reg8(CL) & 31)); }
 void instr_D2_0_reg(int32_t r1) { write_reg8(r1, rol8(read_reg8(r1), read_reg8(CL) & 31)); }
-void instr_D2_1_mem(int32_t addr) { SAFE_READ_WRITE8(addr, ror8(x_, read_reg8(CL) & 31)); }
+void instr_D2_1_mem(int64_t addr) { SAFE_READ_WRITE8(addr, ror8(x_, read_reg8(CL) & 31)); }
 void instr_D2_1_reg(int32_t r1) { write_reg8(r1, ror8(read_reg8(r1), read_reg8(CL) & 31)); }
-void instr_D2_2_mem(int32_t addr) { SAFE_READ_WRITE8(addr, rcl8(x_, read_reg8(CL) & 31)); }
+void instr_D2_2_mem(int64_t addr) { SAFE_READ_WRITE8(addr, rcl8(x_, read_reg8(CL) & 31)); }
 void instr_D2_2_reg(int32_t r1) { write_reg8(r1, rcl8(read_reg8(r1), read_reg8(CL) & 31)); }
-void instr_D2_3_mem(int32_t addr) { SAFE_READ_WRITE8(addr, rcr8(x_, read_reg8(CL) & 31)); }
+void instr_D2_3_mem(int64_t addr) { SAFE_READ_WRITE8(addr, rcr8(x_, read_reg8(CL) & 31)); }
 void instr_D2_3_reg(int32_t r1) { write_reg8(r1, rcr8(read_reg8(r1), read_reg8(CL) & 31)); }
-void instr_D2_4_mem(int32_t addr) { SAFE_READ_WRITE8(addr, shl8(x_, read_reg8(CL) & 31)); }
+void instr_D2_4_mem(int64_t addr) { SAFE_READ_WRITE8(addr, shl8(x_, read_reg8(CL) & 31)); }
 void instr_D2_4_reg(int32_t r1) { write_reg8(r1, shl8(read_reg8(r1), read_reg8(CL) & 31)); }
-void instr_D2_5_mem(int32_t addr) { SAFE_READ_WRITE8(addr, shr8(x_, read_reg8(CL) & 31)); }
+void instr_D2_5_mem(int64_t addr) { SAFE_READ_WRITE8(addr, shr8(x_, read_reg8(CL) & 31)); }
 void instr_D2_5_reg(int32_t r1) { write_reg8(r1, shr8(read_reg8(r1), read_reg8(CL) & 31)); }
-void instr_D2_6_mem(int32_t addr) { SAFE_READ_WRITE8(addr, shl8(x_, read_reg8(CL) & 31)); }
+void instr_D2_6_mem(int64_t addr) { SAFE_READ_WRITE8(addr, shl8(x_, read_reg8(CL) & 31)); }
 void instr_D2_6_reg(int32_t r1) { write_reg8(r1, shl8(read_reg8(r1), read_reg8(CL) & 31)); }
-void instr_D2_7_mem(int32_t addr) { SAFE_READ_WRITE8(addr, sar8(x_, read_reg8(CL) & 31)); }
+void instr_D2_7_mem(int64_t addr) { SAFE_READ_WRITE8(addr, sar8(x_, read_reg8(CL) & 31)); }
 void instr_D2_7_reg(int32_t r1) { write_reg8(r1, sar8(read_reg8(r1), read_reg8(CL) & 31)); }
 
-void instr16_D3_0_mem(int32_t addr) { SAFE_READ_WRITE16(addr, rol16(x_, read_reg8(CL) & 31)); }
+void instr16_D3_0_mem(int64_t addr) { SAFE_READ_WRITE16(addr, rol16(x_, read_reg8(CL) & 31)); }
 void instr16_D3_0_reg(int32_t r1) { write_reg16(r1, rol16(read_reg16(r1), read_reg8(CL) & 31)); }
-void instr16_D3_1_mem(int32_t addr) { SAFE_READ_WRITE16(addr, ror16(x_, read_reg8(CL) & 31)); }
+void instr16_D3_1_mem(int64_t addr) { SAFE_READ_WRITE16(addr, ror16(x_, read_reg8(CL) & 31)); }
 void instr16_D3_1_reg(int32_t r1) { write_reg16(r1, ror16(read_reg16(r1), read_reg8(CL) & 31)); }
-void instr16_D3_2_mem(int32_t addr) { SAFE_READ_WRITE16(addr, rcl16(x_, read_reg8(CL) & 31)); }
+void instr16_D3_2_mem(int64_t addr) { SAFE_READ_WRITE16(addr, rcl16(x_, read_reg8(CL) & 31)); }
 void instr16_D3_2_reg(int32_t r1) { write_reg16(r1, rcl16(read_reg16(r1), read_reg8(CL) & 31)); }
-void instr16_D3_3_mem(int32_t addr) { SAFE_READ_WRITE16(addr, rcr16(x_, read_reg8(CL) & 31)); }
+void instr16_D3_3_mem(int64_t addr) { SAFE_READ_WRITE16(addr, rcr16(x_, read_reg8(CL) & 31)); }
 void instr16_D3_3_reg(int32_t r1) { write_reg16(r1, rcr16(read_reg16(r1), read_reg8(CL) & 31)); }
-void instr16_D3_4_mem(int32_t addr) { SAFE_READ_WRITE16(addr, shl16(x_, read_reg8(CL) & 31)); }
+void instr16_D3_4_mem(int64_t addr) { SAFE_READ_WRITE16(addr, shl16(x_, read_reg8(CL) & 31)); }
 void instr16_D3_4_reg(int32_t r1) { write_reg16(r1, shl16(read_reg16(r1), read_reg8(CL) & 31)); }
-void instr16_D3_5_mem(int32_t addr) { SAFE_READ_WRITE16(addr, shr16(x_, read_reg8(CL) & 31)); }
+void instr16_D3_5_mem(int64_t addr) { SAFE_READ_WRITE16(addr, shr16(x_, read_reg8(CL) & 31)); }
 void instr16_D3_5_reg(int32_t r1) { write_reg16(r1, shr16(read_reg16(r1), read_reg8(CL) & 31)); }
-void instr16_D3_6_mem(int32_t addr) { SAFE_READ_WRITE16(addr, shl16(x_, read_reg8(CL) & 31)); }
+void instr16_D3_6_mem(int64_t addr) { SAFE_READ_WRITE16(addr, shl16(x_, read_reg8(CL) & 31)); }
 void instr16_D3_6_reg(int32_t r1) { write_reg16(r1, shl16(read_reg16(r1), read_reg8(CL) & 31)); }
-void instr16_D3_7_mem(int32_t addr) { SAFE_READ_WRITE16(addr, sar16(x_, read_reg8(CL) & 31)); }
+void instr16_D3_7_mem(int64_t addr) { SAFE_READ_WRITE16(addr, sar16(x_, read_reg8(CL) & 31)); }
 void instr16_D3_7_reg(int32_t r1) { write_reg16(r1, sar16(read_reg16(r1), read_reg8(CL) & 31)); }
 
-void instr32_D3_0_mem(int32_t addr) { SAFE_READ_WRITE32(addr, rol32(x_, read_reg8(CL) & 31)); }
+void instr32_D3_0_mem(int64_t addr) { SAFE_READ_WRITE32(addr, rol32(x_, read_reg8(CL) & 31)); }
 void instr32_D3_0_reg(int32_t r1) { write_reg32(r1, rol32(read_reg32(r1), read_reg8(CL) & 31)); }
-void instr32_D3_1_mem(int32_t addr) { SAFE_READ_WRITE32(addr, ror32(x_, read_reg8(CL) & 31)); }
+void instr32_D3_1_mem(int64_t addr) { SAFE_READ_WRITE32(addr, ror32(x_, read_reg8(CL) & 31)); }
 void instr32_D3_1_reg(int32_t r1) { write_reg32(r1, ror32(read_reg32(r1), read_reg8(CL) & 31)); }
-void instr32_D3_2_mem(int32_t addr) { SAFE_READ_WRITE32(addr, rcl32(x_, read_reg8(CL) & 31)); }
+void instr32_D3_2_mem(int64_t addr) { SAFE_READ_WRITE32(addr, rcl32(x_, read_reg8(CL) & 31)); }
 void instr32_D3_2_reg(int32_t r1) { write_reg32(r1, rcl32(read_reg32(r1), read_reg8(CL) & 31)); }
-void instr32_D3_3_mem(int32_t addr) { SAFE_READ_WRITE32(addr, rcr32(x_, read_reg8(CL) & 31)); }
+void instr32_D3_3_mem(int64_t addr) { SAFE_READ_WRITE32(addr, rcr32(x_, read_reg8(CL) & 31)); }
 void instr32_D3_3_reg(int32_t r1) { write_reg32(r1, rcr32(read_reg32(r1), read_reg8(CL) & 31)); }
-void instr32_D3_4_mem(int32_t addr) { SAFE_READ_WRITE32(addr, shl32(x_, read_reg8(CL) & 31)); }
+void instr32_D3_4_mem(int64_t addr) { SAFE_READ_WRITE32(addr, shl32(x_, read_reg8(CL) & 31)); }
 void instr32_D3_4_reg(int32_t r1) { write_reg32(r1, shl32(read_reg32(r1), read_reg8(CL) & 31)); }
-void instr32_D3_5_mem(int32_t addr) { SAFE_READ_WRITE32(addr, shr32(x_, read_reg8(CL) & 31)); }
+void instr32_D3_5_mem(int64_t addr) { SAFE_READ_WRITE32(addr, shr32(x_, read_reg8(CL) & 31)); }
 void instr32_D3_5_reg(int32_t r1) { write_reg32(r1, shr32(read_reg32(r1), read_reg8(CL) & 31)); }
-void instr32_D3_6_mem(int32_t addr) { SAFE_READ_WRITE32(addr, shl32(x_, read_reg8(CL) & 31)); }
+void instr32_D3_6_mem(int64_t addr) { SAFE_READ_WRITE32(addr, shl32(x_, read_reg8(CL) & 31)); }
 void instr32_D3_6_reg(int32_t r1) { write_reg32(r1, shl32(read_reg32(r1), read_reg8(CL) & 31)); }
-void instr32_D3_7_mem(int32_t addr) { SAFE_READ_WRITE32(addr, sar32(x_, read_reg8(CL) & 31)); }
+void instr32_D3_7_mem(int64_t addr) { SAFE_READ_WRITE32(addr, sar32(x_, read_reg8(CL) & 31)); }
 void instr32_D3_7_reg(int32_t r1) { write_reg32(r1, sar32(read_reg32(r1), read_reg8(CL) & 31)); }
 
 void instr_D4(int32_t arg) { bcd_aam(arg); }
@@ -2010,14 +2010,14 @@ void instr_F5(void)
     cpu->flags_changed &= ~1;
 }
 
-void instr_F6_0_mem(int32_t addr, int32_t imm)
+void instr_F6_0_mem(int64_t addr, int32_t imm)
 {
     int32_t x = safe_read8(addr);
     if (cpu->pagefault) return;
     test8(x, imm);
 }
 void instr_F6_0_reg(int32_t r1, int32_t imm) { test8(read_reg8(r1), imm); }
-void instr_F6_1_mem(int32_t addr, int32_t imm)
+void instr_F6_1_mem(int64_t addr, int32_t imm)
 {
     int32_t x = safe_read8(addr);
     if (cpu->pagefault) return;
@@ -2027,32 +2027,32 @@ void instr_F6_1_reg(int32_t r1, int32_t imm) { test8(read_reg8(r1), imm); }
 
 /* upstream writes this closure as `!x & 0xFF` -- Rust's `!` is the BITWISE complement
  * (C's `!` is logical-not; M1a-2's D3 found the same trap in arith.c's not8) */
-void instr_F6_2_mem(int32_t addr) { SAFE_READ_WRITE8(addr, ~x_ & 0xFF); }
+void instr_F6_2_mem(int64_t addr) { SAFE_READ_WRITE8(addr, ~x_ & 0xFF); }
 void instr_F6_2_reg(int32_t r1) { write_reg8(r1, ~read_reg8(r1)); }
-void instr_F6_3_mem(int32_t addr) { SAFE_READ_WRITE8(addr, neg8(x_)); }
+void instr_F6_3_mem(int64_t addr) { SAFE_READ_WRITE8(addr, neg8(x_)); }
 void instr_F6_3_reg(int32_t r1) { write_reg8(r1, neg8(read_reg8(r1))); }
-void instr_F6_4_mem(int32_t addr)
+void instr_F6_4_mem(int64_t addr)
 {
     int32_t x = safe_read8(addr);
     if (cpu->pagefault) return;
     mul8(x);
 }
 void instr_F6_4_reg(int32_t r1) { mul8(read_reg8(r1)); }
-void instr_F6_5_mem(int32_t addr)
+void instr_F6_5_mem(int64_t addr)
 {
     int32_t x = safe_read8(addr);
     if (cpu->pagefault) return;
     imul8(SEX8(x));
 }
 void instr_F6_5_reg(int32_t r1) { imul8(SEX8(read_reg8(r1))); }
-void instr_F6_6_mem(int32_t addr)
+void instr_F6_6_mem(int64_t addr)
 {
     int32_t x = safe_read8(addr);
     if (cpu->pagefault) return;
     div8((uint32_t)x);
 }
 void instr_F6_6_reg(int32_t r1) { div8((uint32_t)read_reg8(r1)); }
-void instr_F6_7_mem(int32_t addr)
+void instr_F6_7_mem(int64_t addr)
 {
     int32_t x = safe_read8(addr);
     if (cpu->pagefault) return;
@@ -2060,46 +2060,46 @@ void instr_F6_7_mem(int32_t addr)
 }
 void instr_F6_7_reg(int32_t r1) { idiv8(SEX8(read_reg8(r1))); }
 
-void instr16_F7_0_mem(int32_t addr, int32_t imm)
+void instr16_F7_0_mem(int64_t addr, int32_t imm)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
     test16(x, imm);
 }
 void instr16_F7_0_reg(int32_t r1, int32_t imm) { test16(read_reg16(r1), imm); }
-void instr16_F7_1_mem(int32_t addr, int32_t imm)
+void instr16_F7_1_mem(int64_t addr, int32_t imm)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
     test16(x, imm);
 }
 void instr16_F7_1_reg(int32_t r1, int32_t imm) { test16(read_reg16(r1), imm); }
-void instr16_F7_2_mem(int32_t addr) { SAFE_READ_WRITE16(addr, ~x_ & 0xFFFF); }
+void instr16_F7_2_mem(int64_t addr) { SAFE_READ_WRITE16(addr, ~x_ & 0xFFFF); }
 void instr16_F7_2_reg(int32_t r1) { write_reg16(r1, ~read_reg16(r1)); }
-void instr16_F7_3_mem(int32_t addr) { SAFE_READ_WRITE16(addr, neg16(x_)); }
+void instr16_F7_3_mem(int64_t addr) { SAFE_READ_WRITE16(addr, neg16(x_)); }
 void instr16_F7_3_reg(int32_t r1) { write_reg16(r1, neg16(read_reg16(r1))); }
-void instr16_F7_4_mem(int32_t addr)
+void instr16_F7_4_mem(int64_t addr)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
     mul16((uint32_t)x);
 }
 void instr16_F7_4_reg(int32_t r1) { mul16((uint32_t)read_reg16(r1)); }
-void instr16_F7_5_mem(int32_t addr)
+void instr16_F7_5_mem(int64_t addr)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
     imul16(SEX16(x));
 }
 void instr16_F7_5_reg(int32_t r1) { imul16(SEX16(read_reg16(r1))); }
-void instr16_F7_6_mem(int32_t addr)
+void instr16_F7_6_mem(int64_t addr)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
     div16((uint32_t)x);
 }
 void instr16_F7_6_reg(int32_t r1) { div16((uint32_t)read_reg16(r1)); }
-void instr16_F7_7_mem(int32_t addr)
+void instr16_F7_7_mem(int64_t addr)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
@@ -2107,46 +2107,46 @@ void instr16_F7_7_mem(int32_t addr)
 }
 void instr16_F7_7_reg(int32_t r1) { idiv16(SEX16(read_reg16(r1))); }
 
-void instr32_F7_0_mem(int32_t addr, int32_t imm)
+void instr32_F7_0_mem(int64_t addr, int32_t imm)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
     test32(x, imm);
 }
 void instr32_F7_0_reg(int32_t r1, int32_t imm) { test32(read_reg32(r1), imm); }
-void instr32_F7_1_mem(int32_t addr, int32_t imm)
+void instr32_F7_1_mem(int64_t addr, int32_t imm)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
     test32(x, imm);
 }
 void instr32_F7_1_reg(int32_t r1, int32_t imm) { test32(read_reg32(r1), imm); }
-void instr32_F7_2_mem(int32_t addr) { SAFE_READ_WRITE32(addr, ~x_); }
+void instr32_F7_2_mem(int64_t addr) { SAFE_READ_WRITE32(addr, ~x_); }
 void instr32_F7_2_reg(int32_t r1) { write_reg32(r1, ~read_reg32(r1)); }
-void instr32_F7_3_mem(int32_t addr) { SAFE_READ_WRITE32(addr, neg32(x_)); }
+void instr32_F7_3_mem(int64_t addr) { SAFE_READ_WRITE32(addr, neg32(x_)); }
 void instr32_F7_3_reg(int32_t r1) { write_reg32(r1, neg32(read_reg32(r1))); }
-void instr32_F7_4_mem(int32_t addr)
+void instr32_F7_4_mem(int64_t addr)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
     mul32(x);
 }
 void instr32_F7_4_reg(int32_t r1) { mul32(read_reg32(r1)); }
-void instr32_F7_5_mem(int32_t addr)
+void instr32_F7_5_mem(int64_t addr)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
     imul32(x);
 }
 void instr32_F7_5_reg(int32_t r1) { imul32(read_reg32(r1)); }
-void instr32_F7_6_mem(int32_t addr)
+void instr32_F7_6_mem(int64_t addr)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
     div32((uint32_t)x);
 }
 void instr32_F7_6_reg(int32_t r1) { div32((uint32_t)read_reg32(r1)); }
-void instr32_F7_7_mem(int32_t addr)
+void instr32_F7_7_mem(int64_t addr)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
@@ -2243,14 +2243,14 @@ void instr_FD(void)
     cpu->flags |= FLAG_DIRECTION;
 }
 
-void instr_FE_0_mem(int32_t addr) { SAFE_READ_WRITE8(addr, inc8(x_)); }
+void instr_FE_0_mem(int64_t addr) { SAFE_READ_WRITE8(addr, inc8(x_)); }
 void instr_FE_0_reg(int32_t r1) { write_reg8(r1, inc8(read_reg8(r1))); }
-void instr_FE_1_mem(int32_t addr) { SAFE_READ_WRITE8(addr, dec8(x_)); }
+void instr_FE_1_mem(int64_t addr) { SAFE_READ_WRITE8(addr, dec8(x_)); }
 void instr_FE_1_reg(int32_t r1) { write_reg8(r1, dec8(read_reg8(r1))); }
 
-void instr16_FF_0_mem(int32_t addr) { SAFE_READ_WRITE16(addr, inc16(x_)); }
+void instr16_FF_0_mem(int64_t addr) { SAFE_READ_WRITE16(addr, inc16(x_)); }
 void instr16_FF_0_reg(int32_t r1) { write_reg16(r1, inc16(read_reg16(r1))); }
-void instr16_FF_1_mem(int32_t addr) { SAFE_READ_WRITE16(addr, dec16(x_)); }
+void instr16_FF_1_mem(int64_t addr) { SAFE_READ_WRITE16(addr, dec16(x_)); }
 void instr16_FF_1_reg(int32_t r1) { write_reg16(r1, dec16(read_reg16(r1))); }
 
 void instr16_FF_2_helper(int32_t data)
@@ -2262,7 +2262,7 @@ void instr16_FF_2_helper(int32_t data)
     set_instruction_pointer(cs + data);
     /* no dbg_assert here: the 16-bit ip class -- see "THE 16-BIT ip CLASS" in this file's header */
 }
-void instr16_FF_2_mem(int32_t addr)
+void instr16_FF_2_mem(int64_t addr)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
@@ -2276,7 +2276,7 @@ void instr16_FF_3_reg(int32_t _r)
     (void)_r;
     trigger_ud();
 }
-void instr16_FF_3_mem(int32_t addr)
+void instr16_FF_3_mem(int64_t addr)
 {
     /* callf */
     int32_t new_ip = safe_read16(addr);
@@ -2292,7 +2292,7 @@ void instr16_FF_4_helper(int32_t data)
     set_instruction_pointer(get_seg_cs() + data);
     /* no dbg_assert here: the 16-bit ip class -- see "THE 16-BIT ip CLASS" in this file's header */
 }
-void instr16_FF_4_mem(int32_t addr)
+void instr16_FF_4_mem(int64_t addr)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
@@ -2306,7 +2306,7 @@ void instr16_FF_5_reg(int32_t _r)
     (void)_r;
     trigger_ud();
 }
-void instr16_FF_5_mem(int32_t addr)
+void instr16_FF_5_mem(int64_t addr)
 {
     /* jmpf */
     int32_t new_ip = safe_read16(addr);
@@ -2315,7 +2315,7 @@ void instr16_FF_5_mem(int32_t addr)
     if (cpu->pagefault) return;
     far_jump(new_ip, new_cs, false, false);
 }
-void instr16_FF_6_mem(int32_t addr)
+void instr16_FF_6_mem(int64_t addr)
 {
     int32_t x = safe_read16(addr);
     if (cpu->pagefault) return;
@@ -2328,9 +2328,9 @@ void instr16_FF_6_reg(int32_t r1)
     if (cpu->pagefault) return;
 }
 
-void instr32_FF_0_mem(int32_t addr) { SAFE_READ_WRITE32(addr, inc32(x_)); }
+void instr32_FF_0_mem(int64_t addr) { SAFE_READ_WRITE32(addr, inc32(x_)); }
 void instr32_FF_0_reg(int32_t r1) { write_reg32(r1, inc32(read_reg32(r1))); }
-void instr32_FF_1_mem(int32_t addr) { SAFE_READ_WRITE32(addr, dec32(x_)); }
+void instr32_FF_1_mem(int64_t addr) { SAFE_READ_WRITE32(addr, dec32(x_)); }
 void instr32_FF_1_reg(int32_t r1) { write_reg32(r1, dec32(read_reg32(r1))); }
 
 void instr32_FF_2_helper(int32_t data)
@@ -2342,7 +2342,7 @@ void instr32_FF_2_helper(int32_t data)
     /* no dbg_assert here: the 16-bit ip class -- see "THE 16-BIT ip CLASS" in this file's header */
     set_instruction_pointer(cs + data);
 }
-void instr32_FF_2_mem(int32_t addr)
+void instr32_FF_2_mem(int64_t addr)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
@@ -2356,7 +2356,7 @@ void instr32_FF_3_reg(int32_t _r)
     (void)_r;
     trigger_ud();
 }
-void instr32_FF_3_mem(int32_t addr)
+void instr32_FF_3_mem(int64_t addr)
 {
     /* callf */
     int32_t new_ip = safe_read32s(addr);
@@ -2375,7 +2375,7 @@ void instr32_FF_4_helper(int32_t data)
     /* no dbg_assert here: the 16-bit ip class -- see "THE 16-BIT ip CLASS" in this file's header */
     set_instruction_pointer(get_seg_cs() + data);
 }
-void instr32_FF_4_mem(int32_t addr)
+void instr32_FF_4_mem(int64_t addr)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
@@ -2389,7 +2389,7 @@ void instr32_FF_5_reg(int32_t _r)
     (void)_r;
     trigger_ud();
 }
-void instr32_FF_5_mem(int32_t addr)
+void instr32_FF_5_mem(int64_t addr)
 {
     /* jmpf */
     int32_t new_ip = safe_read32s(addr);
@@ -2400,7 +2400,7 @@ void instr32_FF_5_mem(int32_t addr)
      * above -- dropped AT THE SITE (PERF-FIX-2, this file's header). */
     far_jump(new_ip, new_cs, false, true);
 }
-void instr32_FF_6_mem(int32_t addr)
+void instr32_FF_6_mem(int64_t addr)
 {
     int32_t x = safe_read32s(addr);
     if (cpu->pagefault) return;
@@ -2430,40 +2430,40 @@ void instr32_FF_6_reg(int32_t r1)
  * ================================================================== */
 
 /* instructions.rs:1643-1658 -- D8 /0../7, m32real */
-void instr_D8_0_mem(int32_t addr) { f80_t x = fpu_load_m32(addr); if (cpu->pagefault) return; fpu_fadd(0, x); }
+void instr_D8_0_mem(int64_t addr) { f80_t x = fpu_load_m32(addr); if (cpu->pagefault) return; fpu_fadd(0, x); }
 void instr_D8_0_reg(int32_t r) { fpu_fadd(0, fpu_get_sti(r)); }
-void instr_D8_1_mem(int32_t addr) { f80_t x = fpu_load_m32(addr); if (cpu->pagefault) return; fpu_fmul(0, x); }
+void instr_D8_1_mem(int64_t addr) { f80_t x = fpu_load_m32(addr); if (cpu->pagefault) return; fpu_fmul(0, x); }
 void instr_D8_1_reg(int32_t r) { fpu_fmul(0, fpu_get_sti(r)); }
-void instr_D8_2_mem(int32_t addr) { f80_t x = fpu_load_m32(addr); if (cpu->pagefault) return; fpu_fcom(x); }
+void instr_D8_2_mem(int64_t addr) { f80_t x = fpu_load_m32(addr); if (cpu->pagefault) return; fpu_fcom(x); }
 void instr_D8_2_reg(int32_t r) { fpu_fcom(fpu_get_sti(r)); }
-void instr_D8_3_mem(int32_t addr) { f80_t x = fpu_load_m32(addr); if (cpu->pagefault) return; fpu_fcomp(x); }
+void instr_D8_3_mem(int64_t addr) { f80_t x = fpu_load_m32(addr); if (cpu->pagefault) return; fpu_fcomp(x); }
 void instr_D8_3_reg(int32_t r) { fpu_fcomp(fpu_get_sti(r)); }
-void instr_D8_4_mem(int32_t addr) { f80_t x = fpu_load_m32(addr); if (cpu->pagefault) return; fpu_fsub(0, x); }
+void instr_D8_4_mem(int64_t addr) { f80_t x = fpu_load_m32(addr); if (cpu->pagefault) return; fpu_fsub(0, x); }
 void instr_D8_4_reg(int32_t r) { fpu_fsub(0, fpu_get_sti(r)); }
-void instr_D8_5_mem(int32_t addr) { f80_t x = fpu_load_m32(addr); if (cpu->pagefault) return; fpu_fsubr(0, x); }
+void instr_D8_5_mem(int64_t addr) { f80_t x = fpu_load_m32(addr); if (cpu->pagefault) return; fpu_fsubr(0, x); }
 void instr_D8_5_reg(int32_t r) { fpu_fsubr(0, fpu_get_sti(r)); }
-void instr_D8_6_mem(int32_t addr) { f80_t x = fpu_load_m32(addr); if (cpu->pagefault) return; fpu_fdiv(0, x); }
+void instr_D8_6_mem(int64_t addr) { f80_t x = fpu_load_m32(addr); if (cpu->pagefault) return; fpu_fdiv(0, x); }
 void instr_D8_6_reg(int32_t r) { fpu_fdiv(0, fpu_get_sti(r)); }
-void instr_D8_7_mem(int32_t addr) { f80_t x = fpu_load_m32(addr); if (cpu->pagefault) return; fpu_fdivr(0, x); }
+void instr_D8_7_mem(int64_t addr) { f80_t x = fpu_load_m32(addr); if (cpu->pagefault) return; fpu_fdivr(0, x); }
 void instr_D8_7_reg(int32_t r) { fpu_fdivr(0, fpu_get_sti(r)); }
 
 /* instructions.rs:1660-1752 -- D9, the load/store/control group (the 16- and 32-bit
  * forms differ in the environment layout only; both take the operand-size prefix) */
-void instr16_D9_0_mem(int32_t addr) { fpu_fldm32(addr); }
+void instr16_D9_0_mem(int64_t addr) { fpu_fldm32(addr); }
 void instr16_D9_0_reg(int32_t r) { fpu_push(fpu_get_sti(r)); }
-void instr16_D9_1_mem(int32_t addr) { (void)addr; trigger_ud(); } /* "d9/1" upstream */
+void instr16_D9_1_mem(int64_t addr) { (void)addr; trigger_ud(); } /* "d9/1" upstream */
 void instr16_D9_1_reg(int32_t r) { fpu_fxch(r); }
-void instr16_D9_2_mem(int32_t addr) { fpu_fstm32(addr); }
+void instr16_D9_2_mem(int64_t addr) { fpu_fstm32(addr); }
 void instr16_D9_2_reg(int32_t r) { if (r != 0) trigger_ud(); }
-void instr16_D9_3_mem(int32_t addr) { fpu_fstm32p(addr); }
+void instr16_D9_3_mem(int64_t addr) { fpu_fstm32p(addr); }
 void instr16_D9_3_reg(int32_t r) { fpu_fstp(r); }
-void instr16_D9_4_mem(int32_t addr)
+void instr16_D9_4_mem(int64_t addr)
 {
     readable_or_pagefault(addr, 14);
     if (cpu->pagefault) return;
     fpu_fldenv16(addr);
 }
-void instr32_D9_4_mem(int32_t addr)
+void instr32_D9_4_mem(int64_t addr)
 {
     readable_or_pagefault(addr, 28);
     if (cpu->pagefault) return;
@@ -2479,7 +2479,7 @@ void instr16_D9_4_reg(int32_t r)
     default: trigger_ud(); break;
     }
 }
-void instr16_D9_5_mem(int32_t addr) { fpu_fldcw(addr); }
+void instr16_D9_5_mem(int64_t addr) { fpu_fldcw(addr); }
 void instr16_D9_5_reg(int32_t r)
 {
     /* fld1/fldl2t/fldl2e/fldpi/fldlg2/fldln2/fldz */
@@ -2494,13 +2494,13 @@ void instr16_D9_5_reg(int32_t r)
     default: trigger_ud(); break; /* r == 7 */
     }
 }
-void instr16_D9_6_mem(int32_t addr)
+void instr16_D9_6_mem(int64_t addr)
 {
     writable_or_pagefault(addr, 14);
     if (cpu->pagefault) return;
     fpu_fstenv16(addr);
 }
-void instr32_D9_6_mem(int32_t addr)
+void instr32_D9_6_mem(int64_t addr)
 {
     writable_or_pagefault(addr, 28);
     if (cpu->pagefault) return;
@@ -2520,7 +2520,7 @@ void instr16_D9_6_reg(int32_t r)
     default: DBG_ASSERT(false); break; /* unreachable: r is modrm>>3&7 */
     }
 }
-void instr16_D9_7_mem(int32_t addr) { fpu_fstcw(addr); }
+void instr16_D9_7_mem(int64_t addr) { fpu_fstcw(addr); }
 void instr16_D9_7_reg(int32_t r)
 {
     switch (r) {
@@ -2545,22 +2545,22 @@ void instr32_D9_4_reg(int32_t r) { instr16_D9_4_reg(r); }
 void instr32_D9_5_reg(int32_t r) { instr16_D9_5_reg(r); }
 void instr32_D9_6_reg(int32_t r) { instr16_D9_6_reg(r); }
 void instr32_D9_7_reg(int32_t r) { instr16_D9_7_reg(r); }
-void instr32_D9_0_mem(int32_t addr) { instr16_D9_0_mem(addr); }
-void instr32_D9_1_mem(int32_t addr) { instr16_D9_1_mem(addr); }
-void instr32_D9_2_mem(int32_t addr) { instr16_D9_2_mem(addr); }
-void instr32_D9_3_mem(int32_t addr) { instr16_D9_3_mem(addr); }
-void instr32_D9_5_mem(int32_t addr) { instr16_D9_5_mem(addr); }
-void instr32_D9_7_mem(int32_t addr) { instr16_D9_7_mem(addr); }
+void instr32_D9_0_mem(int64_t addr) { instr16_D9_0_mem(addr); }
+void instr32_D9_1_mem(int64_t addr) { instr16_D9_1_mem(addr); }
+void instr32_D9_2_mem(int64_t addr) { instr16_D9_2_mem(addr); }
+void instr32_D9_3_mem(int64_t addr) { instr16_D9_3_mem(addr); }
+void instr32_D9_5_mem(int64_t addr) { instr16_D9_5_mem(addr); }
+void instr32_D9_7_mem(int64_t addr) { instr16_D9_7_mem(addr); }
 
 /* instructions.rs:1780-1804 -- DA /0../7, m32int (and the FCMOVcc /4../7 group) */
-void instr_DA_0_mem(int32_t addr) { f80_t x = fpu_load_i32(addr); if (cpu->pagefault) return; fpu_fadd(0, x); }
-void instr_DA_1_mem(int32_t addr) { f80_t x = fpu_load_i32(addr); if (cpu->pagefault) return; fpu_fmul(0, x); }
-void instr_DA_2_mem(int32_t addr) { f80_t x = fpu_load_i32(addr); if (cpu->pagefault) return; fpu_fcom(x); }
-void instr_DA_3_mem(int32_t addr) { f80_t x = fpu_load_i32(addr); if (cpu->pagefault) return; fpu_fcomp(x); }
-void instr_DA_4_mem(int32_t addr) { f80_t x = fpu_load_i32(addr); if (cpu->pagefault) return; fpu_fsub(0, x); }
-void instr_DA_5_mem(int32_t addr) { f80_t x = fpu_load_i32(addr); if (cpu->pagefault) return; fpu_fsubr(0, x); }
-void instr_DA_6_mem(int32_t addr) { f80_t x = fpu_load_i32(addr); if (cpu->pagefault) return; fpu_fdiv(0, x); }
-void instr_DA_7_mem(int32_t addr) { f80_t x = fpu_load_i32(addr); if (cpu->pagefault) return; fpu_fdivr(0, x); }
+void instr_DA_0_mem(int64_t addr) { f80_t x = fpu_load_i32(addr); if (cpu->pagefault) return; fpu_fadd(0, x); }
+void instr_DA_1_mem(int64_t addr) { f80_t x = fpu_load_i32(addr); if (cpu->pagefault) return; fpu_fmul(0, x); }
+void instr_DA_2_mem(int64_t addr) { f80_t x = fpu_load_i32(addr); if (cpu->pagefault) return; fpu_fcom(x); }
+void instr_DA_3_mem(int64_t addr) { f80_t x = fpu_load_i32(addr); if (cpu->pagefault) return; fpu_fcomp(x); }
+void instr_DA_4_mem(int64_t addr) { f80_t x = fpu_load_i32(addr); if (cpu->pagefault) return; fpu_fsub(0, x); }
+void instr_DA_5_mem(int64_t addr) { f80_t x = fpu_load_i32(addr); if (cpu->pagefault) return; fpu_fsubr(0, x); }
+void instr_DA_6_mem(int64_t addr) { f80_t x = fpu_load_i32(addr); if (cpu->pagefault) return; fpu_fdiv(0, x); }
+void instr_DA_7_mem(int64_t addr) { f80_t x = fpu_load_i32(addr); if (cpu->pagefault) return; fpu_fdivr(0, x); }
 void instr_DA_0_reg(int32_t r) { fpu_fcmovcc(test_b(), r); }
 void instr_DA_1_reg(int32_t r) { fpu_fcmovcc(test_z(), r); }
 void instr_DA_2_reg(int32_t r) { fpu_fcmovcc(test_be(), r); }
@@ -2576,19 +2576,19 @@ void instr_DA_7_reg(int32_t r) { (void)r; trigger_ud(); }
 
 /* instructions.rs:1806-1860 -- DB /0../7, m32int/m80real + finit/fclex + the FCMOVcc
  * complements */
-void instr_DB_0_mem(int32_t addr) { fpu_fildm32(addr); }
-void instr_DB_1_mem(int32_t addr) { fpu_fisttpm32(addr); }
-void instr_DB_2_mem(int32_t addr) { fpu_fistm32(addr); }
-void instr_DB_3_mem(int32_t addr) { fpu_fistm32p(addr); }
-void instr_DB_4_mem(int32_t addr) { (void)addr; trigger_ud(); }
-void instr_DB_5_mem(int32_t addr)
+void instr_DB_0_mem(int64_t addr) { fpu_fildm32(addr); }
+void instr_DB_1_mem(int64_t addr) { fpu_fisttpm32(addr); }
+void instr_DB_2_mem(int64_t addr) { fpu_fistm32(addr); }
+void instr_DB_3_mem(int64_t addr) { fpu_fistm32p(addr); }
+void instr_DB_4_mem(int64_t addr) { (void)addr; trigger_ud(); }
+void instr_DB_5_mem(int64_t addr)
 {
     readable_or_pagefault(addr, 10);
     if (cpu->pagefault) return;
     fpu_fldm80(addr);
 }
-void instr_DB_6_mem(int32_t addr) { (void)addr; trigger_ud(); }
-void instr_DB_7_mem(int32_t addr) { fpu_fst80p(addr); }
+void instr_DB_6_mem(int64_t addr) { (void)addr; trigger_ud(); }
+void instr_DB_7_mem(int64_t addr) { fpu_fst80p(addr); }
 void instr_DB_0_reg(int32_t r) { fpu_fcmovcc(!test_b(), r); }
 void instr_DB_1_reg(int32_t r) { fpu_fcmovcc(!test_z(), r); }
 void instr_DB_2_reg(int32_t r) { fpu_fcmovcc(!test_be(), r); }
@@ -2614,14 +2614,14 @@ void instr_DB_7_reg(int32_t r) { (void)r; trigger_ud(); }
 
 /* instructions.rs:1862-1878 -- DC, m64real (the reg forms are the reversed-operand
  * arithmetic on st(i)) */
-void instr_DC_0_mem(int32_t addr) { f80_t x = fpu_load_m64(addr); if (cpu->pagefault) return; fpu_fadd(0, x); }
-void instr_DC_1_mem(int32_t addr) { f80_t x = fpu_load_m64(addr); if (cpu->pagefault) return; fpu_fmul(0, x); }
-void instr_DC_2_mem(int32_t addr) { f80_t x = fpu_load_m64(addr); if (cpu->pagefault) return; fpu_fcom(x); }
-void instr_DC_3_mem(int32_t addr) { f80_t x = fpu_load_m64(addr); if (cpu->pagefault) return; fpu_fcomp(x); }
-void instr_DC_4_mem(int32_t addr) { f80_t x = fpu_load_m64(addr); if (cpu->pagefault) return; fpu_fsub(0, x); }
-void instr_DC_5_mem(int32_t addr) { f80_t x = fpu_load_m64(addr); if (cpu->pagefault) return; fpu_fsubr(0, x); }
-void instr_DC_6_mem(int32_t addr) { f80_t x = fpu_load_m64(addr); if (cpu->pagefault) return; fpu_fdiv(0, x); }
-void instr_DC_7_mem(int32_t addr) { f80_t x = fpu_load_m64(addr); if (cpu->pagefault) return; fpu_fdivr(0, x); }
+void instr_DC_0_mem(int64_t addr) { f80_t x = fpu_load_m64(addr); if (cpu->pagefault) return; fpu_fadd(0, x); }
+void instr_DC_1_mem(int64_t addr) { f80_t x = fpu_load_m64(addr); if (cpu->pagefault) return; fpu_fmul(0, x); }
+void instr_DC_2_mem(int64_t addr) { f80_t x = fpu_load_m64(addr); if (cpu->pagefault) return; fpu_fcom(x); }
+void instr_DC_3_mem(int64_t addr) { f80_t x = fpu_load_m64(addr); if (cpu->pagefault) return; fpu_fcomp(x); }
+void instr_DC_4_mem(int64_t addr) { f80_t x = fpu_load_m64(addr); if (cpu->pagefault) return; fpu_fsub(0, x); }
+void instr_DC_5_mem(int64_t addr) { f80_t x = fpu_load_m64(addr); if (cpu->pagefault) return; fpu_fsubr(0, x); }
+void instr_DC_6_mem(int64_t addr) { f80_t x = fpu_load_m64(addr); if (cpu->pagefault) return; fpu_fdiv(0, x); }
+void instr_DC_7_mem(int64_t addr) { f80_t x = fpu_load_m64(addr); if (cpu->pagefault) return; fpu_fdivr(0, x); }
 void instr_DC_0_reg(int32_t r) { fpu_fadd(r, fpu_get_sti(r)); }
 void instr_DC_1_reg(int32_t r) { fpu_fmul(r, fpu_get_sti(r)); }
 void instr_DC_2_reg(int32_t r) { fpu_fcom(fpu_get_sti(r)); }
@@ -2632,16 +2632,16 @@ void instr_DC_6_reg(int32_t r) { fpu_fdiv(r, fpu_get_sti(r)); }
 void instr_DC_7_reg(int32_t r) { fpu_fdivr(r, fpu_get_sti(r)); }
 
 /* instructions.rs:1880-1940 -- DD, m64int / m80real + fsave/frstor + fnstsw */
-void instr16_DD_0_mem(int32_t addr) { fpu_fldm64(addr); }
-void instr16_DD_1_mem(int32_t addr) { fpu_fisttpm64(addr); }
-void instr16_DD_2_mem(int32_t addr) { fpu_fstm64(addr); }
-void instr16_DD_3_mem(int32_t addr) { fpu_fstm64p(addr); }
-void instr16_DD_4_mem(int32_t addr) { fpu_frstor16(addr); }
-void instr32_DD_4_mem(int32_t addr) { fpu_frstor32(addr); }
-void instr16_DD_5_mem(int32_t addr) { (void)addr; trigger_ud(); } /* "dd/5" upstream */
-void instr16_DD_6_mem(int32_t addr) { fpu_fsave16(addr); }
-void instr32_DD_6_mem(int32_t addr) { fpu_fsave32(addr); }
-void instr16_DD_7_mem(int32_t addr) { fpu_fnstsw_mem(addr); }
+void instr16_DD_0_mem(int64_t addr) { fpu_fldm64(addr); }
+void instr16_DD_1_mem(int64_t addr) { fpu_fisttpm64(addr); }
+void instr16_DD_2_mem(int64_t addr) { fpu_fstm64(addr); }
+void instr16_DD_3_mem(int64_t addr) { fpu_fstm64p(addr); }
+void instr16_DD_4_mem(int64_t addr) { fpu_frstor16(addr); }
+void instr32_DD_4_mem(int64_t addr) { fpu_frstor32(addr); }
+void instr16_DD_5_mem(int64_t addr) { (void)addr; trigger_ud(); } /* "dd/5" upstream */
+void instr16_DD_6_mem(int64_t addr) { fpu_fsave16(addr); }
+void instr32_DD_6_mem(int64_t addr) { fpu_fsave32(addr); }
+void instr16_DD_7_mem(int64_t addr) { fpu_fnstsw_mem(addr); }
 void instr16_DD_0_reg(int32_t r) { fpu_ffree(r); }
 void instr16_DD_1_reg(int32_t r) { fpu_fxch(r); }
 void instr16_DD_2_reg(int32_t r) { fpu_fst(r); }
@@ -2658,22 +2658,22 @@ void instr32_DD_4_reg(int32_t r) { instr16_DD_4_reg(r); }
 void instr32_DD_5_reg(int32_t r) { instr16_DD_5_reg(r); }
 void instr32_DD_6_reg(int32_t r) { instr16_DD_6_reg(r); }
 void instr32_DD_7_reg(int32_t r) { instr16_DD_7_reg(r); }
-void instr32_DD_0_mem(int32_t addr) { instr16_DD_0_mem(addr); }
-void instr32_DD_1_mem(int32_t addr) { instr16_DD_1_mem(addr); }
-void instr32_DD_2_mem(int32_t addr) { instr16_DD_2_mem(addr); }
-void instr32_DD_3_mem(int32_t addr) { instr16_DD_3_mem(addr); }
-void instr32_DD_5_mem(int32_t addr) { instr16_DD_5_mem(addr); }
-void instr32_DD_7_mem(int32_t addr) { instr16_DD_7_mem(addr); }
+void instr32_DD_0_mem(int64_t addr) { instr16_DD_0_mem(addr); }
+void instr32_DD_1_mem(int64_t addr) { instr16_DD_1_mem(addr); }
+void instr32_DD_2_mem(int64_t addr) { instr16_DD_2_mem(addr); }
+void instr32_DD_3_mem(int64_t addr) { instr16_DD_3_mem(addr); }
+void instr32_DD_5_mem(int64_t addr) { instr16_DD_5_mem(addr); }
+void instr32_DD_7_mem(int64_t addr) { instr16_DD_7_mem(addr); }
 
 /* instructions.rs:1942-1985 -- DE, m16int (the reg forms pop after operating) */
-void instr_DE_0_mem(int32_t addr) { f80_t x = fpu_load_i16(addr); if (cpu->pagefault) return; fpu_fadd(0, x); }
-void instr_DE_1_mem(int32_t addr) { f80_t x = fpu_load_i16(addr); if (cpu->pagefault) return; fpu_fmul(0, x); }
-void instr_DE_2_mem(int32_t addr) { f80_t x = fpu_load_i16(addr); if (cpu->pagefault) return; fpu_fcom(x); }
-void instr_DE_3_mem(int32_t addr) { f80_t x = fpu_load_i16(addr); if (cpu->pagefault) return; fpu_fcomp(x); }
-void instr_DE_4_mem(int32_t addr) { f80_t x = fpu_load_i16(addr); if (cpu->pagefault) return; fpu_fsub(0, x); }
-void instr_DE_5_mem(int32_t addr) { f80_t x = fpu_load_i16(addr); if (cpu->pagefault) return; fpu_fsubr(0, x); }
-void instr_DE_6_mem(int32_t addr) { f80_t x = fpu_load_i16(addr); if (cpu->pagefault) return; fpu_fdiv(0, x); }
-void instr_DE_7_mem(int32_t addr) { f80_t x = fpu_load_i16(addr); if (cpu->pagefault) return; fpu_fdivr(0, x); }
+void instr_DE_0_mem(int64_t addr) { f80_t x = fpu_load_i16(addr); if (cpu->pagefault) return; fpu_fadd(0, x); }
+void instr_DE_1_mem(int64_t addr) { f80_t x = fpu_load_i16(addr); if (cpu->pagefault) return; fpu_fmul(0, x); }
+void instr_DE_2_mem(int64_t addr) { f80_t x = fpu_load_i16(addr); if (cpu->pagefault) return; fpu_fcom(x); }
+void instr_DE_3_mem(int64_t addr) { f80_t x = fpu_load_i16(addr); if (cpu->pagefault) return; fpu_fcomp(x); }
+void instr_DE_4_mem(int64_t addr) { f80_t x = fpu_load_i16(addr); if (cpu->pagefault) return; fpu_fsub(0, x); }
+void instr_DE_5_mem(int64_t addr) { f80_t x = fpu_load_i16(addr); if (cpu->pagefault) return; fpu_fsubr(0, x); }
+void instr_DE_6_mem(int64_t addr) { f80_t x = fpu_load_i16(addr); if (cpu->pagefault) return; fpu_fdiv(0, x); }
+void instr_DE_7_mem(int64_t addr) { f80_t x = fpu_load_i16(addr); if (cpu->pagefault) return; fpu_fdivr(0, x); }
 void instr_DE_0_reg(int32_t r) { fpu_fadd(r, fpu_get_sti(r)); fpu_pop(); }
 void instr_DE_1_reg(int32_t r) { fpu_fmul(r, fpu_get_sti(r)); fpu_pop(); }
 void instr_DE_2_reg(int32_t r) { fpu_fcom(fpu_get_sti(r)); fpu_pop(); }
@@ -2693,19 +2693,19 @@ void instr_DE_6_reg(int32_t r) { fpu_fdiv(r, fpu_get_sti(r)); fpu_pop(); }
 void instr_DE_7_reg(int32_t r) { fpu_fdivr(r, fpu_get_sti(r)); fpu_pop(); }
 
 /* instructions.rs:1987-2003 -- DF, m16int/m64int + fbld/fbstp + fnstsw ax */
-void instr_DF_0_mem(int32_t addr) { fpu_fildm16(addr); }
-void instr_DF_1_mem(int32_t addr) { fpu_fisttpm16(addr); }
-void instr_DF_2_mem(int32_t addr) { fpu_fistm16(addr); }
-void instr_DF_3_mem(int32_t addr) { fpu_fistm16p(addr); }
-void instr_DF_4_mem(int32_t addr) { (void)addr; fpu_unimpl(); } /* fbld */
-void instr_DF_5_mem(int32_t addr) { fpu_fildm64(addr); }
-void instr_DF_6_mem(int32_t addr)
+void instr_DF_0_mem(int64_t addr) { fpu_fildm16(addr); }
+void instr_DF_1_mem(int64_t addr) { fpu_fisttpm16(addr); }
+void instr_DF_2_mem(int64_t addr) { fpu_fistm16(addr); }
+void instr_DF_3_mem(int64_t addr) { fpu_fistm16p(addr); }
+void instr_DF_4_mem(int64_t addr) { (void)addr; fpu_unimpl(); } /* fbld */
+void instr_DF_5_mem(int64_t addr) { fpu_fildm64(addr); }
+void instr_DF_6_mem(int64_t addr)
 {
     writable_or_pagefault(addr, 10);
     if (cpu->pagefault) return;
     fpu_fbstp(addr);
 }
-void instr_DF_7_mem(int32_t addr) { fpu_fistm64p(addr); }
+void instr_DF_7_mem(int64_t addr) { fpu_fistm64p(addr); }
 void instr_DF_0_reg(int32_t r) { fpu_ffree(r); fpu_pop(); }
 void instr_DF_1_reg(int32_t r) { fpu_fxch(r); }
 void instr_DF_2_reg(int32_t r) { fpu_fstp(r); }

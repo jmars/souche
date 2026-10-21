@@ -198,10 +198,10 @@ void bt_reg(int32_t bit_base, int32_t bit_offset);
 int32_t btc_reg(int32_t bit_base, int32_t bit_offset);
 int32_t bts_reg(int32_t bit_base, int32_t bit_offset);
 int32_t btr_reg(int32_t bit_base, int32_t bit_offset);
-void bt_mem(int32_t virt_addr, int32_t bit_offset);
-void btc_mem(int32_t virt_addr, int32_t bit_offset);
-void btr_mem(int32_t virt_addr, int32_t bit_offset);
-void bts_mem(int32_t virt_addr, int32_t bit_offset);
+void bt_mem(int64_t virt_addr, int32_t bit_offset);
+void btc_mem(int64_t virt_addr, int32_t bit_offset);
+void btr_mem(int64_t virt_addr, int32_t bit_offset);
+void bts_mem(int64_t virt_addr, int32_t bit_offset);
 
 /* ---- bit scan / popcount (arith.rs:1049-1125) ---- */
 int32_t bsf16(int32_t old, int32_t bit_base);

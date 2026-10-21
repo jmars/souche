@@ -126,23 +126,29 @@ void virt_boundary_write16(uint32_t low, uint32_t high, int32_t value);
 void virt_boundary_write32(uint32_t low, uint32_t high, int32_t value);
 
 /* safe_* -- cpu.rs:3538-3585 (reads), 3941-4040 (writes).  Sentinel on fault. */
-int32_t safe_read8(int32_t addr);
-int32_t safe_read16(int32_t addr);
-int32_t safe_read32s(int32_t addr);
-float safe_read_f32(int32_t addr);
-uint64_t safe_read64s(int32_t addr);
-reg128 safe_read128s(int32_t addr);
+int32_t safe_read8(int64_t addr);
+int32_t safe_read16(int64_t addr);
+int32_t safe_read32s(int64_t addr);
+float safe_read_f32(int64_t addr);
+uint64_t safe_read64s(int64_t addr);
+reg128 safe_read128s(int64_t addr);
 
-void safe_write8(int32_t addr, int32_t value);
-void safe_write16(int32_t addr, int32_t value);
-void safe_write32(int32_t addr, int32_t value);
-void safe_write64(int32_t addr, uint64_t value);
-void safe_write128(int32_t addr, reg128 value);
+void safe_write8(int64_t addr, int32_t value);
+void safe_write16(int64_t addr, int32_t value);
+void safe_write32(int64_t addr, int32_t value);
+void safe_write64(int64_t addr, uint64_t value);
+void safe_write128(int64_t addr, reg128 value);
 
 /* ------------------------------------------------------------------ *
  * S5a: THE SAME FOUR ACCESSORS WITH A 64-BIT LINEAR ADDRESS (plan correction W1)
  *
- * The pair above takes an `int32_t addr` because a 32-bit effective address IS 32 bits.  In
+ * THE PARAMETER IS `int64_t` IN BOTH FAMILIES (this unit): a 32-bit-mode caller's address is
+ * sign-extended from the int32_t it always was -- byte-identical -- and a long-mode caller's
+ * 64-bit linear address is carried whole, dispatched to the `*_addr` twin at the top of each
+ * function.  The note that used to say the pair "takes an int32_t because a 32-bit effective
+ * address IS 32 bits" is what left the 0x1NN/0x0NN arms unable to carry long mode's address
+ * (results/x86-64-wide.md).  The pair above takes an `int32_t addr` because a 32-bit
+ * effective address IS 32 bits.  In
  * long mode the address is 64 and passing it to those functions would silently truncate it --
  * a wrong page, with the page walk having been consulted about the wrong address, which is the
  * silent-wrong class this tree refuses.  So the 64-bit bodies call THESE, and the truncation

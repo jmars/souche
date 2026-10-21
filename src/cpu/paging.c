@@ -1118,8 +1118,9 @@ void virt_boundary_write32(uint32_t low, uint32_t high, int32_t value)
  * safe reads -- cpu.rs:3538-3585
  * ------------------------------------------------------------------ */
 
-int32_t safe_read8(int32_t addr)
+int32_t safe_read8(int64_t addr)
 {
+    if (long_mode_64()) return safe_read8_addr(addr);
     uint32_t p = translate_address_read(addr);
     if (cpu->pagefault) {
         return 0;
@@ -1127,8 +1128,9 @@ int32_t safe_read8(int32_t addr)
     return read8(p);
 }
 
-int32_t safe_read16(int32_t addr)
+int32_t safe_read16(int64_t addr)
 {
+    if (long_mode_64()) return safe_read16_addr(addr);
     if ((addr & 0xFFF) == 0xFFF) {
         int32_t low = safe_read8(addr);
         if (cpu->pagefault) {
@@ -1149,8 +1151,9 @@ int32_t safe_read16(int32_t addr)
     }
 }
 
-int32_t safe_read32s(int32_t addr)
+int32_t safe_read32s(int64_t addr)
 {
+    if (long_mode_64()) return safe_read32_addr(addr);
     if ((addr & 0xFFF) >= 0xFFD) {
         int32_t low = safe_read16(addr);
         if (cpu->pagefault) {
@@ -1171,8 +1174,15 @@ int32_t safe_read32s(int32_t addr)
     }
 }
 
-float safe_read_f32(int32_t addr)
+float safe_read_f32(int64_t addr)
 {
+    if (long_mode_64()) {
+        int32_t v64 = safe_read32_addr(addr);
+        if (cpu->pagefault) return 0.0f;
+        union { uint32_t u; float f; } b64;
+        b64.u = (uint32_t)v64;
+        return b64.f;
+    }
     /* upstream f32::from_bits(i32::cast_unsigned(safe_read32s(addr)?)) */
     int32_t v = safe_read32s(addr);
     if (cpu->pagefault) {
@@ -1186,8 +1196,9 @@ float safe_read_f32(int32_t addr)
     return bits.f;
 }
 
-uint64_t safe_read64s(int32_t addr)
+uint64_t safe_read64s(int64_t addr)
 {
+    if (long_mode_64()) return safe_read64_addr(addr);
     if ((addr & 0xFFF) > 0x1000 - 8) {
         int32_t low = safe_read32s(addr);
         if (cpu->pagefault) {
@@ -1209,9 +1220,15 @@ uint64_t safe_read64s(int32_t addr)
     }
 }
 
-reg128 safe_read128s(int32_t addr)
+reg128 safe_read128s(int64_t addr)
 {
     reg128 z;
+    if (long_mode_64()) {
+        z.u64[0] = safe_read64_addr(addr);
+        if (cpu->pagefault) return z;
+        z.u64[1] = safe_read64_addr(addr + 8);
+        return z;
+    }
     if ((addr & 0xFFF) > 0x1000 - 16) {
         uint64_t lo = safe_read64s(addr);
         if (cpu->pagefault) {
@@ -1241,8 +1258,9 @@ reg128 safe_read128s(int32_t addr)
  * write paths collapse to the two below (see translate_address_write_and_can_skip_dirty).
  * ------------------------------------------------------------------ */
 
-void safe_write8(int32_t addr, int32_t value)
+void safe_write8(int64_t addr, int32_t value)
 {
+    if (long_mode_64()) { safe_write8_addr(addr, value); return; }
     uint32_t phys_addr = translate_address_write_and_can_skip_dirty(addr);
     if (cpu->pagefault) {
         return;
@@ -1262,8 +1280,9 @@ void safe_write8(int32_t addr, int32_t value)
     }
 }
 
-void safe_write16(int32_t addr, int32_t value)
+void safe_write16(int64_t addr, int32_t value)
 {
+    if (long_mode_64()) { safe_write16_addr(addr, value); return; }
     uint32_t phys_addr = translate_address_write_and_can_skip_dirty(addr);
     if (cpu->pagefault) {
         return;
@@ -1287,8 +1306,9 @@ void safe_write16(int32_t addr, int32_t value)
     }
 }
 
-void safe_write32(int32_t addr, int32_t value)
+void safe_write32(int64_t addr, int32_t value)
 {
+    if (long_mode_64()) { safe_write32_addr(addr, value); return; }
     uint32_t phys_addr = translate_address_write_and_can_skip_dirty(addr);
     if (cpu->pagefault) {
         return;
@@ -1309,8 +1329,9 @@ void safe_write32(int32_t addr, int32_t value)
     }
 }
 
-void safe_write64(int32_t addr, uint64_t value)
+void safe_write64(int64_t addr, uint64_t value)
 {
+    if (long_mode_64()) { safe_write64_addr(addr, value); return; }
     if ((addr & 0xFFF) > 0x1000 - 8) {
         writable_or_pagefault(addr, 8);
         if (cpu->pagefault) {
@@ -1340,8 +1361,14 @@ void safe_write64(int32_t addr, uint64_t value)
     }
 }
 
-void safe_write128(int32_t addr, reg128 value)
+void safe_write128(int64_t addr, reg128 value)
 {
+    if (long_mode_64()) {
+        safe_write64_addr(addr, value.u64[0]);
+        if (cpu->pagefault) return;
+        safe_write64_addr(addr + 8, value.u64[1]);
+        return;
+    }
     if ((addr & 0xFFF) > 0x1000 - 16) {
         writable_or_pagefault(addr, 16);
         if (cpu->pagefault) {

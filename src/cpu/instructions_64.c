@@ -668,7 +668,7 @@ void instr64_81_7_reg(int32_t r1, int64_t imm)
  * operand size is 64 BY DEFAULT (the overlay's `default64` entry), and it is the reason a body
  * here is not "S7 work leaking into S6": it is the instrument's own plumbing, named.
  * ------------------------------------------------------------------ */
-void instr64_8F_0_mem(int32_t modrm_byte)
+void instr64_8F_0_mem(int64_t modrm_byte)
 {
 	/* THE ADDRESS IS RESOLVED BY THE BODY, because 0x8F is `custom_modrm_resolve` in the
 	 * reference's table and the emitter therefore passes the RAW MODRM BYTE (S5's C6/C7 arms
@@ -1081,7 +1081,7 @@ void instr64_7F(int32_t imm) { if (test_nle()) set_instruction_pointer(cpu->inst
  * happens, so a faulting address does NOT fault: the reference suppresses only the register
  * write, exactly as the 32-bit body does.  ctrl-lea-64 (SIB with scale, and rip-relative).
  * ------------------------------------------------------------------ */
-void instr64_8D_mem(int32_t modrm_byte, int32_t r)
+void instr64_8D_mem(int64_t modrm_byte, int32_t r)
 {
 	int64_t addr = modrm_resolve64(modrm_byte);
 	if (!cpu->pagefault) {

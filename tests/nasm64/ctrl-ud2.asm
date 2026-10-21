@@ -43,6 +43,13 @@ stub_start:
     # entries -- which identity-maps the first 4 MiB through PD[0] and PD[1] (512 entries x
     # 4 KiB = 2 MiB each).
     mov dword ptr [0x104000], 0x105000 + 3
+    # THE ABOVE-4-GIBIT WINDOW: PML4[1] -> PDPT2[0] -> PD2[0] = a 2 MiB page at physical
+    # 0x100000.  Linear 0x100000000 therefore lands on the compared window's first page, so a
+    # case's access through a 64-bit effective address is visible in the window it compares.
+    mov dword ptr [0x104000 + 8], 0x10c000 + 3
+    mov dword ptr [0x10c000], 0x10d000 + 3
+    mov dword ptr [0x10d000], 0x100000 + 0x83
+    mov dword ptr [0x10d000 + 4], 0
     mov dword ptr [0x105000], 0x106000 + 3
     mov dword ptr [0x106000], 0x107000 + 3
     mov dword ptr [0x106000 + 8], 0x107000 + 0x1000 + 3

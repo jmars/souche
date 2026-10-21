@@ -1522,6 +1522,8 @@ static int boot_main(int argc, char *argv[])
 
 
 
+
+
 	fprintf(stderr, "v86c boot: %llu instructions, in_hlt=%d, exception=%d, unimplemented=%d,"
 	                " eip=0x%x cs=0x%x cr0=0x%x cr3=0x%x\n",
 	        (unsigned long long)result.count, result.halted ? 1 : 0, (int)result.exception,

@@ -782,6 +782,24 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE WIDE UNIT IS LANDED: THE GUEST DECOMPRESSES THE WHOLE KERNEL (2026-10-19).**
+`results/x86-64-wide.md` is its report.  The "widen the bodies" gap was **four layers**, not one:
+`modrm_resolve` now returns `int64_t` and no longer bounds an answer above 4 GiB; the eleven
+`safe_read*/safe_write*` accessors take `int64_t` and dispatch to their 64-bit-address twins (with
+new 128-bit and f32 arms); 1271 `_mem` signatures went from `int32_t addr` to `int64_t addr`; the
+emitter now emits ONE form (`int64_t addr = modrm_resolve(...)`) because the resolver is mode-aware;
+and the arith layer's `bt/bts/btr/btc_mem` — one layer below the bodies — were found BY THE
+INSTRUMENT (the `wide-strobits` case executed the `bt` with no fault at all, the address having been
+truncated into mapped memory).  Seven new corpus cases (family `wide`), each dereferencing a
+NON-CANONICAL address above 4 GiB so the guest takes #GP and the host SIGSEGV at the same rip; the
+able-to-fail arms are MEASURED in two mutations (restoring the bound: 6 of 7 RED; restoring the
+pre-unit string path: the 7th MISMATCHES).  THE GUEST: no named stop at a 1.5 G budget and the
+decompression COMPLETE — the output buffer's last non-zero byte reaches 0x17FFFFF (all 8,388,607
+bytes; monotone: 2.33 MB at 60 M instructions, 5.11 MB at 400 M).  The four M0 pins are unmoved.
+Corpus 73 -> 80, families 7 -> 8.  NEXT: the decompressor's post-decompression relocation/final
+jump (eip 0x4f3a36e), measured with the extent-scan instrument applied to 0x4780000 — there is no
+stop to name yet, only a budget.
+
 **THE REP UNIT IS LANDED: the guest DECOMPRESSES (2026-10-19).**  `results/x86-64-rep.md` is its
 report.  Part (A): the stop reported as "rep movsb raises a #GP" is `repe cmpsb` (0xA6 is CMPS), and
 the #GP was `get_seg`'s null-segment check, which 64-bit mode does not perform -- the string family
@@ -815,10 +833,12 @@ stage-1 IDT entry is null, where hardware triple-faults too), and `gate-x86-64.s
 `stop-is-the-64bit-interrupt-frame` step asserts the STOP, not a frame.  Corpus 63 → 68 cases, all
 green on all three engines; the four M0 pins are unmoved.
 
-The named gaps the next session should take, in order: (1) **the 32-bit-arm bodies cannot carry a
-64-bit effective address** — the guest's current stop, `eip=0x4f3a7e8`, `modrm=0x44 a=0x12cd38220`
-(a scaled 64-bit index: `0x9669c110 << 1`, so the address is legitimate), i.e. the S6-S10 "widen the
-bodies" work; (2) the 64-bit GDT/TSS/IST paths, SYSCALL/SYSRET, then
+The named gaps the next session should take, in order: (1) **the decompressor's
+post-decompression path** — the guest now has NO stop (1.5 G instructions, `unimplemented=0`) and
+sits at `eip=0x4f3a36e` after producing the whole 8 MiB kernel, so the next measurement is the
+relocation copy's destination range (the extent-scan instrument, applied to `0x4780000`, which read
+475,321 and did not move) and the decompressed kernel's entry point; (2) the 64-bit GDT/TSS/IST
+paths, SYSCALL/SYSRET, then
 SWAPGS (needs an authored dispatch arm — `0F 01 /5` has no reference-table entry); (3) the amd64
 initramfs + the userspace milestone, with the QEMU leg as the second reference; (4) the engines' OWN
 arms (the uop decoder's long mode, then the JIT's recipes) — the differential is the gate that would

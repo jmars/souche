@@ -58,6 +58,15 @@ PDPT = 0x105000
 PD = 0x106000
 PT0 = 0x107000
 PT_END = 0x10B000  # PT0 + 4 * 0x1000
+# THE ABOVE-4-GIBIT WINDOW (this unit): linear 0x100000000..0x10200000 maps to physical
+# 0x100000..0x300000 through PML4[1] -> PDPT2[0] -> PD2[0] (a 2 MiB page).  A corpus case that
+# needs a 64-bit EFFECTIVE ADDRESS can therefore touch real memory and be compared in the
+# window -- an access to an unmapped high address would fault in both legs and prove nothing.
+PML4_2 = 0x10B000
+PDPT2 = 0x10C000
+PD2 = 0x10D000
+HIGH_BASE = 0x100000000   # the linear base a case adds its offset to
+HIGH_PHYS = 0x100000      # what it maps to: the compared window's own start
 
 # where the case's stores land: 16 GPRs, 8 bytes each, at the window's bottom
 STORE_BASE = 0x100000
@@ -136,6 +145,13 @@ stub_start:
     # entries -- which identity-maps the first 4 MiB through PD[0] and PD[1] (512 entries x
     # 4 KiB = 2 MiB each).
     mov dword ptr [{pml4}], {pdpt} + 3
+    # THE ABOVE-4-GIBIT WINDOW: PML4[1] -> PDPT2[0] -> PD2[0] = a 2 MiB page at physical
+    # 0x100000.  Linear 0x100000000 therefore lands on the compared window's first page, so a
+    # case's access through a 64-bit effective address is visible in the window it compares.
+    mov dword ptr [{pml4} + 8], {pdpt2} + 3
+    mov dword ptr [{pdpt2}], {pd2} + 3
+    mov dword ptr [{pd2}], {high_phys} + 0x83
+    mov dword ptr [{pd2} + 4], 0
     mov dword ptr [{pdpt}], {pd} + 3
     mov dword ptr [{pd}], {pt0} + 3
     mov dword ptr [{pd} + 8], {pt0} + 0x1000 + 3
@@ -184,7 +200,8 @@ gdt_end:
 gdt_descriptor:
     .word gdt_end - gdt - 1
     .long gdt
-""".format(pml4=hex(PML4), pdpt=hex(PDPT), pd=hex(PD), pt0=hex(PT0), pt_end=hex(PT_END))
+""".format(pml4=hex(PML4), pdpt=hex(PDPT), pd=hex(PD), pt0=hex(PT0), pt_end=hex(PT_END),
+              pdpt2=hex(PDPT2), pd2=hex(PD2), high_phys=hex(HIGH_PHYS))
 
 PROLOGUE = """\
     # the shared prologue: the register file the document compares starts at zero, the
@@ -1238,6 +1255,38 @@ case("strobits", "cmpxchg16b",
     cmp rax, rax
 """, flags=True)
 
+# --- family 7: wide (this unit) -- a 64-bit EFFECTIVE ADDRESS, one case per family ---
+# EVERY case below computes an effective address ABOVE 4 GiB and dereferences it.  The address
+# is NON-CANONICAL (0x800000000000: bit 47 set, bits 63:48 clear), so the guest takes #GP and
+# the native leg takes SIGSEGV at the same rip -- the same kind, which is what a faulting case
+# compares.  WHY THAT SHAPE: an address above 4 GiB cannot be touched without either a fault
+# (nothing is mapped there in the native leg) or a harness alias, and the fault is the honest
+# instrument -- with the old int32_t resolver the port STOPPED BY NAME before any walk, which
+# the corpus reports as RED, and after the widening it reports the SAME exception as the host.
+WIDE = "    mov r9, 0x800000000000\n"
+case("wide", "mov-mem-above-4g",
+     "MOV r/m32 through a 64-bit effective address (the guest's own shape: a 32-bit-operand "
+     "form whose address is 64 bits)",
+     WIDE + "    mov eax, dword ptr [r9]\n", fault="GP")
+case("wide", "alu-mem-above-4g",
+     "ADD r/m32, imm32 and INC r/m32 through a 64-bit effective address (the RMW macro path)",
+     WIDE + "    add dword ptr [r9], 0x10\n", fault="GP")
+case("wide", "ctrl-mem-above-4g",
+     "XCHG r/m32, r32 through a 64-bit effective address",
+     WIDE + "    xchg dword ptr [r9], ecx\n", fault="GP")
+case("wide", "muldiv-mem-above-4g",
+     "IMUL r32, r/m32 through a 64-bit effective address",
+     WIDE + "    imul eax, dword ptr [r9]\n", fault="GP")
+case("wide", "strobits-mem-above-4g",
+     "BT r/m32, imm8 through a 64-bit effective address",
+     WIDE + "    bt dword ptr [r9], 3\n", fault="GP")
+case("wide", "simd-mem-above-4g",
+     "MOVDQU xmm, m128 through a 64-bit effective address (the S10 accessor path)",
+     WIDE + "    movdqu xmm0, [r9]\n", fault="GP")
+case("wide", "str-mem-above-4g",
+     "CMPSB with BOTH pointers above 4 GiB: the string path's 64-bit addresses",
+     WIDE + "    mov rsi, r9\n    mov rdi, r9\n    mov rcx, 1\n    cmpsb\n", fault="GP")
+
 # --- family 5b: str (this unit) -- the rep string family's LONG-MODE widths ------
 # S9's strobits cases cover the Q opcodes; these four cover what they do not: the
 # COUNTER's width (only observable through the ZF exit -- see the cases), the 0x67
@@ -1400,6 +1449,7 @@ FAMILY_SLICE = {
     # the rep string family's LONG-MODE widths are outside the plan's slices: S9 landed the
     # Q opcodes, and the byte/word/dword forms' 64-bit registers were never a slice's.
     "str": "S9b",
+    "wide": "W",
 }
 
 # ------------------------------------------------------------------ #

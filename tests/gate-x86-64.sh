@@ -68,10 +68,16 @@ echo "== D. THE HONEST STOP, ASSERTED BY NAME (replaced: the frame LANDED, resul
 # ALIVE, which is the milestone the old step could not reach, and (b) the stop is the 4 GiB
 # address bound, so a stop EARLIER (a delivery stop, a refusal, a silent hang) fails here.
 step "decompressor-console-alive" sh -c "grep -q 'Physical KASLR disabled' $SERIAL"
-step "stop-is-the-64bit-address-bound" sh -c \
+# THE STEP THIS REPLACES asserted the 4 GiB ADDRESS BOUND -- the stop this gate used to end on.
+# That stop is GONE (MEASURED, results/x86-64-wide.md): the guest now decompresses, and at this
+# gate's 40 M-instruction budget it is still decompressing with NO named stop.  Asserting the
+# whole decompression here would need ~1.5 G instructions (~9 minutes), so the gate asserts what
+# it can afford and names the rest: no unimplemented stop in the log, and the bound's message
+# ABSENT.  The full extent (8,388,607 bytes, i.e. the whole kernel) is MEASURED in the report at
+# a 1.5 G budget, not asserted here.
+step "no-named-stop" sh -c "grep -q 'unimplemented=0' $BOOTLOG"
+must_fail "address-bound-gone-able-to-fail" sh -c \
 	"grep -q 'a 64-bit effective address above 4 GiB' $BOOTLOG"
-must_fail "address-bound-stop-able-to-fail" sh -c \
-	"grep -q 'call_interrupt_vector' $BOOTLOG"
 
 echo
 echo "[+] gate-x86-64: $PASS passed, $FAIL failed"

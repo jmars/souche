@@ -51,7 +51,7 @@ void transition_fpu_to_mmx(void)
  * sse_instr.rs:4-27 -- the mov* family
  * ------------------------------------------------------------------ */
 
-void mov_r_m64(int32_t addr, int32_t r)
+void mov_r_m64(int64_t addr, int32_t r)
 {
     uint64_t data = read_mmx64s(r);
     safe_write64(addr, data);
@@ -59,7 +59,7 @@ void mov_r_m64(int32_t addr, int32_t r)
     transition_fpu_to_mmx();
 }
 
-void movl_r128_m64(int32_t addr, int32_t r)
+void movl_r128_m64(int64_t addr, int32_t r)
 {
     uint64_t data = read_xmm64s(r);
     safe_write64(addr, data);
@@ -72,7 +72,7 @@ void mov_r_r128(int32_t r1, int32_t r2)
     write_xmm_reg128(r1, data);
 }
 
-void mov_r_m128(int32_t addr, int32_t r)
+void mov_r_m128(int64_t addr, int32_t r)
 {
     reg128 data = read_xmm128s(r);
     safe_write128(addr, data);
@@ -84,7 +84,7 @@ void mov_rm_r128(reg128 source, int32_t r)
     write_xmm_reg128(r, source);
 }
 
-void movh_r128_m64(int32_t addr, int32_t r)
+void movh_r128_m64(int64_t addr, int32_t r)
 {
     reg128 data = read_xmm128s(r);
     safe_write64(addr, data.u64[1]);

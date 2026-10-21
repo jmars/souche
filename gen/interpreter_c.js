@@ -322,9 +322,14 @@ function gen_instruction_body_after_fixed_g(encoding, size) {
 		if (resolves_modrm && implemented) {
 			/* S5a: a 64-bit arm's address is a 64-BIT linear address (RIP-relative, a 64-bit
 			 * SIB base, a full 64-bit displacement); resolving it into an int32_t would be the
-			 * truncation W1 names, and the body could not tell. */
-			out.push(size === 64 ? "\tint64_t addr = modrm_resolve64(modrm_byte);"
-			                     : "\tint32_t addr = modrm_resolve(modrm_byte);");
+			 * truncation W1 names, and the body could not tell.
+			 *
+			 * THIS UNIT WIDENED EVERY ARM, not just the 0x2NN ones: in long mode an
+			 * instruction with NO REX.W still uses a 64-bit linear address, and the arms that
+			 * serve it are the 0x1NN/0x0NN ones.  `modrm_resolve` is the mode-aware entry
+			 * point (it branches on long_mode_64() itself), so one emitted form is right in
+			 * both machines and the 32-bit value is the sign-extended int32_t it always was. */
+			out.push("\tint64_t addr = modrm_resolve(modrm_byte);");
 		}
 		if (implemented) {
 			if (resolves_modrm) out.push("\tif (cpu->pagefault) return;");
