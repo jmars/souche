@@ -782,6 +782,21 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE GSBASE UNIT: THE DISPLACEMENT MEASURED -- BOTH CANDIDATES REFUTED, AND A DEFECT IN MY OWN TOOL
+(2026-10-19).**  `results/x86-64-gsbase.md` is its report.  (1) The ring (widened from 8 to 16 bytes
+for this question) gives the faulting instruction as `65 48 89 05 96 9F DB 63` = **`mov %rax,
+%gs:[0x63DB9F96]`** at **0xFFFFFFFF9C2775BA** with gs_base 0xFFFFFFFF9C242000 -- AND THE FIRST RUN
+ATTRIBUTED IT TO 0xFFFFFFFF9C2775C2, ONE INSTRUCTION TOO LATE, because the fault hook used
+cpu->instruction_pointer when at a fault the cursor has already advanced.  FIXED: the hook now reports
+cpu->previous_ip, with the measurement in the file.  (2) BOTH CANDIDATES REFUTED: with base
+0xFFFFFFFF9C242000 and disp 0x63DB9F96, NO base handling produces 0x31558 -- the architecturally
+correct address is 0xFFFFFFFFFFFFBF96 -- and the disp is a positive 1.6 GB value, not 0x31558-gs_base.
+So 0x31558 IS A THIRD SHAPE, and neither of the two shapes the last report offered is the one the port
+computed.  (3) NEXT MEASUREMENT, exact and already carried by the toolkit: watch the RESOLVED address
+and print inside modrm_resolve64, for a GS-prefixed operand, the base, the offset and their sum -- one
+flag plus one line and the third shape becomes a number.  NO FIX CLAIMED.  Gates green, no pin moved
+(the changes are the toolkit's, not the machine's).
+
 **THE DEBUGTOOLKIT UNIT: THE TOOLS EXIST, DEFAULT-OFF, AND THEY ANSWERED THE 0x31558 QUESTION
 (2026-10-19).**  `results/x86-64-debugtoolkit.md` is its report and `docs/testing.md` §2.6 documents the
 surface.  FOUR TOOLS behind one env-var family, all no-ops when unset: `V86C_WATCH=<addr>:<len>[,…]`
