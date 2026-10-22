@@ -782,6 +782,26 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE MEMSIZE UNIT: MEMORY SIZE DOES NOT CHANGE THE PORT'S PATH -- THE DIVERGENCE IS SIZE-INDEPENDENT
+(2026-10-19).**  `results/x86-64-memsize.md` is its report; MEASUREMENT ONLY.  THE AXIS VARIED FOR THE
+FIRST TIME IN THIS LANE, and the answer is a FINDING: at **80 MiB** (with build/minibios-80m.bin) the
+port stops at `eip=0x87A77246`, cr3=0x30ea000, 4,475,484,647 instructions with the SAME class of stop as
+at **256 MiB** (`eip=0x8AE77246`, 4,475,484,504) -- the #PF delivery recursion -- while QEMU at 80
+reaches its OOM panic (`System is deadlocked on memory`) and at 256 its root mount
+(`VFS: Unable to mount root fs`).  The two port addresses differ only because the kernel's physical
+layout follows the memory size; the STOP is the same class and the instruction count agrees to within
+143.  SO THE DIVERGENCE IS SIZE-INDEPENDENT and is NOT the 32-bit physical model, the mmap holes, the
+initrd placement (none on either side) or the firmware's heap/stack pointers (heap_end_ptr=0xDE00 at
+both) -- it is the same early-kernel fault: a #PF arriving while the kernel's own IDT page is unmapped,
+which the recursion bound names.  THE CALIBRATED ACCEPTANCE TEST IS STATED AND NOT MET: at 80 MiB the
+port should reach QEMU's OOM panic, at 256 the root mount; it reaches NEITHER, stopping before its first
+printk reaches the serial -- so there is NO 'first real amd64 kernel panic' milestone and none is
+claimed.  A gate step asserting it is deliberately NOT added (a step asserting the PORT'S stop would be
+the 'assert the stop' pattern this lane has spent three units correcting).  NEXT MEASUREMENT (the only
+one left on this axis): did the kernel ever TRY to print? -- V86C_WATCH on the serial port's I/O writes
+(0x3F8) with V86C_RING + V86C_DUMP_ON_STOP at the stop, separating 'died before console_init' from
+'printed but the port's UART dropped it'.  Subset gates green, no pin moved.
+
 **THE DISCRIMINATOR UNIT: QEMU AT 80 MiB PRINTS THE SAME TWO KASLR MESSAGES, SO THE DIVERGENCE IS NOT
 KASLR (2026-10-19).**  `results/x86-64-discriminator.md` is its report; MEASUREMENT ONLY, one QEMU run.
 `qemu-system-x86_64 -machine pc -m 80 -enable-kvm -no-reboot -display none -kernel
