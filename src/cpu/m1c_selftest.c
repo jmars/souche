@@ -564,6 +564,37 @@ static void test_debug_toolkit_fires(void)
     CHECK(!v86c_dbg_watch_on);
 }
 
+/* ================================================================== *
+ * TEST 1f -- A SEGMENT OVERRIDE APPLIES TO A RIP-RELATIVE OPERAND (results/x86-64-gsfix.md)
+ *
+ * The corpus cannot carry this arm: the native leg would have to set its own FS/GS base and the
+ * compared window would then depend on the host's segment state, so the arm is here.  The
+ * measurement it encodes: `mov %rax, %gs:[disp32]` at 0xFFFFFFFF9C2775BA -- RIP+disp is
+ * 0x100031558 and the port handed the access 0x31558, its low 32 bits, because the RIP-relative
+ * early return dropped the GS base.  The arm asserts the base is ADDED, and that a DS override
+ * (base 0) and no override are unchanged.
+ * ================================================================== */
+static void test_rip_relative_segment_base(void)
+{
+    machine_setup(false);
+    /* the disp32 lives where the resolver will read it: at the cursor after the modrm byte */
+    wr32(0x2000, 0x00001000);
+    cpu->instruction_pointer = 0x2000;
+    cpu->segment_offsets[GS] = 0xFFFFFFFF9C242000ull;
+    cpu->segment_offsets[DS] = 0;
+
+    cpu->prefixes = (uint16_t)(GS + 1);              /* 65 */
+    CHECK_EQ(modrm_resolve64(0x05), (int64_t)(0x2004 + 0x1000) + (int64_t)0xFFFFFFFF9C242000ull);
+
+    cpu->prefixes = (uint16_t)(DS + 1);              /* 3E: DS base is 0 in 64-bit mode */
+    cpu->instruction_pointer = 0x2000;
+    CHECK_EQ(modrm_resolve64(0x05), (int64_t)(0x2004 + 0x1000));
+
+    cpu->prefixes = 0;
+    cpu->instruction_pointer = 0x2000;
+    CHECK_EQ(modrm_resolve64(0x05), (int64_t)(0x2004 + 0x1000));
+}
+
 static void test_dispatcher_fault_flag(void)
 {
     uint32_t before;
@@ -1516,5 +1547,6 @@ int main(void)
         RUN(test_cr4_pge_write_no_pdpte_reload, "MOV CR4 with PGE 0->1 does not reload PDPTEs (long mode: CR3 holds a PML4E)");
     RUN(test_far_return_64bit_frame, "a 64-bit RETF: an eight-byte RIP/CS frame and a 64-bit target");
     RUN(test_debug_toolkit_fires, "the debugging toolkit fires: watchpoint, fault watch, ring, dump-on-stop");
+    RUN(test_rip_relative_segment_base, "a segment override applies to a RIP-relative operand (FS/GS add their base)");
 return failures != 0;
 }

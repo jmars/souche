@@ -821,7 +821,20 @@ int64_t modrm_resolve64(int32_t modrm_byte)
     }
 
     if (rip_relative) {
-        /* RIP-relative addresses do not take a segment base (DS is implied) */
+        /* A SEGMENT OVERRIDE APPLIES TO A RIP-RELATIVE OPERAND TOO (SDM Vol 2, 2.1.6: the
+         * override selects the segment for ANY memory operand).  In 64-bit mode only FS and GS
+         * have a base; CS/DS/ES/SS are 0.  MEASURED as the amd64 kernel's first #PF
+         * (results/x86-64-gsfix.md): `65 48 89 05 96 9F DB 63` = `mov %rax, %gs:[0x63DB9F96]`
+         * at 0xFFFFFFFF9C2775BA -- RIP+disp is 0x100031558 and the port handed the access
+         * 0x31558 (its low 32 bits), because this early return dropped the GS base
+         * (0xFFFFFFFF9C242000) entirely. */
+        int32_t pf = cpu->prefixes & PREFIX_MASK_SEGMENT;
+        if (pf != 0 && pf != SEG_PREFIX_ZERO) {
+            int32_t sg = pf - 1;
+            if (sg == FS || sg == GS) {
+                return offset + (int64_t)cpu->segment_offsets[sg];
+            }
+        }
         return offset;
     }
 

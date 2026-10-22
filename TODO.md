@@ -782,6 +782,28 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE GSFIX UNIT: THE FS/GS BASE WAS DROPPED FOR RIP-RELATIVE OPERANDS -- FIXED, ARM MEASURED, GUEST
+MOVED ON (2026-10-19).**  `results/x86-64-gsfix.md` is its report.  THE THREE NUMBERS (toolkit, after
+the last unit's previous_ip fix): the instruction is `65 48 89 05 96 9F DB 63` = `mov %rax,
+%gs:[0x63DB9F96]` at 0xFFFFFFFF9C2775BA, gs_base = 0xFFFFFFFF9C242000, disp = 0x63DB9F96, and
+**RIP-next + disp = 0x9C2775C2 + 0x63DB9F96 = 0x100031558, whose LOW 32 BITS ARE EXACTLY 0x31558** --
+the address the port faulted on.  THE DEFECT (READ modrm.c): the RIP-relative branch of
+modrm_resolve64 ended with `return offset;` and a comment saying "RIP-relative addresses do not take a
+segment base (DS is implied)" -- right for the implied DS (base 0 in 64-bit mode), WRONG for an FS/GS
+override, which the SDM (Vol 2, 2.1.6) says selects the segment for ANY memory operand.  So the base
+was NOT added at all (candidate (i)); the low-32-bit shape is the FAULT REPORT's width, not a separate
+narrowing -- the store path is int64_t end to end (int64_t addr = modrm_resolve -> instr64_89_mem ->
+safe_write64_addr).  FIX: add segment_offsets[FS/GS] in the RIP-relative branch, excluding
+SEG_PREFIX_ZERO (LEA's sentinel) so LEA keeps computing with no base; CS/DS/ES/SS stay 0.  ARM: the
+corpus CANNOT carry it (the native leg would have to set its own FS/GS base and the compared window
+would depend on the host's segment state -- the mov cr4 reason again), so it is m1c_selftest's
+test_rip_relative_segment_base, MEASURED to fail with the early return restored
+(`got 0x3004, want 0xffffffff9c245004`) and pass with the fix.  ACCEPTANCE: the kernel no longer faults
+on its percpu store -- it reaches a NEW stop this port named in the rep-string unit: **`long mode: the
+16-bit operand form of a string op in long mode is not implemented (see 0xA5)`** at rip 0xFFFFFFFF9C2771F2,
+cr3 0x30ea000.  NEXT: implement the 16-bit string forms in long mode (now reachable) or lift the
+overlay's narrow64 guard with an arm.  Full battery green, every pin unmoved.
+
 **THE GSBASE UNIT: THE DISPLACEMENT MEASURED -- BOTH CANDIDATES REFUTED, AND A DEFECT IN MY OWN TOOL
 (2026-10-19).**  `results/x86-64-gsbase.md` is its report.  (1) The ring (widened from 8 to 16 bytes
 for this question) gives the faulting instruction as `65 48 89 05 96 9F DB 63` = **`mov %rax,
