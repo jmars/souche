@@ -782,6 +782,31 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE FIRSTFAULT UNIT: ALL THREE QUESTIONS ANSWERED -- THE FIRST FAULT IS A WRITE TO 0x31558 AND THE
+IDT PAGE IS GENUINELY UNMAPPED (2026-10-19).**  `results/x86-64-firstfault.md` is its report;
+MEASUREMENT ONLY (probes removed; tree = commit 801cf8e).  (1) A probe at trigger_pagefault's first
+three entries: `PF#1 addr=0x31558 present=0 write=1 user=0 fetch=0 rip=0xffffffff9c2775c2` -- **THE
+FIRST #PF IS A WRITE to 0x31558**, a LOW address, so the fault is NOT in the fetch path the earlier
+units suspected (the walk for 0xFFFFFFFF9C27759C translates); `PF#2/#3` are the IDT descriptor at
+0x9BC040E0, i.e. the cascade the deliver unit measured.  (2) THE CHAIN, walked by hand from cr3
+0x30EA000: `va=0x9bc03000 i4=0 i3=2 i2=222 i1=3 e4=0x30ec063 e3=0x0 ...` and `va=0x9bc04000 ... i1=4
+e4=0x30ec063 e3=0x0` -- **THE PDPTE IS ZERO FOR BOTH PAGES**, so the IDT page is GENUINELY UNMAPPED and
+there is NO port off-by-one in the stride, index arithmetic or frame mask.  AND IT CORRECTS AN EARLIER
+READING: the stack page 0x9BC03000 is ALSO absent, yet the walk for 0xFFFFFFFF9BC03F40 returned
+pf=0/frame 0x2A03F40 -- **that translation was a 64-bit-TLB HIT, not a walk** (architecturally
+permitted: the TLB is not coherent and the guest must invalidate), so "the stack translates" was a
+cache hit.  (3) The IDT base 0x9BC04000 sits immediately above the boot stack, which is exactly where
+a .data/.bss IDT table belongs, so it is plausible and NOT mis-computed (READ head64.c:625-637: the
+IDT is loaded before the first C call).  IS THE SEAT CORRECT?  YES: hardware's sequence at this state
+is #PF -> the vector-14 gate is read from an unmapped page -> #DF -> no #DF gate (idt[8] zero,
+measured) -> TRIPLE FAULT -> RESET; the port stops with the reason named and the state intact.  Adding
+a reset path is a POLICY question and would destroy the evidence this chain used -- it is recorded as
+a KNOWN DIVERGENCE (the port cannot reproduce a machine that reboots in a loop), not implemented.
+NEXT, with instruments: the store to 0x31558 (instruction bytes at rip 0xFFFFFFFF9C2775C2, the
+destination register, the value) -- is it the kernel writing where it expects the DECOMPRESSOR's
+identity map to still cover, or a consequence of an earlier mis-execution? -- and the stale-TLB
+reading of (2).  Subset gates re-run green, no pin moved.
+
 **THE DELIVER UNIT: THE DELIVERY FAULTS AT ITS FIRST ACCESS -- THE KERNEL'S IDT PAGE IS UNMAPPED
 (2026-10-19).**  `results/x86-64-deliver.md` is its report; NO FUNCTIONAL CHANGE (probes only, removed;
 the tree is commit 801cf8e).  A probe at the FIRST thing the delivery does -- the IDT descriptor read
