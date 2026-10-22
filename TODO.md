@@ -782,6 +782,30 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE BOOTPARAMS UNIT: THE FIELDS MEASURED, AND THE init_size HYPOTHESIS REFUTED (2026-10-19).**
+`results/x86-64-bootparams.md` is its report.  NEW TOOLKIT SURFACE (default off):
+`V86C_BOOTPARAMS=<addr>` with V86C_DUMP_ON_STOP prints the standard zero-page fields.  THE DUMP (at
+rsi=0x84790): e820_entries=4, e820[3]=[0x100000,0x4000000) type 1 (a 63 MiB usable region),
+code32_start=0x100000, cmd_line_ptr=0x8e000, heap_end_ptr=0xde00, initrd_addr_max=0x7fffffff,
+kernel_alignment=0x200000, relocatable=1, pref_address=0x1000000, **init_size=0x3F97000 (63.6 MiB)**.
+WHICH FIELDS THE FIRMWARE CAN GET WRONG AND WHICH IT CANNOT: init_size, pref_address,
+kernel_alignment, relocatable_kernel and cmdline_size are read from the KERNEL IMAGE's own setup header,
+so they cannot differ between the two machines for the same image -- and they MATCH; the fields the
+firmware writes are the E820, the cmdline pointer and the heap/stack pointers.  THE TEMPTING ARITHMETIC
+AND ITS REFUTATION (MEASURED): init_size 63.6 MiB vs a 63 MiB usable region looks like the cause, but the
+tree ALREADY builds an 80 MiB firmware (build/minibios-80m.bin, MEM_TOP=0x5000000) and running the same
+kernel with `--bios build/minibios-80m.bin --memory 256` gives a 79 MiB usable region -- a 64 MiB window
+fits -- and the kernel STILL prints 'Physical KASLR disabled: no suitable memory region!' and stops at
+the same recursion bound (eip=0x87A77246).  SO THE WINDOW SIZE IS NOT THE CAUSE.  WHERE THE DIVERGENCE
+MUST BE: the port's serial carries 'Invalid physical address chosen!' BEFORE the fallback --
+slots_fetch_random rejecting the address it picked -- which is a validity check inside the kernel, not a
+slot search, and the fields it reads are the ones the FIRMWARE writes (the E820 and the cmdline pointer,
+plus the mem_avoid the decompressor builds from output/input_data/cmdline).  NEXT MEASUREMENT:
+instrument choose_random_location's three inputs as the port hands them over (input_data, input_len,
+output, output_len, needed_size and the mem_avoid array) and compare with QEMU's.  NO FIX CLAIMED: the
+firmware fields the port writes are not shown to be wrong, and a minibios change would touch every guest
+gate with a pinned byte transcript.  Subset gates green, no pin moved.
+
 **THE KASLR UNIT: THE E820 IS THE RIGHT SHAPE, AND THE PORT'S KERNEL REJECTS THE ADDRESS IT CHOSE
 (2026-10-19).**  `results/x86-64-kaslr.md` is its report; MEASUREMENT ONLY, no code change.  (1) THE
 MAP AS THE GUEST SEES IT (READ minibios.asm:803-807 + both serials): minibios publishes FOUR entries --

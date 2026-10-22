@@ -123,6 +123,42 @@ void v86c_dbg_ring_record(uint64_t eip, const uint8_t *bytes, int n)
     ring_i = (ring_i + 1) % ring_n;
 }
 
+/* THE BOOT_PARAMS ARTIFACT (results/x86-64-bootparams.md): the fields a kernel's early code reads,
+ * printed from the struct the firmware handed over -- `V86C_BOOTPARAMS=<linear address>` with
+ * V86C_DUMP_ON_STOP.  Offsets are the standard zero-page layout (arch/x86/include/uapi/asm/bootparam.h). */
+static uint32_t bp32(uint64_t b, uint32_t off)
+{
+    return (uint32_t)read8((uint32_t)(b + off)) | ((uint32_t)read8((uint32_t)(b + off + 1)) << 8) |
+           ((uint32_t)read8((uint32_t)(b + off + 2)) << 16) | ((uint32_t)read8((uint32_t)(b + off + 3)) << 24);
+}
+static uint64_t bp64(uint64_t b, uint32_t off)
+{
+    return (uint64_t)bp32(b, off) | ((uint64_t)bp32(b, off + 4) << 32);
+}
+static void dump_boot_params(uint64_t b)
+{
+    int i;
+    fprintf(stderr, "v86c dbg: boot_params @0x%llx e820_entries=%u alt_mem_k=0x%x setup_sects=%u\n",
+            (unsigned long long)b, (unsigned)read8((uint32_t)(b + 0x1e8)), (unsigned)bp32(b, 0x1e0),
+            (unsigned)read8((uint32_t)(b + 0x1f1)));
+    fprintf(stderr, "v86c dbg:   code32_start=0x%x ramdisk_image=0x%x ramdisk_size=0x%x"
+                    " ext_ramdisk=0x%x/0x%x cmd_line_ptr=0x%x ext_cmd=0x%x cmdline_size=0x%x\n",
+            (unsigned)bp32(b, 0x214), (unsigned)bp32(b, 0x218), (unsigned)bp32(b, 0x21c),
+            (unsigned)bp32(b, 0x0c0), (unsigned)bp32(b, 0x0c4), (unsigned)bp32(b, 0x228),
+            (unsigned)bp32(b, 0x0c8), (unsigned)bp32(b, 0x238));
+    fprintf(stderr, "v86c dbg:   heap_end_ptr=0x%x initrd_addr_max=0x%x kernel_alignment=0x%x"
+                    " relocatable=%u pref_address=0x%llx init_size=0x%x\n",
+            (unsigned)bp32(b, 0x224), (unsigned)bp32(b, 0x22c), (unsigned)bp32(b, 0x230),
+            (unsigned)read8((uint32_t)(b + 0x234)), (unsigned long long)bp64(b, 0x258),
+            (unsigned)bp32(b, 0x260));
+    for (i = 0; i < 6; i++) {
+        uint64_t e = b + 0x2d0 + (uint64_t)(20 * i);
+        fprintf(stderr, "v86c dbg:   e820[%d] base=0x%llx len=0x%llx type=%u\n", i,
+                (unsigned long long)bp64(e, 0), (unsigned long long)bp64(e, 8),
+                (unsigned)bp32(e, 16));
+    }
+}
+
 /* the chain walk this lane has hand-written three times */
 static void dump_chain(uint64_t va)
 {
@@ -203,6 +239,8 @@ void v86c_dbg_on_stop(const char *why)
                 (unsigned long long)cpu->reg64[6], (unsigned long long)cpu->reg64[7],
                 (unsigned long long)cpu->reg64[5], (unsigned long long)cpu->reg64[4]);
         if (c != NULL) dump_chain((uint64_t)strtoull(c, NULL, 0));
+        { const char *bp = getenv("V86C_BOOTPARAMS");
+          if (bp != NULL) dump_boot_params((uint64_t)strtoull(bp, NULL, 0)); }
     }
     fflush(stderr);
 }
