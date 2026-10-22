@@ -1696,6 +1696,31 @@ void instr64_0FBA_7_mem(int64_t addr, int64_t imm)
  * the amd64 decompressor's `48 98` stopped the machine, results/x86-64-rep.md).  CDQE
  * sign-extends EAX into RAX (the 32-bit arm's CWDE writes AX only, and its DE arm's
  * zero-extension is the opposite rule); CQO fills RDX with the sign of RAX. */
+/* 0xC9 LEAVE -- THE 64-BIT FRAME'S OWN EPILOGUE, and the defect this unit localised.
+ *
+ * MEASURED (results/x86-64-gp.md): the amd64 kernel's `startup_64_setup_env` returns through
+ * `leave; jmp <tail call>`, and the port ran the 32-BIT `instr32_C9`, which pops a FOUR-byte
+ * EBP and moves the stack by 4.  The measured consequence: at the tail call rbp=0x2a03f28 (the
+ * frame base, holding the saved rbp 0x2a04000 and, at +8, the return address 0x100083a into
+ * head_64.S) but rsp=0x2a03f2c -- FOUR bytes short of the 0x2a03f30 a 64-bit LEAVE leaves.  The
+ * `ret` that follows then popped the qword at 0x2a03f2c, which straddles those two words and is
+ * 0x0100083A00000000: NON-CANONICAL, so the kernel took #GP(0) into the NULL IDT the stub
+ * installs before the jump (idtr base 0 limit 0) and the machine stopped at 4,475,477,692
+ * instructions in every run.
+ *
+ * The SDM's LEAVE at 64 bits: RSP = RBP, then RBP = pop (EIGHT bytes).  Order matters for a
+ * fault: the read comes first, so a faulting LEAVE leaves both registers as they were (the
+ * instruction is re-executed after the handler's iret). */
+void instr64_C9(void)
+{
+	uint64_t frame = get_seg_ss() + read_reg64(EBP);
+	uint64_t new_bp = safe_read64_addr((int64_t)frame);
+	if (cpu->pagefault) return;
+	write_reg64(EBP, new_bp);
+	/* the frame is popped as an EIGHT-byte slot: RSP = old RBP + 8, at the field's own width */
+	write_reg64(ESP, frame + 8);
+}
+
 void instr64_98(void) { write_reg64(EAX, (uint64_t)(int64_t)(int32_t)read_reg32(EAX)); }
 void instr64_99(void) { write_reg64(EDX, (uint64_t)((int64_t)read_reg64(EAX) >> 63)); }
 

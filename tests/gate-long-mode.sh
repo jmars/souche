@@ -78,7 +78,7 @@ must_fail() { # must_fail <name> <cmd...> -- the able-to-fail arm of an assertio
 
 echo "== A. --long-mode OFF is still the 32-bit machine (S2's refusal, by name, S4's counts)"
 step "off-is-32bit" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_OFF" \
-	--expect counts --expect-counts "green=0 red_unimplemented=80 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=0 red_unimplemented=81 mismatch=0 error=0" --quiet
 # a count assertion alone would also pass on 57 of anything, so the census's own line is
 # checked: the refusal must NAME the reason
 step "off-refusal-names-the-reason" sh -c \
@@ -108,7 +108,7 @@ echo "== D. the 0x2NN overlay's census (routed arms / named stops) AS NUMBERS"
 # the default-64 named stops (ret/call/jmp/pop r-m/iret) that S6-S11 replace; a slice that
 # lands one EDITS THIS LINE, which is the record of what it landed.
 step "overlay-census" sh -c \
-	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 157 overlay entries, 117 routed to instr64 bodies, 45 of those call sites unimplemented'"
+	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 158 overlay entries, 118 routed to instr64 bodies, 45 of those call sites unimplemented'"
 must_fail "overlay-census-able-to-fail" sh -c \
 	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 0 overlay entries'"
 
@@ -117,7 +117,7 @@ step "family-1-green" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_
 	--filter '^mov-' --expect counts \
 	--expect-counts "green=12 red_unimplemented=0 mismatch=0 error=0" --quiet
 step "whole-corpus-no-mismatch" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
-	--expect counts --expect-counts "green=80 red_unimplemented=0 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=81 red_unimplemented=0 mismatch=0 error=0" --quiet
 must_fail "whole-corpus-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
 	--actual "$ACTUAL_ON" --expect counts --expect-counts "green=57 mismatch=0" --quiet
 
@@ -257,7 +257,7 @@ step "alu-pop-rsp-green" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTU
 echo "== F4. S7: CONTROL FLOW AND STACK AT 64 BITS (family 3, 12/12 -- ALL GREEN)"
 step "ctrl-family" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
 	--filter '^ctrl-' --expect counts \
-	--expect-counts "green=17 red_unimplemented=0 mismatch=0 error=0" --quiet
+	--expect-counts "green=18 red_unimplemented=0 mismatch=0 error=0" --quiet
 must_fail "ctrl-family-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
 	--actual "$ACTUAL_ON" --filter '^ctrl-' --expect counts \
 	--expect-counts "green=12 mismatch=0" --quiet

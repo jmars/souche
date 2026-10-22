@@ -782,6 +782,30 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE GP UNIT: THE DETERMINISTIC #GP IS LOCALISED, FIXED, AND THE GUEST MOVES ON (2026-10-19).**
+`results/x86-64-gp.md` is its report.  The three named measurements were done in one run (2m13s):
+(a) THE STACK at 0x1001BD2 shows the stub's frame INTACT (saved RBP 0x2a04000 at 0x2a03f28, the return
+address **0x100083a** into head_64.S at 0x2a03f30, `pushq %rsi` = 0x84790 at 0x2a03f50) but **RSP =
+0x2a03f2c after `leave` — four bytes short of 0x2a03f30** — so the `ret` popped the qword at
+0x2a03f2c, which straddles the two saved words and is **0x0100083A00000000: NON-CANONICAL** -> #GP(0)
+into the stub's NULL IDT.  THE DEFECT: `0xC9 LEAVE` had **no 64-bit body** (it is not in
+`long_mode_default64()`, so the 32-bit `instr32_C9` ran and popped a FOUR-byte EBP).  FIXED:
+`instr64_C9` (RSP=RBP then an EIGHT-byte pop, read before write) + a base-table overlay entry
+`{ opcode: 0xC9, default64: true, narrow64 }`; the arm is `ctrl/leave-64`, MEASURED to fail before
+(6 fields MISMATCHED with the overlay entry reverted) and pass after (81/81 green).  THE ACCEPTANCE
+TEST: the guest runs **2,962 instructions further** (4,475,477,692 -> 4,475,480,654) and stops at a
+NEW, named stop: **`mov cr4, rcx` at eip=0x10000A1 with rcx=0x10A0** (PAE|PGE|**LA57**), where the port
+#GPs because it treats CR4 bit 12 as reserved — and the idtr has changed from base 0 limit 0 to
+**base 0x2A04000 limit 511**, the kernel's OWN bringup IDT, which is `startup_64_setup_env`'s last act
+and therefore proof that it COMPLETED.  The LA57 bit came from the kernel's own
+`test dword [0x2143D6F], 1` (`__pgtable_l5_enabled`) finding it set, although CPUID leaf 7 ECX is 0 in
+the port and the trampoline left no LA57 — NOT claimed as a defect; the FOURTH MEASUREMENT is a
+watchpoint on 0x2143D6F plus the stub's `mov %cr4,%rax` result.  (b) THE RELOCATION IS FAITHFUL: the
+entry code at 0x1000000 is byte-identical to the pre-copy source at 0x1200000 for 29 bytes (one byte
+at offset 29 differs — recorded, not explained); (c) the program-header capture read at the wrong
+offset (the header was intact at 300 M AND 500 M), so it is a re-measurement, not an inference.  Full
+battery green, four M0 pins unmoved, corpus 80 -> 81, ctrl 17 -> 18, overlay 157/117 -> 158/118.
+
 **THE JUMP UNIT: THE AMD64 KERNEL ENTERS ITS OWN CODE AND DIES ON ITS 56th INSTRUCTION (2026-10-19).**
 `results/x86-64-jump.md` is its report; MEASUREMENT ONLY, no source file changed.  The jump FIRES:
 at instruction **4,475,477,636** control reaches `eip=0x1000000` with `rsp=0x2a03f58 rsi=0x84790

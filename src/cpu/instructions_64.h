@@ -346,6 +346,7 @@ void instr64_0FCF(void);
 /* S9: string Q forms (five opcodes x {none, F3, F2}) and the atomic family */
 /* the 64-bit stack push, exported for exceptions.c's 8-byte interrupt frame (this unit) */
 void push64(uint64_t value);
+void instr64_C9(void);
 void instr64_98(void); void instr64_99(void);
 void instr64_0FC7_6_reg(int32_t r);
 void instr64_0FC7_6_mem(int64_t addr);

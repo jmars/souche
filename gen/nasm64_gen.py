@@ -1291,6 +1291,19 @@ case("wide", "str-mem-above-4g",
 # S9's strobits cases cover the Q opcodes; these four cover what they do not: the
 # COUNTER's width (only observable through the ZF exit -- see the cases), the 0x67
 # address-size override's truncation and zero-extending write-back, and DF.
+case("ctrl", "leave-64",
+     "LEAVE in 64-bit mode restores RSP from RBP and pops an EIGHT-byte RBP.  A 4-byte pop (the "
+     "32-bit arm) leaves RSP four bytes short, so the following RET pops a qword straddling two "
+     "stack words -- MEASURED as the amd64 kernel's non-canonical return address and #GP",
+     """\
+    mov r11, 0x1122334455667788
+    mov qword ptr [0x100800], r11
+    mov rbp, 0x100800
+    mov rsp, 0x101F00
+    leave
+    mov qword ptr [0x100810], rbp
+    mov qword ptr [0x100818], rsp
+""")
 case("ctrl", "cdqe-cqo-64",
      "CDQE/CQO (0x98/0x99 with REX.W) sign-extend a 32-bit value into a 64-bit one: the "
      "32-bit CWDE arm writes AX only, so the upper half of RAX stays as it was",

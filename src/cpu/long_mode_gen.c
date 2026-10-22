@@ -9,7 +9,7 @@
  * with the overlay, which is the class gen/x86_table64.js exists to make impossible.
  *
  * WHAT IT ANSWERS: which encodings's long-mode operand size is 64 with NO REX.W (the
- * SDM's default-64 group: push/pop/pushf/popf/call/ret/jmp).  30 of them.
+ * SDM's default-64 group: push/pop/pushf/popf/call/ret/jmp).  31 of them.
  */
 
 #include <stdbool.h>
@@ -41,6 +41,7 @@ bool long_mode_default64(int32_t opcode)
 	case 0x9D: return true;
 	case 0xC2: return true;
 	case 0xC3: return true;
+	case 0xC9: return true;
 	case 0xCA: return true;
 	case 0xCB: return true;
 	case 0xCF: return true;

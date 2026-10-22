@@ -414,6 +414,11 @@ const x86_table64 = [
 	 * with per-sub-opcode arms.
 	 * ------------------------------------------------------------------ */
 	{ opcode: 0x8F, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true }, /* pop r/m64                 -- S7 */
+	/* 0xC9 LEAVE: default-64, and the defect this unit localised (results/x86-64-gp.md).  The
+	 * 32-bit arm pops a FOUR-byte EBP, which leaves RSP four bytes short of the 8-byte frame and
+	 * makes the following `ret` pop a qword straddling two stack words -- measured as the amd64
+	 * kernel's #GP at 4,475,477,692 instructions. */
+	{ opcode: 0xC9, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (66 C9 would otherwise run LEAVE with an 8-byte pop)", default64: true }, /* leave */
 	{ opcode: 0xC2, default64: true }, /* ret imm16                 -- S7 */
 	{ opcode: 0xC3, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true }, /* ret                       -- S7 */
 	{ opcode: 0xCA, default64: true }, /* retf imm16                -- S7/S11 */

@@ -25,8 +25,8 @@
  * reached this way still stops by name, exactly as the unprefixed encoding does.
  * See gen/interpreter_c.js, C-side difference 3.
  *
- * 2285 call sites, 45 of them unimplemented at the time this
- * file was generated (2244 instr* symbols defined in the port's sources).
+ * 2286 call sites, 45 of them unimplemented at the time this
+ * file was generated (2245 instr* symbols defined in the port's sources).
  */
 
 #include "cpu.h"
@@ -6612,18 +6612,25 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0xC9:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (66 C9 would otherwise run LEAVE with an 8-byte pop)");
+			return;
+		}
 		instr16_C9();
 	}
 	break;
 	case 0x1C9:
 	{
+		if (long_mode_64()) {
+			unimplemented_instruction("long mode: the 16-bit operand form of a default-64 encoding in long mode is not implemented (66 C9 would otherwise run LEAVE with an 8-byte pop)");
+			return;
+		}
 		instr32_C9();
 	}
 	break;
 	case 0x2C9:
 	{
-		unimplemented_instruction("long mode: 0xC9 has no 64-bit form in gen/x86_table64.js");
-		return;
+		instr64_C9();
 	}
 	break;
 	case 0xCA:
