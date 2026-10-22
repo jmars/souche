@@ -7,6 +7,11 @@
  * writing to stderr with a stable "v86c dbg:" prefix so a gate can grep them.
  *
  *   V86C_WATCH=<addr>:<len>[,<addr>:<len>...]  log every write to a VIRTUAL or PHYSICAL address
+ *   V86C_BREAK=<addr>:<len>[,<addr>:<len>...]  log the first hits of an EXECUTION in a range, with
+ *                                              registers -- WATCH only sees STORES, so "did the port
+ *                                              execute this code, and with what in %rax" needs this
+ *   V86C_BREAK_MAX=<N>                         hits printed per break slot (default 4)
+ *   V86C_BREAK_RING=1                          dump the ring at each printed break hit (the path in)
  *   V86C_RING=<N>                              keep the last N instruction boundaries, dumped on a stop
  *   V86C_DUMP_ON_STOP=1                        on a stop: registers, cr0-4, efer, idtr/gdtr, cr3,
  *                                              and the page-table chain for V86C_CHAIN=<va>
@@ -28,8 +33,10 @@ extern bool v86c_dbg_watch_on;
  * so an investigation can see past the first delivery (results/x86-64-firstfault2.md) */
 extern int v86c_dbg_delivery_bound;
 extern bool v86c_dbg_ring_on;
+extern bool v86c_dbg_break_on;
 
 void v86c_dbg_init(void);
+void v86c_dbg_break_hit(uint64_t eip);
 void v86c_dbg_watch_v(uint64_t addr, int width, uint64_t value, uint64_t rip);
 void v86c_dbg_watch_p(uint32_t phys, int width, uint64_t value, uint64_t rip);
 void v86c_dbg_watch_fault(uint64_t addr, bool write, uint64_t rip);

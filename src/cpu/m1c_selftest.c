@@ -558,10 +558,17 @@ static void test_debug_toolkit_fires(void)
     v86c_dbg_watch_v(0x31558, 1, 0xAB, 0xFFFFFFFF9C2775C2ull);
     v86c_dbg_watch_fault(0x31558, true, 0xFFFFFFFF9C2775C2ull);
     v86c_dbg_ring_record(0xFFFFFFFF9C2775C2ull, bytes, 8);
+    /* the EXECUTION watch: the in-range hit must count, the out-of-range one must not -- a range
+     * check that matched everything would make this 6, not 5 (the arm fails against a debug.c
+     * whose break_hit drops the bounds test) */
+    CHECK(v86c_dbg_break_on);
+    v86c_dbg_break_hit(0xFFFFFFFF9C2775C2ull);
+    v86c_dbg_break_hit(0xFFFFFFFF9C2775C3ull);
     v86c_dbg_on_stop("the toolkit arm");
-    CHECK_EQ(v86c_dbg_test_counts(), 4);   /* watch + fault + ring + stop, counted by the tool */
+    CHECK_EQ(v86c_dbg_test_counts(), 5);   /* watch + fault + ring + one break hit + stop */
     v86c_dbg_test_disarm();
     CHECK(!v86c_dbg_watch_on);
+    CHECK(!v86c_dbg_break_on);
 }
 
 /* ================================================================== *

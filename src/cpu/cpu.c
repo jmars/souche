@@ -191,6 +191,10 @@ void interpreted_run(uint32_t phys_addr)
 		 * REX byte at all (modrm.c's note).  Outside 64-bit mode it is `is_osize_32() ? 1 : 0`
 		 * -- the expression this line used to carry, so the 32-bit dispatch key is unchanged
 		 * byte for byte. */
+		/* the EXECUTION watch: before the instruction runs, so the registers it prints are
+		 * the ones this instruction sees (results/x86-64-reach.md).  One load and one branch
+		 * when the tools are off, the same shape as the ring hook below. */
+		if (v86c_dbg_break_on) v86c_dbg_break_hit(start_eip);
 		run_instruction(opcode | dispatch_os_index(opcode) << 8);
 		if (v86c_dbg_ring_on) {
 			uint8_t b[16];
