@@ -12,6 +12,7 @@
 #include <stdlib.h>
 
 #include "paging.h"
+#include "debug.h"
 #include "cpu.h"         /* S3: unimplemented_instruction -- the long-mode stop below */
 #include "cpu_backend.h" /* S2: the long-mode refusal (plan ss3.5.2, C5) */
 #include "uop_cache.h"   /* PERF-4/M2: the write-path invalidation hook (plan ss4.1) */
@@ -142,6 +143,7 @@ void trigger_pagefault(uint64_t addr,
                        bool is_instruction_fetch,
                        bool rsvd)
 {
+    if (v86c_dbg_watch_on) v86c_dbg_watch_fault(addr, write, cpu->instruction_pointer);
     /* config::LOG_PAGE_FAULTS + dbg_trace dropped (no log channel in M1a) */
     cpu->cr[2] = (int32_t)addr; /* CR2 is 32-bit in this model (ss5.1); long mode's 64-bit
                                  * CR2 is S11's, and the projection is named here so a
@@ -1260,6 +1262,7 @@ reg128 safe_read128s(int64_t addr)
 
 void safe_write8(int64_t addr, int32_t value)
 {
+    if (v86c_dbg_watch_on) v86c_dbg_watch_v((uint64_t)addr, 1, (uint64_t)value, cpu->instruction_pointer);
     if (long_mode_64()) { safe_write8_addr(addr, value); return; }
     uint32_t phys_addr = translate_address_write_and_can_skip_dirty(addr);
     if (cpu->pagefault) {
@@ -1282,6 +1285,7 @@ void safe_write8(int64_t addr, int32_t value)
 
 void safe_write16(int64_t addr, int32_t value)
 {
+    if (v86c_dbg_watch_on) v86c_dbg_watch_v((uint64_t)addr, 2, (uint64_t)value, cpu->instruction_pointer);
     if (long_mode_64()) { safe_write16_addr(addr, value); return; }
     uint32_t phys_addr = translate_address_write_and_can_skip_dirty(addr);
     if (cpu->pagefault) {
@@ -1308,6 +1312,7 @@ void safe_write16(int64_t addr, int32_t value)
 
 void safe_write32(int64_t addr, int32_t value)
 {
+    if (v86c_dbg_watch_on) v86c_dbg_watch_v((uint64_t)addr, 4, (uint64_t)value, cpu->instruction_pointer);
     if (long_mode_64()) { safe_write32_addr(addr, value); return; }
     uint32_t phys_addr = translate_address_write_and_can_skip_dirty(addr);
     if (cpu->pagefault) {
@@ -1331,6 +1336,7 @@ void safe_write32(int64_t addr, int32_t value)
 
 void safe_write64(int64_t addr, uint64_t value)
 {
+    if (v86c_dbg_watch_on) v86c_dbg_watch_v((uint64_t)addr, 8, (uint64_t)value, cpu->instruction_pointer);
     if (long_mode_64()) { safe_write64_addr(addr, value); return; }
     if ((addr & 0xFFF) > 0x1000 - 8) {
         writable_or_pagefault(addr, 8);

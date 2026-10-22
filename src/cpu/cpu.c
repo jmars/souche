@@ -52,6 +52,7 @@
 
 #include "cpu_backend.h" /* S0: the engine seam -- cycle_internal's engine half routes here */
 #include "cpu_state.h"
+#include "debug.h"
 #include "instructions.h"
 #include "memory.h"
 #include "modrm.h"
@@ -78,6 +79,7 @@ void unimplemented_instruction(const char *name)
 	 * 1 GiB / 2 MiB mutation probes, which found no walk stop at all.  The machine stops either
 	 * way; what changes is that the reason a reader gets is the first one. */
 	if (interpreted_unimplemented) return;
+	v86c_dbg_on_stop(name);
 	interpreted_unimplemented = true;
 	snprintf(unimplemented_name, sizeof(unimplemented_name), "%s", name);
 }
@@ -190,6 +192,12 @@ void interpreted_run(uint32_t phys_addr)
 		 * -- the expression this line used to carry, so the 32-bit dispatch key is unchanged
 		 * byte for byte. */
 		run_instruction(opcode | dispatch_os_index(opcode) << 8);
+		if (v86c_dbg_ring_on) {
+			uint8_t b[8];
+			int k;
+			for (k = 0; k < 8; k++) b[k] = (uint8_t)mem8[phys_addr + (uint32_t)k];
+			v86c_dbg_ring_record(start_eip, b, 8);
+		}
 		/* and the SECOND clear, which ends the dispatch's fault window (D1 above): from
 		 * here the only reader is the loop tail's fetch check, which must see only the
 		 * fetch's own fault.  A DELIVERED fault -- flag set, handler entered, eip left at

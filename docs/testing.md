@@ -96,6 +96,31 @@ Two boots of the same image and cmdline, compared **byte for byte**: serial, vir
 instruction count*. It is what makes the JIT's optimisations checkable — the counter staircase is
 guest-observable, so an engine that batches differently moves the guest's clock.
 
+### 2.6 The debugging toolkit (`src/cpu/debug.c`, all DEFAULT OFF)
+
+Four tools behind one env-var family, for the investigations that keep needing them.  **They are off
+unless asked for**: with no variable set the hooks are one load and one branch each, and
+`tests/perf_bench.sh` still reports its pinned `instr=200095214` with the code compiled in.
+
+| flag | what it does |
+|---|---|
+| `V86C_WATCH=<addr>:<len>[,<addr>:<len>…]` | log every write to a watched address, with the rip, width and value.  Watches **virtual** addresses (`safe_write*`), **faulting** accesses (`trigger_pagefault` — a write that faults never reaches a store, which is why it needs its own hook) and **physical** addresses |
+| `V86C_RING=<N>` | keep the last N instruction boundaries (eip + the eight bytes at the fetch) and dump them on any stop |
+| `V86C_DUMP_ON_STOP=1` | on a stop: registers, cr0–cr4, cr2, cr3, efer, idtr/gdtr, cpl, the segment bases |
+| `V86C_CHAIN=<va>` | with the above, the PML4E/PDPTE/PDE/PTE chain of a virtual address, with each entry's physical address and value |
+
+Output goes to **stderr** with the prefix `v86c dbg:` and is **unbuffered** (`v86c_dbg_init` calls
+`setvbuf(stderr, NULL, _IONBF, 0)`, and `v86c_dbg_on_stop` flushes), so a crash cannot eat it — this
+lane lost probe output to block buffering twice before the toolkit existed.  `m1c_selftest`'s
+`test_debug_toolkit_fires` proves each tool fires (it checks the tool's own counter, not just that the
+call returned).
+
+Example — the question that built the toolkit (the amd64 kernel's first #PF):
+
+    V86C_WATCH=0x31558:1 V86C_RING=16 V86C_DUMP_ON_STOP=1 \
+      ./build/v86c --bzimage tests/images/vmlinuz-6.1.0-50-amd64 4475481000 --memory 256 \
+                   --cmdline 'console=ttyS0' --long-mode on
+
 ## 3. The rules, each of which cost something real
 
 - **Measure the instrument before the phenomenon.** A `2>&1` capture made `--jit off` vs `--jit on`

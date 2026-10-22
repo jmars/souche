@@ -44,6 +44,7 @@
 #include <unistd.h> /* _exit: the host-fault handler's exit (cosmocc pulls it in anyway) */
 
 #include "cpu/cpu.h"
+#include "cpu/debug.h"
 #include "cpu/cpu_backend.h" /* S0: the engine seam -- --cpu-engine, the init, the stats seat */
 #include "cpu/cpu_state.h"
 #include "cpu/exceptions.h" /* guest_exception: the vector a stopped delivery recorded */
@@ -1646,6 +1647,7 @@ static void poison_widened_state(void)
  * ------------------------------------------------------------------ */
 int main(int argc, char *argv[])
 {
+	v86c_dbg_init();
 	/* M2-2's boot mode: selected by its OWN flag, so the two-argument oracle contract below
 	 * is reached by exactly the invocations it always was. */
 	if (argc > 1 && strcmp(argv[1], "--bzimage") == 0) {

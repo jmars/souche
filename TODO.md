@@ -782,6 +782,29 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE DEBUGTOOLKIT UNIT: THE TOOLS EXIST, DEFAULT-OFF, AND THEY ANSWERED THE 0x31558 QUESTION
+(2026-10-19).**  `results/x86-64-debugtoolkit.md` is its report and `docs/testing.md` §2.6 documents the
+surface.  FOUR TOOLS behind one env-var family, all no-ops when unset: `V86C_WATCH=<addr>:<len>[,…]`
+(writes -- VIRTUAL via safe_write*, FAULTING via trigger_pagefault -- because a write that faults never
+reaches a store, and PHYSICAL), `V86C_RING=<N>` (the last N instruction boundaries, dumped on any stop),
+`V86C_DUMP_ON_STOP=1` (registers, cr0-cr4, cr2, cr3, efer, idtr/gdtr, cpl, the SEGMENT BASES) and
+`V86C_CHAIN=<va>` (the PML4E/PDPTE/PDE/PTE chain -- the walk this lane hand-wrote three times).  Output
+is `v86c dbg:` on stderr and UNBUFFERED (setvbuf + an fflush on the stop path), so the two evidence
+losses this lane already paid for cannot recur.  COST WHEN OFF is a load and a branch per hook:
+**MEASURED -- tests/perf_bench.sh still reports instr=200095214 with the tools compiled in.**  ARM:
+m1c_selftest's test_debug_toolkit_fires turns the tools on WITHOUT the environment and checks the
+tool's own COUNTER (4 = watch + fault + ring + stop), i.e. the "who reads this on the deciding path"
+question asked of the instrument itself.  THE ACCEPTANCE TEST ANSWERED THE QUESTION:
+`V86C_WATCH=0x31558:1 V86C_RING=16 V86C_DUMP_ON_STOP=1` printed `WATCH F 0x31558 write
+rip=0xffffffff9c2775c2 (the access FAULTED, no store)` and the ring gave the instruction stream, whose
+last entry is `0f 20 e0 65 48 89 05 96` = **`mov rax,cr4; mov %rax,%gs:[disp32]`** -- a PERCPU store
+reached from the kernel's cr4 bookkeeping.  The machine's GS base is CORRECTLY
+0xffffffff9c242000, yet the faulting address is 0x31558 -- the RAW DISPLACEMENT, not gs_base+disp.
+INTERPRETATION: the GS base was not added for this access (the 65 prefix not reaching
+modrm_resolve64's segment_prefix, or the disp really is 0x31558-gs_base) -- the two are told apart by
+printing the instruction's disp32 and the resolved address, one flag away now.  FULL BATTERY green,
+every pin unmoved including the bench with the tools present.
+
 **THE FIRSTFAULT UNIT: ALL THREE QUESTIONS ANSWERED -- THE FIRST FAULT IS A WRITE TO 0x31558 AND THE
 IDT PAGE IS GENUINELY UNMAPPED (2026-10-19).**  `results/x86-64-firstfault.md` is its report;
 MEASUREMENT ONLY (probes removed; tree = commit 801cf8e).  (1) A probe at trigger_pagefault's first

@@ -501,6 +501,7 @@ static void test_cr4_pge_write_no_pdpte_reload(void)
  * bytes, not 8).
  * ================================================================== */
 extern void instr64_CB(void);
+#include "debug.h"
 
 static void test_far_return_64bit_frame(void)
 {
@@ -536,6 +537,31 @@ static void test_far_return_64bit_frame(void)
 
     cpu->efer &= ~EFER_LMA;
     cpu->is_64 = false;
+}
+
+/* ================================================================== *
+ * TEST 1e -- THE DEBUGGING TOOLKIT FIRES (results/x86-64-debugtoolkit.md)
+ *
+ * One arm for the three tools, each proved to FIRE rather than merely exist: the watchpoint (a
+ * watched virtual address and a watched FAULT), the ring (a recorded boundary is dumped) and the
+ * dump-on-stop (the chain of a virtual address is walked).  The tools are env-var driven, so the
+ * arm sets the state through their own entry points and reads back what they wrote -- the same
+ * "who reads this on the deciding path" question every instrument in this tree has to answer.
+ * ================================================================== */
+static void test_debug_toolkit_fires(void)
+{
+    uint8_t bytes[8] = {0x48, 0x8b, 0x05, 0x11, 0x22, 0x33, 0x44, 0x55};
+    machine_setup(false);
+    v86c_dbg_test_arm();              /* turn the tools on WITHOUT the environment */
+    CHECK(v86c_dbg_watch_on);
+    CHECK(v86c_dbg_ring_on);
+    v86c_dbg_watch_v(0x31558, 1, 0xAB, 0xFFFFFFFF9C2775C2ull);
+    v86c_dbg_watch_fault(0x31558, true, 0xFFFFFFFF9C2775C2ull);
+    v86c_dbg_ring_record(0xFFFFFFFF9C2775C2ull, bytes, 8);
+    v86c_dbg_on_stop("the toolkit arm");
+    CHECK_EQ(v86c_dbg_test_counts(), 4);   /* watch + fault + ring + stop, counted by the tool */
+    v86c_dbg_test_disarm();
+    CHECK(!v86c_dbg_watch_on);
 }
 
 static void test_dispatcher_fault_flag(void)
@@ -1489,5 +1515,6 @@ int main(void)
     printf("cpu_m1c_selftest: %d checks, %d failures\n", checks, failures);
         RUN(test_cr4_pge_write_no_pdpte_reload, "MOV CR4 with PGE 0->1 does not reload PDPTEs (long mode: CR3 holds a PML4E)");
     RUN(test_far_return_64bit_frame, "a 64-bit RETF: an eight-byte RIP/CS frame and a 64-bit target");
+    RUN(test_debug_toolkit_fires, "the debugging toolkit fires: watchpoint, fault watch, ring, dump-on-stop");
 return failures != 0;
 }
