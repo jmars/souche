@@ -782,6 +782,26 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE JZ UNIT: THE BRANCH IS INNOCENT, THE LA57 MYSTERY IS SOLVED, AND THE STOP IS A DIFFERENT #GP
+(2026-10-19).**  `results/x86-64-jz.md` is its report; MEASUREMENT ONLY, no source change.  The probe
+printed `cpu->flags`, `flags_changed`, the GETTERS (`getzf()`, `test_z()`) and the lazy operands at
+every eip from 0x1000083 to 0x1000099: at the `jz` **getzf=1 and test_z=1** with `changed=0xC4`
+(stale ZF), `last_result=0`, `last_op_size=31` -- the lazy getter computes `(~0 & (0-1)) >> 31 & 1 = 1`
+correctly.  THE FLAG MACHINERY IS FINE.  The previous unit's fall-through trace was taken BEFORE the
+RIP-relative fix, when the `test` read 0x2413D6C (four bytes early, nonzero) and left ZF clear; with
+the fix the branch is TAKEN, so `or ecx,0x1000` is SKIPPED and **CR4 is written as 0xA0 (PAE|PGE), not
+0x10A0** (INTERPRETATION from the measured branch -- the register was not re-read).  **CORRECTION:
+results/x86-64-la57.md's "this defect is real and is NOT the LA57 cause" was WRONG -- it WAS the
+cause.**  All three original candidates (wrong CPUID, the kernel writing the variable, the flags read
+wrongly) are REFUTED.  THE STOP THAT REMAINS IS A DIFFERENT ONE: `mov cr4` with 0xA0 still #GPs at
+eip=0x10000a1 (idtr base 0x2a04000 limit 511, vector 13's descriptor 0).  The port's reserved-bit mask
+does not contain bits 5/7, so the #GP comes from the step AFTER it: READ instructions_0f.c `case 4:`
+-- when `old ^ new` differs in PAE|PGE|PSE|SMEP the port RELOADS THE PDPTEs (the SDM's MOV-to-CR4
+rule) and #GPs on a reserved bit; here `old ^ new = 0x80` (PGE) so that path runs.  NEXT MEASUREMENT:
+log which branch of `case 4:` raises it and dump the PML4E/PDPTE it reads (cr3, the entry's address
+and value, which bit is called reserved), plus a corpus case doing `mov cr4, 0xA0` in long mode from a
+clean state -- if that #GPs in isolation the defect is reproduced without the kernel.
+
 **THE LA57 UNIT: TWO CANDIDATES REFUTED, ONE REAL DEFECT FIXED, THE BRANCH STILL OPEN (2026-10-19).**
 `results/x86-64-la57.md` is its report.  (1) THE WRITE TRACE (32-byte watch over 0x2413D60..D7F,
 every change logged with its eip): the variable's address in the gp report was WRONG TWICE (hand
