@@ -782,6 +782,28 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE WALKOOB UNIT: THE CRASH IS LOCALISED FURTHER, NOT FIXED -- AND THE KERNEL NOW RUNS IN HIGH
+MEMORY (2026-10-19).**  `results/x86-64-walkoob.md` is its report; NO FUNCTIONAL CHANGE (probes only).
+The last unit's hypothesis is **REFUTED BY MEASUREMENT**: the frame reads are NOT the crash -- a probe
+inside safe_read64_addr printed `0xffffffff9bc03f40 -> phys 0x2a03f40` and `0xffffffff9bc03f48 ->
+0x2a03f48`, both inside the 256 MiB of RAM, so the widened stack path WORKS.  A probe at
+interpreted_run printed `eip=0xffffffff9a2000e3 phys=0x10000e3` (and 0xe5/0xe7/0xfa): **THE KERNEL IS
+NOW EXECUTING AT KERNEL VIRTUAL ADDRESSES**, mapped through its own page tables to its own text at
+16 MiB -- the first time this lane has done that.  The crash is at the FETCH of a `far_return` to
+**0xFFFFFFFF9C27759C** (csbase 0): no interpreted_run line follows it.  WHY IT IS NOT YET PINNED, said
+plainly: the probe lines for that last address were LOST -- with stderr redirected the probe output is
+block-buffered and a SIGSEGV discards it (MEASURED as inconsistency between runs of the same binary:
+one printed the far_return target line, the next did not, a third lost the walk's enter/exit lines).
+THE INSTRUMENT FAILED, NOT THE GUEST.  NEXT MEASUREMENT, with its instrument named: re-run the same
+probes with `setvbuf(stderr, NULL, _IONBF, 0)` (or an fflush after each), so the walk's enter/exit line
+for 0xFFFFFFFF9C27759C survives -- that line answers the only question left (translate, and the crash
+is downstream in the fetch guard/TLB store; or fault, and the crash is in the #PF delivery; the
+kernel's bringup IDT DOES have a #PF gate, measured earlier).  THE FIX MUST BE A BOUND, not a refusal:
+the outcome must be the translation or the guest's #PF, never a host death.  Gates re-run on the
+probe-free tree: make, selftest (all suites green), nasm 118/118, transcript byte-identical,
+determinism 4,000,096,757, gate-x86-64 9/0, gate-long-mode 57/0, gate-long-mode-sys 5/0,
+gate-x86-64-diff 13/0, gate-nasm64 13/0 -- no pin moved.
+
 **THE STACK64 UNIT: THE STACK PATH IS 64-BIT, AND THE CRASH MOVED INTO THE PAGE WALK (2026-10-19).**
 `results/x86-64-stack64.md` is its report.  `misc_instr.c`'s four stack helpers each gained a LONG-MODE
 arm AHEAD of their untouched 16/32-bit one: `get_stack_pointer`/`get_stack_reg` return **int64_t**
