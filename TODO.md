@@ -782,6 +782,31 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE DELIVER UNIT: THE DELIVERY FAULTS AT ITS FIRST ACCESS -- THE KERNEL'S IDT PAGE IS UNMAPPED
+(2026-10-19).**  `results/x86-64-deliver.md` is its report; NO FUNCTIONAL CHANGE (probes only, removed;
+the tree is commit 801cf8e).  A probe at the FIRST thing the delivery does -- the IDT descriptor read
+-- printed, unbuffered, `PROBE desc-read: vector=14 lin=0x9bc040e0 phys=0x0 pf=1` four times and then
+the recursion bound fired.  SO THE DESCRIPTOR READ ITSELF FAULTS, and the three candidates the last
+unit named are all REFUTED BEFORE THEY ARE REACHED: (a) the address computation is arithmetically
+right (`0x9BC04000 + 14*16`), it is the TRANSLATION that fails; (b) the frame push never runs
+(`writable_or_pagefault`/`push64` are not reached, and both were widened by stack64); (c) the
+CPL-changing arm is not entered (`cpl=0`).  WHAT THAT MEANS: the IDT base is 0x9BC04000 and the boot
+stack that DOES translate sits at 0xFFFFFFFF9BC03F40 -- the page immediately BELOW it -- so the
+kernel's identity map covers the stack page and stops at the page boundary, leaving the IDT page
+unmapped.  On hardware the same sequence raises #DF, and the bringup IDT has gates only for #PF and
+#VC (measured earlier: idt[14] non-null, idt[8] zero), so a #DF there is a TRIPLE FAULT -> RESET.
+INTERPRETATION: the port now behaves as the architecture does at this point -- it stops with the reason
+named where the hardware resets -- and the recursion bound is what makes that visible instead of fatal.
+NOTHING WAS CHANGED, deliberately: the brief's rule is that the outcome must be the guest's own fault
+handling, and widening the delivery would not deliver anything on an unmapped IDT, only recurse again.
+NEXT, three measurable questions: (1) WHAT WAS THE FIRST FAULT -- probe trigger_pagefault's addr/cr2 on
+the first entry (the walk for 0xFFFFFFFF9C27759C TRANSLATES, so the #PF came from a different access);
+(2) IS THE IDT PAGE MAPPED IN THE GUEST'S TABLES OR IS THE PORT'S WALK WRONG -- dump the
+PML4E/PDPTE/PDE/PTE chain for 0x9BC03000 vs 0x9BC04000 and compare; (3) if the guest really faults
+before its IDT is mapped, WHAT PUT IT THERE -- startup_64_load_idt loads bringup_idt_descr BEFORE the
+first C call, so an unmapped IDT is either the kernel's own ordering or a consequence of an earlier
+mis-execution.  Subset gates re-run green, no pin moved.
+
 **THE WALKOOB2 UNIT: THE INSTRUMENT FIXED, THE QUESTION ANSWERED, THE HOST CRASH BOUNDED (2026-10-19).**
 `results/x86-64-walkoob2.md` is its report.  (1) THE INSTRUMENT: `setvbuf(stderr, NULL, _IONBF, 0)` at
 the top of main -- the second time this lane has lost evidence to its own tooling (the 160-byte stop
