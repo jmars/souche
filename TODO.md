@@ -782,6 +782,29 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE KASLR UNIT: THE E820 IS THE RIGHT SHAPE, AND THE PORT'S KERNEL REJECTS THE ADDRESS IT CHOSE
+(2026-10-19).**  `results/x86-64-kaslr.md` is its report; MEASUREMENT ONLY, no code change.  (1) THE
+MAP AS THE GUEST SEES IT (READ minibios.asm:803-807 + both serials): minibios publishes FOUR entries --
+[0,0x9FC00) usable, [0x9FC00,+0x400) reserved, [0xF0000,+0x10000) reserved, [0x100000, MEM_TOP) usable
+-- and QEMU's for the same 256 MiB is the SAME SHAPE (one big usable region from 1 MiB to nearly the
+top, the same low reserved holes).  So THE E820 IS NOT TOO FRAGMENTED and is not the defect: a ~255 MiB
+contiguous usable region exists in both, and the memory-size discriminator is already answered by the
+QEMU unit's own run (QEMU at -m 256, the SAME memory the port gets, chose Kernel Offset 0x6400000 --
+it found a region; the port did not).  (2) THE LINE THAT DISTINGUISHES THE PATHS (MEASURED): the port's
+serial carries `Invalid physical address chosen!` followed by `Physical KASLR disabled: no suitable
+memory region!`, and QEMU's carries NEITHER.  The first is slots_fetch_random's message: the kernel DID
+find candidate slots and then rejected the physical address it picked -- so the port's kernel is not
+failing to FIND a slot, it is failing a VALIDITY CHECK on the address it chose.  INTERPRETATION: that
+check is against the kernel's mem_avoid/valid-region bookkeeping, built from the BOOT_PARAMS the
+firmware hands over -- and the port's minibios and QEMU differ there, not in the E820.  (3) NO FIX
+CLAIMED, deliberately: the E820 is the same shape as QEMU's (a 'proper map' would change nothing
+wrong), a minibios change touches EVERY guest gate and the 32-bit transcript is a pinned BYTE (the
+rule says stop and publish rather than move it on a hypothesis), and the distinguishing line points at
+the boot_params.  NEXT MEASUREMENT: dump the boot_params the port hands the kernel (at %rsi = 0x84790,
+which the toolkit's dump already prints) and compare field for field against QEMU's -- e820_entries,
+the e820 table's first entries, hdr.code32_start, hdr.init_size, hdr.pref_address and the cmdline
+pointer.  Subset gates green, no pin moved.
+
 **THE QEMU UNIT: THE SAME IMAGE BOOTS UNDER QEMU, SO THE TRIPLE-FAULT WINDOW IS THE PORT'S
 (2026-10-19).**  `results/x86-64-qemu.md` is its report.  THE SECOND REFERENCE, READ from
 gate-m2-5.sh's gate-1b arm and run on the pinned image with the SAME cmdline and memory (no initrd):
