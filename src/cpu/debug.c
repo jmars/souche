@@ -21,7 +21,7 @@ static struct { uint64_t addr; int len; } watch[V86C_DBG_MAX_WATCH];
 static int watch_n;
 
 #define V86C_DBG_RING_MAX 4096
-static struct { uint64_t eip; uint8_t bytes[8]; } ring[V86C_DBG_RING_MAX];
+static struct { uint64_t eip; uint8_t bytes[16]; } ring[V86C_DBG_RING_MAX];
 static int ring_n, ring_i;
 static int test_counts;
 void v86c_dbg_test_arm(void)
@@ -113,7 +113,7 @@ void v86c_dbg_ring_record(uint64_t eip, const uint8_t *bytes, int n)
     int i;
     test_counts++;
     ring[ring_i].eip = eip;
-    for (i = 0; i < 8; i++) ring[ring_i].bytes[i] = i < n ? bytes[i] : 0;
+    for (i = 0; i < 16; i++) ring[ring_i].bytes[i] = i < n ? bytes[i] : 0;
     ring_i = (ring_i + 1) % ring_n;
 }
 
@@ -168,10 +168,13 @@ void v86c_dbg_on_stop(const char *why)
         fprintf(stderr, "v86c dbg: ring (%d recorded, oldest first):\n", ring_n);
         for (i = 0; i < ring_n; i++) {
             int k = (ring_i + i) % ring_n;
-            fprintf(stderr, "v86c dbg:   eip=0x%llx bytes %02x %02x %02x %02x %02x %02x %02x %02x\n",
+            fprintf(stderr, "v86c dbg:   eip=0x%llx bytes %02x %02x %02x %02x %02x %02x %02x %02x"
+                            " %02x %02x %02x %02x %02x %02x %02x %02x\n",
                     (unsigned long long)ring[k].eip,
                     ring[k].bytes[0], ring[k].bytes[1], ring[k].bytes[2], ring[k].bytes[3],
-                    ring[k].bytes[4], ring[k].bytes[5], ring[k].bytes[6], ring[k].bytes[7]);
+                    ring[k].bytes[4], ring[k].bytes[5], ring[k].bytes[6], ring[k].bytes[7],
+                    ring[k].bytes[8], ring[k].bytes[9], ring[k].bytes[10], ring[k].bytes[11],
+                    ring[k].bytes[12], ring[k].bytes[13], ring[k].bytes[14], ring[k].bytes[15]);
         }
     }
     if (dump_on_stop) {

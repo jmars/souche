@@ -193,10 +193,10 @@ void interpreted_run(uint32_t phys_addr)
 		 * byte for byte. */
 		run_instruction(opcode | dispatch_os_index(opcode) << 8);
 		if (v86c_dbg_ring_on) {
-			uint8_t b[8];
+			uint8_t b[16];
 			int k;
-			for (k = 0; k < 8; k++) b[k] = (uint8_t)mem8[phys_addr + (uint32_t)k];
-			v86c_dbg_ring_record(start_eip, b, 8);
+			for (k = 0; k < 16; k++) b[k] = (uint8_t)mem8[phys_addr + (uint32_t)k];
+			v86c_dbg_ring_record(start_eip, b, 16);
 		}
 		/* and the SECOND clear, which ends the dispatch's fault window (D1 above): from
 		 * here the only reader is the loop tail's fetch check, which must see only the

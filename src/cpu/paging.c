@@ -143,7 +143,11 @@ void trigger_pagefault(uint64_t addr,
                        bool is_instruction_fetch,
                        bool rsvd)
 {
-    if (v86c_dbg_watch_on) v86c_dbg_watch_fault(addr, write, cpu->instruction_pointer);
+    /* THE INSTRUCTION THAT FAULTED IS `previous_ip`, NOT `instruction_pointer`: at a fault the
+     * cursor has already advanced past the instruction (MEASURED -- the first version of this hook
+     * reported a rip one instruction too late and sent this lane looking at the wrong store,
+     * results/x86-64-gsbase.md). */
+    if (v86c_dbg_watch_on) v86c_dbg_watch_fault(addr, write, cpu->previous_ip);
     /* config::LOG_PAGE_FAULTS + dbg_trace dropped (no log channel in M1a) */
     cpu->cr[2] = (int32_t)addr; /* CR2 is 32-bit in this model (ss5.1); long mode's 64-bit
                                  * CR2 is S11's, and the projection is named here so a

@@ -93,6 +93,7 @@ INSTRUCTION_LIMIT ?= 1000000
 # `make selftest` still compiles every one of them individually with $(CPU_CFLAGS)
 # -Werror, so per-file warning coverage is unchanged.
 CPU_SRC := src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/paging.c \
+           src/cpu/debug.c \
            src/cpu/arith.c src/cpu/modrm.c src/cpu/misc_instr.c \
            src/cpu/string.c src/cpu/instructions.c src/cpu/instructions_0f.c \
            src/cpu/instructions_64.c \
@@ -297,6 +298,7 @@ NASM64_WORKDIR := $(BUILD)/nasm64
 # both would be a duplicate-symbol error.  The run loop is covered by the transcript gate
 # instead (gates G1/G2), which is the stronger check for it.
 SELFTEST_SRC := src/cpu/cpu_state.c src/cpu/flags.c src/cpu/memory.c src/cpu/paging.c \
+                src/cpu/debug.c \
                 src/cpu/arith.c src/cpu/modrm.c src/cpu/misc_instr.c \
                 src/cpu/string.c src/cpu/instructions.c \
                 src/cpu/instructions_0f.c \

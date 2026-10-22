@@ -30,7 +30,7 @@ void v86c_dbg_init(void);
 void v86c_dbg_watch_v(uint64_t addr, int width, uint64_t value, uint64_t rip);
 void v86c_dbg_watch_p(uint32_t phys, int width, uint64_t value, uint64_t rip);
 void v86c_dbg_watch_fault(uint64_t addr, bool write, uint64_t rip);
-void v86c_dbg_ring_record(uint64_t eip, const uint8_t *bytes, int n);
+void v86c_dbg_ring_record(uint64_t eip, const uint8_t *bytes, int n); /* up to 16 bytes */
 void v86c_dbg_on_stop(const char *why);
 
 /* the selftest's own surface: turn the tools on without the environment, and read the count of
