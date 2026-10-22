@@ -782,6 +782,28 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE BISECT UNIT: THE DIVERGENCE IS THE KERNEL'S FIRST printk, AND THE PML4 ENTRY IT NEEDS WAS NEVER
+WRITTEN BY THE KERNEL (2026-10-19).**  `results/x86-64-bisect.md` is its report; MEASUREMENT ONLY.
+(1) THE FIRST DIVERGENCE LINE (both at 256 MiB, same image and cmdline, earlyprintk+console on):
+QEMU's line 2 is `[0.000000] Linux version 6.1.0-50-amd64 (debian-kernel@lists.debian.org) ... Debian
+6.1.176-1`; the port never prints it. The port and QEMU agree up to and INCLUDING the decompressor's
+KASLR messages (which the discriminator unit proved are the normal path at a small size), so the port's
+kernel dies BETWEEN the handover and that first printk -- READ: that line comes from setup_arch's
+pr_info(linux_banner), AFTER __startup_64's page-table fixup and after the kernel installed its own CR3.
+(2) THE NAMED ACCESS BEHIND IT: a V86C_WATCH on 0x30EA000 (the first PML4 entry, 8 bytes, at the
+kernel's cr3) shows EVERY write to that entry in the whole run coming from **rip=0x4F399C0, the
+DECOMPRESSOR's output flush** (byte by byte, values are image data: 0x0015FFE800180015).  THE KERNEL
+NEVER WRITES IT -- so the entry its 4-level walk reads as PML4[0] is decompressed image bytes, not the
+fixup __startup_64 is supposed to store, which is exactly why the walk fails at a later level
+(cr2=0x8B1100E0, the IDT descriptor) and the delivery cannot proceed.  INTERPRETATION (the crux):
+**__startup_64's page-table fixup did not run, or did not write** -- a named single-instruction question
+(its stores to early_top_pgt, and the mov %rax,%cr3 that follows).  (3) NO FIX CLAIMED: the measurement
+names the MISSING WRITE, not the defect, and the three shapes (the fixup was skipped by a wrong branch;
+it wrote elsewhere -- the address-computation class this lane has hit four times; or cr3 is not the table
+it fixed up -- a CR3/CR4 ordering) have different fixes and two of them would change the machine.  NEXT:
+V86C_WATCH on the early_top_pgt physical address PLUS V86C_RING, so one run shows both the stores the
+kernel DID make and the instruction before the stop.  Subset gates green, no pin moved.
+
 **THE MEMSIZE UNIT: MEMORY SIZE DOES NOT CHANGE THE PORT'S PATH -- THE DIVERGENCE IS SIZE-INDEPENDENT
 (2026-10-19).**  `results/x86-64-memsize.md` is its report; MEASUREMENT ONLY.  THE AXIS VARIED FOR THE
 FIRST TIME IN THIS LANE, and the answer is a FINDING: at **80 MiB** (with build/minibios-80m.bin) the
