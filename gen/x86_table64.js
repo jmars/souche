@@ -204,11 +204,18 @@ const x86_table64 = [
 	{ opcode: 0x8D },  /* lea r64, m (S7; custom_modrm_resolve, like the 32-bit body) */
 	/* S9: the string Q forms (movs/cmps/stos/lods/scas).  The F3/F2 arms are the emitter's
 	 * prefix split of the SAME opcode, so each gets its own instr64_F3NN / instr64_F2NN body. */
-	{ opcode: 0xA5, narrow64: "the 16-bit operand form of a string op in long mode is not implemented (66 A5 would otherwise run MOVSQ -- the arms split on F2/F3 only)" },
-	{ opcode: 0xA7, narrow64: "the 16-bit operand form of a string op in long mode is not implemented (see 0xA5)" },
-	{ opcode: 0xAB, narrow64: "the 16-bit operand form of a string op in long mode is not implemented (see 0xA5)" },
-	{ opcode: 0xAD, narrow64: "the 16-bit operand form of a string op in long mode is not implemented (see 0xA5)" },
-	{ opcode: 0xAF, narrow64: "the 16-bit operand form of a string op in long mode is not implemented (see 0xA5)" },
+	/* LIFTED (results/x86-64-str16.md): the 0x66 arm routes to the 16-bit bodies, which pass
+	 * STR_W explicitly -- the MOVSQ fear was about the REX.W arm, and dispatch_os_index gives
+	 * os_index 0 for a 0x66 prefix, so it cannot be selected here. */
+	{ opcode: 0xA5 },
+	/* LIFTED (results/x86-64-str16.md): see the 0xA5 note. */
+	{ opcode: 0xA7 },
+	/* LIFTED (results/x86-64-str16.md): see the 0xA5 note. */
+	{ opcode: 0xAB },
+	/* LIFTED (results/x86-64-str16.md): see the 0xA5 note. */
+	{ opcode: 0xAD },
+	/* LIFTED (results/x86-64-str16.md): see the 0xA5 note. */
+	{ opcode: 0xAF },
 	/* 0xC3 / 0xE8 / 0xE9 are ALREADY here as default-64 entries with no body (S5's shutter);
 	 * S7 gives them their bodies, and 0xC2 / 0xCA / 0xCB / 0xCF stay named stops. */
 

@@ -1353,6 +1353,32 @@ case("ctrl", "cdqe-cqo-64",
     cqo
     mov rsi, rdx
 """)
+case("str", "word-forms-66",
+     "THE 16-BIT STRING FORMS IN LONG MODE: `66 F3 A5` is REP MOVSW -- two bytes per element, with "
+     "the 64-bit RSI/RDI/RCX of long mode.  The port refused these by name until the amd64 kernel "
+     "reached one (results/x86-64-str16.md); the width is the discriminator (a 32-bit fall-through "
+     "copies four bytes per element and desynchronises the window)",
+     """\
+    mov r11, 0x0123456789ABCDEF
+    mov qword ptr [0x100100], r11
+    mov qword ptr [0x100108], r11
+    mov rsi, 0x100100
+    mov rdi, 0x100200
+    mov rcx, 3
+    rep movsw
+    mov r8, rcx
+    mov r9, rsi
+    mov r10, rdi
+    mov r11, 0x100200
+    mov ax, 0xBBAA
+    mov rdi, 0x100300
+    mov rcx, 2
+    rep stosw
+    mov rsi, 0x100100
+    mov rdi, 0x100100
+    mov rcx, 2
+    repe cmpsw
+""")
 case("str", "cmps-count-64",
      "the REP COUNTER IS RCX, 64 BITS: `repe cmpsb` with RCX = 0x100000002 exits on the "
      "first mismatch and must leave RCX = 0x100000001.  A 32-bit counter reads ECX = 2, "

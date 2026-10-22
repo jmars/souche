@@ -782,6 +782,25 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE STR16 UNIT: THE 16-BIT STRING FORMS ARE REAL -- THE GUARD LIFTED, AND THE KERNEL GETS 11,059
+INSTRUCTIONS FURTHER (2026-10-19).**  `results/x86-64-str16.md` is its report.  WHICH SHAPE: the
+narrow64 guard's own message named its fear ("66 A5 would otherwise run MOVSQ -- the arms split on
+F2/F3 only"), and READ of interpreter_gen.c's `case 0xA5:` shows the 0x66 arm calls the **16-bit
+bodies** (instr16_A5 -> movsw_rep -> string_instruction(..., STR_W, ...)), which go through the
+long-mode string path the rep unit built.  The fear was misplaced: dispatch_os_index returns **0** for
+a 0x66 prefix, so the 0x2NN arm (the MOVSQ one) CANNOT be selected.  So the GUARD WAS LIFTED, not the
+bodies duplicated, with that reasoning in the overlay.  ARM: new corpus case **str/word-forms-66**
+(the corpus CAN carry it -- a string op is unprivileged): 66 F3 A5 = rep movsw over three elements of
+a qword, then rep stosw, then repe cmpsw, RSI/RDI/RCX stored in the window; the width is the
+discriminator.  MEASURED: 84/84 green with the guard lifted, and with the guard restored
+`total=84 green=83 red_unimplemented=1` (the case RED).  ACCEPTANCE: the kernel is PAST the stop --
+4,475,473,445 -> **4,475,484,504 instructions (+11,059)** -- and now stops on the recursion bound
+again at eip=0x8AE77246, cr3=0x30ea000: a #PF whose delivery faults again.  NEXT: that #PF, with the
+toolkit (V86C_WATCH + V86C_DUMP_ON_STOP + V86C_CHAIN) and the deliver unit's IDT question.  Full
+battery green (one gate-m2-5 run reported 9 FAILING in its QEMU leg -- empty QEMU serial -- and the
+immediate re-run was 0 FAILING; the port's own leg and the transcript passed in both, and it is
+recorded rather than hidden).  Corpus 83 -> 84, str 4 -> 5, overlay census unchanged.
+
 **THE GSFIX UNIT: THE FS/GS BASE WAS DROPPED FOR RIP-RELATIVE OPERANDS -- FIXED, ARM MEASURED, GUEST
 MOVED ON (2026-10-19).**  `results/x86-64-gsfix.md` is its report.  THE THREE NUMBERS (toolkit, after
 the last unit's previous_ip fix): the instruction is `65 48 89 05 96 9F DB 63` = `mov %rax,
