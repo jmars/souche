@@ -782,6 +782,28 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE DISCRIMINATOR UNIT: QEMU AT 80 MiB PRINTS THE SAME TWO KASLR MESSAGES, SO THE DIVERGENCE IS NOT
+KASLR (2026-10-19).**  `results/x86-64-discriminator.md` is its report; MEASUREMENT ONLY, one QEMU run.
+`qemu-system-x86_64 -machine pc -m 80 -enable-kvm -no-reboot -display none -kernel
+tests/images/vmlinuz-6.1.0-50-amd64 -append 'console=ttyS0 earlyprintk=serial' -serial file:` prints,
+from the top: `Probing EDD ... ok`, **`Invalid physical address chosen!`**, **`Physical KASLR disabled:
+no suitable memory region!`**, then `Linux version 6.1.0-50-amd64 ...`, `Memory KASLR using RDTSC...`,
+`Kernel Offset: 0x19600000`, and `---[ end Kernel panic - not syncing: System is deadlocked on memory
+]---` (the correct end for 80 MiB).  SO THREE UNITS OF HYPOTHESIS ARE CLOSED: (i) the two KASLR messages
+are the NORMAL early-boot path at a small memory size, NOT a port divergence -- QEMU shows them too and
+boots; (ii) results/x86-64-kaslr.md's 'the port's kernel rejects the address it chose' and
+results/x86-64-bootparams.md's init_size-vs-window arithmetic are both beside the point; (iii) the 80 MiB
+firmware run that still printed the same lines was not evidence of anything either.  THE DIVERGENCE IS
+LATER: QEMU gets from those messages to its own panic; the port gets from the same messages to a #PF whose
+delivery re-enters four times (eip=0x87A77246, cr3=0x30ea000) -- and the port DOES enter the kernel (it
+runs at eip=0x87A.../0x8AE... on the kernel's own tables), so it dies BETWEEN the handover and
+console_init, before its first printk reaches the serial.  NEXT MEASUREMENT: V86C_RING +
+V86C_DUMP_ON_STOP at the stop, plus a V86C_WATCH on the serial port's I/O writes (0x3F8) to see whether
+the kernel ever TRIED to print -- which distinguishes 'died before console_init' from 'printed but the
+port's UART dropped it', two very different defects.  (2) A second amd64 image was NOT needed: the
+discriminator answered what it was for, and the discipline for adding one is recorded in
+results/x86-64-qemu.md ss4.  Subset gates green, no pin moved.
+
 **THE BOOTPARAMS UNIT: THE FIELDS MEASURED, AND THE init_size HYPOTHESIS REFUTED (2026-10-19).**
 `results/x86-64-bootparams.md` is its report.  NEW TOOLKIT SURFACE (default off):
 `V86C_BOOTPARAMS=<addr>` with V86C_DUMP_ON_STOP prints the standard zero-page fields.  THE DUMP (at
