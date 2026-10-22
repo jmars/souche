@@ -782,6 +782,31 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE PF2 UNIT: THE GUEST'S PML4E[0] IS ZERO, SO THE IDT IS GENUINELY UNMAPPED (2026-10-19).**
+`results/x86-64-pf2.md` is its report; MEASUREMENT ONLY, made entirely with the toolkit (no hand
+probes, no code change).  (1) THE FIRST FAULT: V86C_RING gives the kernel's own stream -- `mov rdi,
+0x9C517600; mov ecx, 0x400; mov rsi, rbx; rep movsq` (f3 a5, a 0x400-qword copy), then `call`, then the
+faulting access; V86C_WATCH says it is a **READ of 0x9C5100E0**, and idtr = 0x9C510000/4095 makes that
+exactly **idtr_base + 14*16 -- the IDT descriptor for vector 14, read by the delivery itself**.  So the
+first fault is not a guest data access at all: it is the delivery reading its own gate.  (2) IS THE
+TABLE GENUINELY ABSENT?  YES -- V86C_CHAIN (the firstfault unit's method) reads the table bytes
+physically: `chain va=0x9c5100e0 cr3=0x30ea000 idx=0/2/226/272` and **`PML4E @0x30ea000 = 0x0`**.  The
+top-level entry for the entire low half is NOT PRESENT, and the port's own walk agrees -- so NO stride,
+index, frame-mask or truncation defect is involved.  (Compare the firstfault unit's reading of the
+SAME cr3: PML4E = 0x30EC063 -- THE TABLES CHANGED between then and now, which is what early-boot table
+construction looks like.)  (3) THE DELIVERY: the IDT page is genuinely unmapped, so the delivery's own
+descriptor read faults and the recursion bound stops the machine; hardware's sequence here is #PF ->
+the vector-14 gate read from an unmapped page -> #DF -> no #DF gate -> TRIPLE FAULT -> RESET, so the
+port's named stop is the CORRECT SEAT (the deliver unit's conclusion, reconfirmed at a second address
+with a second IDT base).  NOTHING IS PAPERED OVER: the port does not substitute its own fault handling
+for a guest fault.  THE QUESTION THAT REMAINS: why is PML4E[0] zero at that instant, and what raised
+the FIRST fault (the watch sees only the delivery's descriptor read -- the original fault is masked by
+the recursion bound)?  The instrument: the toolkit with the bound lifted to 1 in a debug build, or a
+V86C_WATCH on the first trigger_pagefault address (the ring's last entries point at the `rep movsq`
+destination 0x9C517600).  That distinguishes "the kernel is between two table switches and its own IDT
+is not yet mapped" (a guest transient; hardware resets) from "the port mis-executed the table
+construction" (a port defect).  Subset gates green, no pin moved.
+
 **THE STR16 UNIT: THE 16-BIT STRING FORMS ARE REAL -- THE GUARD LIFTED, AND THE KERNEL GETS 11,059
 INSTRUCTIONS FURTHER (2026-10-19).**  `results/x86-64-str16.md` is its report.  WHICH SHAPE: the
 narrow64 guard's own message named its fear ("66 A5 would otherwise run MOVSQ -- the arms split on
