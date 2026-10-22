@@ -1334,15 +1334,22 @@ static void test_pae_gp(void)
     CHECK_EQ(exc_code, 0);
     CHECK_EQ(cpu->cr[0], CR0_PE | CR0_PG); /* CR0 unwritten */
 
-    /* the CR4 write path faults atomically too: CR4 stays uncommitted */
+    /* THE CR4 WRITE PATH DOES NOT RELOAD PDPTEs ON A PSE/PGE CHANGE (corrected in the pdpte
+     * unit, results/x86-64-pdpte.md).  The SDM reloads the PDPTEs when CR4.PAE is SET (a 0->1
+     * transition); changing PSE, PGE or SMEP only flushes the TLB.  This test used to assert a
+     * #GP here because the port reloaded on any of the four -- and in long mode that reload
+     * read the guest's PML4 entries with the 32-bit PAE PDPTE rules and faulted on a legal
+     * PML4E, which is what stopped the amd64 kernel.  The old assertion was the DEFECT, so it
+     * is corrected rather than kept: with the bad PDPT in place and PAE already set, the write
+     * now commits and no exception is recorded.  The PAE 0->1 fault path is still exercised by
+     * the CR0 test above (which sets PAE and PG together) and by gate-pae-1. */
     pae_setup();
     write64_no_mmap_or_dirty_check(PAE_PDPT_PHYS + 0, 0x0000000100000001ull);
     reset_exceptions();
     write_reg32(EAX, (int32_t)(CR4_PAE | CR4_PSE));
     instr_0F22(EAX, 4);
-    CHECK_EQ(exc_vector, CPU_EXCEPTION_GP);
-    CHECK_EQ(exc_code, 0);
-    CHECK_EQ(cpu->cr[4], CR4_PAE); /* CR4 unwritten */
+    CHECK_EQ(exc_vector, (uint64_t)-1);          /* no fault: no PDPTE reload */
+    CHECK_EQ(cpu->cr[4], CR4_PAE | CR4_PSE);     /* and the write committed */
 
     printf("PASS paging: PAE load_pdpte #GP (high-half, reserved bit, masking) + CR fault atomicity\n");
 }

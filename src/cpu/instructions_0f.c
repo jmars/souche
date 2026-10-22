@@ -565,9 +565,25 @@ void instr_0F22(int32_t r, int32_t creg)
 			    cpu_backend_refuse_long_mode("CR4.PAE")) {
 				return;
 			}
-			if ((data & CR4_PAE) != 0 &&
-			    ((old_cr4 ^ data) & (CR4_PAE | CR4_PGE | CR4_PSE | CR4_SMEP)) != 0 &&
-			    (cpu->cr[0] & CR0_PG) != 0 && !load_pdpte(cpu->cr[3])) {
+			/* THE PDPTE RELOAD, ON THE SDM'S TERMS AND ONLY IN 3-LEVEL MODE.
+			 * The SDM's MOV-to-CR4 rule reloads the PDPTEs when CR4.PAE is SET (a 0->1
+			 * transition); changing PGE, PSE or SMEP only flushes the TLB.  The port
+			 * reloaded on ANY of the four, and in long mode the "PDPT" it read is the
+			 * guest's PML4 -- four 8-byte entries at CR3 judged by the 32-bit PAE
+			 * PDPTE rules (read_pdpt: bits 63:32 must be zero, and 0x1E6 reserved), so
+			 * a legitimate PML4E (PWT, PS, or NX) made a MOV CR4 #GP.
+			 *
+			 * MEASURED as the amd64 kernel's last blocker (results/x86-64-pdpte.md):
+			 * `mov cr4, rcx` with rcx=0xA0 (PAE|PGE) against old CR4=0x20 -- PGE 0->1,
+			 * no PAE transition at all -- reloaded and #GPs on the kernel's own PML4E,
+			 * delivered into the bringup IDT's null vector-13 gate.
+			 *
+			 * In long mode the 4-level walk (do_page_walk64) reads CR3 directly and
+			 * reg_pdpte is not consulted at all, so the reload is not merely wrong
+			 * there, it is unnecessary. */
+			if ((data & CR4_PAE) != 0 && (old_cr4 & CR4_PAE) == 0 &&
+			    (cpu->cr[0] & CR0_PG) != 0 && (cpu->efer & EFER_LMA) == 0 &&
+			    !load_pdpte(cpu->cr[3])) {
 				return;
 			}
 			if (((old_cr4 ^ data) & (CR4_PGE | CR4_PSE | CR4_PAE)) != 0) {

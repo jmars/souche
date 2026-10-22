@@ -782,6 +782,29 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE PDPTE UNIT: THE CR4 WRITE'S RELOAD WAS TOO EAGER, FIXED, AND THE KERNEL NOW RUNS ON ITS OWN
+TABLES (2026-10-19).**  `results/x86-64-pdpte.md` is its report.  READ of instructions_0f.c `case 4:`
+plus paging.c's read_pdpt gives the answer, and it is (ii) AND (i): (ii) the port reloaded the PDPTEs
+whenever `old ^ new` touched PAE|PGE|PSE|SMEP, while the SDM reloads them only when **CR4.PAE is SET**
+(a PGE/PSE/SMEP change only flushes the TLB) -- the kernel's write is PGE-only (0x20 -> 0xA0, old^new
+= 0x80); and (i) in long mode the entry at CR3 is a **PML4E**, and read_pdpt judges it by the 32-bit
+PAE PDPTE rules (bits 63:32 must be zero, 0x1E6 reserved), so a legal PML4E (PWT bit 3, PS bit 7, NX
+bit 63) made the write #GP.  Candidate (iii) is REFUTED: the table is the kernel's own 4-level PML4.
+FIX: reload only on PAE 0->1, and never in long mode (do_page_walk64 reads CR3 directly; reg_pdpte is
+not consulted).  THE ARM: the corpus cannot carry it (`mov cr4` is privileged and the native leg runs
+at CPL 3 -- MEASURED, the first attempt reported `Exception actual None / expected GP`), so the arm is
+the existing cpu_selftest assertion that encoded the DEFECT ("the CR4 write path faults atomically
+too"), corrected to the SDM rule with its reason in the file; MEASURED asymmetry with the old trigger
+restored: 2 failures (`exc_vector got 0xd want -1`, `cr[4] got 0x20 want 0x30`), 0 with the fix.
+**The pin moves 3889 -> 3888** (three assertions became two), stated not absorbed.  An m1c arm was
+added too and PASSES but does NOT discriminate (it passes under the mutation) -- recorded as a seat,
+not an instrument.  ACCEPTANCE TEST: the CR4 #GP is GONE, the kernel switches to its OWN page tables
+(cr3 0x4f76000 -> **0x30ea000**) and runs 110 instructions further (4,475,480,658 -> 4,475,480,768),
+stopping on a PRE-EXISTING named gap of this port: `long mode: a RETF target at or above 4 GiB`
+(instr64_CB / far_return's int32_t eip, results/x86-64-idt64.md).  NEXT: widen far_return to a 64-bit
+eip (both its int32_t consequences are named stops today; the CPL-change path reads a 32-bit ESP/SS
+frame too).  Full battery green, four M0 pins unmoved.
+
 **THE JZ UNIT: THE BRANCH IS INNOCENT, THE LA57 MYSTERY IS SOLVED, AND THE STOP IS A DIFFERENT #GP
 (2026-10-19).**  `results/x86-64-jz.md` is its report; MEASUREMENT ONLY, no source change.  The probe
 printed `cpu->flags`, `flags_changed`, the GETTERS (`getzf()`, `test_z()`) and the lazy operands at

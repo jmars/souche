@@ -454,6 +454,43 @@ static void test_pagefault_delivery_64bit(void)
     CHECK_EQ(safe_read64_addr((int64_t)(IDT64_BASE + (14 << 3))), 0); /* that slot is null */
 }
 
+/* ================================================================== *
+ * TEST 1c -- MOV CR4 with PGE 0->1 must NOT reload the PDPTEs, and in long mode the entry at
+ * CR3 is a PML4E, not a 32-bit PAE PDPTE
+ *
+ * MEASURED as the amd64 kernel's last blocker (results/x86-64-pdpte.md): `mov cr4, rcx` with
+ * rcx=0xA0 (PAE|PGE) against old CR4=0x20 -- PGE 0->1, NO PAE transition -- reloaded the
+ * "PDPTEs", which in long mode are the guest's PML4 entries judged by the 32-bit PAE PDPTE
+ * rules, and #GP'd on a legitimate PML4E.  The SDM reloads PDPTEs only when CR4.PAE is SET;
+ * PGE/PSE/SMEP changes flush the TLB.  The fixture's PML4[0] carries PWT (bit 3) and NX (bit
+ * 63) -- both legal in a PML4E and both rejected by read_pdpt -- so before the fix this
+ * write #GPs and after it commits.
+ * ================================================================== */
+static void test_cr4_pge_write_no_pdpte_reload(void)
+{
+    machine_setup(false);
+    wr64(PML4_64 + 0, (uint64_t)(PAE_PDPT | PAGE_TABLE_PRESENT_MASK) | (1ull << 3) | (1ull << 63));
+    wr64(PAE_PDPT + 0, (uint64_t)(PAE_PD | PAGE_TABLE_PRESENT_MASK));
+    wr64(PAE_PD + 0, (uint64_t)(PAGE_TABLE_PSE_MASK | PAGE_TABLE_PRESENT_MASK | PAGE_TABLE_RW_MASK));
+    cpu->cr[3] = PML4_64;
+    cpu->cr[4] = CR4_PAE;
+    set_cr0(cpu->cr[0] | CR0_PG);
+    cpu->efer |= EFER_LMA;
+    cpu->is_64 = true;
+    cpu->pagefault = false;
+
+    /* the write under test: CR4 = PAE|PGE, i.e. PGE going 0 -> 1 */
+    write_reg32(ECX, 0xA0);
+    instr_0F22(ECX, 4);
+    CHECK(!cpu->pagefault);          /* a faulting MOV CR4 sets the abort flag */
+    CHECK_EQ(cpu->cr[4], 0xA0);      /* and it committed */
+
+    /* leave the machine out of long mode: efer is not reset by machine_reset, and a later
+     * fixture that expects a 32-bit machine would otherwise inherit LMA */
+    cpu->efer &= ~EFER_LMA;
+    cpu->is_64 = false;
+}
+
 static void test_dispatcher_fault_flag(void)
 {
     uint32_t before;
@@ -1403,5 +1440,6 @@ int main(void)
     RUN(test_m1c_opcodes, "the 31 landed 0F encodings");
 
     printf("cpu_m1c_selftest: %d checks, %d failures\n", checks, failures);
-    return failures != 0;
+        RUN(test_cr4_pge_write_no_pdpte_reload, "MOV CR4 with PGE 0->1 does not reload PDPTEs (long mode: CR3 holds a PML4E)");
+return failures != 0;
 }
