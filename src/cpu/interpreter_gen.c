@@ -2518,7 +2518,7 @@ void run_instruction(int32_t opcode)
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		if (modrm_byte < 0xC0) {
-			int64_t addr = modrm_resolve(modrm_byte);
+			int64_t addr = modrm_resolve_imm(modrm_byte, 2);
 			if (cpu->pagefault) return;
 			int32_t imm = read_imm16();
 			if (cpu->pagefault) return;
@@ -2536,7 +2536,7 @@ void run_instruction(int32_t opcode)
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		if (modrm_byte < 0xC0) {
-			int64_t addr = modrm_resolve(modrm_byte);
+			int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 			if (cpu->pagefault) return;
 			int32_t imm = read_imm32s();
 			if (cpu->pagefault) return;
@@ -2554,7 +2554,7 @@ void run_instruction(int32_t opcode)
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		if (modrm_byte < 0xC0) {
-			int64_t addr = modrm_resolve(modrm_byte);
+			int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 			if (cpu->pagefault) return;
 			int64_t imm = read_imm32s();
 			if (cpu->pagefault) return;
@@ -2601,7 +2601,7 @@ void run_instruction(int32_t opcode)
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		if (modrm_byte < 0xC0) {
-			int64_t addr = modrm_resolve(modrm_byte);
+			int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 			if (cpu->pagefault) return;
 			int32_t imm = read_imm8s();
 			if (cpu->pagefault) return;
@@ -2619,7 +2619,7 @@ void run_instruction(int32_t opcode)
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		if (modrm_byte < 0xC0) {
-			int64_t addr = modrm_resolve(modrm_byte);
+			int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 			if (cpu->pagefault) return;
 			int32_t imm = read_imm8s();
 			if (cpu->pagefault) return;
@@ -2637,7 +2637,7 @@ void run_instruction(int32_t opcode)
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		if (modrm_byte < 0xC0) {
-			int64_t addr = modrm_resolve(modrm_byte);
+			int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 			if (cpu->pagefault) return;
 			int64_t imm = read_imm8s();
 			if (cpu->pagefault) return;
@@ -3123,7 +3123,7 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -3139,7 +3139,7 @@ void run_instruction(int32_t opcode)
 		case 1:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -3155,7 +3155,7 @@ void run_instruction(int32_t opcode)
 		case 2:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -3171,7 +3171,7 @@ void run_instruction(int32_t opcode)
 		case 3:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -3187,7 +3187,7 @@ void run_instruction(int32_t opcode)
 		case 4:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -3203,7 +3203,7 @@ void run_instruction(int32_t opcode)
 		case 5:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -3219,7 +3219,7 @@ void run_instruction(int32_t opcode)
 		case 6:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -3235,7 +3235,7 @@ void run_instruction(int32_t opcode)
 		case 7:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -3268,7 +3268,7 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 2);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
@@ -3284,7 +3284,7 @@ void run_instruction(int32_t opcode)
 		case 1:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 2);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
@@ -3300,7 +3300,7 @@ void run_instruction(int32_t opcode)
 		case 2:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 2);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
@@ -3316,7 +3316,7 @@ void run_instruction(int32_t opcode)
 		case 3:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 2);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
@@ -3332,7 +3332,7 @@ void run_instruction(int32_t opcode)
 		case 4:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 2);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
@@ -3348,7 +3348,7 @@ void run_instruction(int32_t opcode)
 		case 5:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 2);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
@@ -3364,7 +3364,7 @@ void run_instruction(int32_t opcode)
 		case 6:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 2);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
@@ -3380,7 +3380,7 @@ void run_instruction(int32_t opcode)
 		case 7:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 2);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
@@ -3407,7 +3407,7 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
@@ -3423,7 +3423,7 @@ void run_instruction(int32_t opcode)
 		case 1:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
@@ -3439,7 +3439,7 @@ void run_instruction(int32_t opcode)
 		case 2:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
@@ -3455,7 +3455,7 @@ void run_instruction(int32_t opcode)
 		case 3:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
@@ -3471,7 +3471,7 @@ void run_instruction(int32_t opcode)
 		case 4:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
@@ -3487,7 +3487,7 @@ void run_instruction(int32_t opcode)
 		case 5:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
@@ -3503,7 +3503,7 @@ void run_instruction(int32_t opcode)
 		case 6:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
@@ -3519,7 +3519,7 @@ void run_instruction(int32_t opcode)
 		case 7:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
@@ -3546,7 +3546,7 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm32s();
 				if (cpu->pagefault) return;
@@ -3562,7 +3562,7 @@ void run_instruction(int32_t opcode)
 		case 1:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm32s();
 				if (cpu->pagefault) return;
@@ -3578,7 +3578,7 @@ void run_instruction(int32_t opcode)
 		case 2:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm32s();
 				if (cpu->pagefault) return;
@@ -3594,7 +3594,7 @@ void run_instruction(int32_t opcode)
 		case 3:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm32s();
 				if (cpu->pagefault) return;
@@ -3610,7 +3610,7 @@ void run_instruction(int32_t opcode)
 		case 4:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm32s();
 				if (cpu->pagefault) return;
@@ -3626,7 +3626,7 @@ void run_instruction(int32_t opcode)
 		case 5:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm32s();
 				if (cpu->pagefault) return;
@@ -3642,7 +3642,7 @@ void run_instruction(int32_t opcode)
 		case 6:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm32s();
 				if (cpu->pagefault) return;
@@ -3658,7 +3658,7 @@ void run_instruction(int32_t opcode)
 		case 7:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm32s();
 				if (cpu->pagefault) return;
@@ -3691,7 +3691,7 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -3707,7 +3707,7 @@ void run_instruction(int32_t opcode)
 		case 1:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -3723,7 +3723,7 @@ void run_instruction(int32_t opcode)
 		case 2:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -3739,7 +3739,7 @@ void run_instruction(int32_t opcode)
 		case 3:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -3755,7 +3755,7 @@ void run_instruction(int32_t opcode)
 		case 4:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -3771,7 +3771,7 @@ void run_instruction(int32_t opcode)
 		case 5:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -3787,7 +3787,7 @@ void run_instruction(int32_t opcode)
 		case 6:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -3803,7 +3803,7 @@ void run_instruction(int32_t opcode)
 		case 7:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -3839,7 +3839,7 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -3855,7 +3855,7 @@ void run_instruction(int32_t opcode)
 		case 1:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -3871,7 +3871,7 @@ void run_instruction(int32_t opcode)
 		case 2:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -3887,7 +3887,7 @@ void run_instruction(int32_t opcode)
 		case 3:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -3903,7 +3903,7 @@ void run_instruction(int32_t opcode)
 		case 4:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -3919,7 +3919,7 @@ void run_instruction(int32_t opcode)
 		case 5:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -3935,7 +3935,7 @@ void run_instruction(int32_t opcode)
 		case 6:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -3951,7 +3951,7 @@ void run_instruction(int32_t opcode)
 		case 7:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -3978,7 +3978,7 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -3994,7 +3994,7 @@ void run_instruction(int32_t opcode)
 		case 1:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -4010,7 +4010,7 @@ void run_instruction(int32_t opcode)
 		case 2:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -4026,7 +4026,7 @@ void run_instruction(int32_t opcode)
 		case 3:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -4042,7 +4042,7 @@ void run_instruction(int32_t opcode)
 		case 4:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -4058,7 +4058,7 @@ void run_instruction(int32_t opcode)
 		case 5:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -4074,7 +4074,7 @@ void run_instruction(int32_t opcode)
 		case 6:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -4090,7 +4090,7 @@ void run_instruction(int32_t opcode)
 		case 7:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -4117,7 +4117,7 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -4133,7 +4133,7 @@ void run_instruction(int32_t opcode)
 		case 1:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -4149,7 +4149,7 @@ void run_instruction(int32_t opcode)
 		case 2:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -4165,7 +4165,7 @@ void run_instruction(int32_t opcode)
 		case 3:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -4181,7 +4181,7 @@ void run_instruction(int32_t opcode)
 		case 4:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -4197,7 +4197,7 @@ void run_instruction(int32_t opcode)
 		case 5:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -4213,7 +4213,7 @@ void run_instruction(int32_t opcode)
 		case 6:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -4229,7 +4229,7 @@ void run_instruction(int32_t opcode)
 		case 7:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm8s();
 				if (cpu->pagefault) return;
@@ -5760,7 +5760,7 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -5776,7 +5776,7 @@ void run_instruction(int32_t opcode)
 		case 1:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -5792,7 +5792,7 @@ void run_instruction(int32_t opcode)
 		case 2:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -5808,7 +5808,7 @@ void run_instruction(int32_t opcode)
 		case 3:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -5824,7 +5824,7 @@ void run_instruction(int32_t opcode)
 		case 4:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -5840,7 +5840,7 @@ void run_instruction(int32_t opcode)
 		case 5:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -5856,7 +5856,7 @@ void run_instruction(int32_t opcode)
 		case 6:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -5872,7 +5872,7 @@ void run_instruction(int32_t opcode)
 		case 7:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -5905,7 +5905,7 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -5921,7 +5921,7 @@ void run_instruction(int32_t opcode)
 		case 1:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -5937,7 +5937,7 @@ void run_instruction(int32_t opcode)
 		case 2:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -5953,7 +5953,7 @@ void run_instruction(int32_t opcode)
 		case 3:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -5969,7 +5969,7 @@ void run_instruction(int32_t opcode)
 		case 4:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -5985,7 +5985,7 @@ void run_instruction(int32_t opcode)
 		case 5:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -6001,7 +6001,7 @@ void run_instruction(int32_t opcode)
 		case 6:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -6017,7 +6017,7 @@ void run_instruction(int32_t opcode)
 		case 7:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -6044,7 +6044,7 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -6060,7 +6060,7 @@ void run_instruction(int32_t opcode)
 		case 1:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -6076,7 +6076,7 @@ void run_instruction(int32_t opcode)
 		case 2:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -6092,7 +6092,7 @@ void run_instruction(int32_t opcode)
 		case 3:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -6108,7 +6108,7 @@ void run_instruction(int32_t opcode)
 		case 4:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -6124,7 +6124,7 @@ void run_instruction(int32_t opcode)
 		case 5:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -6140,7 +6140,7 @@ void run_instruction(int32_t opcode)
 		case 6:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -6156,7 +6156,7 @@ void run_instruction(int32_t opcode)
 		case 7:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -6183,7 +6183,7 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -6199,7 +6199,7 @@ void run_instruction(int32_t opcode)
 		case 1:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -6239,7 +6239,7 @@ void run_instruction(int32_t opcode)
 		case 4:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -6255,7 +6255,7 @@ void run_instruction(int32_t opcode)
 		case 5:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -6283,7 +6283,7 @@ void run_instruction(int32_t opcode)
 		case 7:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -6457,7 +6457,7 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -6484,7 +6484,7 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -6511,7 +6511,7 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 2);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
@@ -6538,7 +6538,7 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
@@ -6565,7 +6565,7 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm32s();
 				if (cpu->pagefault) return;
@@ -9497,7 +9497,7 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -9513,7 +9513,7 @@ void run_instruction(int32_t opcode)
 		case 1:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -9622,7 +9622,7 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 2);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
@@ -9638,7 +9638,7 @@ void run_instruction(int32_t opcode)
 		case 1:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 2);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm16();
 				if (cpu->pagefault) return;
@@ -9737,7 +9737,7 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
@@ -9753,7 +9753,7 @@ void run_instruction(int32_t opcode)
 		case 1:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm32s();
 				if (cpu->pagefault) return;
@@ -14568,7 +14568,7 @@ void run_instruction0f(int32_t opcode)
 				return;
 			}
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -14585,7 +14585,7 @@ void run_instruction0f(int32_t opcode)
 				return;
 			}
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -14602,7 +14602,7 @@ void run_instruction0f(int32_t opcode)
 				return;
 			}
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -14619,7 +14619,7 @@ void run_instruction0f(int32_t opcode)
 				return;
 			}
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -14653,7 +14653,7 @@ void run_instruction0f(int32_t opcode)
 					return;
 				}
 				if (modrm_byte < 0xC0) {
-					int64_t addr = modrm_resolve(modrm_byte);
+					int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 					if (cpu->pagefault) return;
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
@@ -14672,7 +14672,7 @@ void run_instruction0f(int32_t opcode)
 					return;
 				}
 				if (modrm_byte < 0xC0) {
-					int64_t addr = modrm_resolve(modrm_byte);
+					int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 					if (cpu->pagefault) return;
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
@@ -14691,7 +14691,7 @@ void run_instruction0f(int32_t opcode)
 					return;
 				}
 				if (modrm_byte < 0xC0) {
-					int64_t addr = modrm_resolve(modrm_byte);
+					int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 					if (cpu->pagefault) return;
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
@@ -14717,7 +14717,7 @@ void run_instruction0f(int32_t opcode)
 					return;
 				}
 				if (modrm_byte < 0xC0) {
-					int64_t addr = modrm_resolve(modrm_byte);
+					int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 					if (cpu->pagefault) return;
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
@@ -14736,7 +14736,7 @@ void run_instruction0f(int32_t opcode)
 					return;
 				}
 				if (modrm_byte < 0xC0) {
-					int64_t addr = modrm_resolve(modrm_byte);
+					int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 					if (cpu->pagefault) return;
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
@@ -14755,7 +14755,7 @@ void run_instruction0f(int32_t opcode)
 					return;
 				}
 				if (modrm_byte < 0xC0) {
-					int64_t addr = modrm_resolve(modrm_byte);
+					int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 					if (cpu->pagefault) return;
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
@@ -14795,7 +14795,7 @@ void run_instruction0f(int32_t opcode)
 					return;
 				}
 				if (modrm_byte < 0xC0) {
-					int64_t addr = modrm_resolve(modrm_byte);
+					int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 					if (cpu->pagefault) return;
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
@@ -14814,7 +14814,7 @@ void run_instruction0f(int32_t opcode)
 					return;
 				}
 				if (modrm_byte < 0xC0) {
-					int64_t addr = modrm_resolve(modrm_byte);
+					int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 					if (cpu->pagefault) return;
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
@@ -14833,7 +14833,7 @@ void run_instruction0f(int32_t opcode)
 					return;
 				}
 				if (modrm_byte < 0xC0) {
-					int64_t addr = modrm_resolve(modrm_byte);
+					int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 					if (cpu->pagefault) return;
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
@@ -14859,7 +14859,7 @@ void run_instruction0f(int32_t opcode)
 					return;
 				}
 				if (modrm_byte < 0xC0) {
-					int64_t addr = modrm_resolve(modrm_byte);
+					int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 					if (cpu->pagefault) return;
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
@@ -14878,7 +14878,7 @@ void run_instruction0f(int32_t opcode)
 					return;
 				}
 				if (modrm_byte < 0xC0) {
-					int64_t addr = modrm_resolve(modrm_byte);
+					int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 					if (cpu->pagefault) return;
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
@@ -14897,7 +14897,7 @@ void run_instruction0f(int32_t opcode)
 					return;
 				}
 				if (modrm_byte < 0xC0) {
-					int64_t addr = modrm_resolve(modrm_byte);
+					int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 					if (cpu->pagefault) return;
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
@@ -14937,7 +14937,7 @@ void run_instruction0f(int32_t opcode)
 					return;
 				}
 				if (modrm_byte < 0xC0) {
-					int64_t addr = modrm_resolve(modrm_byte);
+					int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 					if (cpu->pagefault) return;
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
@@ -14956,7 +14956,7 @@ void run_instruction0f(int32_t opcode)
 					return;
 				}
 				if (modrm_byte < 0xC0) {
-					int64_t addr = modrm_resolve(modrm_byte);
+					int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 					if (cpu->pagefault) return;
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
@@ -14975,7 +14975,7 @@ void run_instruction0f(int32_t opcode)
 					return;
 				}
 				if (modrm_byte < 0xC0) {
-					int64_t addr = modrm_resolve(modrm_byte);
+					int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 					if (cpu->pagefault) return;
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
@@ -14994,7 +14994,7 @@ void run_instruction0f(int32_t opcode)
 					return;
 				}
 				if (modrm_byte < 0xC0) {
-					int64_t addr = modrm_resolve(modrm_byte);
+					int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 					if (cpu->pagefault) return;
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
@@ -15020,7 +15020,7 @@ void run_instruction0f(int32_t opcode)
 					return;
 				}
 				if (modrm_byte < 0xC0) {
-					int64_t addr = modrm_resolve(modrm_byte);
+					int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 					if (cpu->pagefault) return;
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
@@ -15039,7 +15039,7 @@ void run_instruction0f(int32_t opcode)
 					return;
 				}
 				if (modrm_byte < 0xC0) {
-					int64_t addr = modrm_resolve(modrm_byte);
+					int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 					if (cpu->pagefault) return;
 					int32_t imm = read_imm8();
 					if (cpu->pagefault) return;
@@ -16243,7 +16243,7 @@ void run_instruction0f(int32_t opcode)
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		if (modrm_byte < 0xC0) {
-			int64_t addr = modrm_resolve(modrm_byte);
+			int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 			if (cpu->pagefault) return;
 			int32_t imm = read_imm8();
 			if (cpu->pagefault) return;
@@ -16261,7 +16261,7 @@ void run_instruction0f(int32_t opcode)
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		if (modrm_byte < 0xC0) {
-			int64_t addr = modrm_resolve(modrm_byte);
+			int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 			if (cpu->pagefault) return;
 			int32_t imm = read_imm8();
 			if (cpu->pagefault) return;
@@ -16433,7 +16433,7 @@ void run_instruction0f(int32_t opcode)
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		if (modrm_byte < 0xC0) {
-			int64_t addr = modrm_resolve(modrm_byte);
+			int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 			if (cpu->pagefault) return;
 			int32_t imm = read_imm8();
 			if (cpu->pagefault) return;
@@ -16451,7 +16451,7 @@ void run_instruction0f(int32_t opcode)
 		int32_t modrm_byte = read_imm8();
 		if (cpu->pagefault) return;
 		if (modrm_byte < 0xC0) {
-			int64_t addr = modrm_resolve(modrm_byte);
+			int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 			if (cpu->pagefault) return;
 			int32_t imm = read_imm8();
 			if (cpu->pagefault) return;
@@ -17060,7 +17060,7 @@ void run_instruction0f(int32_t opcode)
 		case 4:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17076,7 +17076,7 @@ void run_instruction0f(int32_t opcode)
 		case 5:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17092,7 +17092,7 @@ void run_instruction0f(int32_t opcode)
 		case 6:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17108,7 +17108,7 @@ void run_instruction0f(int32_t opcode)
 		case 7:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17135,7 +17135,7 @@ void run_instruction0f(int32_t opcode)
 		case 4:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17151,7 +17151,7 @@ void run_instruction0f(int32_t opcode)
 		case 5:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17167,7 +17167,7 @@ void run_instruction0f(int32_t opcode)
 		case 6:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17183,7 +17183,7 @@ void run_instruction0f(int32_t opcode)
 		case 7:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17210,7 +17210,7 @@ void run_instruction0f(int32_t opcode)
 		case 4:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17226,7 +17226,7 @@ void run_instruction0f(int32_t opcode)
 		case 5:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17242,7 +17242,7 @@ void run_instruction0f(int32_t opcode)
 		case 6:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17258,7 +17258,7 @@ void run_instruction0f(int32_t opcode)
 		case 7:
 		{
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int64_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17554,7 +17554,7 @@ void run_instruction0f(int32_t opcode)
 				return;
 			}
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17571,7 +17571,7 @@ void run_instruction0f(int32_t opcode)
 				return;
 			}
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17588,7 +17588,7 @@ void run_instruction0f(int32_t opcode)
 				return;
 			}
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17605,7 +17605,7 @@ void run_instruction0f(int32_t opcode)
 				return;
 			}
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17657,7 +17657,7 @@ void run_instruction0f(int32_t opcode)
 				return;
 			}
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17674,7 +17674,7 @@ void run_instruction0f(int32_t opcode)
 				return;
 			}
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17705,7 +17705,7 @@ void run_instruction0f(int32_t opcode)
 				return;
 			}
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17722,7 +17722,7 @@ void run_instruction0f(int32_t opcode)
 				return;
 			}
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17753,7 +17753,7 @@ void run_instruction0f(int32_t opcode)
 				return;
 			}
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;
@@ -17770,7 +17770,7 @@ void run_instruction0f(int32_t opcode)
 				return;
 			}
 			if (modrm_byte < 0xC0) {
-				int64_t addr = modrm_resolve(modrm_byte);
+				int64_t addr = modrm_resolve_imm(modrm_byte, 1);
 				if (cpu->pagefault) return;
 				int32_t imm = read_imm8();
 				if (cpu->pagefault) return;

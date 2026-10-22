@@ -782,6 +782,28 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE LA57 UNIT: TWO CANDIDATES REFUTED, ONE REAL DEFECT FIXED, THE BRANCH STILL OPEN (2026-10-19).**
+`results/x86-64-la57.md` is its report.  (1) THE WRITE TRACE (32-byte watch over 0x2413D60..D7F,
+every change logged with its eip): the variable's address in the gp report was WRONG TWICE (hand
+arithmetic; `F7 05 disp32 imm32` is TEN bytes, so the base is 0x1000099 and the target is
+**0x2413D70**, now derived from the bytes at run time and printed).  The only writers are the
+decompressor's output flush and a `rep movsq` memcpy that ZEROES it; at the CR4 write the probe reads
+linear 0x2413D70 -> phys 0x2413D70, `safe_read32s = 0x0`, mem8 = 00 00 00 00.  So the kernel's
+`__pgtable_l5_enabled` IS ZERO and candidate 3 (the kernel decided LA57) is REFUTED.  (2) THE CPUID
+DUMP through the port's own instr_0FA2: cpuid(0,0) max level 0x16; cpuid(7,0) ecx=0 (LA57 bit16 = 0);
+cpuid(7,1) all zeros -- candidate 1 (a wrong CPUID answer) is REFUTED.  The eip trace at the CR4 write
+still shows the `jz` at 0x1000099 FALLING THROUGH to `or ecx,0x1000`, with the operand measured 0 and
+the address measured correct, so the remaining suspect is THE FLAGS THE `jz` READS.  THE THIRD
+MEASUREMENT: a probe at 0x1000099 printing cpu->flags and cpu->flags_changed right after the test,
+plus a corpus case reproducing the kernel's exact RIP-relative-with-immediate test against a zero
+dword.  ONE REAL DEFECT FELL OUT AND IS FIXED: the RIP-relative base was FOUR BYTES EARLY for any
+encoding with a trailing immediate (`modrm_resolve` runs before the immediate is read) -- now
+`modrm_resolve_imm(modrm_byte, imm_bytes)` with the size passed by the emitter (158 arms); arm
+`ctrl/rip-relative-with-imm`, MEASURED to fail with the term removed (7 fields, r8 0x2222 vs 0x1111)
+and pass with it (83/83 green).  It is NOT the LA57 cause: the guest runs 4 instructions further
+(4,475,480,658) and stops at the SAME `mov cr4, rcx`.  Full battery green, four M0 pins unmoved,
+corpus 81 -> 83, ctrl 18 -> 20.
+
 **THE GP UNIT: THE DETERMINISTIC #GP IS LOCALISED, FIXED, AND THE GUEST MOVES ON (2026-10-19).**
 `results/x86-64-gp.md` is its report.  The three named measurements were done in one run (2m13s):
 (a) THE STACK at 0x1001BD2 shows the stub's frame INTACT (saved RBP 0x2a04000 at 0x2a03f28, the return

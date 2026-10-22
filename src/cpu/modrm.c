@@ -720,6 +720,24 @@ int64_t read_moffs64(void)
  * the 64-bit effective address -- see modrm.h for what it adds
  * ------------------------------------------------------------------ */
 
+/* THE RIP-RELATIVE BASE IS THE ADDRESS OF THE NEXT INSTRUCTION, i.e. AFTER the trailing
+ * immediate.  `modrm_resolve64` runs before the immediate is read (the port's argument order is
+ * upstream's, and it is semantic), so at that moment the cursor sits after the DISPLACEMENT --
+ * four bytes early for `F7 05 disp32 imm32`.  MEASURED (results/x86-64-la57.md): the amd64
+ * kernel's `test dword [__pgtable_l5_enabled], 1` at 0x100008F read 0x2413D6C instead of
+ * 0x2413D70, found a nonzero dword, and set CR4.LA57 against old CR4=0x20 -- the #GP this unit
+ * was asked to explain.  The emitter passes the trailing immediate's size in bytes. */
+static int32_t modrm_trailing_imm;
+
+int64_t modrm_resolve_imm(int32_t modrm_byte, int32_t imm_bytes)
+{
+    int64_t r;
+    modrm_trailing_imm = imm_bytes;
+    r = modrm_resolve(modrm_byte);
+    modrm_trailing_imm = 0;
+    return r;
+}
+
 int64_t modrm_resolve64(int32_t modrm_byte)
 {
     /* 0x67 ADDRESS-SIZE OVERRIDE: a 32-bit effective address, ZERO-EXTENDED.  Computed by the
@@ -781,7 +799,7 @@ int64_t modrm_resolve64(int32_t modrm_byte)
          * the displacement has been consumed -- which is why the read comes first. */
         int32_t d = read_imm32s();
         if (cpu->pagefault) return 0;
-        offset = (int64_t)cpu->instruction_pointer + (int64_t)d;
+        offset = (int64_t)cpu->instruction_pointer + (int64_t)d + (int64_t)modrm_trailing_imm;
         rip_relative = true;
     }
     else {

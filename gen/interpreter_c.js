@@ -286,6 +286,15 @@ function gen_instruction_body_after_fixed_g(encoding, size) {
 			? [(size === 64 ? "int64_t" : "int32_t") + ` imm = ${imm_read};`,
 			   "if (cpu->pagefault) return;"]
 			: [];
+		/* THE TRAILING IMMEDIATE'S SIZE, for the RIP-relative base: `modrm_resolve_imm` adds it,
+		 * because the base is the NEXT instruction's address and the resolver runs before the
+		 * immediate is read (results/x86-64-la57.md). */
+		const imm_bytes = imm_read === undefined ? 0
+			: imm_read === "read_imm8()" || imm_read === "read_imm8s()" ? 1
+			: imm_read === "read_imm16()" ? 2
+			: imm_read === "read_imm32s()" ? 4
+			: imm_read === "read_imm64()" ? 8
+			: 0;
 
 		const mem_args = [];
 		if (encoding.custom_modrm_resolve) {
@@ -329,7 +338,9 @@ function gen_instruction_body_after_fixed_g(encoding, size) {
 			 * serve it are the 0x1NN/0x0NN ones.  `modrm_resolve` is the mode-aware entry
 			 * point (it branches on long_mode_64() itself), so one emitted form is right in
 			 * both machines and the 32-bit value is the sign-extended int32_t it always was. */
-			out.push("\tint64_t addr = modrm_resolve(modrm_byte);");
+			out.push(imm_bytes !== 0
+				? `\tint64_t addr = modrm_resolve_imm(modrm_byte, ${imm_bytes});`
+				: "\tint64_t addr = modrm_resolve(modrm_byte);");
 		}
 		if (implemented) {
 			if (resolves_modrm) out.push("\tif (cpu->pagefault) return;");

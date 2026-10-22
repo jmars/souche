@@ -1291,6 +1291,40 @@ case("wide", "str-mem-above-4g",
 # S9's strobits cases cover the Q opcodes; these four cover what they do not: the
 # COUNTER's width (only observable through the ZF exit -- see the cases), the 0x67
 # address-size override's truncation and zero-extending write-back, and DF.
+case("ctrl", "rip-relative-with-imm",
+     "THE RIP-RELATIVE BASE IS THE ADDRESS OF THE NEXT INSTRUCTION, i.e. AFTER the trailing "
+     "immediate.  `F7 05 disp32 imm32` is ten bytes, so the base is start+10; a resolver that "
+     "takes the base where the displacement ends (start+6) reads FOUR BYTES EARLY.  body_data0 "
+     "holds 1 and body_data1 holds 0, so the correct target sets ZF (JZ taken) and the early "
+     "one does not.  MEASURED as the amd64 kernel's CR4.LA57 branch (results/x86-64-la57.md)",
+     """\
+    mov r8, 0x1111111111111111
+    test dword ptr [rip + body_data1], 1
+    jz 1f
+    mov r8, 0x2222222222222222
+1:
+    mov r9, r8
+""",
+     data=[0x100000000, 0])  # body_data0's HIGH dword is 1, so a 4-byte-early read is nonzero
+case("ctrl", "test-mem-imm32-jz",
+     "TEST r/m32, imm32 on a ZERO dword must set ZF and the following JZ must be TAKEN -- the "
+     "encoding the amd64 kernel uses at 0x100008F (F7 /0 with an imm32) before it decides "
+     "CR4.LA57; MEASURED as the branch the port took the wrong way (results/x86-64-la57.md)",
+     """\
+    mov dword ptr [0x100900], 0
+    mov dword ptr [0x100904], 1
+    mov r11, 0x100900
+    mov r8, 0x1111111111111111
+    test dword ptr [r11], 1
+    jz 1f
+    mov r8, 0x2222222222222222
+1:
+    test dword ptr [r11 + 4], 1
+    jz 2f
+    mov r9, 0x3333333333333333
+2:
+    mov r10, r8
+""")
 case("ctrl", "leave-64",
      "LEAVE in 64-bit mode restores RSP from RBP and pops an EIGHT-byte RBP.  A 4-byte pop (the "
      "32-bit arm) leaves RSP four bytes short, so the following RET pops a qword straddling two "

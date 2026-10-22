@@ -121,6 +121,9 @@ int64_t read_moffs64(void);
 
 /* cpu.rs:3122-3130 + modrm.rs:4-133 */
 int64_t modrm_resolve(int32_t modrm_byte);
+/* the same, for an encoding with a TRAILING IMMEDIATE: the RIP-relative base is the address of
+ * the next instruction, so the immediate's size is added to it (see modrm.c) */
+int64_t modrm_resolve_imm(int32_t modrm_byte, int32_t imm_bytes);
 
 /* S5a: THE 64-BIT ADDRESS GENERATOR (plan correction W1).  modrm_resolve() above returns an
  * int32_t because the 32-bit forms wrap at 32 bits; a long-mode effective address is 64 bits
