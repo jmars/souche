@@ -782,6 +782,30 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE WALKOOB2 UNIT: THE INSTRUMENT FIXED, THE QUESTION ANSWERED, THE HOST CRASH BOUNDED (2026-10-19).**
+`results/x86-64-walkoob2.md` is its report.  (1) THE INSTRUMENT: `setvbuf(stderr, NULL, _IONBF, 0)` at
+the top of main -- the second time this lane has lost evidence to its own tooling (the 160-byte stop
+message was the first) -- and the lost lines came back.  (2) THE ANSWER, MEASURED: **THE WALK
+TRANSLATES** -- `walk enter/exit addr=0xffffffff9c27759c fetch=1 -> entry=0x307759f pf=0`, i.e. frame
+0x3077000, inside RAM -- so the stack64 report's "inside safe_read64_addr" and the walkoob report's
+"the walk's PML4-511 path" are BOTH REFUTED.  The crash is in the **#PF DELIVERY**: the kernel's own
+IDT is at 0x9BC04000 (a linear address above 4 GiB), each delivery faults again, and
+`call_interrupt_vector` RECURSED WITHOUT BOUND until the HOST'S STACK OVERFLOWED (the silent SIGSEGV
+explained).  (3) THE FIX, a bound on the EMULATOR's recursion, not a refusal of the guest's deliveries:
+`call_interrupt_vector` is now a thin wrapper over `call_interrupt_vector_inner` with a delivery-depth
+bound of 4; hardware answers a fault during a fault with #DF (and during #DF with a triple fault) and
+this port must not recurse into the host stack.  MEASURED: the run that used to die silently now ends
+`4475480778 instructions ... unimplemented=1 eip=0x8ae775ba cr3=0x30ea000` with the named stop "a
+fault raised while delivering a fault: the delivery re-entered four times (hardware would raise #DF;
+the port stops rather than recursing)".  **The guest does NOT yet run its own code.**  NEXT: WHY the
+delivery faults -- probe inside the delivery for the descriptor address and its translated physical
+address, the stack pointer and the writable_or_pagefault result, and which read/write sets
+cpu->pagefault (candidates: the descriptor read's address computation, the frame push onto a stack at
+0xFFFFFFFF9BC03F40, or the CPL-changing arm that still stops by name).  THE ARM IS NOT WRITTEN and is
+recorded as a gap: the bound's failure mode WAS measured (silent SIGSEGV before, named stop after) but
+that is the guest, not a reproducible arm; a fixture whose fault delivery itself faults is the next
+unit's work.  Full battery green, four M0 pins unmoved, no assertion count changed.
+
 **THE WALKOOB UNIT: THE CRASH IS LOCALISED FURTHER, NOT FIXED -- AND THE KERNEL NOW RUNS IN HIGH
 MEMORY (2026-10-19).**  `results/x86-64-walkoob.md` is its report; NO FUNCTIONAL CHANGE (probes only).
 The last unit's hypothesis is **REFUTED BY MEASUREMENT**: the frame reads are NOT the crash -- a probe

@@ -497,7 +497,34 @@ static void iret(bool is_16)
  * -- the `return`s below are that abort, and none of them undoes the delivery's partial
  * effects (upstream has none of its own yet at those points except the ones kept).
  * ------------------------------------------------------------------ */
+/* THE NESTED-DELIVERY BOUND.  MEASURED (results/x86-64-walkoob2.md): the amd64 kernel's #PF
+ * delivery reads its own IDT at 0x9BC04000 -- a linear address above 4 GiB -- and something in
+ * that delivery faults again, so the port RE-ENTERED call_interrupt_vector without bound and
+ * died of a HOST STACK OVERFLOW (SIGSEGV with no output).  Hardware answers a fault raised
+ * while delivering a fault with #DF (and a fault during #DF with a triple fault); this port
+ * must not recurse into the host's stack.  The bound is on the EMULATOR's recursion, not a
+ * refusal of the guest's deliveries: depth 4 is far above anything the machine legitimately
+ * nests, and the stop names what happened. */
+static int delivery_depth;
+
+static void call_interrupt_vector_inner(int32_t interrupt, bool is_int, bool has_error_code,
+                                        int32_t error_code);
+
 void call_interrupt_vector(int32_t interrupt, bool is_int, bool has_error_code, int32_t error_code)
+{
+    if (delivery_depth >= 4) {
+        unimplemented_instruction(
+            "a fault raised while delivering a fault: the delivery re-entered four times"
+            " (hardware would raise #DF; the port stops rather than recursing)");
+        return;
+    }
+    delivery_depth++;
+    call_interrupt_vector_inner(interrupt, is_int, has_error_code, error_code);
+    delivery_depth--;
+}
+
+static void call_interrupt_vector_inner(int32_t interrupt, bool is_int, bool has_error_code,
+                                        int32_t error_code)
 {
     if (cpu->protected_mode) {
         if (vm86_mode() && (cpu->cr[4] & CR4_VME) != 0) {
