@@ -782,6 +782,27 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE FIRSTFAULT2 UNIT: THE FIRST FAULT IS STILL MASKED, AND THE EVIDENCE SAYS THE GUEST'S OWN STATE IS
+THE CAUSE (2026-10-19).**  `results/x86-64-firstfault2.md` is its report.  THE TOOL (code change,
+default off): `V86C_FAULT_DELIVERY_BOUND=<N>` -- read in v86c_dbg_init, held in
+v86c_dbg_delivery_bound (default **4**, the shipped value), read by call_interrupt_vector's recursion
+bound; UNSET = byte-identical behaviour and every pin unmoved.  WHAT IT MEASURED, and it did NOT
+converge -- which is itself the finding: (i) **0x9C517600, the rep movsq destination the ring pointed
+at, does NOT fault** -- the watch on it never fired, so that lead is dead; (ii) **raising the bound to
+16 does not reveal the first fault either** -- the deliveries nest deeper and EVERY one fails at the
+SAME descriptor read (0x9C5100E0, the vector-14 gate), because the delivery cannot complete while the
+IDT page is unmapped, so no depth exposes what started it.  The instrument the last report proposed
+cannot answer the question BY CONSTRUCTION; the stop's message text ("re-entered four times") is a
+literal string that now reads slightly wrong when the bound is overridden -- recorded, not reworded.
+WHICH SHAPE: the FIRST one.  With PML4E[0] = 0 (measured last unit, port and hand walk agreeing) and
+the fault being a READ of the IDT descriptor, the state is "the kernel is between two table switches,
+its own IDT not yet mapped"; hardware would #PF -> #DF -> no #DF gate -> TRIPLE FAULT -> RESET, so THE
+PORT'S SEAT IS RIGHT and NOTHING IN THE MACHINE SHOULD CHANGE.  The guest cannot proceed past its own
+triple-fault on THIS image: the honest next step is a DIFFERENT GUEST OR A DIFFERENT EXPECTATION, not
+another stop or another widening.  A REAL answer would need the delivery to be able to complete (the
+guest's state, not the port's) or a HARDWARE CROSS-CHECK -- the QEMU leg the plan's ss5 names as the
+second reference, a unit of its own.  Full battery green, every pin unmoved.
+
 **THE PF2 UNIT: THE GUEST'S PML4E[0] IS ZERO, SO THE IDT IS GENUINELY UNMAPPED (2026-10-19).**
 `results/x86-64-pf2.md` is its report; MEASUREMENT ONLY, made entirely with the toolkit (no hand
 probes, no code change).  (1) THE FIRST FAULT: V86C_RING gives the kernel's own stream -- `mov rdi,

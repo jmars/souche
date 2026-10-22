@@ -37,6 +37,8 @@
 
 #include "exceptions.h"
 
+#include "debug.h"
+
 #include <stdio.h> /* snprintf, for the stop messages that carry their evidence */
 
 #include "cpu.h"
@@ -512,7 +514,7 @@ static void call_interrupt_vector_inner(int32_t interrupt, bool is_int, bool has
 
 void call_interrupt_vector(int32_t interrupt, bool is_int, bool has_error_code, int32_t error_code)
 {
-    if (delivery_depth >= 4) {
+    if (delivery_depth >= v86c_dbg_delivery_bound) {
         unimplemented_instruction(
             "a fault raised while delivering a fault: the delivery re-entered four times"
             " (hardware would raise #DF; the port stops rather than recursing)");

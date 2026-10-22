@@ -13,6 +13,7 @@
 #include "paging.h"
 
 bool v86c_dbg_watch_on;
+int v86c_dbg_delivery_bound = 4;
 bool v86c_dbg_ring_on;
 static bool dump_on_stop;
 
@@ -43,6 +44,11 @@ void v86c_dbg_init(void)
     const char *w = getenv("V86C_WATCH");
     const char *r = getenv("V86C_RING");
     const char *d = getenv("V86C_DUMP_ON_STOP");
+    const char *b = getenv("V86C_FAULT_DELIVERY_BOUND");
+    if (b != NULL) {
+        int v = (int)strtol(b, NULL, 0);
+        if (v > 0) v86c_dbg_delivery_bound = v;
+    }
     if (w != NULL) {
         const char *p = w;
         while (*p != '\0' && watch_n < V86C_DBG_MAX_WATCH) {

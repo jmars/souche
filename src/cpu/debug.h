@@ -24,6 +24,9 @@
 
 /* the masks the hot paths read; false unless v86c_dbg_init() turned them on */
 extern bool v86c_dbg_watch_on;
+/* the recursion bound, DEBUG ONLY: unset = the shipped 4; V86C_FAULT_DELIVERY_BOUND=N overrides it
+ * so an investigation can see past the first delivery (results/x86-64-firstfault2.md) */
+extern int v86c_dbg_delivery_bound;
 extern bool v86c_dbg_ring_on;
 
 void v86c_dbg_init(void);
