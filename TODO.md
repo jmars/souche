@@ -782,6 +782,26 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE STARTUP64 UNIT: __startup_64's FIXUP NEVER RUNS -- NOT EVEN THE HIGH-HALF ENTRY IS WRITTEN
+(2026-10-19).**  `results/x86-64-startup64.md` is its report; MEASUREMENT ONLY.  THE RIGHT TEST, and why
+the bisect unit's was not damning on its own: a kernel running at 0xFFFFFFFF9C27... lives in the HIGH
+half, i.e. early_top_pgt[511] at 0x30EAFF8 -- if the fixup had run, THAT entry would carry a present,
+kernel-owned PDPT pointer.  A V86C_WATCH on it shows **every byte written by rip=0x4F399C0, the
+DECOMPRESSOR's output flush, and by nothing else** (bytes 0x0010000500000018, low bit 0 = NOT PRESENT).
+So THE KERNEL NEVER WRITES early_top_pgt AT ALL -- not the low entry (bisect unit) and not the high one --
+therefore __startup_64's page-table fixup DOES NOT RUN, and the kernel is nevertheless executing at
+0xFFFFFFFF9C27..., an address whose PML4 entry is not present, so those fetches are served by the 64-bit
+TLB (translations cached before the tables were replaced -- the same stale-TLB shape firstfault recorded).
+RULED OUT: (b) a store with a wrongly computed address (there is no store at all), (c) a store with a
+wrong width or segment, and any mis-sized/mis-addressed write to the watched entries (the watch is
+byte-granular).  WHAT IS LEFT: (a) or (d) -- the port never REACHES __startup_64 (control flow diverges
+earlier; the ring's ret-thunk entries show it reaches C, not necessarily the fixup), or it reaches the
+routine and BRANCHES PAST the fixup on a flag or compare the port gets wrong (the S8-rotate/jz class).
+NEXT MEASUREMENT: does the port execute __startup_64 at all? -- the ring widened to keep more boundaries
+plus a V86C_WATCH on the whole early_top_pgt PAGE with a kernel-rip filter (grep -v 0x4f3 on the watch
+output); if no kernel instruction wrote anywhere in that page, the ring's eip sequence around the stop
+names the branch the port took instead.  Subset gates green, no pin moved.
+
 **THE BISECT UNIT: THE DIVERGENCE IS THE KERNEL'S FIRST printk, AND THE PML4 ENTRY IT NEEDS WAS NEVER
 WRITTEN BY THE KERNEL (2026-10-19).**  `results/x86-64-bisect.md` is its report; MEASUREMENT ONLY.
 (1) THE FIRST DIVERGENCE LINE (both at 256 MiB, same image and cmdline, earlyprintk+console on):
