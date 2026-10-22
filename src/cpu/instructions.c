@@ -1586,7 +1586,7 @@ void instr16_CA(int32_t imm16)
     if (cpu->pagefault) return;
     int32_t cs = safe_read16(get_stack_pointer(2));
     if (cpu->pagefault) return;
-    far_return(ip, cs, imm16, false);
+    far_return(ip, cs, imm16, false, false);
 }
 void instr32_CA(int32_t imm16)
 {
@@ -1595,7 +1595,7 @@ void instr32_CA(int32_t imm16)
     if (cpu->pagefault) return;
     int32_t cs = safe_read32s(get_stack_pointer(4));
     if (cpu->pagefault) return;
-    far_return(ip, cs & 0xFFFF, imm16, true);
+    far_return(ip, cs & 0xFFFF, imm16, true, false);
     /* no dbg_assert here: the 16-bit ip class -- see "THE 16-BIT ip CLASS" in this file's header */
 }
 void instr16_CB(void)
@@ -1605,7 +1605,7 @@ void instr16_CB(void)
     if (cpu->pagefault) return;
     int32_t cs = safe_read16(get_stack_pointer(2));
     if (cpu->pagefault) return;
-    far_return(ip, cs, 0, false);
+    far_return(ip, cs, 0, false, false);
     /* no dbg_assert here: the 16-bit ip class -- see "THE 16-BIT ip CLASS" in this file's header */
 }
 void instr32_CB(void)
@@ -1615,7 +1615,7 @@ void instr32_CB(void)
     if (cpu->pagefault) return;
     int32_t cs = safe_read32s(get_stack_pointer(4));
     if (cpu->pagefault) return;
-    far_return(ip, cs & 0xFFFF, 0, true);
+    far_return(ip, cs & 0xFFFF, 0, true, false);
     /* no dbg_assert here: the 16-bit ip class -- see "THE 16-BIT ip CLASS" in this file's header */
 }
 

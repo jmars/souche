@@ -959,24 +959,27 @@ void instr64_C3(void)
  * 64-bit mode). */
 void instr64_CB(void)
 {
+	/* A 64-BIT STACK POINTER ABOVE 4 GiB IS THE PORT'S NEXT GAP, AND IT IS NAMED HERE RATHER
+	 * THAN CRASHED ON.  MEASURED (results/x86-64-farret.md): the amd64 kernel's third RETFQ
+	 * runs with rsp = 0xFFFFFFFF9BC03F40 -- a kernel VIRTUAL address -- and the port's stack
+	 * path (`get_stack_pointer` -> `read_reg32(ESP)`) truncates it to 0x9BC03F40, a physical
+	 * address past the end of guest RAM, so the frame read went out of bounds and the HOST
+	 * SEGFAULTED (no stop, no message).  Until the stack path is 64-bit, this is a named stop. */
+	if (read_reg64(ESP) > 0xFFFFFFFFull) {
+		unimplemented_instruction(
+			"long mode: a far return with RSP at or above 4 GiB (the port's stack path is"
+			" 32-bit: get_stack_pointer reads ESP)");
+		return;
+	}
 	uint64_t ip = safe_read64_addr((int64_t)get_stack_pointer(0));
 	if (cpu->pagefault) return;
 	uint64_t cs = safe_read64_addr((int64_t)get_stack_pointer(8));
 	if (cpu->pagefault) return;
-	if (ip > 0xFFFFFFFFull) {
-		unimplemented_instruction(
-			"long mode: a RETF target at or above 4 GiB (far_return takes a 32-bit eip)");
-		return;
-	}
-	if ((int32_t)(cs & 3) != cpu->cpl) {
-		unimplemented_instruction(
-			"long mode: a RETF that changes privilege level (far_return's CPL-change path reads"
-			" a 32-bit ESP/SS frame)");
-		return;
-	}
-	/* stack_adjust 8 is the difference between the 32-bit frame far_return assumes (2*4) and
-	 * this one (2*8); is_osize_32 stays true for the same reason as the eip bound above. */
-	far_return((int32_t)(uint32_t)ip, (int32_t)(cs & 0xFFFF), 8, true);
+	/* THE 64-BIT TARGET IS 64 BITS: far_return takes an int64_t eip and the frame is popped
+	 * here (stack_adjust 0), so the >= 4 GiB stop that blocked the amd64 kernel is gone.  A
+	 * privilege change goes to far_return's 64-bit arm, which reads RSP(8) and SS(8) AFTER
+	 * RIP and CS -- the SDM's order. */
+	far_return((int64_t)ip, (int32_t)(cs & 0xFFFF), 0, true, true);
 }
 
 /* 0x05/0x0D/0x15/0x1D/0x25/0x2D/0x35/0x3D -- THE ACCUMULATOR-IMMEDIATE FORMS at 64 bits.  Each

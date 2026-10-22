@@ -491,6 +491,53 @@ static void test_cr4_pge_write_no_pdpte_reload(void)
     cpu->is_64 = false;
 }
 
+/* ================================================================== *
+ * TEST 1d -- the 64-BIT FAR RETURN: an EIGHT-byte RIP/CS frame and a 64-bit target
+ *
+ * The corpus cannot carry this arm: the native leg runs at CPL 3 and a `retf` to a ring-0
+ * code segment #GPs there (the same reason `mov cr4` could not be a corpus case).  So it is a
+ * selftest assertion, and it checks the two things a 4-byte frame gets wrong: the TARGET (a
+ * RIP above 4 GiB, which the old int32_t eip refused by name) and the STACK ADVANCE (16
+ * bytes, not 8).
+ * ================================================================== */
+extern void instr64_CB(void);
+
+static void test_far_return_64bit_frame(void)
+{
+    machine_setup(false);
+    /* four-level paging, as the other long-mode fixtures build it: PML4[0] -> PDPT[0] ->
+     * PD[0] = a 2 MiB identity page, so the stack, GDT and the frame stay reachable */
+    wr64(PML4_64 + 0, (uint64_t)(PAE_PDPT | PAGE_TABLE_PRESENT_MASK));
+    wr64(PAE_PDPT + 0, (uint64_t)(PAE_PD | PAGE_TABLE_PRESENT_MASK));
+    wr64(PAE_PD + 0, (uint64_t)(PAGE_TABLE_PSE_MASK | PAGE_TABLE_PRESENT_MASK | PAGE_TABLE_RW_MASK));
+    cpu->cr[3] = PML4_64;
+    cpu->cr[4] = CR4_PAE;
+    set_cr0(cpu->cr[0] | CR0_PG);
+
+    /* a 64-bit code segment at SEL_CODE2: flags 0xA = G=1, D=0, L=1 */
+    wr64((uint32_t)GDT_BASE + 3 * 8, make_desc(0, 0xFFFFF, 0x9A, 0xA));
+
+    /* the frame: RIP(8) above 4 GiB, then CS(8) with the low 16 bits the selector */
+    uint64_t frame = (uint64_t)STACK_TOP - 16;
+    wr64((uint32_t)frame, 0xFFFFFFFF9C27759Cull);
+    wr64((uint32_t)frame + 8, SEL_CODE2);
+    write_reg32(ESP, (int32_t)frame);
+    cpu->efer |= EFER_LMA;
+    cpu->is_64 = true;
+    cpu->pagefault = false;
+
+    instr64_CB();
+    CHECK(!cpu->pagefault);
+    /* the TARGET is the full 64-bit RIP, not a 32-bit projection */
+    CHECK_EQ(cpu->instruction_pointer, 0xFFFFFFFF9C27759Cull);
+    CHECK_EQ(cpu->sreg[CS], SEL_CODE2);
+    /* the FRAME is sixteen bytes: RSP moved by 2 x 8 */
+    CHECK_EQ(read_reg32(ESP), STACK_TOP);
+
+    cpu->efer &= ~EFER_LMA;
+    cpu->is_64 = false;
+}
+
 static void test_dispatcher_fault_flag(void)
 {
     uint32_t before;
@@ -1441,5 +1488,6 @@ int main(void)
 
     printf("cpu_m1c_selftest: %d checks, %d failures\n", checks, failures);
         RUN(test_cr4_pge_write_no_pdpte_reload, "MOV CR4 with PGE 0->1 does not reload PDPTEs (long mode: CR3 holds a PML4E)");
+    RUN(test_far_return_64bit_frame, "a 64-bit RETF: an eight-byte RIP/CS frame and a 64-bit target");
 return failures != 0;
 }

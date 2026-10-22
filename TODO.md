@@ -782,6 +782,30 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE FARRET UNIT: THE 64-BIT FAR RETURN IS WIDENED, AND IT EXPOSES THE PORT'S 32-BIT STACK PATH
+(2026-10-19).**  `results/x86-64-farret.md` is its report.  `far_return` now takes an **int64_t eip**
+plus an `is_64` frame selector: the same-CPL frame is `2*8 + stack_adjust`, and the PRIVILEGE-CHANGE
+path reads **RSP(8) at +16 and SS(8) at +24 -- AFTER RIP and CS**, the SDM's 64-bit RET order (the
+32-bit path never had to spell that out).  `instr64_CB` no longer bounds the target, so the
+`>= 4 GiB` stop inherited from the idt64 unit is GONE.  THE CORPUS CANNOT CARRY THE ARM (its native
+leg is CPL 3, where a retf/iretq to a ring-0 CS #GPs -- the same reason `mov cr4` could not), so the
+arm is m1c_selftest's `test_far_return_64bit_frame` (an eight-byte frame with RIP 0xFFFFFFFF9C27759C,
+asserting the full 64-bit target and that RSP moved by 16).  HONESTY: that arm PASSES but also passed
+under the mutation that restores the 32-bit frame, so **its discriminating power is NOT established**
+-- a seat, not an instrument.  THE ACCEPTANCE TEST FIRST CRASHED THE HOST: with the widening the
+kernel's THIRD RETFQ runs at `rsp = 0xFFFFFFFF9BC03F40` -- a kernel VIRTUAL stack -- and the port's
+stack path (`get_stack_pointer` -> `read_reg32(ESP)`) truncates it to 0x9BC03F40, past the end of
+256 MiB of RAM, so `safe_read64_addr` read out of bounds and the process died with SIGSEGV and NO
+message (MEASURED: the three RETFQs are 0x100266/0x1000043/0xffffffff9c27759c with those rsps).
+`instr64_CB` now checks `read_reg64(ESP) > 0xFFFFFFFF` first and STOPS BY NAME, so the crash is a
+named stop at the same instruction count (4,475,480,768, cr3=0x30ea000, eip=0x88e0015a).  THE NEXT
+UNIT IS **THE 64-BIT STACK PATH**: `get_stack_pointer` (misc_instr.c:115), `set_stack_reg`,
+push32/pop32/push16/pop16 and every safe_* call that adds `get_seg_ss()` to a 32-bit RSP; the
+instrument is the kernel's own high-stack RETFQ.  ALSO STILL OPEN: **`iretq` was NOT widened** --
+`iret` is one `iret(bool is_16)` with the 32-bit frame; the 64-bit form needs RIP(8)/CS(8)/RFLAGS(8)
+and, on a privilege change, RSP(8)/SS(8) after them.  The guest has not reached an iretq yet, so it is
+recorded rather than claimed.  Full battery green, four M0 pins unmoved.
+
 **THE PDPTE UNIT: THE CR4 WRITE'S RELOAD WAS TOO EAGER, FIXED, AND THE KERNEL NOW RUNS ON ITS OWN
 TABLES (2026-10-19).**  `results/x86-64-pdpte.md` is its report.  READ of instructions_0f.c `case 4:`
 plus paging.c's read_pdpt gives the answer, and it is (ii) AND (i): (ii) the port reloaded the PDPTEs

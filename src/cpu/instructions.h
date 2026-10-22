@@ -62,7 +62,11 @@ void segment_prefix_op(int32_t seg);
 
 /* --- exceptions.c, M1c (plan ss7 step 17): far control transfers and iret. */
 void far_jump(int32_t eip, int32_t selector, bool is_call, bool is_osize_32);   /* cpu.rs:1128 */
-void far_return(int32_t eip, int32_t selector, int32_t stack_adjust, bool is_osize_32); /* cpu.rs:1507 */
+/* S5a/this unit: eip is 64 BITS and `is_64` selects the eight-byte frame (SDM RET in
+ * 64-bit mode pops RIP and CS as eight bytes, and on a privilege change RSP and SS after
+ * them).  The 16/32-bit callers pass is_64 = false and a zero-extended eip. */
+void far_return(int64_t eip, int32_t selector, int32_t stack_adjust, bool is_osize_32,
+                bool is_64); /* cpu.rs:1507 */
 void iret16(void);                                                              /* cpu.rs:507 */
 void iret32(void);                                                              /* cpu.rs:508 */
 

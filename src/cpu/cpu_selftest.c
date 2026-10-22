@@ -1788,8 +1788,10 @@ void far_jump(int32_t eip, int32_t selector, bool is_call, bool is_osize_32)
     far_jump_last_is_call = is_call;
     far_jump_last_is_osize_32 = is_osize_32;
 }
-void far_return(int32_t eip, int32_t selector, int32_t stack_adjust, bool is_osize_32)
+void far_return(int64_t eip, int32_t selector, int32_t stack_adjust, bool is_osize_32,
+                bool is_64)
 {
+    (void)is_64;
     far_return_calls++;
     far_return_last_eip = eip;
     far_return_last_selector = selector;

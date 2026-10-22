@@ -1389,7 +1389,8 @@ void far_jump(int32_t eip, int32_t selector, bool is_call, bool is_osize_32)
 /* ------------------------------------------------------------------ *
  * cpu.rs:1507-1655 -- far_return
  * ------------------------------------------------------------------ */
-void far_return(int32_t eip, int32_t selector, int32_t stack_adjust, bool is_osize_32)
+void far_return(int64_t eip, int32_t selector, int32_t stack_adjust, bool is_osize_32,
+                bool is_64)
 {
 
     if (!cpu->protected_mode) {
@@ -1453,7 +1454,25 @@ void far_return(int32_t eip, int32_t selector, int32_t stack_adjust, bool is_osi
     if (seg_selector_rpl(cs_selector) > cpu->cpl) {
         int32_t temp_esp;
         int32_t temp_ss;
-        if (is_osize_32) {
+        if (is_64) {
+            /* THE 64-BIT FAR RETURN'S PRIVILEGE CHANGE (SDM, RET): the frame is
+             * RIP(8), CS(8), then RSP(8) and SS(8) -- SS:RSP come AFTER RIP/CS, the same
+             * order as IRET, and every field is eight bytes.  MEASURED as the amd64
+             * kernel's last blocker (results/x86-64-farret.md). */
+            uint64_t new_rsp = safe_read64_addr(get_stack_pointer(stack_adjust + 16));
+            DBG_ASSERT(!cpu->pagefault);
+            temp_ss = safe_read16(get_stack_pointer(stack_adjust + 24));
+            DBG_ASSERT(!cpu->pagefault);
+            temp_esp = (int32_t)(uint32_t)new_rsp;
+            /* a 64-bit RSP above 4 GiB cannot be carried by the port's 32-bit stack register
+             * path: stop by name rather than truncate */
+            if (new_rsp > 0xFFFFFFFFull) {
+                unimplemented_instruction(
+                    "long mode: a far return whose new RSP is at or above 4 GiB");
+                return;
+            }
+        }
+        else if (is_osize_32) {
             temp_esp = safe_read32s(get_stack_pointer(stack_adjust + 8));
             DBG_ASSERT(!cpu->pagefault); /* upstream .unwrap() */
             temp_ss = safe_read16(get_stack_pointer(stack_adjust + 12));
@@ -1503,7 +1522,12 @@ void far_return(int32_t eip, int32_t selector, int32_t stack_adjust, bool is_osi
         }
     }
     else {
-        if (is_osize_32) {
+        if (is_64) {
+            /* 2 x 8 bytes for RIP and CS, plus the caller's stack_adjust (which for
+             * instr64_CB is 0: it reads the 16-byte frame itself and passes 0) */
+            adjust_stack_reg(2 * 8 + stack_adjust);
+        }
+        else if (is_osize_32) {
             adjust_stack_reg(2 * 4 + stack_adjust);
         }
         else {
