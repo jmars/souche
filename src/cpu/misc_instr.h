@@ -75,10 +75,10 @@ void setcc_reg(bool condition, int32_t r);
 void setcc_mem(bool condition, int32_t addr);
 
 /* ---- the stack pointer (misc_instr.rs:133-148 + cpu.rs:4300-4320) ---- */
-int32_t get_stack_pointer(int32_t offset);
+int64_t get_stack_pointer(int32_t offset);
 void adjust_stack_reg(int32_t adjustment);
-int32_t get_stack_reg(void);
-void set_stack_reg(int32_t value);
+int64_t get_stack_reg(void);
+void set_stack_reg(int64_t value);
 int32_t get_reg_asize(int32_t reg);
 void set_reg_asize(bool addr_size_32, int32_t reg, int32_t value);
 int32_t decr_ecx_asize(bool addr_size_32);

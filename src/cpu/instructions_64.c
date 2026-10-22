@@ -965,12 +965,11 @@ void instr64_CB(void)
 	 * path (`get_stack_pointer` -> `read_reg32(ESP)`) truncates it to 0x9BC03F40, a physical
 	 * address past the end of guest RAM, so the frame read went out of bounds and the HOST
 	 * SEGFAULTED (no stop, no message).  Until the stack path is 64-bit, this is a named stop. */
-	if (read_reg64(ESP) > 0xFFFFFFFFull) {
-		unimplemented_instruction(
-			"long mode: a far return with RSP at or above 4 GiB (the port's stack path is"
-			" 32-bit: get_stack_pointer reads ESP)");
-		return;
-	}
+	/* THE 32-BIT-STACK STOP IS GONE, NOT DISABLED: get_stack_pointer now carries the whole
+	 * 64-bit RSP into the resolver, so a kernel stack at 0xFFFFFFFF9BC03F40 is an ORDINARY
+	 * address here and this instruction must not special-case it.  What still bounds an
+	 * access is the PHYSICAL one -- the 4-level walk's own limits and interpreted_run's
+	 * fetch guard -- which is where "out of range" belongs. */
 	uint64_t ip = safe_read64_addr((int64_t)get_stack_pointer(0));
 	if (cpu->pagefault) return;
 	uint64_t cs = safe_read64_addr((int64_t)get_stack_pointer(8));

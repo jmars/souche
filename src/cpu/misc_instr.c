@@ -112,11 +112,18 @@ void setcc_mem(bool condition, int32_t addr)
  * the stack pointer -- misc_instr.rs:133-148, cpu.rs:4296-4320
  * ------------------------------------------------------------------ */
 
-int32_t get_stack_pointer(int32_t offset)
+int64_t get_stack_pointer(int32_t offset)
 {
-    /* S3: get_seg_ss() is 64-bit now; the stack address is a 32-bit linear address in every
-     * mode this port can run, so the sum is projected at the return type -- the same value
-     * upstream's i32 addition gives (the low 32 bits of the sum). */
+    /* THE STACK ADDRESS IS 64 BITS IN LONG MODE (this unit).  MEASURED: the amd64 kernel runs
+     * with rsp = 0xFFFFFFFF9BC03F40 -- a kernel VIRTUAL address -- and the old 32-bit
+     * projection sent every frame read to 0x9BC03F40, past the end of guest RAM
+     * (results/x86-64-stack64.md).  In long mode SS's base is 0 and RSP is the whole 64-bit
+     * register, so the sum is carried at full width into the resolver (safe_* take int64_t
+     * since the "widen the bodies" unit).  The 16/32-bit forms keep their arithmetic exactly:
+     * their 32-bit sum is the low 32 bits of the same expression. */
+    if (long_mode_64()) {
+        return (int64_t)(get_seg_ss() + read_reg64(ESP) + (uint64_t)(int64_t)offset);
+    }
     if (cpu->stack_size_32) {
         return (int32_t)(uint32_t)(get_seg_ss() + read_reg32(ESP) + offset);
     }
@@ -127,7 +134,10 @@ int32_t get_stack_pointer(int32_t offset)
 
 void adjust_stack_reg(int32_t adjustment)
 {
-    if (cpu->stack_size_32) {
+    if (long_mode_64()) {
+        write_reg64(ESP, read_reg64(ESP) + (uint64_t)(int64_t)adjustment);
+    }
+    else if (cpu->stack_size_32) {
         write_reg32(ESP, read_reg32(ESP) + adjustment);
     }
     else {
@@ -136,9 +146,12 @@ void adjust_stack_reg(int32_t adjustment)
 }
 
 /* cpu.rs:4296-4320 */
-int32_t get_stack_reg(void)
+int64_t get_stack_reg(void)
 {
-    if (cpu->stack_size_32) {
+    if (long_mode_64()) {
+        return (int64_t)read_reg64(ESP);
+    }
+    else if (cpu->stack_size_32) {
         return read_reg32(ESP);
     }
     else {
@@ -146,9 +159,12 @@ int32_t get_stack_reg(void)
     }
 }
 
-void set_stack_reg(int32_t value)
+void set_stack_reg(int64_t value)
 {
-    if (cpu->stack_size_32) {
+    if (long_mode_64()) {
+        write_reg64(ESP, (uint64_t)value);
+    }
+    else if (cpu->stack_size_32) {
         write_reg32(ESP, value);
     }
     else {

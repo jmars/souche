@@ -782,6 +782,30 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE STACK64 UNIT: THE STACK PATH IS 64-BIT, AND THE CRASH MOVED INTO THE PAGE WALK (2026-10-19).**
+`results/x86-64-stack64.md` is its report.  `misc_instr.c`'s four stack helpers each gained a LONG-MODE
+arm AHEAD of their untouched 16/32-bit one: `get_stack_pointer`/`get_stack_reg` return **int64_t**
+(`get_seg_ss() + read_reg64(ESP) + offset`), `set_stack_reg` takes int64_t, `adjust_stack_reg` writes
+RSP at 64 bits -- and the full-width address flows into the resolver unchanged because `safe_*` have
+taken int64_t since the "widen the bodies" unit.  MEASURED (probe, since removed): the kernel's third
+RETFQ now computes `rsp64=0xffffffff9bc03f40 addr=0xffffffff9bc03f40` -- the address the resolver
+receives IS the 64-bit RSP (it was 0x9bc03f40).  THE GUARD: the last unit's `instr64_CB` RSP>=4 GiB
+stop is **REMOVED, not disabled** -- with the stack widened it would be a FALSE STOP on a valid guest
+state; the physical bound stays where it belongs (`interpreted_run`'s fetch guard and the walk's
+WALK64_TABLE/frame bound, paging.c:448-457), and the distinction is LINEAR vs PHYSICAL: a 64-bit
+linear address is now legal, a physical address outside RAM is still a named stop.  THE GUEST STILL
+DIES: a HOST SIGSEGV with no message at the same instruction (4475480800 budget), but the probe proves
+the stack arithmetic is no longer the cause, so the crash is inside
+`safe_read64_addr(0xFFFFFFFF9BC03F40)` -- the 4-level walk on the kernel's OWN page tables
+(cr3=0x30ea000), the PML4-index-511 path.  THE CORPUS CANNOT CARRY THE ARM, for a DIFFERENT reason
+than mov cr4: a high stack is not privileged, but the harness maps only the image at 0x80000 and the
+compared window at 0x100000..0x102000, and a case's stack must be inside that window for the two legs
+to agree, so a stack above 4 GiB needs harness aliasing -- the arm belongs in the selftest and is
+**NOT WRITTEN YET** (a stated gap).  NEXT: instrument `do_page_walk64` for 0xFFFFFFFF9BC03F40 (each
+level's entry address, its value, the frame it produces, which bound it passed) -- a host crash is a
+defect in this port's contract, so it is the next unit's FIRST job; `iretq` remains untouched.
+Full battery green, four M0 pins unmoved.
+
 **THE FARRET UNIT: THE 64-BIT FAR RETURN IS WIDENED, AND IT EXPOSES THE PORT'S 32-BIT STACK PATH
 (2026-10-19).**  `results/x86-64-farret.md` is its report.  `far_return` now takes an **int64_t eip**
 plus an `is_64` frame selector: the same-CPL frame is `2*8 + stack_adjust`, and the PRIVILEGE-CHANGE
