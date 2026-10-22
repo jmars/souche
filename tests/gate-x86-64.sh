@@ -79,6 +79,27 @@ step "no-named-stop" sh -c "grep -q 'unimplemented=0' $BOOTLOG"
 must_fail "address-bound-gone-able-to-fail" sh -c \
 	"grep -q 'a 64-bit effective address above 4 GiB' $BOOTLOG"
 
+echo "== E. THE SECOND REFERENCE: qemu-system-x86_64 ON THE SAME IMAGE AND CMDLINE"
+# THE POINT OF THIS STEP (results/x86-64-qemu.md): the port stops the amd64 kernel in an early
+# triple-fault window, and the honest question is whether that window is the IMAGE's or the PORT's.
+# QEMU -- a second, independent reference for the same kernel -- answers it: with the SAME image,
+# the SAME cmdline and the same memory it boots the kernel to the root-mount panic.  So the window
+# is the PORT's, and this step records the reference sequence to bisect against.
+#
+# FLAKE DISCIPLINE (the tree's own rule): a QEMU run under load can time out, and a timeout is NOT
+# a regression.  The assertion is therefore on the SERIAL, not on qemu's exit code, and a run that
+# produced no serial at all is reported as such rather than failed -- the port's own steps above
+# still carry the port's side.
+QSERIAL=/tmp/gate-x86-64-qemu-serial.txt
+rm -f $QSERIAL
+timeout 130 qemu-system-x86_64 -machine pc -m 256 -enable-kvm -no-reboot -display none \
+	-kernel $KERNEL -append 'console=ttyS0 earlyprintk=serial' \
+	-serial file:$QSERIAL > /dev/null 2>&1 || true
+step "qemu-boots-the-same-image" sh -c "grep -q 'Linux version 6.1.0-50-amd64' $QSERIAL"
+step "qemu-reaches-the-root-mount" sh -c \
+	"grep -q 'Unable to mount root fs' $QSERIAL"
+must_fail "qemu-able-to-fail" sh -c "grep -q 'Unable to mount root fs' $BOOTLOG"
+
 echo
 echo "[+] gate-x86-64: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

@@ -782,6 +782,28 @@ measured (a delegated run EXECUTES, so the hand-built sandbox crashed; the gate'
 images is the stronger instrument) — `uop_cache_selftest` 7934367 → 7934363, stated not absorbed.
 **THE PLAN'S FOURTEEN SLICES ARE ALL LANDED.**
 
+**THE QEMU UNIT: THE SAME IMAGE BOOTS UNDER QEMU, SO THE TRIPLE-FAULT WINDOW IS THE PORT'S
+(2026-10-19).**  `results/x86-64-qemu.md` is its report.  THE SECOND REFERENCE, READ from
+gate-m2-5.sh's gate-1b arm and run on the pinned image with the SAME cmdline and memory (no initrd):
+`qemu-system-x86_64 -machine pc -m 256 -enable-kvm -no-reboot -display none -kernel
+tests/images/vmlinuz-6.1.0-50-amd64 -append 'console=ttyS0 earlyprintk=serial' -serial file:...`.
+**IT BOOTS** -- 23,978 bytes of serial, `Linux version 6.1.0-50-amd64 … Debian 6.1.176-1`, `NX
+protection: active`, `Hypervisor detected: KVM`, through `kernel_init` to
+`---[ end Kernel panic - not syncing: VFS: Unable to mount root fs on unknown-block(0,0) ]---`, which
+is the CORRECT end for a cmdline with no initrd.  **SO THE LAST UNIT'S CONCLUSION IS REFUTED**: the
+guest CAN proceed on this image; the triple-fault window is the PORT's, not the image's, and QEMU's
+serial is now the reference sequence to bisect against (the port's serial stops at the decompressor's
+KASLR line).  WORKING HYPOTHESIS (INTERPRETATION, not a finding): the port's kernel runs with
+`Physical KASLR disabled: no suitable memory region!` while QEMU's runs with `Kernel Offset:
+0x6400000` -- the two take DIFFERENT early-boot paths, and the port's is the one that faults; that is
+the first thing to compare.  THE GATE: gate-x86-64.sh gains a section E (three steps + an able-to-fail
+arm) asserting the SERIAL, not qemu's exit code, because a timeout under load is not a regression --
+**gate-x86-64 12/0** (was 9).  THE SECOND IMAGE IS NOT OBTAINED and the reason is stated: the tree holds
+ONE amd64 kernel (the others are i386); obtaining a second means a download with its own provenance pin
+(URL + sha256) and a size decision, and §1's measurement makes it no longer the NEXT question -- it
+would answer a different one (does the divergence reproduce on a kernel with a different early-boot
+ordering) and is the natural follow-up to the bisect.  Full battery green, every pin unmoved.
+
 **THE FIRSTFAULT2 UNIT: THE FIRST FAULT IS STILL MASKED, AND THE EVIDENCE SAYS THE GUEST'S OWN STATE IS
 THE CAUSE (2026-10-19).**  `results/x86-64-firstfault2.md` is its report.  THE TOOL (code change,
 default off): `V86C_FAULT_DELIVERY_BOUND=<N>` -- read in v86c_dbg_init, held in
