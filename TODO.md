@@ -354,6 +354,27 @@ or pack in normal use has to carry it.
 
 ## 8. Long mode (64-bit guests) — **one day**, not a non-goal
 
+**RECURSION (2026-10-21): THE FAULT-DELIVERY RECURSION IS A PER-CPU BASE WITH A WRONG HIGH HALF.**
+`results/x86-64-recursion.md`. The ring names the code (link `0xffffffff812ef8e5`, slide still
+`0x7E00000`): `mov %gs:0x7ed3ec94,%eax` (a per-cpu read), `cltq`, `mov -0x7d3c6c20(,%rax,8),%rdx`
+(`__per_cpu_offset[cpu]`), `lea 0x1e00(%rdx),%rax`, and the faulting `cmp %edi,0x1e08(%rdx)` with
+**`%rdx = 0`** — a NULL per-cpu pointer, read at `0x1e08`. The DELIVERY's own fault is at
+`cr2 = 0xc0a0b010` = **`gdtr + 0x10`**: the port could not read the CS descriptor in the GDT, so the
+delivery faulted four times and the bound fired. `gdtr = gs_base + 0xb000` exactly — the GDT is the
+per-cpu `gdt_page`, so ONE value produces both. **THE REFERENCE** (QEMU's gdbstub at the same
+instruction, nokaslr): `rax = 0xffff88800ffb6e00`, `rdx = 0xffff88800ffb5000`, and `rsp`/`rdi`/`rbp`/
+`rsi` identical to the port's — hardware's per-cpu pointer is valid and its `cpu_number` read returned
+0; the port's returned `0x1e00`. **THE DEFECT:** the port's per-cpu base is
+`0xffff8c16 c0a00000` where the direct map of that same allocation is `0xffff8880 c0a00000` — the LOW
+half is its own legitimate 192 MiB `memblock` placement (QEMU's is `0xffb5000`, equally legitimate),
+the HIGH half is wrong. So it is a **32-bit-halves defect in the per-cpu base's high half**, not an
+allocation or mapping error. **NEXT FORK:** break on the store to `__per_cpu_offset[0]` and on the
+`wrmsr(MSR_GS_BASE)` that follows and read both — the wrong high half is already in the computed value
+(INTERPRETATION: the GDT address derives from it), so the producer is `setup_per_cpu_areas`'
+arithmetic, not the MSR write alone. **No fix claimed** (three shapes fit and the machine is not
+changed on a hypothesis). The kernel still reaches its banner and ~30 s of boot; `gate-x86-64` 14/0
+with the banner gated. No source change: make/selftest/gate-x86-64/bench green, bench 200,095,214.
+
 **F7 (2026-10-21): TEST r/m64, imm32 LANDED — AND THE KERNEL NOW RUNS 30 SECONDS OF BOOT.**
 `results/x86-64-f7.md`. `instr64_F7_0_mem`/`_reg` over the port's existing `test64()`, with the
 immediate SIGN-EXTENDED to 64 bits (SDM) and TEST's flags (CF/OF cleared, SF/ZF/PF from the result,
