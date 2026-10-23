@@ -366,14 +366,35 @@ void instr16_0F01_6_mem(int64_t addr)
 void instr32_0F01_6_mem(int64_t addr) { instr16_0F01_6_mem(addr); }
 
 /* instructions_0f.rs:312-326 -- invlpg */
-void instr16_0F01_7_reg(int32_t _r)
+/* 0F 01 /7 -- rm=0 is SWAPGS (SDM Vol 2 "SWAPGS"), rm=1 is RDTSCP (still a named stop).
+ *
+ * REACH (results/x86-64-retzero.md): the amd64 guest stopped here.  Its exception-return path
+ * (`pop` every register, `add rsp,8`, test the return CS, then `iretq` or `swapgs`) executes
+ * `0f 01 f8` on the way back to user mode, and the port raised #UD -- so every exception that
+ * came back through that path killed the machine.  The state it swaps already exists: the GS
+ * base (segment_offsets[GS], the same field `wrmsr 0xC0000101` writes) and `kernel_gs_base`
+ * (MSR 0xC0000102). */
+static void swapgs(void)
 {
-	(void)_r;
+	uint64_t gs = cpu->segment_offsets[GS];
+	cpu->segment_offsets[GS] = cpu->kernel_gs_base;
+	cpu->kernel_gs_base = gs;
+}
+
+void instr16_0F01_7_reg(int32_t r)
+{
+	if (long_mode_64() && (r & 7) == 0) {
+		swapgs();
+		return;
+	}
 	trigger_ud();
 }
-void instr32_0F01_7_reg(int32_t _r)
+void instr32_0F01_7_reg(int32_t r)
 {
-	(void)_r;
+	if (long_mode_64() && (r & 7) == 0) {
+		swapgs();
+		return;
+	}
 	trigger_ud();
 }
 void instr16_0F01_7_mem(int64_t addr)

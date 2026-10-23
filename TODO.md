@@ -354,6 +354,28 @@ or pack in normal use has to carry it.
 
 ## 8. Long mode (64-bit guests) — **one day**, not a non-goal
 
+**RETZERO (2026-10-21): THE #UD IS `SWAPGS` — NOT A `ret` POPPING ZERO.** `results/x86-64-retzero.md`.
+**The premise is corrected:** `pt_regs.ip` is at **+0x80**, not the +0x78 the previous unit read
+(that slot is `orig_ax`), so `regs->ip` was never 0. MEASURED from the frame: ip =
+`0xffffffff89a01223`, and the image at that link address is **`0f 01 f8` = `swapgs`**, in the
+kernel's `restore_regs_and_return_to_kernel` tail (`pop r15..rdi; add rsp,8; testb $4,0x20(%rsp);
+jne; iretq; push rdi; swapgs`). The ring's epilogue and the shared `ret` thunk were a red herring:
+the fault is three instructions later. **SWAPGS was simply not implemented** — `instr32_0F01_7_reg`
+raised #UD unconditionally — so every exception returning through that path killed the machine.
+**FIXED** (`src/cpu/instructions_0f.c`): `0F 01 /7` with `rm=0` in long mode exchanges
+`segment_offsets[GS]` with `kernel_gs_base` (the fields the MSRs already use); `rm=1` (RDTSCP) and
+non-long-mode stay #UD. Arm: `test_swapgs` (register-only; fails against the pre-fix build).
+**ASYMMETRY, measured:** before, halt in `early_fixup_exception` with trapnr 6 at `swapgs`; after, no
+#UD — the return path runs (`mov %cr3,%rdi; and $~0x1800,%rdi; mov %rdi,%cr3`, then
+`mov %gs:0x19000,%rdi`) and the new stop is a **#PF at that per-cpu read**, `cr2 =
+0xffff88800001fb40` (`gs_base = 0xffff888000006b40 + 0x19000`), halted by the recursion guard
+(`PEEK 0x312c000 = 3`; `0xffffffff8ae9c800` is `ja` → halt), i.e. **three nested exceptions**. The
+direct-map chain for that address EXISTS (`PML4[273]=0x30ec063 → PUD[0]=0x30ecd063`), so the repair
+is not refusing. **Next fork:** why the handler's own path faults — break on
+`early_idt_handler_common`'s entry (`0xffffffff8ae77120`, which does `incl early_recursion_flag`),
+count hits, `PEEK 0x312c000` at each, and find whether the decrement at the handler's exit is
+reached. **The first `printk` is still not reached.** Full battery green, every pin unmoved.
+
 **REPAIR (2026-10-21): THE DIRECT-MAP REPAIR NOW WORKS — A 32-BIT CR2 WAS REFUSING IT.**
 `results/x86-64-repair.md`. Candidate (a) of the fork, confirmed with BOTH SIDES of the comparison
 visible: `__early_make_pgtable` (link `0xffffffff83077283`) opens with

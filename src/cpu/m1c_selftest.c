@@ -642,6 +642,42 @@ static void test_cr2_64bit_read(void)
 }
 
 /* ================================================================== *
+ * TEST 1j -- SWAPGS EXCHANGES THE GS BASE WITH KERNEL_GS_BASE (results/x86-64-retzero.md)
+ *
+ * The corpus cannot carry it (privileged; the native leg is CPL 3).  The measurement it encodes:
+ * the amd64 guest's exception-return path executes `0f 01 f8` and the port raised #UD, so every
+ * exception returning through that path killed the machine -- the stop was 0xffffffff81c01223,
+ * `swapgs`, reached right after the `pop`s and the CR3 switch of the return path.  Register-only:
+ * the instruction touches no memory, so no paging fixture is needed.
+ * ================================================================== */
+static void test_swapgs(void)
+{
+    machine_setup(false);
+    cpu->segment_offsets[GS] = 0xFFFF888000006B40ull;
+    cpu->kernel_gs_base = 0xFFFF8AE42000ull;
+    cpu->efer |= EFER_LMA;
+    cpu->is_64 = true;
+    CHECK(long_mode_64());
+
+    instr32_0F01_7_reg(0);               /* swapgs */
+    CHECK(!cpu->pagefault);
+    CHECK_EQ(cpu->segment_offsets[GS], 0xFFFF8AE42000ull);
+    CHECK_EQ(cpu->kernel_gs_base, 0xFFFF888000006B40ull);
+
+    instr32_0F01_7_reg(0);               /* and back -- the swap is its own inverse */
+    CHECK_EQ(cpu->segment_offsets[GS], 0xFFFF888000006B40ull);
+    CHECK_EQ(cpu->kernel_gs_base, 0xFFFF8AE42000ull);
+
+    /* NOT probed here: rm=1 (RDTSCP) and SWAPGS outside long mode both raise #UD, and a #UD
+     * DELIVERY needs an IDT fixture this arm deliberately does not build (the instruction under
+     * test touches no memory, which is why it can live in this harness at all) */
+
+    cpu->segment_offsets[GS] = 0;
+    cpu->kernel_gs_base = 0;
+    machine_setup(false);
+}
+
+/* ================================================================== *
  * TEST 1f -- A SEGMENT OVERRIDE APPLIES TO A RIP-RELATIVE OPERAND (results/x86-64-gsfix.md)
  *
  * The corpus cannot carry this arm: the native leg would have to set its own FS/GS base and the
@@ -1624,6 +1660,7 @@ int main(void)
         RUN(test_cr4_pge_write_no_pdpte_reload, "MOV CR4 with PGE 0->1 does not reload PDPTEs (long mode: CR3 holds a PML4E)");
     RUN(test_far_return_64bit_frame, "a 64-bit RETF: an eight-byte RIP/CS frame and a 64-bit target");
     RUN(test_debug_toolkit_fires, "the debugging toolkit fires: watchpoint, fault watch, ring, dump-on-stop");
+    RUN(test_swapgs, "SWAPGS exchanges the GS base with KERNEL_GS_BASE (and is not SWAPGS outside long mode)");
     RUN(test_cr2_64bit_read, "a long-mode `mov r64, cr2` returns the WHOLE linear address (and 32-bit mode is unchanged)");
     RUN(test_debug_toolkit_range_overlap, "the range hook counts only the ranges that contain a watched byte");
     RUN(test_rip_relative_segment_base, "a segment override applies to a RIP-relative operand (FS/GS add their base)");
