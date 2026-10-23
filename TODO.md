@@ -354,6 +354,29 @@ or pack in normal use has to carry it.
 
 ## 8. Long mode (64-bit guests) — **one day**, not a non-goal
 
+**REPAIR (2026-10-21): THE DIRECT-MAP REPAIR NOW WORKS — A 32-BIT CR2 WAS REFUSING IT.**
+`results/x86-64-repair.md`. Candidate (a) of the fork, confirmed with BOTH SIDES of the comparison
+visible: `__early_make_pgtable` (link `0xffffffff83077283`) opens with
+`physaddr = address - page_offset_base`, `cmp MAXMEM`, `jae → return false`; MEASURED before the fix,
+the entry got `rdi = 0x84790` and the `cmp` saw `rdx = 0x778000084790` against
+`rax = 0x400000000000` — so it refused, `PML4[273]` stayed 0 and the panic was the #PF (trapnr 14).
+The address was truncated because the guest's `native_read_cr2()` (`48 0f 20 d7`) went through a
+32-bit read: `cr2_64` was CORRECT (probe: `cr2_64=0xffff888000084790`) but the body's REX.W test
+could never fire — `cpu->prefixes` is 0 by the time the `0F 20` body runs, MEASURED. **FIXED** in
+`src/cpu/instructions_0f.c`: a long-mode read of CR2 returns the whole `cr2_64` unconditionally (the
+SDM's default operand size for `MOV CR` in IA-32e is 64 bits), and a long-mode WRITE takes a 64-bit
+source (`read_reg64`) — the mirror defect. **ASYMMETRY, measured:** entry `rdi=0xffff888000084790`,
+guard `rdx=0x84790` passes, the store at `0x8ae77456` targets `rsi=0xffffffff8aeea888`
+(`early_top_pgt + 273*8`) with `rax=0x30ec063`, and **`PEEK 0x30ea888 = 0x30ec063`** — `PML4[273]`
+mapped to `early_dynamic_pgts[0]` (`0x30ec000`). `copy_bootdata`'s memcpy retries and succeeds, and
+the kernel is past the fault that stopped every unit since `results/x86-64-reach2.md`. **What is
+left, named:** the stop has moved to a **#UD** (trapnr 6) with the frame's `regs->ip = 0`, taken at a
+shared `ret` thunk after a function epilogue — the next fork is "what does that `ret` pop", with
+`V86C_BREAK` on the thunk and `V86C_PEEK` of the popped slot. **The first `printk` is still not
+reached.** Unit arm: `test_cr2_64bit_read` (register-only, no paging; fails against the pre-fix
+build). NAMED GAP: the `0x66`-prefixed 32-bit CR2 read in long mode cannot be distinguished (the
+prefix state does not reach the body). Full battery green, every pin unmoved.
+
 **DMAP (2026-10-21): THE DIRECT MAP IS DEMAND-MAPPED — THE REPAIR RUNS AND DOES NOT STICK.**
 `results/x86-64-dmap.md`. **CORRECTION to the premise of the unit before it:** no `__startup_64` loop
 writes `PML4[273]`. `READ` from the source of *this* image (tag `v6.1.176`):

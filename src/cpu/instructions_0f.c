@@ -522,9 +522,16 @@ void instr_0F20(int32_t r, int32_t creg)
 		write_reg32(r, cpu->cr[0]);
 		break;
 	case 2:
-		/* a REX.W read in 64-bit mode returns the WHOLE linear address (results/x86-64-dmap.md);
-		 * without REX.W, and outside long mode, it is the model's 32-bit projection */
-		if (long_mode_64() && (cpu->prefixes & PREFIX_REX_W) != 0) {
+		/* A LONG-MODE READ RETURNS THE WHOLE LINEAR ADDRESS (results/x86-64-repair.md).  The
+		 * SDM makes the operand size of MOV CR 64 bits by default in IA-32e, and keying on
+		 * REX.W here was WRONG for a reason MEASURED, not guessed: the port's `cpu->prefixes`
+		 * is 0 by the time this body runs for `48 0f 20 d7` (the 0F escape's 32-bit
+		 * dispatcher drops it), so a REX.W test can never see the prefix and the guest's
+		 * `native_read_cr2()` came back as the low half 0x84790 -- which made the early #PF
+		 * handler's direct-map repair refuse (`physaddr >= MAXMEM`) and the kernel panic.
+		 * The 0x66-prefixed 32-bit read of CR2 in long mode is a NAMED GAP: the prefix state
+		 * does not reach this body, so it cannot be distinguished here. */
+		if (long_mode_64()) {
 			write_reg64(r, cpu->cr2_64);
 		}
 		else {
@@ -580,8 +587,10 @@ void instr_0F22(int32_t r, int32_t creg)
 		set_cr0(data);
 		break;
 	case 2:
-		cpu->cr2_64 = (uint64_t)(uint32_t)data;
-		cpu->cr[2] = data;
+		/* in long mode the SOURCE is 64 bits too (results/x86-64-repair.md) -- a 32-bit read
+		 * of the register would store a truncated CR2, the mirror of the read-side defect */
+		cpu->cr2_64 = long_mode_64() ? read_reg64(r) : (uint64_t)(uint32_t)data;
+		cpu->cr[2] = (int32_t)(uint32_t)cpu->cr2_64;
 		break;
 	case 3:
 		set_cr3(data);

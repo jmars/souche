@@ -599,6 +599,49 @@ static void test_debug_toolkit_range_overlap(void)
 }
 
 /* ================================================================== *
+ * TEST 1i -- A LONG-MODE `mov r64, cr2` RETURNS THE WHOLE ADDRESS (results/x86-64-repair.md)
+ *
+ * The corpus cannot carry it: MOV CR is privileged and the native leg runs at CPL 3.  This arm
+ * needs no paging at all -- the instruction touches a register -- which is why it is here and not
+ * a fixture.  The measurement it encodes: the port's CR2 was 32 bits, so the amd64 guest's
+ * `native_read_cr2()` returned 0x84790 for a fault at 0xffff888000084790, and the early #PF
+ * handler's direct-map repair refused (`physaddr >= MAXMEM`) and the kernel panicked.  It fails
+ * against a build that returns `cr[2]`: the read comes back 0x84790.
+ * ================================================================== */
+static void test_cr2_64bit_read(void)
+{
+    machine_setup(false);
+    cpu->cr2_64 = 0xFFFF888000084790ull;
+    cpu->cr[2] = (int32_t)0x00084790;
+    cpu->cpl = 0;
+
+    /* outside long mode: the model's 32-bit projection, exactly as before */
+    CHECK_EQ(cpu->cr[2], 0x84790);
+    instr_0F20(EAX, 2);
+    CHECK(!cpu->pagefault);
+    CHECK_EQ(read_reg32(EAX), 0x84790);
+
+    /* in long mode the read is the whole linear address */
+    cpu->efer |= EFER_LMA;
+    cpu->is_64 = true;
+    CHECK(long_mode_64());
+    instr_0F20(EAX, 2);
+    CHECK(!cpu->pagefault);
+    CHECK_EQ(read_reg64(EAX), 0xFFFF888000084790ull);
+
+    /* and `mov cr2, r` stores the whole thing back */
+    write_reg64(ECX, 0xFFFF888000084123ull);
+    instr_0F22(ECX, 2);
+    CHECK_EQ(cpu->cr2_64, 0xFFFF888000084123ull);
+
+    cpu->cr2_64 = 0;
+    cpu->cr[2] = 0;
+    cpu->efer &= ~EFER_LMA;
+    cpu->is_64 = false;
+    machine_setup(false);
+}
+
+/* ================================================================== *
  * TEST 1f -- A SEGMENT OVERRIDE APPLIES TO A RIP-RELATIVE OPERAND (results/x86-64-gsfix.md)
  *
  * The corpus cannot carry this arm: the native leg would have to set its own FS/GS base and the
@@ -1581,6 +1624,7 @@ int main(void)
         RUN(test_cr4_pge_write_no_pdpte_reload, "MOV CR4 with PGE 0->1 does not reload PDPTEs (long mode: CR3 holds a PML4E)");
     RUN(test_far_return_64bit_frame, "a 64-bit RETF: an eight-byte RIP/CS frame and a 64-bit target");
     RUN(test_debug_toolkit_fires, "the debugging toolkit fires: watchpoint, fault watch, ring, dump-on-stop");
+    RUN(test_cr2_64bit_read, "a long-mode `mov r64, cr2` returns the WHOLE linear address (and 32-bit mode is unchanged)");
     RUN(test_debug_toolkit_range_overlap, "the range hook counts only the ranges that contain a watched byte");
     RUN(test_rip_relative_segment_base, "a segment override applies to a RIP-relative operand (FS/GS add their base)");
 return failures != 0;
