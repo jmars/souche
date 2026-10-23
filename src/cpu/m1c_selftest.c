@@ -437,13 +437,19 @@ static void test_pagefault_delivery_64bit(void)
     CHECK_EQ(cpu->sreg[CS], SEL_CODE2);
     CHECK(long_mode_64()); /* the gate's CS has L=1: the machine is still in 64-bit mode */
 
-    /* THE FRAME: four qwords -- error code, the REWOUND rip, the interrupted CS, RFLAGS */
-    CHECK_EQ(read_reg64(ESP), (uint64_t)STACK_TOP - 32);
+    /* THE FRAME: SIX qwords in IA-32e -- error code, the REWOUND rip, the interrupted CS,
+     * RFLAGS, and -- the 64-bit rule that the 32-bit arm does not have -- RSP and SS, pushed on
+     * EVERY delivery, not only on a privilege change (SDM Vol 3, 6.14.1: "in 64-bit mode, the
+     * processor always pushes SS:RSP").  This arm previously encoded the 32-bit four-qword shape
+     * and was updated when the long-mode delivery gained SS:RSP (results/x86-64-kgs.md). */
+    CHECK_EQ(read_reg64(ESP), (uint64_t)STACK_TOP - 48);
     uint64_t frame = read_reg64(ESP);
     CHECK_EQ(safe_read64_addr((int64_t)frame + 0), 0);            /* #PF error code: P=0 W=0 U=0 */
     CHECK_EQ(safe_read64_addr((int64_t)frame + 8), 0x7000);       /* the re-executed rip */
     CHECK_EQ(safe_read64_addr((int64_t)frame + 16), SEL_CODE);    /* the interrupted CS */
     CHECK((safe_read64_addr((int64_t)frame + 24) & FLAG_DIRECTION) == 0);
+    CHECK_EQ(safe_read64_addr((int64_t)frame + 32), (uint64_t)STACK_TOP); /* the interrupted RSP */
+    CHECK_EQ(safe_read64_addr((int64_t)frame + 40) & 0xFFFF, SEL_DATA);   /* the interrupted SS */
 
     /* THE STRIDE, ABLE TO FAIL: the same gate read at the 8-byte stride is slot 7's null
      * descriptor.  The check is the arithmetic the port used to do, so it fails if the

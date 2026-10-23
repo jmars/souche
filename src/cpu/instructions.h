@@ -68,7 +68,8 @@ void far_jump(int32_t eip, int32_t selector, bool is_call, bool is_osize_32);   
 void far_return(int64_t eip, int32_t selector, int32_t stack_adjust, bool is_osize_32,
                 bool is_64); /* cpu.rs:1507 */
 void iret16(void);                                                              /* cpu.rs:507 */
-void iret32(void);                                                              /* cpu.rs:508 */
+void iret32(void);
+void iret64(void); /* 0xCF in long mode -- IRETQ (results/x86-64-kgs.md) */                                                              /* cpu.rs:508 */
 
 /* --- pic.c, M1c (plan ss7 step 18): the interrupt-controller poll.  Called by POPF/STI
  * (the deferred-interrupt window) and by HLT. */

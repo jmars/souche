@@ -142,6 +142,10 @@ const x86_table64_0f = [
 	{ opcode: 0xAD }, /* shrd r/m64, r64, cl */
 	{ opcode: 0xBC }, /* bsf r64, r/m64 */
 	{ opcode: 0xBD }, /* bsr r64, r/m64 */
+	{ opcode: 0xA3 }, /* bt  r/m64, r64 */
+	{ opcode: 0xAB }, /* bts r/m64, r64 (results/x86-64-kgs.md) */
+	{ opcode: 0xB3 }, /* btr r/m64, r64 */
+	{ opcode: 0xBB }, /* btc r/m64, r64 */
 	{ opcode: 0xBA }, /* the bt/bts/btr/btc imm8 group */
 	{ opcode: 0xC8 }, /* bswap r64 (0F C8+r: eight opcodes, one body each) */
 	{ opcode: 0xC9 },

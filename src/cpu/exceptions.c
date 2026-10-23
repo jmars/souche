@@ -191,6 +191,44 @@ static void iret(bool is_16);
 void iret16(void) { iret(true); }
 void iret32(void) { iret(false); }
 
+/* 0xCF in 64-bit mode -- IRETQ (results/x86-64-kgs.md).  The frame is FIVE eight-byte words --
+ * RIP, CS, RFLAGS, RSP, SS -- which is why the delivery pushes five (exceptions.c's lm64 arm):
+ * the amd64 kernel's early exception return is a plain `iretq`, and the port stopped on it by
+ * name ("instructions::instr64_CF") the moment the frame was right.
+ *
+ * The SAME-PRIVILEGE return is implemented here; a return that CHANGES privilege is a named
+ * stop, because it needs the SS:RSP reload and the data-segment nulling the 32-bit arm does
+ * (exceptions.c's `iret_data_segments` block), and no guest in this tree has exercised it yet. */
+void iret64(void)
+{
+    int64_t base = get_stack_pointer(0);
+    int64_t new_rip, new_cs, new_flags, new_rsp, new_ss;
+
+    new_rip = (int64_t)safe_read64s(base);
+    if (cpu->pagefault) return;
+    new_cs = (int32_t)(safe_read64s(base + 8) & 0xFFFF);
+    if (cpu->pagefault) return;
+    new_flags = (int64_t)safe_read64s(base + 16);
+    if (cpu->pagefault) return;
+    new_rsp = (int64_t)safe_read64s(base + 24);
+    if (cpu->pagefault) return;
+    new_ss = (int32_t)(safe_read64s(base + 32) & 0xFFFF);
+    if (cpu->pagefault) return;
+
+    if ((new_cs & 3) != cpu->cpl) {
+        unimplemented_instruction("iretq: a return that changes privilege level is not implemented");
+        return;
+    }
+    (void)new_ss; /* the SDM does not reload SS on a same-privilege return */
+
+    far_return(new_rip, new_cs, 0, false, true);
+    if (cpu->pagefault) return;
+    set_stack_reg(new_rsp);
+    update_eflags(new_flags);
+    update_state_flags();
+    handle_irqs();
+}
+
 static void iret(bool is_16)
 {
     if (vm86_mode() && getiopl() < 3) {
@@ -778,7 +816,8 @@ static void call_interrupt_vector_inner(int32_t interrupt, bool is_int, bool has
             int32_t bytes_per_arg = lm64 ? 8 : (intr_descriptor_is_32(descriptor) ? 4 : 2);
             int32_t error_code_space = has_error_code ? 1 : 0;
 
-            int32_t stack_space = bytes_per_arg * (3 + error_code_space);
+            /* 5 words in 64-bit mode (SS:RSP:RFLAGS:CS:RIP), 3 in the 32/16-bit arms */
+            int32_t stack_space = bytes_per_arg * ((lm64 ? 5 : 3) + error_code_space);
 
             /* XXX: with current cpl or with cpl 0? */
             writable_or_pagefault(get_stack_pointer(-stack_space), stack_space);
@@ -793,12 +832,23 @@ static void call_interrupt_vector_inner(int32_t interrupt, bool is_int, bool has
 
         /* XXX: #SS if stack would cross stack limit */
         if (lm64) {
-            /* THE 64-BIT FRAME: RFLAGS, CS and RIP are EIGHT bytes each (and the error code,
-             * when the vector pushes one, is eight too), which is why the 32-bit arm's
+            /* THE 64-BIT FRAME: SS, RSP, RFLAGS, CS and RIP, EIGHT bytes each (and the error
+             * code, when the vector pushes one, is eight too), which is why the 32-bit arm's
              * `is_32` test cannot be reused -- a 64-bit gate has the SAME type bit set (0xE/0xF
-             * carry bit 3) and would take the 4-byte path.  MEASURED: this is the frame the
-             * `stop-is-the-64bit-interrupt-frame` step in tests/gate-x86-64.sh could only
-             * assert the STOP of; results/x86-64-rep.md records the delivered frame. */
+             * carry bit 3) and would take the 4-byte path.
+             *
+             * SS AND RSP ARE ALWAYS PUSHED IN 64-BIT MODE, even when the privilege level does
+             * not change -- which is why IRET always pops five words.  MEASURED as the port's
+             * stop (results/x86-64-kgs.md): QEMU's handler-entry RSP is two words (0x10) below
+             * its pre-exception RSP than the port's is, i.e. hardware pushed SS:RSP and the port
+             * did not, so the amd64 kernel's early return path (`testb $4,0x20(%rsp)`, the SS
+             * slot) read copy_bootdata's return address instead of the kernel selector, took its
+             * user-return branch, and the swapgs zeroed GS.base. */
+            int64_t interrupted_rsp = get_stack_pointer(0);
+            push64((int32_t)cpu->sreg[SS]);
+            DBG_ASSERT(!cpu->pagefault);
+            push64(interrupted_rsp);
+            DBG_ASSERT(!cpu->pagefault);
             push64(old_flags);
             DBG_ASSERT(!cpu->pagefault);
             push64((int32_t)cpu->sreg[CS]);

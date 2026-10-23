@@ -23,9 +23,10 @@ KERNEL=tests/images/vmlinuz-6.1.0-50-amd64
 DEB_URL="https://deb.debian.org/debian/pool/main/l/linux/linux-image-6.1.0-50-amd64-unsigned_6.1.176-1_amd64.deb"
 DEB_SHA=439422e41d2dbb840b60b81e3bf5e5955bfa56b7a8c268aec83c9ff882d421e6
 SHA_KERNEL=653421d9774c0de27502ca010d572323b52a5d7141d067b9b04214bd24baca3a
-# raised from 20M: the guest now decompresses past 30M instructions before it reaches the
-# 64-bit address bound this gate asserts (results/x86-64-rep.md)
-LIMIT=40000000
+# raised from 20M (results/x86-64-rep.md) and again from 40M: the kernel now runs its OWN code
+# past start_kernel and prints its banner at ~4.49 G instructions (results/x86-64-kgs.md).  At the
+# measured ~40 M instructions/second that is ~2 minutes, inside the 300 s timeout below.
+LIMIT=6000000000
 SERIAL=/tmp/gate-x86-64-serial.txt
 LOG=/tmp/gate-x86-64.log
 BOOTLOG=/tmp/gate-x86-64-boot.log
@@ -56,8 +57,12 @@ boot_once() {
 step "kernel-runs" boot_once
 step "kernel-in-long-mode" sh -c \
 	"grep -q 'cs=0x10 cr0=0x80050033' $BOOTLOG"
+# cr3 MOVES now (results/x86-64-kgs.md): the guest starts on the decompressor's tables
+# (0x4f76000), switches to the kernel's own (0x30ea000) during __startup_64, and by the banner it
+# is on the relocated image's -- so the assertion is the LONG-MODE property, not one historical
+# value: paging on, long mode active, a non-zero cr3.
 step "kernel-page-tables-in-ram" sh -c \
-	"grep -q 'cr3=0x4f76000' $BOOTLOG"
+	"grep -q 'cr0=0x80050033' $BOOTLOG && ! grep -q 'cr3=0x0 ' $BOOTLOG"
 step "kernel-serial-output" sh -c "grep -q 'Probing EDD' $SERIAL"
 
 echo "== D. THE HONEST STOP, ASSERTED BY NAME (replaced: the frame LANDED, results/x86-64-rep.md)"
@@ -68,6 +73,13 @@ echo "== D. THE HONEST STOP, ASSERTED BY NAME (replaced: the frame LANDED, resul
 # ALIVE, which is the milestone the old step could not reach, and (b) the stop is the 4 GiB
 # address bound, so a stop EARLIER (a delivery stop, a refusal, a silent hang) fails here.
 step "decompressor-console-alive" sh -c "grep -q 'Physical KASLR disabled' $SERIAL"
+
+# THE MILESTONE (results/x86-64-kgs.md): the amd64 kernel runs its OWN C code far enough to print.
+# It got there the moment the 64-bit interrupt frame carried SS:RSP (the frame the kernel's early
+# return path reads) and iretq existed; before those, the machine died in the exception return and
+# never reached start_kernel.  The assertion is the kernel's own banner, which no decompressor
+# message can produce.
+step "kernel-first-printk" sh -c "grep -q 'Linux version 6.1.0-50-amd64' $SERIAL"
 # THE STEP THIS REPLACES asserted the 4 GiB ADDRESS BOUND -- the stop this gate used to end on.
 # That stop is GONE (MEASURED, results/x86-64-wide.md): the guest now decompresses, and at this
 # gate's 40 M-instruction budget it is still decompressing with NO named stop.  Asserting the
@@ -75,7 +87,13 @@ step "decompressor-console-alive" sh -c "grep -q 'Physical KASLR disabled' $SERI
 # it can afford and names the rest: no unimplemented stop in the log, and the bound's message
 # ABSENT.  The full extent (8,388,607 bytes, i.e. the whole kernel) is MEASURED in the report at
 # a 1.5 G budget, not asserted here.
-step "no-named-stop" sh -c "grep -q 'unimplemented=0' $BOOTLOG"
+# THE STOP MOVED (results/x86-64-kgs.md): with the banner reached, the guest stops on the NEXT
+# unimplemented 64-bit body -- asserted BY NAME so that a regression to an earlier stop, or a
+# silent hang, fails here.  Replace the name, not the step, when the next body lands.
+step "stop-is-the-next-unimplemented-body" sh -c \
+	"grep -q 'unimplemented: instructions::instr64_F7_0_mem' $BOOTLOG"
+must_fail "stop-name-able-to-fail" sh -c \
+	"grep -q 'unimplemented: instructions::instr64_C3' $BOOTLOG"
 must_fail "address-bound-gone-able-to-fail" sh -c \
 	"grep -q 'a 64-bit effective address above 4 GiB' $BOOTLOG"
 
