@@ -354,6 +354,29 @@ or pack in normal use has to carry it.
 
 ## 8. Long mode (64-bit guests) — **one day**, not a non-goal
 
+**F7 (2026-10-21): TEST r/m64, imm32 LANDED — AND THE KERNEL NOW RUNS 30 SECONDS OF BOOT.**
+`results/x86-64-f7.md`. `instr64_F7_0_mem`/`_reg` over the port's existing `test64()`, with the
+immediate SIGN-EXTENDED to 64 bits (SDM) and TEST's flags (CF/OF cleared, SF/ZF/PF from the result,
+AF UNDEFINED). Corpus arm `alu/test-imm32-64` separates a sign-extended immediate (SF=1) from a
+zero-extended one (SF=0) and compares `0x8C5` so the undefined AF is dropped; RED against the pre-fix
+binary, green now (`make nasm64` 13/0, all 85 cases agreeing). **READ, and it will bite the next
+"implement N bodies" unit: the interpreter generator finds bodies by SCANNING THE SOURCE TEXT, so a
+macro-generated body is invisible — MEASURED, my first attempt with a `DEFINE_BITTEST64` macro left
+the census at 44 unimplemented and the call sites as stops; write the bodies out.** THE GUEST: from
+the banner (4,488,210,693 instructions) to **4,519,091,709** and a serial reading
+`[   29.866809] percpu: cpu 0 has no node -1 or node-local memory` / `[   29.876706] percpu:
+Embedded 62 pages/cpu …` — through `start_kernel` into `setup_per_cpu_areas`, ~30 SECONDS of kernel
+boot. **THE NEXT STOP IS NOT A BODY**: `a fault raised while delivering a fault: the delivery
+re-entered four times` at `eip=0x890ef901 cr3=0x2a10000` — the fault-delivery recursion bound, i.e. a
+walk/frame question, so this unit STOPS there per its own rule. Next fork: which access faults at
+`0xffffffff890ef901` and why its delivery re-enters (`V86C_CHAIN`/`V86C_PEEK_SP`; the 64-bit frame is
+no longer a suspect). GATES: `gate-x86-64` **14/0** with the banner gated and the stop step re-pointed
+to the new stop; long-mode 57/0; diff 13/0; the rest green. PINS THAT MOVED, with reasons: the corpus
+count 84 -> 85 (a case ADDED, in three gates), the overlay census 44 -> 42 unimplemented (two gaps
+CLOSED), the alu family and the diff legs to `green=13/84 red_unimplemented=1` (the new case is a
+named stop in those legs' configurations). A blanket edit of mine briefly broke the muldiv pin and was
+restored.
+
 **VA (2026-10-21): QEMU FAULTS TOO — THE DIVERGENCE IS AFTER THE REPAIR, AND IT IS
 `MSR_KERNEL_GS_BASE`.** `results/x86-64-va.md`. The brief's premise is corrected with QEMU's own
 `-d int` log: QEMU's FIRST exception is `v=0e e=0000 cpl=0 IP=0010:ffffffff83077246

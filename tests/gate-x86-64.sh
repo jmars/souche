@@ -90,8 +90,12 @@ step "kernel-first-printk" sh -c "grep -q 'Linux version 6.1.0-50-amd64' $SERIAL
 # THE STOP MOVED (results/x86-64-kgs.md): with the banner reached, the guest stops on the NEXT
 # unimplemented 64-bit body -- asserted BY NAME so that a regression to an earlier stop, or a
 # silent hang, fails here.  Replace the name, not the step, when the next body lands.
+# THE STOP MOVED AGAIN (results/x86-64-f7.md): F7 /0 landed and the guest now runs ~30 SECONDS of
+# kernel boot (the banner, then percpu setup) before it dies in the fault-delivery path -- not on a
+# missing body at all.  The step names the CURRENT stop, so a regression to an earlier one, or a
+# silent hang, still fails here; replace the name, not the step, when the next one lands.
 step "stop-is-the-next-unimplemented-body" sh -c \
-	"grep -q 'unimplemented: instructions::instr64_F7_0_mem' $BOOTLOG"
+	"grep -q 'a fault raised while delivering a fault' $BOOTLOG"
 must_fail "stop-name-able-to-fail" sh -c \
 	"grep -q 'unimplemented: instructions::instr64_C3' $BOOTLOG"
 must_fail "address-bound-gone-able-to-fail" sh -c \

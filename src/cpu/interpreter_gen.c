@@ -25,8 +25,8 @@
  * reached this way still stops by name, exactly as the unprefixed encoding does.
  * See gen/interpreter_c.js, C-side difference 3.
  *
- * 2294 call sites, 44 of them unimplemented at the time this
- * file was generated (2254 instr* symbols defined in the port's sources).
+ * 2294 call sites, 42 of them unimplemented at the time this
+ * file was generated (2256 instr* symbols defined in the port's sources).
  */
 
 #include "cpu.h"
@@ -9812,12 +9812,16 @@ void run_instruction(int32_t opcode)
 		case 0:
 		{
 			if (modrm_byte < 0xC0) {
-				unimplemented_instruction("instructions::instr64_F7_0_mem");
-				return;
+				int64_t addr = modrm_resolve_imm(modrm_byte, 4);
+				if (cpu->pagefault) return;
+				int64_t imm = read_imm32s();
+				if (cpu->pagefault) return;
+				instr64_F7_0_mem(addr, imm);
 			}
 			else {
-				unimplemented_instruction("instructions::instr64_F7_0_reg");
-				return;
+				int64_t imm = read_imm32s();
+				if (cpu->pagefault) return;
+				instr64_F7_0_reg(reg_index_b(modrm_byte & 7), imm);
 			}
 		}
 			break;

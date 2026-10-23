@@ -709,6 +709,21 @@ void instr64_8F_0_reg(int32_t r1)
 	write_reg64(r1, v);
 }
 
+/* F7 /0 -- TEST r/m64, imm32 (results/x86-64-f7.md).  The immediate is SIGN-EXTENDED to 64 bits
+ * (SDM "TEST": the imm32 is sign-extended for a 64-bit operand), and TEST's flags are AND's
+ * without the store: CF and OF cleared, SF/ZF/PF from the result, AF UNDEFINED (so the corpus
+ * case compares 0x8C5, dropping it). */
+void instr64_F7_0_mem(int64_t addr, int32_t imm)
+{
+	int64_t x = (int64_t)safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	test64(x, (int64_t)imm);
+}
+void instr64_F7_0_reg(int32_t r1, int32_t imm)
+{
+	test64((int64_t)read_reg64(r1), (int64_t)imm);
+}
+
 void instr64_F7_2_mem(int64_t addr)
 {
 	safe_write64_addr(addr, (uint64_t)not64((int64_t)safe_read64_addr(addr)));

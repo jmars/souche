@@ -203,6 +203,7 @@ void instr64_87_mem(int64_t addr, int32_t r);
 void instr64_87_reg(int32_t r1, int32_t r);
 void instr64_C3(void);
 void instr64_0FA3_mem(int64_t, int32_t); void instr64_0FA3_reg(int32_t, int32_t);
+void instr64_F7_0_mem(int64_t, int32_t); void instr64_F7_0_reg(int32_t, int32_t);
 void instr64_0FAB_mem(int64_t, int32_t); void instr64_0FAB_reg(int32_t, int32_t);
 void instr64_0FB3_mem(int64_t, int32_t); void instr64_0FB3_reg(int32_t, int32_t);
 void instr64_0FBB_mem(int64_t, int32_t); void instr64_0FBB_reg(int32_t, int32_t);

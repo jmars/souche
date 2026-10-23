@@ -258,6 +258,18 @@ def case(family, name, why, body, **kw):
     CASES.append(Case(name, family, why, body, **kw))
 
 
+case("alu", "test-imm32-64",
+     "F7 /0 TEST r/m64, imm32: the immediate is SIGN-EXTENDED to 64 bits, so with RAX = -1 "
+     "`test rax, 0x80000000` ANDs 0xFFFFFFFF80000000 and leaves SF=1; a zero-extended immediate "
+     "ANDs 0x0000000080000000 and leaves SF=0.  The memory form is the same width rule.  AF is "
+     "UNDEFINED after TEST, so the flags mask drops it (0x8C5).",
+     """\
+    mov rax, -1
+    test rax, 0xFFFFFFFF80000000
+    mov rbx, 0x1122334455667788
+    test rbx, 0xFFFFFFFF80000000
+""", flags=True, flags_mask="0x8C5")
+
 # --- family 1: mov (S5, the first vertical slice) --------------------------------
 case("mov", "imm64",
      "MOV r64,imm64 is an 8-byte immediate: a 32-bit decoder reads 4 bytes and "
