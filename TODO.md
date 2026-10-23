@@ -354,6 +354,32 @@ or pack in normal use has to carry it.
 
 ## 8. Long mode (64-bit guests) — **one day**, not a non-goal
 
+**VA (2026-10-21): QEMU FAULTS TOO — THE DIVERGENCE IS AFTER THE REPAIR, AND IT IS
+`MSR_KERNEL_GS_BASE`.** `results/x86-64-va.md`. The brief's premise is corrected with QEMU's own
+`-d int` log: QEMU's FIRST exception is `v=0e e=0000 cpl=0 IP=0010:ffffffff83077246
+SP=0000:ffffffff82a03f30 CR2=ffff888000014790` — the SAME instruction as the port, and its CR2 is
+the direct map of ITS OWN boot_params (physical 0x14790; the port's is 0x84790). So both fault on the
+same access and both repair it (QEMU then takes three more demand #PFs and boots; the port's
+`PML4[273] = 0x30ec063` was measured). The "inside vs outside the fixed early range" arithmetic does
+NOT distinguish them: both addresses are low memory inside that range, and the direct map is
+demand-built anyway. Nor does the call site: the unconditional `copy_bootdata` in
+`x86_64_start_kernel` (link `0xffffffff83077608`) runs BEFORE `x86_64_start_reservations`' guarded one
+(`0xffffffff83077555`) on any boot — MEASURED on the port (only that site is hit) and QEMU's fault-0
+SP equals the port's rsp at the same instruction, de-slid, exactly. So the branch input is the SAME
+on both (return address `0x…8307760d`, bit 2 SET) and **the `swapgs` is taken on hardware too**;
+QEMU survives it because `MSR_KERNEL_GS_BASE` is NOT 0 there, while on the port
+`gs_base = 0xffffffff8ae42000, kernel_gs = 0` (MEASURED), so the swap zeroes GS.base and the percpu
+read resolves to the bare `0x19000`, which the demand-repair cannot map. The kernel DOES write MSR
+`0xC0000102` — **30 sites, encoded `mov edi,0xc0000102; call wrmsr`** (a search for
+`mov ecx,0xc0000102` finds none: the encoding differs) — but ALL are in main `.text`, later than this
+point. **NEXT FORK:** `V86C_BREAK` on those sites in the early call tree of `x86_64_start_kernel`
+(`sme_early_init`/`kasan_early_init`/`idt_setup_early_handler`/`tdx_early_init`), with
+`instructions_0f.c:6452` (the port's `wrmsr` reader) as the check: if one executes before the
+`swapgs`, the defect is a `wrmsr`; if none does, hardware reaches one the port skips. **The first
+`printk` is still not reached.** No source change: make/selftest/gate-x86-64/bench green, bench
+200,095,214. Operational note: `-d cpu,int` wrote a 23 GB log in 3.5 minutes and filled /tmp; `-d int`
+alone is the right instrument at this scale.
+
 **BRANCH (2026-10-21): ONLY THE UNCONDITIONAL `copy_bootdata` RUNS, AND THE BRANCH IS BIT 2 OF A
 RETURN ADDRESS.** `results/x86-64-branch.md`. MEASURED with `V86C_BREAK` on both call sites in one
 run: slot 1 (`0xffffffff8ae77608`, `x86_64_start_kernel`'s UNCONDITIONAL `copy_bootdata`) is hit
