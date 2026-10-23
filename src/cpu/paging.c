@@ -1266,8 +1266,8 @@ reg128 safe_read128s(int64_t addr)
 
 void safe_write8(int64_t addr, int32_t value)
 {
-    if (v86c_dbg_watch_on) v86c_dbg_watch_v((uint64_t)addr, 1, (uint64_t)value, cpu->instruction_pointer);
     if (long_mode_64()) { safe_write8_addr(addr, value); return; }
+    if (v86c_dbg_watch_on) v86c_dbg_watch_v((uint64_t)addr, 1, (uint64_t)value, cpu->instruction_pointer);
     uint32_t phys_addr = translate_address_write_and_can_skip_dirty(addr);
     if (cpu->pagefault) {
         return;
@@ -1289,8 +1289,8 @@ void safe_write8(int64_t addr, int32_t value)
 
 void safe_write16(int64_t addr, int32_t value)
 {
-    if (v86c_dbg_watch_on) v86c_dbg_watch_v((uint64_t)addr, 2, (uint64_t)value, cpu->instruction_pointer);
     if (long_mode_64()) { safe_write16_addr(addr, value); return; }
+    if (v86c_dbg_watch_on) v86c_dbg_watch_v((uint64_t)addr, 2, (uint64_t)value, cpu->instruction_pointer);
     uint32_t phys_addr = translate_address_write_and_can_skip_dirty(addr);
     if (cpu->pagefault) {
         return;
@@ -1316,8 +1316,8 @@ void safe_write16(int64_t addr, int32_t value)
 
 void safe_write32(int64_t addr, int32_t value)
 {
-    if (v86c_dbg_watch_on) v86c_dbg_watch_v((uint64_t)addr, 4, (uint64_t)value, cpu->instruction_pointer);
     if (long_mode_64()) { safe_write32_addr(addr, value); return; }
+    if (v86c_dbg_watch_on) v86c_dbg_watch_v((uint64_t)addr, 4, (uint64_t)value, cpu->instruction_pointer);
     uint32_t phys_addr = translate_address_write_and_can_skip_dirty(addr);
     if (cpu->pagefault) {
         return;
@@ -1340,8 +1340,8 @@ void safe_write32(int64_t addr, int32_t value)
 
 void safe_write64(int64_t addr, uint64_t value)
 {
-    if (v86c_dbg_watch_on) v86c_dbg_watch_v((uint64_t)addr, 8, (uint64_t)value, cpu->instruction_pointer);
     if (long_mode_64()) { safe_write64_addr(addr, value); return; }
+    if (v86c_dbg_watch_on) v86c_dbg_watch_v((uint64_t)addr, 8, (uint64_t)value, cpu->instruction_pointer);
     if ((addr & 0xFFF) > 0x1000 - 8) {
         writable_or_pagefault(addr, 8);
         if (cpu->pagefault) {
@@ -1426,6 +1426,13 @@ int32_t safe_read8_addr(int64_t addr)
 
 void safe_write8_addr(int64_t addr, int32_t value)
 {
+    /* THE LONG-MODE WATCH SEAT (results/x86-64-reach2.md).  Every 64-bit store body in
+     * instructions_64.c and the generated overlay calls THIS function rather than
+     * safe_write8(), so the hook at safe_write8()'s top never saw them -- and the amd64 guest
+     * runs in no other mode.  MEASURED: the decompressor's `.data` copy, __startup_64's
+     * `pgd[0] = pgd[1] = 0x30ec063` and `phys_base`'s fixup all appeared at their addresses
+     * with V86C_WATCH reporting no writer at all.  The hook lives here, once per guest store. */
+    if (v86c_dbg_watch_on) v86c_dbg_watch_v((uint64_t)addr, 1, (uint64_t)value, cpu->instruction_pointer);
     uint32_t p = translate_address_write((uint64_t)addr);
     if (cpu->pagefault) return;
     write8(p, value);
@@ -1488,6 +1495,7 @@ void safe_write16_addr(int64_t addr, int32_t value)
         safe_write8_addr(addr + 1, (value >> 8) & 0xFF);
         return;
     }
+    if (v86c_dbg_watch_on) v86c_dbg_watch_v((uint64_t)addr, 2, (uint64_t)value, cpu->instruction_pointer);
     uint32_t p = translate_address_write((uint64_t)addr);
     if (cpu->pagefault) return;
     write16(p, value);
@@ -1501,6 +1509,7 @@ void safe_write32_addr(int64_t addr, int32_t value)
         safe_write16_addr(addr + 2, (value >> 16) & 0xFFFF);
         return;
     }
+    if (v86c_dbg_watch_on) v86c_dbg_watch_v((uint64_t)addr, 4, (uint64_t)value, cpu->instruction_pointer);
     safe_write32_addr_local(addr, value);
 }
 
@@ -1531,6 +1540,7 @@ void safe_write64_addr(int64_t addr, uint64_t value)
         safe_write32_addr_local(addr + 4, (int32_t)(value >> 32));
         return;
     }
+    if (v86c_dbg_watch_on) v86c_dbg_watch_v((uint64_t)addr, 8, (uint64_t)value, cpu->instruction_pointer);
     uint32_t p = translate_address_write((uint64_t)addr);
     if (cpu->pagefault) return;
     write32(p, (int32_t)value);

@@ -354,6 +354,41 @@ or pack in normal use has to carry it.
 
 ## 8. Long mode (64-bit guests) — **one day**, not a non-goal
 
+**REACH (2026-10-21): the port DOES execute `__startup_64`.** `results/x86-64-reach.md`.  MEASURED
+with a new EXECUTION watch (`V86C_BREAK`, with registers, ring-at-hit, chain and physical peek):
+the kernel's entry at `0x1000000` runs `sme_enable` → `verify_cpu` → `__startup_64(physaddr, bp)`
+→ `sme_postprocess_startup` → the CR3 formation, and `__startup_64`'s fixup loops and its
+`phys_base` tail store (at phys `0x2a1a010`) execute.  Its return of 0 is CORRECT for a non-SME
+machine, and the CR3 it forms (`0x30EA000`) is the value the kernel's own arithmetic calls for
+(`early_top_pgt - __START_KERNEL_map`, with the decompressor's `+0x7E00000` relocation cancelled by
+the kernel's `-0x7E00000` global).  So the stop is NOT a missing `__startup_64` and NOT a wrong
+CR3.  What is missing is the *page-table stores*: a 24 KiB watch over `early_top_pgt` and the
+dynamic page tables sees only the decompressor.  **And the previous units' "no writer" reasoning
+was unsound** — the per-store hook lived in the non-`_addr` `safe_write*`, so every long-mode store
+and every bulk copy was invisible; the toolkit now has `v86c_dbg_watch_range` for bulk copies (the
+`*_addr` half was closed concurrently in `paging.c`).  Named next forks: `%r10` at `0x1000613`
+(where the identity-map loop stores) and the decompressor's `output`/delta divergence
+(`0x8E00000` chosen, `0x1000000` used).  NOTE: `make selftest` is RED on a concurrent writer's
+unfinished `test_watch_sees_long_mode_store`; the collision is recorded in the report, §7.
+
+**REACH-2 (2026-10-21): THE STORES WERE NEVER MISSING — THE WATCH WAS BLIND.** `results/x86-64-reach2.md`.
+CORRECTION to the paragraph above, which stands as the record of what that run could see.  The
+`*_addr` half was NOT closed when the paragraph was written: `V86C_WATCH` could not see *any*
+long-mode store, because every 64-bit store body calls `safe_write*_addr()` directly.  With the hook
+moved into the four `_addr` twins (`src/cpu/paging.c`), the same watch on the same guest shows
+`__startup_64`'s identity-map stores landing correctly: `early_top_pgt[0] = early_top_pgt[1] =
+0x30ec063` (present, RW, pointing at `early_dynamic_pgts[0]`), written by `rip=0x10007bb`/`0x10007c0`.
+MEASURED asymmetry: before, a 24 KiB window over the early page tables logged 24,589 writes, **all
+from the decompressor**; after, the kernel's two `pgd` stores appear.  So `__startup_64` runs, its
+fixup lands, and `cr3 = 0x30EA000` is correct — the last three units' "the kernel never writes
+`early_top_pgt`" is VOID (a control establishes attributability, never exclusivity, and this
+control's domain was the wrong store path).  The guest's stop is unchanged and is now known NOT to
+be a page-table defect: `eip=0xFFFFFFFF8AE77246`, `cr3=0x30EA000`, 4,475,484,504 instructions,
+serial ending at the decompressor's KASLR lines; **the kernel's first `printk` is not reached.**
+Named next fork: the #PF at that high-half address, whose chain the toolkit can now report
+correctly for the first time.  `make selftest` is GREEN; full battery green, every pin unmoved
+(bench 200,095,214, determinism 4,000,096,757, transcript byte-identical).
+
 **S0 IS LANDED (2026-10-19): THE BACKEND SEAM, INERT.** `results/x86-64-plan.md` is the plan of
 record (fourteen slices, S0-S13); `results/x86-64-s0.md` is S0's report.  What exists now: the
 engine contract (`src/cpu/cpu_backend.h`: name, `modes`, init/run_batch/clear_caches/print_stats),

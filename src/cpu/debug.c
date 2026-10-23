@@ -131,6 +131,29 @@ void v86c_dbg_watch_p(uint32_t phys, int width, uint64_t value, uint64_t rip)
     watch_hit(1, (uint64_t)phys, width, value, rip);
 }
 
+/* A BULK COPY IS ONE STORE THE PER-BYTE HOOK CANNOT SEE: string.c's fast path writes a whole
+ * page run with ONE memcpy_no_mmap_or_dirty_check/memset_no_mmap_or_dirty_check call, and its
+ * 64-bit slow path stores through safe_write*_addr, which does not call the hook above either.
+ * MEASURED as a real blind spot (results/x86-64-reach.md ss4): the decompressor's .data segment
+ * copy and the kernel's -load_delta global appeared at their addresses with NO logged write, so
+ * "the watch shows no writer" was not "nothing wrote it".  One call per copy with a range
+ * overlap test, so a 65 MB memcpy costs what a 1-byte store does. */
+void v86c_dbg_watch_range(uint64_t phys, uint64_t len, uint64_t rip)
+{
+    int i;
+    for (i = 0; i < watch_n; i++) {
+        uint64_t a = watch[i].addr;
+        uint64_t b = a + (uint64_t)watch[i].len;
+        uint64_t lo = phys > a ? phys : a;
+        uint64_t hi = (phys + len) < b ? (phys + len) : b;
+        if (lo >= hi) continue;
+        test_counts++;
+        fprintf(stderr, "v86c dbg: WATCH R phys=0x%llx len=0x%llx overlap@0x%llx+0x%llx rip=0x%llx\n",
+                (unsigned long long)phys, (unsigned long long)len, (unsigned long long)lo,
+                (unsigned long long)(hi - lo), (unsigned long long)rip);
+    }
+}
+
 /* A WATCHED ADDRESS THAT FAULTS NEVER REACHES A STORE, so the write hook above cannot see it.
  * This one is the faulting access itself -- the shape that answers "who writes 0x31558". */
 void v86c_dbg_watch_fault(uint64_t addr, bool write, uint64_t rip)

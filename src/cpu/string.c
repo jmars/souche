@@ -49,6 +49,7 @@
 #include "misc_instr.h" /* set_reg_asize */
 #include "modrm.h"   /* get_seg + the register indices of cpu_state.h */
 #include "paging.h"  /* translate_address_*, safe_read*, safe_write*, writable_or_pagefault */
+#include "debug.h"   /* the toolkit's RANGE watch: a bulk copy is one store (results/x86-64-reach.md) */
 
 /* string.rs:25-32 */
 static uint32_t count_until_end_of_page(int32_t direction, int32_t size, uint32_t addr)
@@ -491,6 +492,10 @@ static void string_instruction(bool is_asize_32,
                      * fast path keeps it inside one page; the range form is belt-and-braces
                      * and is what write_blob uses too) */
                     uop_invalidate_range(phys_dst, count_until_page_end * (uint32_t)size_bytes);
+                    if (v86c_dbg_watch_on) {
+                        v86c_dbg_watch_range(phys_dst, (uint64_t)count_until_page_end * (uint64_t)size_bytes,
+                                             cpu->instruction_pointer);
+                    }
                     memcpy_no_mmap_or_dirty_check(phys_src, phys_dst,
                                                   count_until_page_end * (uint32_t)size_bytes);
                 }
@@ -503,6 +508,10 @@ static void string_instruction(bool is_asize_32,
                         phys_dst -= count_until_page_end - 1;
                     }
                     uop_invalidate_range(phys_dst, count_until_page_end);
+                    if (v86c_dbg_watch_on) {
+                        v86c_dbg_watch_range(phys_dst, (uint64_t)count_until_page_end,
+                                             cpu->instruction_pointer);
+                    }
                     memset_no_mmap_or_dirty_check(phys_dst, (uint8_t)src_val, count_until_page_end);
                     i = count_until_page_end;
                     break;

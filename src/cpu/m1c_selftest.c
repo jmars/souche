@@ -572,6 +572,33 @@ static void test_debug_toolkit_fires(void)
 }
 
 /* ================================================================== *
+ * TEST 1g -- THE RANGE HOOK'S OVERLAP TEST (results/x86-64-reach2.md)
+ *
+ * The bulk string path (rep movs/stos) writes through memcpy/memset, which no per-store hook
+ * can see, so the toolkit grew a RANGE hook and string.c calls it once per bulk copy.  The arm
+ * is the overlap arithmetic: a range that does not contain the watched byte must not count.
+ * MEASURED before the arm: a broken test (counting every range) makes the second call fire and
+ * the count 2 instead of 1.
+ * ================================================================== */
+static void test_debug_toolkit_range_overlap(void)
+{
+    machine_setup(false);
+    v86c_dbg_test_arm();                       /* watch[0] = 0x31558:1 */
+    CHECK(v86c_dbg_watch_on);
+
+    v86c_dbg_watch_range(0x31558, 1, 0xFFFFFFFF9C2775C2ull);   /* contains it: 1 */
+    CHECK_EQ(v86c_dbg_test_counts(), 1);
+    v86c_dbg_watch_range(0x10000, 16, 0xFFFFFFFF9C2775C2ull);  /* nowhere near: still 1 */
+    CHECK_EQ(v86c_dbg_test_counts(), 1);
+    v86c_dbg_watch_range(0x31500, 0x100, 0xFFFFFFFF9C2775C2ull); /* straddles it: 2 */
+    CHECK_EQ(v86c_dbg_test_counts(), 2);
+    v86c_dbg_watch_range(0x31559, 0x10, 0xFFFFFFFF9C2775C2ull);  /* starts past it: still 2 */
+    CHECK_EQ(v86c_dbg_test_counts(), 2);
+
+    v86c_dbg_test_disarm();
+}
+
+/* ================================================================== *
  * TEST 1f -- A SEGMENT OVERRIDE APPLIES TO A RIP-RELATIVE OPERAND (results/x86-64-gsfix.md)
  *
  * The corpus cannot carry this arm: the native leg would have to set its own FS/GS base and the
@@ -1554,6 +1581,7 @@ int main(void)
         RUN(test_cr4_pge_write_no_pdpte_reload, "MOV CR4 with PGE 0->1 does not reload PDPTEs (long mode: CR3 holds a PML4E)");
     RUN(test_far_return_64bit_frame, "a 64-bit RETF: an eight-byte RIP/CS frame and a 64-bit target");
     RUN(test_debug_toolkit_fires, "the debugging toolkit fires: watchpoint, fault watch, ring, dump-on-stop");
+    RUN(test_debug_toolkit_range_overlap, "the range hook counts only the ranges that contain a watched byte");
     RUN(test_rip_relative_segment_base, "a segment override applies to a RIP-relative operand (FS/GS add their base)");
 return failures != 0;
 }
