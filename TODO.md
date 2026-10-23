@@ -354,6 +354,27 @@ or pack in normal use has to carry it.
 
 ## 8. Long mode (64-bit guests) — **one day**, not a non-goal
 
+**HALVES (2026-10-21): `page_offset_base`'S LOW HALF IS WRONG — ONE 32-BIT HALF EXPLAINS THE WHOLE
+RECURSION.** `results/x86-64-halves.md`. MEASURED: `V86C_WATCH` on `__per_cpu_offset[0]` (runtime VA
+`0xffffffff8aa393e0`) logs ONE write, `value=0xffff8c16c0fd4000 rip=0xffffffff8ae9d9c6`, so the value
+is wrong BEFORE the `wrmsr` (shape (a)/(b), not a mis-read EDX). The writer is link
+`0xffffffff8309d9be` (`mov %r13,-0x7d3c6c20(,%rax,8)`) after `add %rax,%r13`, and at the `add`
+`%rax = 0xfd4000` (the physical offset, no high bits) while `PEEK 0x2413d60` gives
+**page_offset_base = 0xffff8c16c0000000** — and `0xffff8c16c0000000 + 0xfd4000 = 0xffff8c16c0fd4000`,
+i.e. the stored per-cpu base is the CORRECT sum of the STORED base. **The base is the defect:** the
+kernel randomized it, and the value must be 1 GiB-aligned with a ZERO low 32 bits
+(`0xffff8c1600000000`); memory holds `0xc0000000` there instead. That wrong base shifts every entry
+of the randomized direct map by `0xc0000000`: `V86C_BREAK_CHAIN=0xffff8c16c0fd4000` shows
+`PDE = 0x8000000000e000e3` → phys `0x00e00000` where `0xc0e00000` is required (and
+`0xc0e00000 - 0xc0000000 = 0x00e00000` exactly). So: the per-cpu area (phys `0xc0fd4000`, a
+legitimate 192 MiB memblock placement) is mapped at phys `0xfd4000` → the per-cpu `cpu_number` read
+returns garbage `0x1e00` → `__per_cpu_offset[0x1e00]` is out of bounds → `%rdx = 0` → the fault at
+`0x1e08` → the delivery reads the CS descriptor at `gdtr+0x10` = `gs_base + 0xb010` = `0xc0a0b010`,
+unmapped for the same reason → four deliveries → the bound. **NEXT FORK, one measurement:**
+`V86C_WATCH=0xffffffff82413d60:8` (the runtime VA of the global) names the writer and its value — a
+32-bit store where a 64-bit one belongs, a halves swap, or a carry. **No fix claimed.** No source
+change: make/selftest/gate-x86-64/bench green, bench 200,095,214.
+
 **RECURSION (2026-10-21): THE FAULT-DELIVERY RECURSION IS A PER-CPU BASE WITH A WRONG HIGH HALF.**
 `results/x86-64-recursion.md`. The ring names the code (link `0xffffffff812ef8e5`, slide still
 `0x7E00000`): `mov %gs:0x7ed3ec94,%eax` (a per-cpu read), `cltq`, `mov -0x7d3c6c20(,%rax,8),%rdx`
