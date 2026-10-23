@@ -354,6 +354,29 @@ or pack in normal use has to carry it.
 
 ## 8. Long mode (64-bit guests) — **one day**, not a non-goal
 
+**SSSLOT (2026-10-21): THE SS SLOT HOLDS A RETURN ADDRESS — AND THE PORT REACHES THE SECOND
+`copy_bootdata`.** `results/x86-64-ssslot.md`. QEMU as the reference (TCG; KVM logs nothing) gives the
+hardware-shaped first fault: `v=0e e=0000 cpl=0 IP=0010:ffffffff83077246 SP=0000:ffffffff82a03f30
+CR2=ffff888000014790` — the SAME instruction as the port, and its SP matches the port's rsp de-slid
+EXACTLY; QEMU never faults at the `gs:0x19000` read (zero hits) and boots. The stub is `push $0x0e;
+jmp common` (no SS/RSP, correct for a same-privilege exception) and the common handler pushes
+FOURTEEN registers with rdi written into the frame's first slot, so the restore path's `pop x15` +
+`add rsp,8` lands exactly on `ip` — the frame is NOT the defect (ip/cs/flags are correct, and the
+runtime bytes at `0xffffffff81c01214` are identical to the image, so no alternatives patch). **The
+answer:** `testb $4,0x20(%rsp)` reads the word ABOVE the pre-exception SP — `copy_bootdata`'s RETURN
+ADDRESS — and bit 2 of its low byte decides. QEMU's fault is from the call at `0xffffffff83077555`
+(return address `…5a`, bit 2 CLEAR → `iretq`); the port's is from the call at `0xffffffff83077608`
+(return address `…0d`, bit 2 SET → `swapgs`), and `kernel_gs` is 0 — the image contains NO write of
+MSR `0xC0000102` at all — so GS.base becomes 0, the percpu read resolves to the bare `0x19000`, the
+demand-repair refuses, and three nested faults halt the machine. **So the port's divergence is that
+it reaches the SECOND call site at all:** that call is guarded by `if (!boot_params.hdr.version)`,
+so `boot_params.hdr.version` was still 0 after the first copy — **the first `copy_bootdata` did not
+copy**. NEXT FORK: why — its source read was repaired and retried, and its destination
+`&boot_params` (`0xffffffff8b117600`) has a present 2 MiB page (`PDE[88] = 0x032001e3`); instrument
+`V86C_WATCH` on phys `0x3317600` (the first 16 bytes of `&boot_params`). **The first `printk` is
+still not reached.** No source change this unit (instruments only): make/selftest/gate-x86-64/bench
+green, bench 200,095,214, no pin moved.
+
 **NEST (2026-10-21): THE NESTED EXCEPTIONS ARE ONE `swapgs` ON AN UNFILLED SS SLOT.** `results/x86-64-nest.md`.
 MEASURED end to end. Four handler entries (`BREAK 0xffffffff8ae77120`, all vector 0x0e #PF) with the
 new rsp-relative VIRTUAL dump `V86C_PEEK_SP`: rip `0xffffffff8ae77246` (copy_bootdata's direct-map
