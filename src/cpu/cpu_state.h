@@ -335,6 +335,13 @@ typedef struct cpu_state {
     uint64_t idtr_offset;         /* 568 */
     int32_t gdtr_size;            /* 572 */
     uint64_t gdtr_offset;         /* 576 */
+    /* S11's CR2 (results/x86-64-dmap.md): the field below stays the 32-bit model's projection,
+     * but in 64-bit mode CR2 is a 64-bit linear address -- and the amd64 guest's early #PF
+     * handler READS it to repair the direct map on demand (`do_early_exception` ->
+     * `early_make_pgtable(native_read_cr2())`, which bails when `cr2 - __PAGE_OFFSET` is out of
+     * range).  MEASURED: with only the 32-bit field the guest read 0x84790 instead of
+     * 0xffff888000084790, the repair refused, and the kernel panicked. */
+    uint64_t cr2_64;
     int32_t cr[8];                /* 580 -- NOT widened: the physical model is 32-bit
                                    * (plan ss5.1), so a CR3 above 4 GiB is the case that
                                    * path REFUSES by name; widening the field would widen

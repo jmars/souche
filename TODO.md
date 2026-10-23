@@ -354,6 +354,33 @@ or pack in normal use has to carry it.
 
 ## 8. Long mode (64-bit guests) — **one day**, not a non-goal
 
+**DMAP (2026-10-21): THE DIRECT MAP IS DEMAND-MAPPED — THE REPAIR RUNS AND DOES NOT STICK.**
+`results/x86-64-dmap.md`. **CORRECTION to the premise of the unit before it:** no `__startup_64` loop
+writes `PML4[273]`. `READ` from the source of *this* image (tag `v6.1.176`):
+`x86_64_start_kernel` calls `reset_early_page_tables()` (memsetting `early_top_pgt[0..510]`,
+deliberately killing everything but the kernel map) and then `copy_bootdata(__va(real_mode_data))`;
+the #PF that read takes is *supposed* to happen and `do_early_exception` is supposed to repair it
+with `early_make_pgtable(native_read_cr2())`, building the 2 MiB entry and returning so the memcpy
+retries. So `PML4[273] == 0` before the fault is CORRECT. **MEASURED:** the port does enter the
+repair — `V86C_BREAK` on `0xffffffff8ae770c0:0x200` hits `0xffffffff8ae771df`
+(`reset_early_page_tables`) from `__early_make_pgtable`'s `again:` path with
+`rdx=0xffffffff8aeea000` and `rcx=0x3fe` (the 510-entry memset) — so it repairs, the mapping does not
+take, the same fault recurs, `early_dynamic_pgts` is exhausted, the reset wipes the table again, and
+`early_fixup_exception` panics. The panic string, READ from the image at link `0xffffffff82346118`,
+is `PANIC: early exception 0x%02x IP %lx:%lx error %lx cr2 0x%lx`; MEASURED at that panic:
+`regs->cs = 0x10` (not the cs branch), `early_recursion_flag = 1` (not the >2 branch), `trapnr = 0x0e`
+— reached because `fixup_exception` returned 0 for a genuine #PF. **FIXED (a precondition):**
+`cr2` was 32 bits (`int32_t cr[8]`, with the gap in its own comment) while the repair's first act is
+`address - __PAGE_OFFSET`; a `uint64_t cr2_64` now carries the whole linear address, set where a #PF
+is raised and returned by a REX.W `mov r64, cr2` in long mode, with `cr[2]` untouched so no 32-bit
+path can move. It did **not** change this run (4,475,558,722 instructions, `in_hlt=1`), so CR2's
+width is not the binding constraint on the path taken. **Next fork, instrumented:** the two guards
+(`physaddr >= MAXMEM`, `read_cr3_pa() != __pa_nodebug(early_top_pgt)`) and the `*pgd_p = …` stores at
+link `0xffffffff83077456`/`0xffffffff830774ce`, with `V86C_WATCH=0x30ea888` on `PML4[273]` to see
+whether an entry is ever installed and then lost. **The first `printk` is still not reached.** Full
+battery green, every pin unmoved. NAMED GAP: no unit arm for the CR2 widening (its probe is
+integration-level).
+
 **HIGHPF (2026-10-21): THE STOP WAS THE #PF DELIVERY, NOT THE FAULT.** `results/x86-64-highpf.md`.
 The instruction at `0xFFFFFFFF8AE77246` is `copy_bootdata`'s `rep movsd` (link
 `0xffffffff83077246`, `&boot_params` relocated to `0xffffffff8b117600`, source `__va(0x84790)` =

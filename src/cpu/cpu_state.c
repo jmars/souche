@@ -269,6 +269,7 @@ void reset_cpu(void)
 
     cpu->cr[0] = (int32_t)((1u << 30) | (1u << 29) | (1u << 4));
     cpu->cr[2] = 0;
+    cpu->cr2_64 = 0;
     cpu->cr[3] = 0;
     cpu->cr[4] = 0;
     cpu->dreg[6] = RESET_DREG6;

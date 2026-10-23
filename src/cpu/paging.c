@@ -149,6 +149,7 @@ void trigger_pagefault(uint64_t addr,
      * results/x86-64-gsbase.md). */
     if (v86c_dbg_watch_on) v86c_dbg_watch_fault(addr, write, cpu->previous_ip);
     /* config::LOG_PAGE_FAULTS + dbg_trace dropped (no log channel in M1a) */
+    cpu->cr2_64 = (uint64_t)addr; /* the 64-bit CR2 long mode reads (results/x86-64-dmap.md) */
     cpu->cr[2] = (int32_t)addr; /* CR2 is 32-bit in this model (ss5.1); long mode's 64-bit
                                  * CR2 is S11's, and the projection is named here so a
                                  * >4 GiB fault address is a reported gap, not a silent

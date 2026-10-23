@@ -522,7 +522,14 @@ void instr_0F20(int32_t r, int32_t creg)
 		write_reg32(r, cpu->cr[0]);
 		break;
 	case 2:
-		write_reg32(r, cpu->cr[2]);
+		/* a REX.W read in 64-bit mode returns the WHOLE linear address (results/x86-64-dmap.md);
+		 * without REX.W, and outside long mode, it is the model's 32-bit projection */
+		if (long_mode_64() && (cpu->prefixes & PREFIX_REX_W) != 0) {
+			write_reg64(r, cpu->cr2_64);
+		}
+		else {
+			write_reg32(r, cpu->cr[2]);
+		}
 		break;
 	case 3:
 		write_reg32(r, cpu->cr[3]);
@@ -573,6 +580,7 @@ void instr_0F22(int32_t r, int32_t creg)
 		set_cr0(data);
 		break;
 	case 2:
+		cpu->cr2_64 = (uint64_t)(uint32_t)data;
 		cpu->cr[2] = data;
 		break;
 	case 3:
