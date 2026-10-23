@@ -354,6 +354,28 @@ or pack in normal use has to carry it.
 
 ## 8. Long mode (64-bit guests) — **one day**, not a non-goal
 
+**BRANCH (2026-10-21): ONLY THE UNCONDITIONAL `copy_bootdata` RUNS, AND THE BRANCH IS BIT 2 OF A
+RETURN ADDRESS.** `results/x86-64-branch.md`. MEASURED with `V86C_BREAK` on both call sites in one
+run: slot 1 (`0xffffffff8ae77608`, `x86_64_start_kernel`'s UNCONDITIONAL `copy_bootdata`) is hit
+(rdi = 0xffff888000084790 = `__va(real_mode_data)`); slot 0 (`0xffffffff8ae77555`,
+`x86_64_start_reservations`' `if (!boot_params.hdr.version)`-guarded call) is **never hit**. READ:
+`0x83077544` is the guarded site (`cmpw $0,[boot_params.hdr.version]; jne; add page_offset_base,rdi;
+call copy_bootdata; jmp`) and `0x830775b2` starts `x86_64_start_kernel` (`mov %cr4,%rax; mov
+%rax,%gs:0x31558` = `cr4_init_shadow`). The branch that decides the rest of the boot is
+`testb $4,0x20(%rsp)` in `restore_regs_and_return_to_kernel`, whose input is `copy_bootdata`'s
+RETURN ADDRESS: the unconditional call's is `…8307760d` (bit 2 SET → `swapgs` → GS.base 0 →
+`gs:0x19000` → demand-repair refuses → panic), the guarded call's is `…8307755a` (bit 2 CLEAR →
+`iretq`). `kernel_gs = 0` at the swapgs and no `.init` code writes MSR `0xC0000102`, so the branch
+must never be taken — which is what QEMU's log shows (zero faults at `pc=ffffffff81c0123a`).
+**What that implies:** QEMU's fault must be the GUARDED site, so on QEMU the unconditional
+`copy_bootdata`'s direct-map read did NOT fault while the port's did. **The one-line discriminator is
+QEMU's stack word at physical `0x2a03f38`** (the return address above its `SP = 0xffffffff82a03f30`
+from its own `-d int` log): `…760d` refutes the implication, `…755a` confirms it. NOT OBTAINED — the
+host has no `gdb` and the monitor cannot be timed into that window; the method is in the report §5.
+**No fix claimed** (no fix is proven; the machine is not changed on a hypothesis). **The first
+`printk` is still not reached.** No source change: make/selftest/gate-x86-64/bench green, bench
+200,095,214, no pin moved.
+
 **SSSLOT (2026-10-21): THE SS SLOT HOLDS A RETURN ADDRESS — AND THE PORT REACHES THE SECOND
 `copy_bootdata`.** `results/x86-64-ssslot.md`. QEMU as the reference (TCG; KVM logs nothing) gives the
 hardware-shaped first fault: `v=0e e=0000 cpl=0 IP=0010:ffffffff83077246 SP=0000:ffffffff82a03f30
