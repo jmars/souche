@@ -198,6 +198,7 @@ static void dump_ring(void)
  * does with the value, not that it got there. */
 static void dump_chain(uint64_t va);
 static void dump_peek(void);
+static void dump_peek_sp(void);
 
 static void dump_peek(void)
 {
@@ -219,6 +220,30 @@ static void dump_peek(void)
         p = (*end == ',') ? end + 1 : end;
         if (p == end) break;
     }
+}
+
+/* THE FRAME IS AT RSP, and the kernel's stack is not identity-mapped, so this dump is a VIRTUAL
+ * read through the port's own walk (results/x86-64-nest.md).  A fault here is swallowed: this is a
+ * diagnostic, and it must not change the guest's abort state. */
+static void dump_peek_sp(void)
+{
+    const char *k = getenv("V86C_PEEK_SP");
+    uint64_t len;
+    int i;
+    bool saved;
+    if (k == NULL) return;
+    len = strtoull(k, NULL, 0);
+    if (len > 128) len = 128;
+    saved = cpu->pagefault;
+    fprintf(stderr, "v86c dbg: PEEK SP 0x%llx (%llu bytes):", (unsigned long long)cpu->reg64[4],
+            (unsigned long long)len);
+    for (i = 0; i < (int)len; i++) {
+        uint32_t p = translate_address_read((uint64_t)(cpu->reg64[4] + (uint64_t)i));
+        if (cpu->pagefault) { fprintf(stderr, " <fault at +%d>", i); break; }
+        fprintf(stderr, " %02x", (unsigned)read8(p));
+    }
+    fprintf(stderr, "\n");
+    cpu->pagefault = saved;
 }
 
 void v86c_dbg_break_hit(uint64_t eip)
@@ -248,6 +273,10 @@ void v86c_dbg_break_hit(uint64_t eip)
                     (unsigned long long)cpu->efer, (int)cpu->cpl,
                     (unsigned long long)cpu->segment_offsets[CS],
                     (unsigned long long)cpu->segment_offsets[SS]);
+            fprintf(stderr, "v86c dbg:   gs_base=0x%llx kernel_gs=0x%llx fs_base=0x%llx\n",
+                    (unsigned long long)cpu->segment_offsets[GS],
+                    (unsigned long long)cpu->kernel_gs_base,
+                    (unsigned long long)cpu->segment_offsets[FS]);
             fprintf(stderr, "v86c dbg:   idtr=0x%llx/%d gdtr=0x%llx/%d cr2=0x%x cr2_64=0x%llx"
                             " prefixes=0x%x osize32=%d\n",
                     (unsigned long long)cpu->idtr_offset, (int)cpu->idtr_size,
@@ -257,6 +286,7 @@ void v86c_dbg_break_hit(uint64_t eip)
             { const char *c = getenv("V86C_BREAK_CHAIN");
               if (c != NULL) dump_chain((uint64_t)strtoull(c, NULL, 0)); }
             dump_peek();
+            dump_peek_sp();
             if (brk_ring && v86c_dbg_ring_on) dump_ring();
         }
     }

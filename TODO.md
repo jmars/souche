@@ -354,6 +354,31 @@ or pack in normal use has to carry it.
 
 ## 8. Long mode (64-bit guests) — **one day**, not a non-goal
 
+**NEST (2026-10-21): THE NESTED EXCEPTIONS ARE ONE `swapgs` ON AN UNFILLED SS SLOT.** `results/x86-64-nest.md`.
+MEASURED end to end. Four handler entries (`BREAK 0xffffffff8ae77120`, all vector 0x0e #PF) with the
+new rsp-relative VIRTUAL dump `V86C_PEEK_SP`: rip `0xffffffff8ae77246` (copy_bootdata's direct-map
+read, `cr2_64 = 0xffff888000084790` CORRECT), then `0xffffffff89a0123a` (`mov %gs:0x19000,%rdi`,
+`cr2_64 = 0x19000` — the BARE offset), then `0xffffffff88f4bb09` twice (a `call` in the panic print,
+`cr2_64 = 0x1fb40`). The pushed frame is RFLAGS/CS/RIP + errcode — SDM-correct for a same-privilege
+exception, so a wrong *push* is ruled out, and the resolver does add the segment base. The immediate
+cause: the early stub's tail is `decl early_recursion_flag; jmp 0xffffffff81c011f9`
+(`restore_regs_and_return_to_kernel`, READ from the image), and that path branches on
+`testb $4,0x20(%rsp)` — the **SS slot**. MEASURED at the branch: ip/cs/flags correct, then
+`sp = 0x84790` and `ss = 0xffffffff8ae7760d`, which are copy_bootdata's OWN register values — the
+restore path is reading two slots PAST the frame the stub built. Bit 2 of `0x0d` is set, so the
+kernel takes its user-return branch: `swapgs` with `gs_base = 0xffffffff8ae42000` and
+`kernel_gs = 0`, so `GS.base` becomes 0, the next `%gs:0x19000` resolves to the bare `0x19000`,
+`early_make_pgtable(0x19000)` refuses (physaddr wraps, `>= MAXMEM` — the demand-repair only knows
+direct-map addresses), the kernel panics, and the third nested fault trips
+`early_recursion_flag > 2`, which halts **silently**. **NO FIX IS CLAIMED**: two readings fit and the
+measurements do not separate them — (1) the early stub is meant to push SS/RSP and the port
+mis-executes those two pushes (the cheaper hypothesis, and the shape this lane has paid for twice), or
+(2) the kernel relies on `sp`/`ss` being stale and QEMU's stack happens to hold a value with bit 2
+clear. **Next fork:** the stub's push list (link `0xffffffff8307715c`…`0xffffffff83077171`) against
+pt_regs' 21 slots, and the same slot's content on QEMU. Instrument added: `V86C_PEEK_SP` (rsp-relative
+virtual dump — the kernel stack is not identity-mapped) and `gs_base`/`kernel_gs`/`fs_base` in the
+break dump. **The first `printk` is still not reached.** Full battery green, every pin unmoved.
+
 **RETZERO (2026-10-21): THE #UD IS `SWAPGS` — NOT A `ret` POPPING ZERO.** `results/x86-64-retzero.md`.
 **The premise is corrected:** `pt_regs.ip` is at **+0x80**, not the +0x78 the previous unit read
 (that slot is `orig_ax`), so `regs->ip` was never 0. MEASURED from the frame: ip =
