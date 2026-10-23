@@ -155,10 +155,21 @@ void instr32_0F00_1_reg(int32_t r)
 /* instructions_0f.rs:200-206 */
 static void sgdt(int32_t addr, int32_t mask)
 {
-	writable_or_pagefault(addr, 6);
+	/* REACH-3 (results/x86-64-highpf.md): in 64-bit mode the operand is TEN bytes -- a
+	 * 2-byte limit and an EIGHT-byte base -- and the operand-size mask does not apply to the
+	 * base at all.  A 32-bit store here kept only the low half of a kernel's high-half table
+	 * address, the same defect the loaders below had. */
+	writable_or_pagefault(addr, long_mode_64() ? 10 : 6);
 	if (cpu->pagefault) return;
 	safe_write16(addr, (int32_t)cpu->gdtr_size);
 	DBG_ASSERT(!cpu->pagefault); /* upstream's .unwrap() */
+	if (long_mode_64()) {
+		safe_write32(addr + 2, (int32_t)(uint32_t)cpu->gdtr_offset);
+		DBG_ASSERT(!cpu->pagefault);
+		safe_write32(addr + 6, (int32_t)(uint32_t)(cpu->gdtr_offset >> 32));
+		DBG_ASSERT(!cpu->pagefault);
+		return;
+	}
 	/* S3: the base is 64-bit now; upstream's `offset & mask` is 32-bit arithmetic, so the
 	 * projection is explicit here rather than an implicit narrowing at safe_write32 */
 	safe_write32(addr + 2, (int32_t)((uint32_t)cpu->gdtr_offset & (uint32_t)mask));
@@ -180,10 +191,17 @@ void instr32_0F01_0_reg(int32_t _r)
 /* instructions_0f.rs:215-221 */
 static void sidt(int32_t addr, int32_t mask)
 {
-	writable_or_pagefault(addr, 6);
+	writable_or_pagefault(addr, long_mode_64() ? 10 : 6);
 	if (cpu->pagefault) return;
 	safe_write16(addr, (int32_t)cpu->idtr_size);
 	DBG_ASSERT(!cpu->pagefault); /* upstream's .unwrap() */
+	if (long_mode_64()) {
+		safe_write32(addr + 2, (int32_t)(uint32_t)cpu->idtr_offset);
+		DBG_ASSERT(!cpu->pagefault);
+		safe_write32(addr + 6, (int32_t)(uint32_t)(cpu->idtr_offset >> 32));
+		DBG_ASSERT(!cpu->pagefault);
+		return;
+	}
 	safe_write32(addr + 2, (int32_t)((uint32_t)cpu->idtr_offset & (uint32_t)mask));
 	DBG_ASSERT(!cpu->pagefault); /* upstream's .unwrap() */
 }
@@ -228,9 +246,20 @@ static void lgdt(int32_t addr, int32_t mask)
 		if (cpu->pagefault) return;
 	}
 	cpu->gdtr_size = size;
-	/* widened in S3: a base with bit 31 set is an ADDRESS above 2 GiB, not a negative
-	 * number, so it must not sign-extend into the 64-bit field */
-	cpu->gdtr_offset = (uint64_t)offset & (uint64_t)(uint32_t)mask;
+	/* REACH-3 (results/x86-64-highpf.md): the `mask` is the OPERAND-SIZE mask -- 0xFFFFFF for
+	 * a 16-bit operand size, -1 for a 32-bit one -- and it must NOT be applied in 64-bit mode,
+	 * where the operand is a ten-byte descriptor with an EIGHT-byte base whatever the prefixes
+	 * say.  MEASURED: masking here kept only the low half, so the amd64 guest's
+	 * `idtr=0x8b110000` instead of `0xffffffff8b110000` and every #PF delivery read an
+	 * unmapped low page -- the port's stop was the DELIVERY, not the fault. */
+	if (long_mode_64()) {
+		cpu->gdtr_offset = (uint64_t)offset;
+	}
+	else {
+		/* widened in S3: a base with bit 31 set is an ADDRESS above 2 GiB, not a negative
+		 * number, so it must not sign-extend into the 64-bit field */
+		cpu->gdtr_offset = (uint64_t)offset & (uint64_t)(uint32_t)mask;
+	}
 }
 void instr16_0F01_2_mem(int64_t addr) { lgdt(addr, 0xFFFFFF); }
 void instr32_0F01_2_mem(int64_t addr) { lgdt(addr, -1); }
@@ -273,7 +302,14 @@ static void lidt(int32_t addr, int32_t mask)
 		if (cpu->pagefault) return;
 	}
 	cpu->idtr_size = size;
-	cpu->idtr_offset = (uint64_t)offset & (uint64_t)(uint32_t)mask;
+	/* the operand-size mask is the 16/32-bit rule; in 64-bit mode the base is 64 bits
+	 * (results/x86-64-highpf.md -- the same note as lgdt above) */
+	if (long_mode_64()) {
+		cpu->idtr_offset = (uint64_t)offset;
+	}
+	else {
+		cpu->idtr_offset = (uint64_t)offset & (uint64_t)(uint32_t)mask;
+	}
 }
 void instr16_0F01_3_mem(int64_t addr) { lidt(addr, 0xFFFFFF); }
 void instr32_0F01_3_mem(int64_t addr) { lidt(addr, -1); }

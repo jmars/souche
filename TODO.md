@@ -354,6 +354,28 @@ or pack in normal use has to carry it.
 
 ## 8. Long mode (64-bit guests) — **one day**, not a non-goal
 
+**HIGHPF (2026-10-21): THE STOP WAS THE #PF DELIVERY, NOT THE FAULT.** `results/x86-64-highpf.md`.
+The instruction at `0xFFFFFFFF8AE77246` is `copy_bootdata`'s `rep movsd` (link
+`0xffffffff83077246`, `&boot_params` relocated to `0xffffffff8b117600`, source `__va(0x84790)` =
+`0xffff888000084790`); the high-half text maps correctly (`PDE[87] = 0x30001e3`, 2 MiB at phys
+`0x3000000`, and the fetched bytes match the image's). **The first fault is the SOURCE read of the
+direct map** (`WATCH F 0xffff888000084790 read`), and every delivery then faulted at `0x8b1100e0` —
+`IDT[14]` read at a **truncated 32-bit base**, because `lgdt`/`lidt` applied the *operand-size* mask
+(`0xFFFFFF` / `-1`) to the eight-byte base long mode had just loaded. **FIXED** in all four of
+`lgdt`/`lidt`/`sgdt`/`sidt` (`src/cpu/instructions_0f.c`). MEASURED asymmetry, same instrument and
+guest: `idtr` `0x8b110000` → **`0xffffffff8b110000`**, `gdtr` likewise, and the run changes from
+"unimplemented: a fault raised while delivering a fault" (rc 1) to a **delivered** #PF with the
+kernel's own handler running (rc 0, `in_hlt=1`, `exception=-1`, +74,218 instructions). **What is
+left, named:** nothing in the port's run ever maps the direct map — `V86C_WATCH=0x30ea888:8` over the
+whole boot shows 18 writes and every one is the decompressor's — so `copy_bootdata`'s `__va()` read
+faults, while QEMU (no early exception at all) boots. The kernel's on-demand builder is
+`__early_make_pgtable` (`physaddr = address - __PAGE_OFFSET`, guarded by
+`read_cr3_pa() == __pa_nodebug(early_top_pgt)`, which holds here); its callers are the next fork, with
+`V86C_BREAK` on its entry and `V86C_WATCH` on the `early_dynamic_pgts` pages as the instrument.
+**The first `printk` is still not reached.** Full battery green, every pin unmoved. NAMED GAP: the
+`lgdt`/`lidt` arm is integration-level only — every long-mode fixture in `m1c_selftest.c` needs the
+IA-32e entry edge, which that harness refuses, so a unit arm is owed.
+
 **REACH (2026-10-21): the port DOES execute `__startup_64`.** `results/x86-64-reach.md`.  MEASURED
 with a new EXECUTION watch (`V86C_BREAK`, with registers, ring-at-hit, chain and physical peek):
 the kernel's entry at `0x1000000` runs `sme_enable` → `verify_cpu` → `__startup_64(physaddr, bp)`

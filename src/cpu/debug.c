@@ -248,6 +248,10 @@ void v86c_dbg_break_hit(uint64_t eip)
                     (unsigned long long)cpu->efer, (int)cpu->cpl,
                     (unsigned long long)cpu->segment_offsets[CS],
                     (unsigned long long)cpu->segment_offsets[SS]);
+            fprintf(stderr, "v86c dbg:   idtr=0x%llx/%d gdtr=0x%llx/%d cr2=0x%x\n",
+                    (unsigned long long)cpu->idtr_offset, (int)cpu->idtr_size,
+                    (unsigned long long)cpu->gdtr_offset, (int)cpu->gdtr_size,
+                    (unsigned)cpu->cr[2]);
             { const char *c = getenv("V86C_BREAK_CHAIN");
               if (c != NULL) dump_chain((uint64_t)strtoull(c, NULL, 0)); }
             dump_peek();
