@@ -151,6 +151,15 @@ MINIBIOS_EMBED := $(BUILD)/minibios_embed.c
 MINIBIOS_80_BIN := $(BUILD)/minibios-80m.bin
 MINIBIOS_80_MEM_TOP := 0x5000000
 
+# x86-64: the same firmware at the MACHINE's size, for the amd64 leg.  MEASURED as the reason it
+# exists (results/x86-64-ptcensus.md): the decompressor found NO physical region it accepted under
+# the 64 MiB map ("Invalid physical address chosen!" then "Physical KASLR disabled: no suitable
+# memory region!"), fell back to a layout of its own, and that layout put a task stack across a
+# 1 GiB boundary the kernel never maps.  The default firmware's bytes are untouched: this is a
+# SEPARATE file handed to the amd64 leg via `--bios`, exactly as the 80 MiB one is to the disk gate.
+MINIBIOS_256_BIN := $(BUILD)/minibios-256m.bin
+MINIBIOS_256_MEM_TOP := 0x10000000
+
 # M1b-3: the Berkeley SoftFloat engine (softfloat.c's arithmetic core).  It is the
 # READ-ONLY upstream amalgamation, compiled with upstream's own defines (v86/Makefile:
 # 242-248) so the reference's fast-int64 paths are the ones that run.  It is third-party
@@ -497,11 +506,22 @@ $(MINIBIOS_80_BIN): $(MINIBIOS_ASM)
 	$(OBJCOPY) -O binary -j .text $(BUILD)/minibios80.elf $@
 	@test $$(stat -c %s $@) -eq 65536 || { echo "minibios-80m: not 64 KiB"; exit 1; }
 
+# the 256 MiB variant: same source, same layout, one different constant (and the same 64 KiB
+# size check, because the reset vector's position depends on it).
+$(MINIBIOS_256_BIN): $(MINIBIOS_ASM)
+	@mkdir -p $(BUILD)
+	$(AS) $(ASFLAGS) --defsym MEM_TOP=$(MINIBIOS_256_MEM_TOP) -o $(BUILD)/minibios256.o $<
+	$(LD) -m elf_i386 -Ttext 0 -o $(BUILD)/minibios256.elf $(BUILD)/minibios256.o
+	$(OBJCOPY) -O binary -j .text $(BUILD)/minibios256.elf $@
+	@test $$(stat -c %s $@) -eq 65536 || { echo "minibios-256m: not 64 KiB"; exit 1; }
+
 minibios: $(MINIBIOS_BIN)
 
-.PHONY: minibios minibios-mem
+.PHONY: minibios minibios-mem minibios-256m
 
 minibios-mem: $(MINIBIOS_80_BIN)
+
+minibios-256m: $(MINIBIOS_256_BIN)
 
 # M1a's gate G1/G2: the unit tests.  Assertions are ON (no -DNDEBUG), which is what
 # makes the flags invariants checkable.
