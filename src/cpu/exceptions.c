@@ -352,7 +352,7 @@ static void iret(bool is_16)
     /* protected mode return */
     seg_selector_t cs_selector = seg_selector_of_u16((uint16_t)new_cs);
     seg_descriptor_t cs_descriptor;
-    int32_t cs_descriptor_address;
+    int64_t cs_descriptor_address;
     selector_lookup_t lookup = lookup_segment_selector(cs_selector, &cs_descriptor, &cs_descriptor_address);
     if (cpu->pagefault) {
         return;
@@ -415,7 +415,7 @@ static void iret(bool is_16)
 
         seg_selector_t ss_selector = seg_selector_of_u16((uint16_t)temp_ss);
         seg_descriptor_t ss_descriptor;
-        int32_t ss_descriptor_address;
+        int64_t ss_descriptor_address;
         lookup = lookup_segment_selector(ss_selector, &ss_descriptor, &ss_descriptor_address);
         if (cpu->pagefault) {
             return;
@@ -594,12 +594,13 @@ static void call_interrupt_vector_inner(int32_t interrupt, bool is_int, bool has
             return;
         }
 
-        int32_t descriptor_address =
-            (int32_t)translate_address_system_read(
-                cpu->idtr_offset + (uint32_t)(interrupt * gate_size));
+        /* A PHYSICAL address: translate_address_system_read's uint32_t return is the model's
+         * 32-bit physical projection (the IDT base itself goes in at 64 bits). */
+        uint32_t descriptor_address =
+            translate_address_system_read(cpu->idtr_offset + (uint32_t)(interrupt * gate_size));
         if (cpu->pagefault) return;
 
-        intr_descriptor_t descriptor = intr_descriptor_of_u64((uint64_t)read64s((uint32_t)descriptor_address));
+        intr_descriptor_t descriptor = intr_descriptor_of_u64((uint64_t)read64s(descriptor_address));
 
         int32_t offset = intr_descriptor_offset(descriptor);
         /* THE 64-BIT HANDLER ADDRESS: offset_low (bytes 0-1) | offset_middle (bytes 6-7)
@@ -611,7 +612,7 @@ static void call_interrupt_vector_inner(int32_t interrupt, bool is_int, bool has
          * 64-bit interrupt frame reachable at all. */
         int64_t offset64 = offset;
         if (lm64) {
-            uint64_t high_half = (uint64_t)read64s((uint32_t)(descriptor_address + 8));
+            uint64_t high_half = (uint64_t)read64s(descriptor_address + 8);
             offset64 = (int64_t)((uint64_t)(uint32_t)offset | (high_half << 32));
         }
         int32_t selector = intr_descriptor_selector(descriptor);
@@ -666,7 +667,7 @@ static void call_interrupt_vector_inner(int32_t interrupt, bool is_int, bool has
         }
 
         seg_descriptor_t cs_descriptor;
-        int32_t cs_descriptor_address;
+        int64_t cs_descriptor_address;
         selector_lookup_t lookup =
             lookup_segment_selector(seg_selector_of_u16((uint16_t)selector), &cs_descriptor, &cs_descriptor_address);
         if (cpu->pagefault) {
@@ -718,7 +719,7 @@ static void call_interrupt_vector_inner(int32_t interrupt, bool is_int, bool has
 
             seg_selector_t ss_segment_selector = seg_selector_of_u16((uint16_t)new_ss);
             seg_descriptor_t ss_segment_descriptor;
-            int32_t ss_descriptor_address;
+            int64_t ss_descriptor_address;
             lookup = lookup_segment_selector(ss_segment_selector, &ss_segment_descriptor, &ss_descriptor_address);
             if (cpu->pagefault) {
                 return;
@@ -949,20 +950,28 @@ static void call_interrupt_vector_inner(int32_t interrupt, bool is_int, bool has
  * cpu.rs:2638-2673 -- lookup_segment_selector
  * ------------------------------------------------------------------ */
 selector_lookup_t lookup_segment_selector(seg_selector_t selector, seg_descriptor_t *desc,
-                                          int32_t *descriptor_address)
+                                          int64_t *descriptor_address)
 {
     if (seg_selector_is_null(selector)) {
         return SELECTOR_LOOKUP_IS_NULL;
     }
 
-    uint32_t table_offset;
+    /* THE TABLE BASE IS 64 BITS IN LONG MODE.  It was projected to 32 bits here (S3's "the
+     * 32-bit model's table base") and the descriptor was therefore fetched from the wrong
+     * address the moment a guest put its GDT above 4 GiB: MEASURED as the amd64 kernel's
+     * `ltr %eax` in cpu_init (results/x86-64-e7e8.md) -- gdtr 0xffff888000a0b000, selector
+     * 0x40, and the read went to 0xa0b040, an unmapped user-space linear address, because the
+     * top half was dropped here.  THE SINGLE PROJECTION BACK TO THE MODEL'S 32-BIT PHYSICAL
+     * ADDRESS IS translate_address_system_read()'s uint32_t RETURN -- that is where S3's
+     * 32-bit physical model lives, not this line. */
+    uint64_t table_offset;
     uint32_t table_limit;
     if (seg_selector_is_gdt(selector)) {
-        table_offset = (uint32_t)cpu->gdtr_offset; /* S3: the 32-bit model's table base */
+        table_offset = cpu->gdtr_offset;
         table_limit = (uint32_t)cpu->gdtr_size;
     }
     else {
-        table_offset = (uint32_t)cpu->segment_offsets[LDTR];
+        table_offset = cpu->segment_offsets[LDTR];
         table_limit = cpu->segment_limits[LDTR];
     }
 
@@ -971,7 +980,7 @@ selector_lookup_t lookup_segment_selector(seg_selector_t selector, seg_descripto
         return SELECTOR_LOOKUP_OUTSIDE;
     }
 
-    int32_t address = (int32_t)seg_selector_descriptor_offset(selector) + (int32_t)table_offset;
+    int64_t address = (int64_t)seg_selector_descriptor_offset(selector) + (int64_t)table_offset;
 
     uint32_t physical = translate_address_system_read(address);
     if (cpu->pagefault) {
@@ -1013,7 +1022,7 @@ bool switch_seg(int32_t reg, int32_t selector_raw)
 
     seg_selector_t selector = seg_selector_of_u16((uint16_t)selector_raw);
     seg_descriptor_t descriptor;
-    int32_t descriptor_address;
+    int64_t descriptor_address;
     selector_lookup_t lookup = lookup_segment_selector(selector, &descriptor, &descriptor_address);
     if (cpu->pagefault) {
         return false;
@@ -1093,9 +1102,9 @@ bool switch_seg(int32_t reg, int32_t selector_raw)
     if (!seg_descriptor_accessed(descriptor)) {
         descriptor = seg_descriptor_set_accessed(descriptor);
 
-        int32_t address = (int32_t)translate_address_system_write(descriptor_address + 5);
+        uint32_t address = translate_address_system_write(descriptor_address + 5);
         DBG_ASSERT(!cpu->pagefault); /* upstream .unwrap() */
-        write8((uint32_t)address, (int32_t)seg_descriptor_access_byte(descriptor));
+        write8(address, (int32_t)seg_descriptor_access_byte(descriptor));
     }
 
     cpu->segment_is_null[reg] = false;
@@ -1144,7 +1153,7 @@ void far_jump(int32_t eip, int32_t selector, bool is_call, bool is_osize_32)
 
     seg_selector_t cs_selector = seg_selector_of_u16((uint16_t)selector);
     seg_descriptor_t info;
-    int32_t info_address;
+    int64_t info_address;
     selector_lookup_t lookup = lookup_segment_selector(cs_selector, &info, &info_address);
     if (cpu->pagefault) {
         return;
@@ -1182,7 +1191,7 @@ void far_jump(int32_t eip, int32_t selector, bool is_call, bool is_osize_32)
             int32_t target_cs_selector = (int32_t)(uint16_t)(info.raw >> 16);
 
             seg_descriptor_t cs_info;
-            int32_t cs_info_address;
+            int64_t cs_info_address;
             lookup = lookup_segment_selector(seg_selector_of_u16((uint16_t)target_cs_selector), &cs_info,
                                              &cs_info_address);
             if (cpu->pagefault) {
@@ -1223,7 +1232,7 @@ void far_jump(int32_t eip, int32_t selector, bool is_call, bool is_osize_32)
 
                 seg_selector_t ss_selector = seg_selector_of_u16((uint16_t)new_ss);
                 seg_descriptor_t ss_info;
-                int32_t ss_info_address;
+                int64_t ss_info_address;
                 lookup = lookup_segment_selector(ss_selector, &ss_info, &ss_info_address);
                 if (cpu->pagefault) {
                     return;
@@ -1485,7 +1494,7 @@ void far_return(int64_t eip, int32_t selector, int32_t stack_adjust, bool is_osi
 
     seg_selector_t cs_selector = seg_selector_of_u16((uint16_t)selector);
     seg_descriptor_t info;
-    int32_t info_address;
+    int64_t info_address;
     selector_lookup_t lookup = lookup_segment_selector(cs_selector, &info, &info_address);
     if (cpu->pagefault) {
         return;
@@ -1642,7 +1651,7 @@ void do_task_switch(int32_t selector_raw, bool has_error_code, int32_t error_cod
 
     seg_selector_t selector = seg_selector_of_u16((uint16_t)selector_raw);
     seg_descriptor_t descriptor;
-    int32_t descriptor_address;
+    int64_t descriptor_address;
     selector_lookup_t lookup = lookup_segment_selector(selector, &descriptor, &descriptor_address);
     if (cpu->pagefault) {
         panic_stop("do_task_switch: TODO: handle pagefault (upstream .expect() panic, cpu.rs:1671)");
@@ -1754,7 +1763,7 @@ void do_task_switch(int32_t selector_raw, bool has_error_code, int32_t error_cod
         /* mark the old task as not busy */
         seg_selector_t tr_selector = seg_selector_of_u16(cpu->sreg[TR]);
         seg_descriptor_t tr_descriptor;
-        int32_t tr_descriptor_address;
+        int64_t tr_descriptor_address;
         lookup = lookup_segment_selector(tr_selector, &tr_descriptor, &tr_descriptor_address);
         if (cpu->pagefault) {
             panic_stop("do_task_switch: TODO: handle pagefault on the TR lookup (upstream .expect() panic, cpu.rs:1742)");
@@ -1813,7 +1822,7 @@ void do_task_switch(int32_t selector_raw, bool has_error_code, int32_t error_cod
     else {
         seg_selector_t new_cs_selector = seg_selector_of_u16((uint16_t)new_cs);
         seg_descriptor_t new_cs_descriptor;
-        int32_t new_cs_descriptor_address;
+        int64_t new_cs_descriptor_address;
         lookup = lookup_segment_selector(new_cs_selector, &new_cs_descriptor, &new_cs_descriptor_address);
         if (cpu->pagefault) {
             panic_stop("do_task_switch: TODO: handle pagefault on the new CS (upstream .expect() panic, cpu.rs:1795)");
@@ -1956,7 +1965,7 @@ void load_tr(int32_t selector_raw)
     seg_selector_t selector = seg_selector_of_u16((uint16_t)selector_raw);
 
     seg_descriptor_t descriptor;
-    int32_t descriptor_address;
+    int64_t descriptor_address;
     selector_lookup_t lookup = lookup_segment_selector(selector, &descriptor, &descriptor_address);
     if (cpu->pagefault) {
         return;
@@ -1993,9 +2002,9 @@ void load_tr(int32_t selector_raw)
 
     /* mark task as busy */
     {
-        int32_t address = (int32_t)translate_address_system_write(descriptor_address + 5);
+        uint32_t address = translate_address_system_write(descriptor_address + 5);
         DBG_ASSERT(!cpu->pagefault); /* upstream .unwrap() */
-        write8((uint32_t)address, (int32_t)seg_descriptor_access_byte(seg_descriptor_set_busy(descriptor)));
+        write8(address, (int32_t)seg_descriptor_access_byte(seg_descriptor_set_busy(descriptor)));
     }
 }
 
@@ -2019,7 +2028,7 @@ void load_ldt(int32_t selector_raw)
 
 
     seg_descriptor_t descriptor;
-    int32_t descriptor_address;
+    int64_t descriptor_address;
     selector_lookup_t lookup = lookup_segment_selector(selector, &descriptor, &descriptor_address);
     if (cpu->pagefault) {
         return;

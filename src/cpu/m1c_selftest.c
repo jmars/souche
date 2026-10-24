@@ -1692,6 +1692,66 @@ static void test_long_mode_ff_inc_dec_are_32bit_without_rexw(void)
     machine_setup(false);
 }
 
+/* THE GDT BASE IS 64 BITS IN LONG MODE (results/x86-64-desc.md).  `lookup_segment_selector`
+ * used to project the table base to 32 bits, so a guest whose GDT sits above 4 GiB had its
+ * descriptors fetched from an unmapped user-space linear address: MEASURED as the amd64
+ * kernel's `ltr %eax` in cpu_init, gdtr 0xffff888000a0b000 + selector 0x40 -> a read at
+ * 0xa0b040.  The arm gives the fixture a real 4-level mapping for 4 GiB..4 GiB+2 MiB (to the
+ * frame at 1 MiB), puts a valid 386-TSS descriptor at gdt_base+0x40 THROUGH THAT MAPPING, and
+ * puts a DIFFERENT (null) descriptor at the address the truncation would have used.  A
+ * truncated base reads the wrong one. */
+#define PDPT_HI  0x14000 /* PDPT[4] -> this PD: the 4 GiB.. window */
+static void test_long_mode_descriptor_address_is_64bit(void)
+{
+    machine_setup(false);
+
+    /* four-level paging: PML4[0] -> PDPT -> PD (a 2 MiB identity page, as the 64-bit gate
+     * test does), plus PDPT[4] -> PDPT_HI -> one 2 MiB page at 4 GiB mapped to frame 1 MiB */
+    wr64(PML4_64 + 0, (uint64_t)(PAE_PDPT | PAGE_TABLE_PRESENT_MASK));
+    wr64(PAE_PDPT + 0, (uint64_t)(PAE_PD | PAGE_TABLE_PRESENT_MASK));
+    wr64(PAE_PD + 0, (uint64_t)(PAGE_TABLE_PSE_MASK | PAGE_TABLE_PRESENT_MASK | PAGE_TABLE_RW_MASK));
+    /* 4 KiB pages, not a 2 MiB one: the fixture has 2 MiB of RAM, so a 2 MiB frame could
+     * only be frame 0 -- the very address the truncation uses, which would make the arm
+     * unable to tell the two apart.  PDPT[4] -> a PD whose [0] is a PT, and PT[0] maps the
+     * 4 GiB page to the frame at 1 MiB. */
+    wr64(PAE_PDPT + 4 * 8, (uint64_t)(PDPT_HI | PAGE_TABLE_PRESENT_MASK | PAGE_TABLE_RW_MASK));
+    wr64(PDPT_HI + 0, (uint64_t)((PDPT_HI + 0x1000) | PAGE_TABLE_PRESENT_MASK | PAGE_TABLE_RW_MASK));
+    wr64(PDPT_HI + 0x1000, (uint64_t)(0x100000ull | PAGE_TABLE_PRESENT_MASK | PAGE_TABLE_RW_MASK));
+    cpu->cr[3] = PML4_64;
+    cpu->cr[4] = CR4_PAE;
+    set_cr0(cpu->cr[0] | CR0_PG);
+    cpu->efer |= EFER_LMA;
+    cpu->is_64 = true;
+    CHECK(!cpu->pagefault);
+    CHECK(long_mode_64());
+
+    /* an available 386 TSS: limit 0x67, base 0x1000, P=1 DPL=0 type=9 */
+    uint64_t tss_raw = 0x67ull | (0x1000ull << 16) | (0x89ull << 40);
+    /* ... placed at gdt_base + 0x40 = 0x100000040, i.e. phys 0x100040 through the window */
+    wr64(0x100040, tss_raw);
+    /* and a null descriptor where the 32-bit projection would look (gdt_base truncated to 0) */
+    wr64(0x40, 0);
+
+    cpu->gdtr_offset = 0x100000000ull; /* 4 GiB */
+    cpu->gdtr_size = 0x100;
+
+    seg_descriptor_t desc;
+    int64_t addr = 0;
+    selector_lookup_t lookup = lookup_segment_selector(seg_selector_of_u16(0x40), &desc, &addr);
+    CHECK(!cpu->pagefault);
+    CHECK(lookup == SELECTOR_LOOKUP_OK);
+    CHECK_EQ(addr, 0x100000040ll);          /* the FULL linear address, not its low 32 bits */
+    CHECK_EQ(desc.raw, tss_raw);            /* the descriptor that lives through that mapping */
+    CHECK_EQ(seg_descriptor_system_type(desc), 9);
+
+    /* the truncated address would have found the null descriptor at phys 0x40 */
+    CHECK(desc.raw != 0);
+
+    cpu->efer &= ~EFER_LMA;
+    cpu->is_64 = false;
+    machine_setup(false);
+}
+
 int main(void)
 {
     RUN(test_pagefault_delivery_and_iret, "#PF through an IDT, the frame, the iret return");
@@ -1716,6 +1776,7 @@ int main(void)
     RUN(test_cr2_64bit_read, "a long-mode `mov r64, cr2` returns the WHOLE linear address (and 32-bit mode is unchanged)");
     RUN(test_debug_toolkit_range_overlap, "the range hook counts only the ranges that contain a watched byte");
     RUN(test_rip_relative_segment_base, "a segment override applies to a RIP-relative operand (FS/GS add their base)");
+    RUN(test_long_mode_descriptor_address_is_64bit, "the GDT base is 64 bits in long mode: lookup_segment_selector returns gdt_base+0x40 above 4 GiB and reads the descriptor through the mapping");
     RUN(test_long_mode_ff_inc_dec_are_32bit_without_rexw, "FF /0 and FF /1 in long mode are 32-bit without REX.W: `inc %eax` on the 0xffffffff wrap zero-extends into RAX and sets ZF");
 return failures != 0;
 }

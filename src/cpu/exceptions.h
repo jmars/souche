@@ -260,7 +260,7 @@ typedef enum selector_lookup {
  * cpu->pagefault is set and the return value is meaningless. */
 selector_lookup_t lookup_segment_selector(seg_selector_t selector,
                                           seg_descriptor_t *desc,
-                                          int32_t *descriptor_address);
+                                          int64_t *descriptor_address);
 
 /* ------------------------------------------------------------------ *
  * switch_seg (cpu.rs:2676) is declared in misc_instr.h -- lss16/lss32 were its first

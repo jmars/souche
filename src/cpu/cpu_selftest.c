@@ -1678,7 +1678,7 @@ static int32_t lookup_segment_selector_calls = 0;
 static seg_descriptor_t lookup_segment_selector_answer; /* raw = 0 by default */
 
 selector_lookup_t lookup_segment_selector(seg_selector_t selector, seg_descriptor_t *desc,
-                                          int32_t *descriptor_address)
+                                          int64_t *descriptor_address)
 {
     lookup_segment_selector_calls++;
     *desc = lookup_segment_selector_answer;

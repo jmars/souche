@@ -772,7 +772,7 @@ int32_t lar(int32_t selector, int32_t original)
 {
     seg_selector_t sel = seg_selector_of_u16((uint16_t)selector);
     seg_descriptor_t desc;
-    int32_t descriptor_address;
+    int64_t descriptor_address;
     selector_lookup_t lookup = lookup_segment_selector(sel, &desc, &descriptor_address);
     if (cpu->pagefault) {
         /* pagefault -- the instruction returns with the original value */
@@ -810,7 +810,7 @@ int32_t lsl(int32_t selector, int32_t original)
 {
     seg_selector_t sel = seg_selector_of_u16((uint16_t)selector);
     seg_descriptor_t desc;
-    int32_t descriptor_address;
+    int64_t descriptor_address;
     selector_lookup_t lookup = lookup_segment_selector(sel, &desc, &descriptor_address);
     if (cpu->pagefault) {
         /* pagefault */
@@ -849,7 +849,7 @@ void verr(int32_t selector)
     cpu->flags_changed &= ~FLAG_ZERO;
     seg_selector_t sel = seg_selector_of_u16((uint16_t)selector);
     seg_descriptor_t desc;
-    int32_t descriptor_address;
+    int64_t descriptor_address;
     selector_lookup_t lookup = lookup_segment_selector(sel, &desc, &descriptor_address);
     if (cpu->pagefault) {
         return;
@@ -875,7 +875,7 @@ void verw(int32_t selector)
     cpu->flags_changed &= ~FLAG_ZERO;
     seg_selector_t sel = seg_selector_of_u16((uint16_t)selector);
     seg_descriptor_t desc;
-    int32_t descriptor_address;
+    int64_t descriptor_address;
     selector_lookup_t lookup = lookup_segment_selector(sel, &desc, &descriptor_address);
     if (cpu->pagefault) {
         return;
