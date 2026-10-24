@@ -196,6 +196,12 @@ void interpreted_run(uint32_t phys_addr)
 		 * when the tools are off, the same shape as the ring hook below. */
 		if (v86c_dbg_break_on) v86c_dbg_break_hit(start_eip);
 		run_instruction(opcode | dispatch_os_index(opcode) << 8);
+		/* the NEW-MINIMUM ring (results/x86-64-rsplow.md): AFTER the instruction, so the rsp
+		 * recorded is the one the instruction LEFT -- a push or a `sub rsp` lowers it -- and
+		 * start_eip is the instruction's own address, which is what a kallsyms lookup names.
+		 * Recording BEFORE the instruction (where the break hook sits) would attribute every
+		 * step to the instruction that follows it.  One load and one branch when off. */
+		if (v86c_dbg_rsplow_on) v86c_dbg_rsplow_tick(start_eip, cpu->reg64[4]);
 		if (v86c_dbg_ring_on) {
 			uint8_t b[16];
 			int k;

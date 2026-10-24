@@ -98,7 +98,7 @@ guest-observable, so an engine that batches differently moves the guest's clock.
 
 ### 2.6 The debugging toolkit (`src/cpu/debug.c`, all DEFAULT OFF)
 
-Four tools behind one env-var family, for the investigations that keep needing them.  **They are off
+The tools behind one env-var family, for the investigations that keep needing them.  **They are off
 unless asked for**: with no variable set the hooks are one load and one branch each, and
 `tests/perf_bench.sh` still reports its pinned `instr=200095214` with the code compiled in.
 
@@ -106,20 +106,45 @@ unless asked for**: with no variable set the hooks are one load and one branch e
 |---|---|
 | `V86C_WATCH=<addr>:<len>[,<addr>:<len>…]` | log every write to a watched address, with the rip, width and value.  Watches **virtual** addresses (`safe_write*`), **faulting** accesses (`trigger_pagefault` — a write that faults never reaches a store, which is why it needs its own hook) and **physical** addresses |
 | `V86C_RING=<N>` | keep the last N instruction boundaries (eip + the eight bytes at the fetch) and dump them on any stop |
-| `V86C_DUMP_ON_STOP=1` | on a stop: registers, cr0–cr4, cr2, cr3, efer, idtr/gdtr, cpl, the segment bases |
+| `V86C_DUMP_ON_STOP=1` | on a stop: registers, cr0–cr4, cr2 and cr2_64, cr3, efer, idtr/gdtr, cpl, the segment bases |
 | `V86C_CHAIN=<va>` | with the above, the PML4E/PDPTE/PDE/PTE chain of a virtual address, with each entry's physical address and value |
+| `V86C_INTS=<N>` | trace interrupt/exception **delivery**: the vector, the interrupted rip, rsp/cs/cpl and the nesting depth, plus a per-vector histogram and the total, dumped on a stop |
+| `V86C_RSPLOW=<K>` | keep the last K instructions on which **rsp reached a new minimum** (rip, rsp, the delta from the previous low) and dump them on any stop — the stack descent *recorded*, instead of inferred from whatever the stack happens to hold |
 
 Output goes to **stderr** with the prefix `v86c dbg:` and is **unbuffered** (`v86c_dbg_init` calls
 `setvbuf(stderr, NULL, _IONBF, 0)`, and `v86c_dbg_on_stop` flushes), so a crash cannot eat it — this
 lane lost probe output to block buffering twice before the toolkit existed.  `m1c_selftest`'s
 `test_debug_toolkit_fires` proves each tool fires (it checks the tool's own counter, not just that the
-call returned).
+call returned); `test_debug_ints_delivery` and `test_debug_rsplow_ring` do the same for the two
+traces, with mutants each is measured against.
 
 Example — the question that built the toolkit (the amd64 kernel's first #PF):
 
     V86C_WATCH=0x31558:1 V86C_RING=16 V86C_DUMP_ON_STOP=1 \
       ./build/v86c --bzimage tests/images/vmlinuz-6.1.0-50-amd64 4475481000 --memory 256 \
                    --cmdline 'console=ttyS0' --long-mode on
+
+### 2.7 Naming a kernel address: `tools/kallsyms.py`
+
+The pinned Debian kernel's `boot/System.map-6.1.0-50-amd64` is a **decoy** ("The real System.map is
+in the linux-image-<version>-dbg package"), so a link address out of a `V86C_BREAK`/`V86C_RSPLOW`
+line cannot be named from the package.  The image carries kallsyms itself, and `tools/kallsyms.py`
+parses it out of the ELF's `.rodata` — structurally, never from hard-coded file offsets:
+
+    python3 tools/kallsyms.py /tmp/vmlinux.bin 0xffffffff81c00c02 0xffffffff81a3d3aa
+    0xffffffff81c00c02 -> asm_exc_page_fault+0x22
+    0xffffffff81a3d3aa -> exc_page_fault+0xca
+
+It prints `<address> -> <symbol>+<offset>` per address, and one banner line on stderr with the table
+geometry (symbol count, `relative_base`, where the offsets/names/markers/token tables were found,
+which offset convention the image uses).  Addresses are **link** addresses; a guest's slid address
+must have the slide subtracted first.  The parse is proved by anchors that are independent of it —
+section boundaries (`_text` = 0xffffffff81000000, `__start_rodata` = 0xffffffff82000000,
+`__bss_start` = 0xffffffff8330d000, all three equal to the ELF section addresses) and the names of
+disassembled functions (`__stack_chk_fail`, `asm_exc_page_fault`, `vsnprintf`/`pointer`/
+`symbol_string`); see `results/x86-64-rsplow.md` §4.  A one-symbol shift of the offsets array is
+caught by the table's own sortedness and by those anchors — that shift is the failure mode to expect
+from a parser like this, and it names plausible-but-wrong symbols silently.
 
 ## 3. The rules, each of which cost something real
 

@@ -77,6 +77,70 @@ int v86c_dbg_ints_count(int vector)
     return ints_hist[vector];
 }
 
+/* ---- THE NEW-MINIMUM RING (results/x86-64-rsplow.md) ----------------------------
+ * WHY IT EXISTS: the amd64 guest's descent (results/x86-64-stackoverflow.md ss5) was read off the
+ * STACK, and results/x86-64-nostorm.md ss3 proved that reading cannot settle it -- a value at rsp is
+ * not necessarily a return address (the function at 0xffffffff819e4290 is reached by a TAIL JUMP from
+ * 0xffffffff819e6ce0, so the word at rsp belongs to the caller of a function one link away).  The
+ * descent has to be RECORDED at the seat that moves rsp, not inferred afterwards.
+ * WHAT IS AN EVENT: cpu->reg64[4] strictly LOWER than every value seen so far.  The FIRST value seen
+ * only seeds the minimum -- it records nothing, so every recorded event is a real step below a
+ * previous low and `delta` is the size of that step (a seed event would print delta=-0x0 and make
+ * "the first event" mean "the first instruction").  A value that recovers and comes back down to a
+ * level already reached is NOT an event: the ring is the descent's frontier, not a stack trace.
+ * LONG MODE IS NOT A CONDITION: the descent is a property of the guest's own pushes, and a 16- or
+ * 32-bit guest has a stack too.  Gating on EFER.LMA would make the instrument silently useless for
+ * any other investigation, and the tool is default-off, so the flag-off machine is untouched either
+ * way.  Stated here because the brief left the choice open.
+ * THE RING HOLDS THE LAST K, so the total is printed with it: "the last 4096 of N" is only readable
+ * if N is on the page (this lane has read a bounded window as a quiet guest before). */
+bool v86c_dbg_rsplow_on;
+static struct { uint64_t rip; uint64_t rsp; uint64_t delta; } rsplow[V86C_DBG_RING_MAX];
+static int rsplow_k;        /* capacity: the last K events */
+static int rsplow_i;        /* next slot to write */
+static int rsplow_total;    /* every event ever recorded, kept or not */
+static uint64_t rsplow_min;
+static bool rsplow_seen;
+
+void v86c_dbg_test_rsplow_arm(int k)
+{
+    if (k < 1) k = 1;
+    if (k > V86C_DBG_RING_MAX) k = V86C_DBG_RING_MAX;
+    rsplow_k = k;
+    rsplow_i = 0;
+    rsplow_total = 0;
+    rsplow_min = 0;
+    rsplow_seen = false;
+    v86c_dbg_rsplow_on = true;
+}
+int v86c_dbg_rsplow_total(void) { return rsplow_total; }
+int v86c_dbg_rsplow_kept(void) { return rsplow_total < rsplow_k ? rsplow_total : rsplow_k; }
+int v86c_dbg_rsplow_limit(void) { return rsplow_k; }
+bool v86c_dbg_rsplow_entry(int i, uint64_t *rip, uint64_t *rsp, uint64_t *delta)
+{
+    int k;
+    if (i < 0 || i >= v86c_dbg_rsplow_kept()) return false;
+    k = (rsplow_i + rsplow_k - v86c_dbg_rsplow_kept() + i) % rsplow_k;
+    if (rip != NULL) *rip = rsplow[k].rip;
+    if (rsp != NULL) *rsp = rsplow[k].rsp;
+    if (delta != NULL) *delta = rsplow[k].delta;
+    return true;
+}
+
+void v86c_dbg_rsplow_tick(uint64_t rip, uint64_t rsp)
+{
+    if (!v86c_dbg_rsplow_on) return;   /* the entire cost when off: this test */
+    if (!rsplow_seen) { rsplow_seen = true; rsplow_min = rsp; return; }
+    if (rsp >= rsplow_min) return;
+    rsplow_total++;
+    test_counts++;
+    rsplow[rsplow_i].rip = rip;
+    rsplow[rsplow_i].rsp = rsp;
+    rsplow[rsplow_i].delta = rsplow_min - rsp;
+    rsplow_min = rsp;
+    rsplow_i = (rsplow_i + 1) % rsplow_k;
+}
+
 void v86c_dbg_test_arm(void)
 {
     watch_n = 1; watch[0].addr = 0x31558; watch[0].len = 1;
@@ -91,6 +155,7 @@ void v86c_dbg_test_disarm(void)
     v86c_dbg_watch_on = false; v86c_dbg_ring_on = false; watch_n = 0; ring_n = 0;
     v86c_dbg_break_on = false; brk_n = 0;
     v86c_dbg_ints_on = false;
+    v86c_dbg_rsplow_on = false;
 }
 int v86c_dbg_test_counts(void) { return test_counts; }
 
@@ -155,13 +220,22 @@ void v86c_dbg_init(void)
             v86c_dbg_ints_on = true;
         }
       } }
+    { const char *rl = getenv("V86C_RSPLOW");
+      if (rl != NULL) {
+        long v = strtol(rl, NULL, 0);
+        if (v > 0) {
+            if (v > V86C_DBG_RING_MAX) v = V86C_DBG_RING_MAX;
+            rsplow_k = (int)v;
+            v86c_dbg_rsplow_on = true;
+        }
+      } }
     dump_on_stop = d != NULL && *d != '0';
     /* UNBUFFERED BY DEFAULT: the whole point is that a crash cannot eat the output */
     setvbuf(stderr, NULL, _IONBF, 0);
     if (v86c_dbg_watch_on || v86c_dbg_ring_on || dump_on_stop || v86c_dbg_break_on ||
-        v86c_dbg_ints_on) {
-        fprintf(stderr, "v86c dbg: tools on (watch=%d break=%d ring=%d dump=%d ints=%d)\n",
-                watch_n, brk_n, ring_n, (int)dump_on_stop, ints_limit);
+        v86c_dbg_ints_on || v86c_dbg_rsplow_on) {
+        fprintf(stderr, "v86c dbg: tools on (watch=%d break=%d ring=%d dump=%d ints=%d rsplow=%d)\n",
+                watch_n, brk_n, ring_n, (int)dump_on_stop, ints_limit, rsplow_k);
     }
 }
 
@@ -513,10 +587,35 @@ static void dump_ints_summary(void)
     fprintf(stderr, "\n");
 }
 
+/* THE DESCENT'S TAIL, oldest first, with the TOTAL on the first line: a ring holding the last K of
+ * N is only readable if N is printed (a bounded window read as the whole story is this lane's most
+ * expensive instrument failure).  `delta` is the step below the PREVIOUS minimum, so the printed
+ * sequence IS the descent -- each line a push (or a `sub rsp`) that went lower than everything
+ * before it, and the rip that did it is what a kallsyms lookup then names. */
+static void dump_rsplow(void)
+{
+    int i, kept = v86c_dbg_rsplow_kept();
+    test_counts++;   /* the dump is an entry this tool PRODUCED: a caller can assert it spoke */
+    fprintf(stderr, "v86c dbg: RSPLOW total=%d kept=%d ring=%d min=0x%llx (oldest first; delta from"
+                    " the previous minimum)\n",
+            rsplow_total, kept, rsplow_k, (unsigned long long)rsplow_min);
+    if (kept == 0) {
+        fprintf(stderr, "v86c dbg:   RSPLOW no event: rsp never went below its first value\n");
+        return;
+    }
+    for (i = 0; i < kept; i++) {
+        uint64_t rip = 0, rsp = 0, delta = 0;
+        v86c_dbg_rsplow_entry(i, &rip, &rsp, &delta);
+        fprintf(stderr, "v86c dbg: RSPLOW %d rip=0x%llx rsp=0x%llx delta=-0x%llx\n",
+                rsplow_total - kept + i + 1, (unsigned long long)rip, (unsigned long long)rsp,
+                (unsigned long long)delta);
+    }
+}
+
 void v86c_dbg_on_stop(const char *why)
 {
     int i;
-    if (!dump_on_stop && !v86c_dbg_ring_on && !v86c_dbg_ints_on) return;
+    if (!dump_on_stop && !v86c_dbg_ring_on && !v86c_dbg_ints_on && !v86c_dbg_rsplow_on) return;
     test_counts++;
     fflush(stderr);
     fprintf(stderr, "v86c dbg: STOP (%s)\n", why != NULL ? why : "?");
@@ -527,6 +626,7 @@ void v86c_dbg_on_stop(const char *why)
         }
     }
     if (v86c_dbg_ints_on) dump_ints_summary();
+    if (v86c_dbg_rsplow_on) dump_rsplow();
     if (v86c_dbg_ring_on) dump_ring();
     if (dump_on_stop) {
         const char *c = getenv("V86C_CHAIN");
@@ -534,10 +634,11 @@ void v86c_dbg_on_stop(const char *why)
                 (unsigned long long)cpu->segment_offsets[CS], (unsigned long long)cpu->segment_offsets[SS],
                 (unsigned long long)cpu->segment_offsets[DS], (unsigned long long)cpu->segment_offsets[FS],
                 (unsigned long long)cpu->segment_offsets[GS]);
-        fprintf(stderr, "v86c dbg: state rip=0x%llx cr0=0x%x cr2=0x%x cr3=0x%x cr4=0x%x efer=0x%llx"
-                        " idtr=0x%llx/%d gdtr=0x%llx/%d cpl=%d\n",
+        fprintf(stderr, "v86c dbg: state rip=0x%llx cr0=0x%x cr2=0x%x cr2_64=0x%llx cr3=0x%x cr4=0x%x"
+                        " efer=0x%llx idtr=0x%llx/%d gdtr=0x%llx/%d cpl=%d\n",
                 (unsigned long long)cpu->instruction_pointer, (unsigned)cpu->cr[0],
-                (unsigned)cpu->cr[2], (unsigned)cpu->cr[3], (unsigned)cpu->cr[4],
+                (unsigned)cpu->cr[2], (unsigned long long)cpu->cr2_64, (unsigned)cpu->cr[3],
+                (unsigned)cpu->cr[4],
                 (unsigned long long)cpu->efer, (unsigned long long)cpu->idtr_offset,
                 (int)cpu->idtr_size, (unsigned long long)cpu->gdtr_offset, (int)cpu->gdtr_size,
                 (int)cpu->cpl);

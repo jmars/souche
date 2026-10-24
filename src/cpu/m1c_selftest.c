@@ -743,6 +743,142 @@ static void test_debug_ints_delivery(void)
 }
 
 /* ================================================================== *
+ * TEST 1l -- THE NEW-MINIMUM RING RECORDS THE DESCENT, AND KEEPS THE LAST K (results/x86-64-rsplow.md)
+ *
+ * V86C_RSPLOW=K is the instrument results/x86-64-nostorm.md ss5 asked for: three units read the
+ * descent off the STACK and were wrong about it (the function at 0xffffffff819e4290 is reached by a
+ * TAIL JUMP, so the word at rsp is not its return address), so the pushes themselves have to be
+ * RECORDED at the seat that moves rsp.  The arm drives the seat directly and asks the questions a
+ * ring must answer, each with the mutant it catches:
+ *   - SEED: the first value seen only seeds the minimum -- a seat that records it reads 1 where 0 is
+ *     asserted, and "the first event" then means "the first instruction", with a delta of zero;
+ *   - NON-LOWER: an EQUAL value and a HIGHER value record nothing -- a `>` instead of `>=` in the
+ *     comparison reads 2 after the equal tick, and a ring that stores every value reads 2 after the
+ *     higher one;
+ *   - DELTA: each step's size below the PREVIOUS minimum (0x10, then 0xf0, then 0x100...), which a
+ *     delta computed after the minimum has already been updated reads as 0;
+ *   - LAST K: six events into a ring of FOUR must hold events 3..6 -- a ring that fills and then
+ *     stops storing holds events 1..4, and its entry 0 is the WRONG descent step, which is the
+ *     reading error this arm exists for (the tail of the ring is what names the overflow);
+ *   - THE DUMP SPEAKS ALONE: with every other tool off, v86c_dbg_on_stop must still take its early
+ *     return branch (the STOP entry + the RSPLOW entry) -- a dump gated on another tool leaves +1.
+ * The ENV path is asserted too: K arms the seat, a K past the ring bound is CAPPED (a cap that does
+ * not cap is a memory-filler), and an absent V86C_RSPLOW leaves the tool OFF.
+ * ================================================================== */
+static void test_debug_rsplow_ring(void)
+{
+    uint64_t rip, rsp, delta;
+
+    machine_setup(false);
+    v86c_dbg_test_rsplow_arm(4);              /* the LAST FOUR events */
+    CHECK(v86c_dbg_rsplow_on);
+    CHECK_EQ(v86c_dbg_rsplow_limit(), 4);
+    CHECK_EQ(v86c_dbg_rsplow_total(), 0);
+    CHECK_EQ(v86c_dbg_rsplow_kept(), 0);
+
+    v86c_dbg_rsplow_tick(0x1000, 0x4000);     /* the SEED: not an event */
+    CHECK_EQ(v86c_dbg_rsplow_total(), 0);
+    v86c_dbg_rsplow_tick(0x1004, 0x4000);     /* EQUAL to the minimum: not an event */
+    CHECK_EQ(v86c_dbg_rsplow_total(), 0);
+    v86c_dbg_rsplow_tick(0x1008, 0x3ff0);     /* event 1, delta 0x10 */
+    CHECK_EQ(v86c_dbg_rsplow_total(), 1);
+    v86c_dbg_rsplow_tick(0x100c, 0x4008);     /* HIGHER: not an event */
+    CHECK_EQ(v86c_dbg_rsplow_total(), 1);
+    v86c_dbg_rsplow_tick(0x1010, 0x3ff0);     /* back to a level already reached: not an event */
+    CHECK_EQ(v86c_dbg_rsplow_total(), 1);
+    CHECK(v86c_dbg_rsplow_entry(0, &rip, &rsp, &delta));
+    CHECK_EQ(rip, 0x1008);
+    CHECK_EQ(rsp, 0x3ff0);
+    CHECK_EQ(delta, 0x10);
+
+    v86c_dbg_rsplow_tick(0x1014, 0x3f00);     /* event 2, delta 0xf0 */
+    v86c_dbg_rsplow_tick(0x1018, 0x3e00);     /* event 3, delta 0x100 */
+    v86c_dbg_rsplow_tick(0x101c, 0x3d00);     /* event 4 */
+    v86c_dbg_rsplow_tick(0x1020, 0x3c00);     /* event 5 */
+    v86c_dbg_rsplow_tick(0x1024, 0x3b00);     /* event 6 */
+    CHECK_EQ(v86c_dbg_rsplow_total(), 6);
+    CHECK_EQ(v86c_dbg_rsplow_kept(), 4);      /* the ring holds K, not the total */
+
+    /* THE LAST FOUR, oldest first: events 3..6.  A ring that keeps the FIRST K reads
+     * entry 0 = 0x3ff0 (event 1) and names the wrong descent step. */
+    CHECK(v86c_dbg_rsplow_entry(0, &rip, &rsp, &delta));
+    CHECK_EQ(rip, 0x1018); CHECK_EQ(rsp, 0x3e00); CHECK_EQ(delta, 0x100);
+    CHECK(v86c_dbg_rsplow_entry(1, &rip, &rsp, &delta));
+    CHECK_EQ(rip, 0x101c); CHECK_EQ(rsp, 0x3d00);
+    CHECK(v86c_dbg_rsplow_entry(2, &rip, &rsp, &delta));
+    CHECK_EQ(rip, 0x1020); CHECK_EQ(rsp, 0x3c00);
+    CHECK(v86c_dbg_rsplow_entry(3, &rip, &rsp, &delta));
+    CHECK_EQ(rip, 0x1024); CHECK_EQ(rsp, 0x3b00);
+    CHECK(!v86c_dbg_rsplow_entry(4, NULL, NULL, NULL));   /* no fifth entry */
+
+    /* THE DUMP SPEAKS ALONE: no other tool is on, so the early return must not fire and the ring
+     * must print -- +2 entries (the STOP line and the RSPLOW summary) */
+    { int before = v86c_dbg_test_counts();
+      v86c_dbg_on_stop("the rsplow arm");
+      CHECK_EQ(v86c_dbg_test_counts(), before + 2); }
+
+    v86c_dbg_test_disarm();
+    CHECK(!v86c_dbg_rsplow_on);
+
+    /* THE ENV PATH IS THE INSTRUMENT THE USER RUNS */
+    setenv("V86C_RSPLOW", "8", 1);
+    v86c_dbg_init();
+    CHECK(v86c_dbg_rsplow_on);
+    CHECK_EQ(v86c_dbg_rsplow_limit(), 8);
+    v86c_dbg_test_disarm();
+    setenv("V86C_RSPLOW", "100000", 1);
+    v86c_dbg_init();
+    CHECK_EQ(v86c_dbg_rsplow_limit(), 4096);   /* the ring bound, not the request */
+    v86c_dbg_test_disarm();
+    unsetenv("V86C_RSPLOW");
+    v86c_dbg_init();
+    CHECK(!v86c_dbg_rsplow_on);                /* absent = OFF */
+}
+
+/* ================================================================== *
+ * TEST 1m -- THE RING'S SEAT IS IN THE INTERPRETER'S LOOP (results/x86-64-rsplow.md)
+ *
+ * The arm above drives v86c_dbg_rsplow_tick directly, which proves the RING works but not that
+ * anything CALLS it -- and a seat nobody calls is indistinguishable from an absent seat to every
+ * other test in this file (this lane has shipped exactly that: a subsystem unit-tested, never
+ * called from a run path).  So this arm runs the REAL per-instruction seat: four instructions
+ * whose bytes are placed so the batch ends on a page crossing, two of them `push %eax`.
+ *
+ * IT FAILS AGAINST A debug.c THAT IS NOT WIRED INTO cpu.c: delete the one call from
+ * interpreted_run and the total is 0 where 2 is asserted.  MEASURED as mutant M7.
+ * ================================================================== */
+static void test_debug_rsplow_loop_seat(void)
+{
+    uint64_t rip, rsp, delta;
+
+    machine_setup(false);
+    cpu->reg64[4] = 0x7000;                   /* rsp */
+    cpu->reg64[0] = 0x12345678;               /* eax, the value pushed */
+    cpu->instruction_pointer = 0x2FFA;
+    cpu->previous_ip = 0x2FFA;
+    mem8[0x2FFA] = 0x90;                      /* nop  -- seeds the minimum, no event */
+    mem8[0x2FFB] = 0x90;                      /* nop */
+    mem8[0x2FFC] = 0x50;                      /* push %eax -> rsp 0x6ffc */
+    mem8[0x2FFD] = 0x50;                      /* push %eax -> rsp 0x6ff8 */
+    mem8[0x2FFE] = 0x90;                      /* nop */
+    mem8[0x2FFF] = 0x90;                      /* nop -- and the fetch crosses to page 0x3000 */
+
+    v86c_dbg_test_rsplow_arm(8);
+    interpreted_run(0x2FFA);
+
+    CHECK_EQ(v86c_dbg_rsplow_total(), 2);
+    CHECK(v86c_dbg_rsplow_entry(0, &rip, &rsp, &delta));
+    CHECK_EQ(rip, 0x2FFC);
+    CHECK_EQ(rsp, 0x6FFC);
+    CHECK_EQ(delta, 0x4);
+    CHECK(v86c_dbg_rsplow_entry(1, &rip, &rsp, &delta));
+    CHECK_EQ(rip, 0x2FFD);
+    CHECK_EQ(rsp, 0x6FF8);
+
+    v86c_dbg_test_disarm();
+}
+
+/* ================================================================== *
  * TEST 1i -- A LONG-MODE `mov r64, cr2` RETURNS THE WHOLE ADDRESS (results/x86-64-repair.md)
  *
  * The corpus cannot carry it: MOV CR is privileged and the native leg runs at CPL 3.  This arm
@@ -1913,6 +2049,8 @@ int main(void)
     RUN(test_debug_toolkit_range_overlap, "the range hook counts only the ranges that contain a watched byte");
     RUN(test_debug_toolkit_watch_vp, "the long-mode store's physical frame is watchable: vp counts a hit through EITHER address, once");
     RUN(test_debug_ints_delivery, "the delivery trace counts every delivery, records nesting depth, and its print window BOUNDS");
+    RUN(test_debug_rsplow_ring, "the new-minimum ring records only a LOWER rsp, keeps the LAST K, and dumps alone");
+    RUN(test_debug_rsplow_loop_seat, "the ring's seat is in the interpreter's per-instruction loop (two pushes recorded)");
     RUN(test_rip_relative_segment_base, "a segment override applies to a RIP-relative operand (FS/GS add their base)");
     RUN(test_long_mode_descriptor_address_is_64bit, "the GDT base is 64 bits in long mode: lookup_segment_selector returns gdt_base+0x40 above 4 GiB and reads the descriptor through the mapping");
     RUN(test_long_mode_ff_inc_dec_are_32bit_without_rexw, "FF /0 and FF /1 in long mode are 32-bit without REX.W: `inc %eax` on the 0xffffffff wrap zero-extends into RAX and sets ZF");
