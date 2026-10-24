@@ -579,11 +579,15 @@ void v86c_dbg_ints_delivery(int32_t vector, bool is_int, bool has_error_code,
         else strcpy(err, "-");
         ints_printed++;
         test_counts++;
+        /* cr2 IS THE FAULTING ADDRESS FOR vec=14 ONLY (results/x86-64-nostorm.md ss5): every
+         * other delivery leaves it stale, and reading it as "the address this exception is
+         * about" is the same trap as reading a stale stack word as a return address. */
         fprintf(stderr, "v86c dbg: INTS %d vec=%d int=%d err=%s cpl=%d depth=%d from_rip=0x%llx"
-                        " rsp=0x%llx cs=0x%llx\n",
+                        " rsp=0x%llx cs=0x%llx%s0x%llx\n",
                 ints_total, (int)vector, is_int ? 1 : 0, err, (int)cpu->cpl, depth,
                 (unsigned long long)interrupted_rip, (unsigned long long)rsp,
-                (unsigned long long)cs);
+                (unsigned long long)cs, vector == 14 ? " cr2=" : " cr2(stale)=",
+                (unsigned long long)cpu->cr2_64);
     }
     else if (!ints_window_closed) {
         ints_window_closed = true;
