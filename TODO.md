@@ -354,7 +354,33 @@ or pack in normal use has to carry it.
 
 ## 8. Long mode (64-bit guests) — **one day**, not a non-goal
 
-**HALVES (2026-10-21): `page_offset_base`'S LOW HALF IS WRONG — ONE 32-BIT HALF EXPLAINS THE WHOLE
+**PRODUCER (2026-10-21): `page_offset_base` IS WRITTEN CORRECTLY — AND THE HALVES ENTRY BELOW IS
+RETRACTED.** `results/x86-64-producer.md`. The instrument had to be fixed first (MEASURED): `V86C_WATCH`
+on the global's virtual address, on its neighbours and on two direct-map aliases all reported **nothing**
+while a PEEK of the same physical slot showed the value change inside one run — every body goes through
+`safe_write*`, so the silence was the instrument's, not the guest's. **Landed:** the physical writers
+(`write8/16/32`, `write64_no_mmap_or_dirty_check`, `mmap_write64`) now call `v86c_dbg_watch_p` (one load
+and one branch when the toolkit is off). `V86C_WATCH=0x2413d60:8` then speaks:
+`WATCH P 0x2413d60 width=4 value=0xffffffffc0000000 rip=0xffffffff8ae9ef45` and
+`WATCH P 0x2413d64 width=4 value=0xffffffffffff8c16 rip=0xffffffff8ae9ef45` — two 32-BIT stores of the two
+halves, rip link `0xffffffff8309ef45`, inside `kernel_randomize_memory`
+(`div %rcx; and $0xffffffffc0000000,%rdx; lea (%rdx,%rbx,1),%rax; mov %rax,(%rcx)` at link
+`0xffffffff8309ef31..0x8309ef42`), i.e. `page_offset_base = __PAGE_OFFSET_BASE_L4 + ((rand % n) &
+PUD_MASK)`. **RETRACTION:** `0xffff8c16c0000000` **IS CORRECT** — it is PUD-aligned, a PUD is 1 GiB, so
+the low 30 bits are zero and **bits 30–31 MAY be set**; the HALVES entry's "a legitimate value must have a
+ZERO low 32 bits" is WRONG and its "wrong low half" conclusion is withdrawn. **WHAT IS ACTUALLY WRONG
+(MEASURED, and it is not the randomizer):** the *physical* addresses are truncated to **24 bits** — the
+per-cpu base uses `0x00fd4000` where `0xc0fd4000` is required, and the direct-map PDE maps `0x00e00000`
+where `0xc0e00000` is required — and those physical addresses (`0xc0e00000`, `0xc0fd4000` ≈ 3.2 GB) are
+also **beyond the guest's 256 MiB RAM**, which is the second finding: `__alloc_bootmem_node_nopanic`
+(link `0xffffffff8309d94f`) returns a physical address outside RAM. **NEXT FORK, two questions, not a
+body:** (1) where bits 31..24 are dropped on the way to the PTE (`0xc0e00000 → 0x00e00000`); (2) why the
+allocator hands back an address above RAM. **No fix claimed, no source change to the machine** — only the
+toolkit; make/selftest/gate-x86-64/bench green, bench 200,095,214.
+
+**HALVES (2026-10-21) — *RETRACTED IN PART, see PRODUCER above*: the "wrong low half" reading of
+`page_offset_base` is withdrawn; the recursion chain it measured is still the record.**
+`page_offset_base`'S LOW HALF IS WRONG — ONE 32-BIT HALF EXPLAINS THE WHOLE
 RECURSION.** `results/x86-64-halves.md`. MEASURED: `V86C_WATCH` on `__per_cpu_offset[0]` (runtime VA
 `0xffffffff8aa393e0`) logs ONE write, `value=0xffff8c16c0fd4000 rip=0xffffffff8ae9d9c6`, so the value
 is wrong BEFORE the `wrmsr` (shape (a)/(b), not a mis-read EDX). The writer is link
