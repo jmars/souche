@@ -32,6 +32,51 @@ static bool brk_ring;
 static struct { uint64_t eip; uint8_t bytes[16]; } ring[V86C_DBG_RING_MAX];
 static int ring_n, ring_i;
 static int test_counts;
+
+/* ---- THE DELIVERY TRACE (results/x86-64-ints.md) --------------------------------
+ * WHY IT EXISTS: the amd64 guest's stack descent (results/x86-64-stackoverflow.md ss5) had to be
+ * INFERRED from stack arithmetic because the toolkit could not see a single interrupt/exception
+ * delivery -- not the vector, not the depth, not the rip that was interrupted.  This seat answers
+ * exactly that, from the one place a gate is accepted (call_interrupt_vector).
+ * THE STORM IS BOUNDED IN BOTH DIRECTIONS, deliberately: the printed lines by `ints_limit` (capped
+ * at V86C_DBG_INTS_MAX so a delivery storm cannot fill a disk), and the COUNTING by nothing -- the
+ * histogram is what answers "which vector drives the loop", so it must survive a limit of 0, and
+ * the stop summary must print even then (a summary gated on the print limit is the budget knob
+ * this lane has already found once: declared, and unable to fire). */
+#define V86C_DBG_INTS_MAX 100000
+#define V86C_DBG_INTS_VECTORS 256
+#define V86C_DBG_INTS_TOP 8
+bool v86c_dbg_ints_on;
+static int ints_limit;    /* lines to print; 0 = the histogram only */
+static int ints_printed;
+static int ints_total;
+static int ints_max_depth;
+static int ints_hist[V86C_DBG_INTS_VECTORS];
+static bool ints_window_closed;
+
+void v86c_dbg_test_ints_arm(int limit)
+{
+    int i;
+    if (limit < 0) limit = 0;
+    if (limit > V86C_DBG_INTS_MAX) limit = V86C_DBG_INTS_MAX;
+    ints_limit = limit;
+    ints_printed = 0;
+    ints_total = 0;
+    ints_max_depth = 0;
+    ints_window_closed = false;
+    for (i = 0; i < V86C_DBG_INTS_VECTORS; i++) ints_hist[i] = 0;
+    v86c_dbg_ints_on = true;
+}
+int v86c_dbg_ints_total(void) { return ints_total; }
+int v86c_dbg_ints_printed(void) { return ints_printed; }
+int v86c_dbg_ints_max_depth(void) { return ints_max_depth; }
+int v86c_dbg_ints_limit(void) { return ints_limit; }
+int v86c_dbg_ints_count(int vector)
+{
+    if (vector < 0 || vector >= V86C_DBG_INTS_VECTORS) return 0;
+    return ints_hist[vector];
+}
+
 void v86c_dbg_test_arm(void)
 {
     watch_n = 1; watch[0].addr = 0x31558; watch[0].len = 1;
@@ -45,6 +90,7 @@ void v86c_dbg_test_disarm(void)
 {
     v86c_dbg_watch_on = false; v86c_dbg_ring_on = false; watch_n = 0; ring_n = 0;
     v86c_dbg_break_on = false; brk_n = 0;
+    v86c_dbg_ints_on = false;
 }
 int v86c_dbg_test_counts(void) { return test_counts; }
 
@@ -100,12 +146,22 @@ void v86c_dbg_init(void)
     { const char *m = getenv("V86C_BREAK_MAX");
       if (m != NULL) { int v = (int)strtol(m, NULL, 0); if (v > 0) brk_max = v; } }
     { const char *br = getenv("V86C_BREAK_RING"); brk_ring = br != NULL && *br != '0'; }
+    { const char *n = getenv("V86C_INTS");
+      if (n != NULL) {
+        long v = strtol(n, NULL, 0);
+        if (v > 0) {
+            if (v > V86C_DBG_INTS_MAX) v = V86C_DBG_INTS_MAX;
+            ints_limit = (int)v;
+            v86c_dbg_ints_on = true;
+        }
+      } }
     dump_on_stop = d != NULL && *d != '0';
     /* UNBUFFERED BY DEFAULT: the whole point is that a crash cannot eat the output */
     setvbuf(stderr, NULL, _IONBF, 0);
-    if (v86c_dbg_watch_on || v86c_dbg_ring_on || dump_on_stop || v86c_dbg_break_on) {
-        fprintf(stderr, "v86c dbg: tools on (watch=%d break=%d ring=%d dump=%d)\n", watch_n, brk_n,
-                ring_n, (int)dump_on_stop);
+    if (v86c_dbg_watch_on || v86c_dbg_ring_on || dump_on_stop || v86c_dbg_break_on ||
+        v86c_dbg_ints_on) {
+        fprintf(stderr, "v86c dbg: tools on (watch=%d break=%d ring=%d dump=%d ints=%d)\n",
+                watch_n, brk_n, ring_n, (int)dump_on_stop, ints_limit);
     }
 }
 
@@ -398,10 +454,69 @@ static void dump_chain(uint64_t va)
     }
 }
 
+/* ONE LINE PER DELIVERY, bounded by the print limit, and the window's CLOSURE printed ONCE so a
+ * later silence is never read as a quiet guest -- this lane has lost five units to an instrument's
+ * silence, and "the trace stopped" is the most expensive of them. */
+void v86c_dbg_ints_delivery(int32_t vector, bool is_int, bool has_error_code,
+                            int32_t error_code, int depth, uint64_t interrupted_rip,
+                            uint64_t rsp, uint64_t cs)
+{
+    if (!v86c_dbg_ints_on) return;   /* the entire cost when off: this test */
+    ints_total++;
+    if (vector >= 0 && vector < V86C_DBG_INTS_VECTORS) ints_hist[vector]++;
+    if (depth > ints_max_depth) ints_max_depth = depth;
+    if (ints_printed < ints_limit) {
+        char err[24];
+        if (has_error_code) snprintf(err, sizeof err, "0x%x", (unsigned)error_code);
+        else strcpy(err, "-");
+        ints_printed++;
+        test_counts++;
+        fprintf(stderr, "v86c dbg: INTS %d vec=%d int=%d err=%s cpl=%d depth=%d from_rip=0x%llx"
+                        " rsp=0x%llx cs=0x%llx\n",
+                ints_total, (int)vector, is_int ? 1 : 0, err, (int)cpu->cpl, depth,
+                (unsigned long long)interrupted_rip, (unsigned long long)rsp,
+                (unsigned long long)cs);
+    }
+    else if (!ints_window_closed) {
+        ints_window_closed = true;
+        if (ints_limit == 0) {
+            fprintf(stderr, "v86c dbg: INTS per-delivery lines are OFF (limit 0): counting only,"
+                            " the stop summary carries the histogram\n");
+        }
+        else {
+            fprintf(stderr, "v86c dbg: INTS print window CLOSED at %d line(s) (delivery %d); the"
+                            " histogram keeps counting and the stop summary carries the totals\n",
+                    ints_limit, ints_total);
+        }
+    }
+}
+
+/* THE SUMMARY IS GATED ON THE TRACE BEING ARMED, NEVER ON THE PRINT LIMIT: with a limit of 0 the
+ * per-delivery lines are silent by design, and the histogram is the ONLY thing that answers which
+ * vector drives the loop. */
+static void dump_ints_summary(void)
+{
+    int i, k, n = 0;
+    int vec[V86C_DBG_INTS_VECTORS];
+    test_counts++;   /* the summary is an entry this tool PRODUCED: a caller can assert it spoke */
+    fprintf(stderr, "v86c dbg: INTS total=%d max_depth=%d printed=%d limit=%d\n",
+            ints_total, ints_max_depth, ints_printed, ints_limit);
+    for (i = 0; i < V86C_DBG_INTS_VECTORS; i++) if (ints_hist[i] > 0) vec[n++] = i;
+    if (n == 0) { fprintf(stderr, "v86c dbg:   INTS no delivery was traced\n"); return; }
+    fprintf(stderr, "v86c dbg:   INTS vectors:");
+    for (k = 0; k < V86C_DBG_INTS_TOP && k < n; k++) {
+        int j, best = k;
+        for (j = k + 1; j < n; j++) if (ints_hist[vec[j]] > ints_hist[vec[best]]) best = j;
+        { int t = vec[k]; vec[k] = vec[best]; vec[best] = t; }
+        fprintf(stderr, " vec=%d x%d", vec[k], ints_hist[vec[k]]);
+    }
+    fprintf(stderr, "\n");
+}
+
 void v86c_dbg_on_stop(const char *why)
 {
     int i;
-    if (!dump_on_stop && !v86c_dbg_ring_on) return;
+    if (!dump_on_stop && !v86c_dbg_ring_on && !v86c_dbg_ints_on) return;
     test_counts++;
     fflush(stderr);
     fprintf(stderr, "v86c dbg: STOP (%s)\n", why != NULL ? why : "?");
@@ -411,6 +526,7 @@ void v86c_dbg_on_stop(const char *why)
                     (unsigned long long)brk[i].addr, (unsigned long long)brk[i].len, brk[i].hits);
         }
     }
+    if (v86c_dbg_ints_on) dump_ints_summary();
     if (v86c_dbg_ring_on) dump_ring();
     if (dump_on_stop) {
         const char *c = getenv("V86C_CHAIN");

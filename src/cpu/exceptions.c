@@ -558,6 +558,13 @@ void call_interrupt_vector(int32_t interrupt, bool is_int, bool has_error_code, 
             " (hardware would raise #DF; the port stops rather than recursing)");
         return;
     }
+    /* THE ONE DELIVERY SEAT (results/x86-64-ints.md): every interrupt and every exception the
+     * port delivers passes here, so this is where the delivery trace's ONE call belongs.  It is
+     * BEFORE the nesting counter moves, so `depth` is the depth this delivery is NESTED IN, and
+     * the interrupted rip is previous_ip -- the instruction that faulted or was preempted (the
+     * same value paging.c:145's rewind pushes as the frame's eip). */
+    v86c_dbg_ints_delivery(interrupt, is_int, has_error_code, error_code, delivery_depth,
+                           cpu->previous_ip, cpu->reg64[4], cpu->segment_offsets[CS]);
     delivery_depth++;
     call_interrupt_vector_inner(interrupt, is_int, has_error_code, error_code);
     delivery_depth--;

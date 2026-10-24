@@ -48,6 +48,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h> /* setenv/unsetenv: the delivery trace's ENV path is asserted */
 #include <string.h>
 
 #include "cpu.h"
@@ -638,6 +639,107 @@ static void test_debug_toolkit_watch_vp(void)
     CHECK_EQ(v86c_dbg_test_counts(), 3);
 
     v86c_dbg_test_disarm();
+}
+
+/* ================================================================== *
+ * TEST 1k -- THE DELIVERY TRACE COUNTS, RECORDS DEPTH, AND ITS PRINT WINDOW BOUNDS
+ * (results/x86-64-ints.md)
+ *
+ * V86C_INTS=N is the instrument results/x86-64-stackoverflow.md ss5 and
+ * results/x86-64-peekperturb.md ss5 both asked for: the port could not see ONE interrupt or
+ * exception delivery, so the guest's ~0x700-per-level stack descent had to be inferred from stack
+ * arithmetic.  The arm drives the REAL seat (call_interrupt_vector, through trigger_de) and asks
+ * the three questions an instrument must answer, each with the mutant it catches:
+ *   - total: three deliveries, THREE counted -- a seat that counts only what it prints reads 1;
+ *   - printed: a limit of ONE, three deliveries, ONE printed line -- a bound that does not bound
+ *     (`<=` for `<`, or a budget compared after charging) reads 2 or 3, which is the exact defect
+ *     this lane already found in a budget knob;
+ *   - max_depth: three SEQUENTIAL deliveries nest in nothing (0), and TEST 3's fixture -- a #DE
+ *     whose gate lookup faults -- delivers the #PF at depth 1, so a max_depth that is never
+ *     updated reads 0 and one that records the POST-increment depth reads 2.
+ * The last block arms with a limit of ZERO: no line may print, and the stop summary must still
+ * speak (the histogram is what answers the question), so v86c_dbg_on_stop must not take its early
+ * return and must run with no other tool on.
+ * ================================================================== */
+static void test_debug_ints_delivery(void)
+{
+    machine_setup(false);
+    /* vector 0 -> a real code selector, so trigger_de DELIVERS instead of stopping */
+    wr64((uint32_t)IDT_BASE + 0 * 8, make_idt_entry(HANDLER_EIP, SEL_CODE2, INTR_GATE_TRAP, 0, true));
+    cpu->previous_ip = 0x7000;
+    cpu->instruction_pointer = 0x7005;
+    cpu->pagefault = false;
+
+    v86c_dbg_test_ints_arm(1);            /* ONE printed line, the histogram unbounded */
+    CHECK(v86c_dbg_ints_on);
+    CHECK_EQ(v86c_dbg_ints_total(), 0);
+
+    trigger_de();                         /* delivery 1: printed */
+    CHECK_EQ(v86c_dbg_ints_total(), 1);
+    CHECK_EQ(v86c_dbg_ints_printed(), 1);
+    trigger_de();                         /* delivery 2: counted, NOT printed */
+    trigger_de();                         /* delivery 3: counted, NOT printed */
+    CHECK_EQ(v86c_dbg_ints_total(), 3);
+    CHECK_EQ(v86c_dbg_ints_printed(), 1);          /* the window is BOUNDED */
+    CHECK_EQ(v86c_dbg_ints_max_depth(), 0);        /* three SEQUENTIAL deliveries nest in nothing */
+    CHECK_EQ(v86c_dbg_ints_count(0), 3);           /* the HISTOGRAM: vector 0, three times */
+
+    /* the NESTING the guest does: a #DE whose gate names an LDT selector in an absent page, so
+     * the delivery's OWN lookup faults and the #PF is delivered at depth 1 (TEST 3's fixture) */
+    machine_setup(true);
+    load_ldt(0x30);
+    cpu->previous_ip = 0x7000;
+    cpu->instruction_pointer = 0x7005;
+    cpu->pagefault = false;
+    interpreted_unimplemented = false;
+    trigger_de();                         /* the #DE at depth 0, then the #PF at depth 1 */
+    CHECK(!interpreted_unimplemented);
+    CHECK_EQ(v86c_dbg_ints_total(), 5);
+    CHECK_EQ(v86c_dbg_ints_max_depth(), 1);
+    CHECK_EQ(v86c_dbg_ints_printed(), 1);          /* still ONE: the window never reopens */
+    CHECK_EQ(v86c_dbg_ints_count(0), 4);           /* the #DE's, once more */
+    CHECK_EQ(v86c_dbg_ints_count(14), 1);          /* and the #PF the delivery itself raised */
+
+    /* A LIMIT OF ZERO IS NOT "OFF": no per-delivery line, but the counters and the STOP SUMMARY
+     * must still speak -- a histogram nobody can read answers nothing */
+    v86c_dbg_test_ints_arm(0);
+    CHECK(v86c_dbg_ints_on);
+    machine_setup(false);
+    wr64((uint32_t)IDT_BASE + 0 * 8, make_idt_entry(HANDLER_EIP, SEL_CODE2, INTR_GATE_TRAP, 0, true));
+    cpu->previous_ip = 0x7000;
+    cpu->instruction_pointer = 0x7005;
+    cpu->pagefault = false;
+    trigger_de();
+    CHECK_EQ(v86c_dbg_ints_total(), 1);
+    CHECK_EQ(v86c_dbg_ints_printed(), 0);          /* silent by design */
+    /* +2: the STOP line and the INTS SUMMARY.  The second one is the assertion that matters -- a
+     * summary gated on the print limit (or on another tool) leaves the count at +1, and then a
+     * limit-0 run reports NOTHING at all, which is the silence this tool exists to prevent. */
+    { int before = v86c_dbg_test_counts();
+      v86c_dbg_on_stop("the ints arm");            /* must NOT take the early return */
+      CHECK_EQ(v86c_dbg_test_counts(), before + 2); }
+
+    v86c_dbg_test_disarm();
+    CHECK(!v86c_dbg_ints_on);
+
+    /* THE ENV PATH IS THE INSTRUMENT THE USER RUNS, so it is asserted too: V86C_INTS=5 must arm
+     * the seat, a storm-sized N must be CAPPED (a cap that does not cap is a disk-filler), and an
+     * ABSENT V86C_INTS must leave the tool OFF -- the default-off contract the bench pin and the
+     * byte-identical transcript protect. */
+    setenv("V86C_INTS", "5", 1);
+    v86c_dbg_init();
+    CHECK(v86c_dbg_ints_on);
+    CHECK_EQ(v86c_dbg_ints_limit(), 5);
+    /* v86c_dbg_init is a ONE-SHOT parse (it arms tools, it never disarms -- main.c calls it once),
+     * so each arm below starts from the disarmed state rather than from the previous arm's */
+    v86c_dbg_test_disarm();
+    setenv("V86C_INTS", "1000000", 1);
+    v86c_dbg_init();
+    CHECK_EQ(v86c_dbg_ints_limit(), 100000);   /* the storm cap, not the request */
+    v86c_dbg_test_disarm();
+    unsetenv("V86C_INTS");
+    v86c_dbg_init();
+    CHECK(!v86c_dbg_ints_on);                  /* absent = OFF */
 }
 
 /* ================================================================== *
@@ -1810,6 +1912,7 @@ int main(void)
     RUN(test_cr2_64bit_read, "a long-mode `mov r64, cr2` returns the WHOLE linear address (and 32-bit mode is unchanged)");
     RUN(test_debug_toolkit_range_overlap, "the range hook counts only the ranges that contain a watched byte");
     RUN(test_debug_toolkit_watch_vp, "the long-mode store's physical frame is watchable: vp counts a hit through EITHER address, once");
+    RUN(test_debug_ints_delivery, "the delivery trace counts every delivery, records nesting depth, and its print window BOUNDS");
     RUN(test_rip_relative_segment_base, "a segment override applies to a RIP-relative operand (FS/GS add their base)");
     RUN(test_long_mode_descriptor_address_is_64bit, "the GDT base is 64 bits in long mode: lookup_segment_selector returns gdt_base+0x40 above 4 GiB and reads the descriptor through the mapping");
     RUN(test_long_mode_ff_inc_dec_are_32bit_without_rexw, "FF /0 and FF /1 in long mode are 32-bit without REX.W: `inc %eax` on the 0xffffffff wrap zero-extends into RAX and sets ZF");

@@ -16,6 +16,9 @@
  *   V86C_DUMP_ON_STOP=1                        on a stop: registers, cr0-4, efer, idtr/gdtr, cr3,
  *                                              and the page-table chain for V86C_CHAIN=<va>
  *   V86C_CHAIN=<va>                            the virtual address whose chain DUMP_ON_STOP prints
+ *   V86C_INTS=<N>                              trace INTERRUPT/EXCEPTION DELIVERY: N printed lines
+ *                                              (max 100000), plus a per-vector histogram, the max
+ *                                              nesting depth and the total, dumped on a stop
  *
  * THE COST WHEN OFF is one load and one branch per hooked write (the mask is a global bool read
  * once per hook), and the bench pin is the measurement that it is free (results/x86-64-debugtoolkit.md).
@@ -34,6 +37,7 @@ extern bool v86c_dbg_watch_on;
 extern int v86c_dbg_delivery_bound;
 extern bool v86c_dbg_ring_on;
 extern bool v86c_dbg_break_on;
+extern bool v86c_dbg_ints_on;
 
 void v86c_dbg_init(void);
 void v86c_dbg_break_hit(uint64_t eip);
@@ -45,6 +49,15 @@ void v86c_dbg_watch_vp(uint64_t va, uint32_t phys, int width, uint64_t value, ui
 void v86c_dbg_watch_fault(uint64_t addr, bool write, uint64_t rip);
 void v86c_dbg_watch_range(uint64_t phys, uint64_t len, uint64_t rip);
 void v86c_dbg_ring_record(uint64_t eip, const uint8_t *bytes, int n); /* up to 16 bytes */
+/* THE DELIVERY TRACE (results/x86-64-ints.md): called from the ONE delivery seat,
+ * call_interrupt_vector (exceptions.c), BEFORE the delivery nests, so `depth` is the depth this
+ * delivery is NESTED IN (0 = not nested) and `interrupted_rip` is cpu->previous_ip -- the
+ * faulting/interrupted instruction, which is why paging.c:145's rewind reads it.  The vector,
+ * `is_int` and the error code are upstream's own arguments; rsp and cs are the machine's state
+ * at the seat.  The CPL printed is cpu->cpl, read here like v86c_dbg_break_hit reads the regs. */
+void v86c_dbg_ints_delivery(int32_t vector, bool is_int, bool has_error_code,
+                            int32_t error_code, int depth, uint64_t interrupted_rip,
+                            uint64_t rsp, uint64_t cs);
 void v86c_dbg_on_stop(const char *why);
 
 /* the selftest's own surface: turn the tools on without the environment, and read the count of
@@ -52,5 +65,16 @@ void v86c_dbg_on_stop(const char *why);
 void v86c_dbg_test_arm(void);
 void v86c_dbg_test_disarm(void);
 int v86c_dbg_test_counts(void);
+/* the delivery trace's own surface: arm it with a PRINT LIMIT (0 = histogram only) and read back
+ * what it counted.  The printed-line counter is separate from the total on purpose -- that
+ * separation is what lets an arm assert the window is BOUNDED. */
+void v86c_dbg_test_ints_arm(int limit);
+int v86c_dbg_ints_total(void);
+int v86c_dbg_ints_printed(void);
+int v86c_dbg_ints_max_depth(void);
+int v86c_dbg_ints_limit(void);   /* the PRINT limit after parsing/capping -- the storm bound */
+/* the per-vector histogram's read-back: the summary prints the top eight, and the selftest asks
+ * one vector directly -- a histogram nothing can assert is a seat nobody calls. */
+int v86c_dbg_ints_count(int vector);
 
 #endif /* V86C_DEBUG_H */
