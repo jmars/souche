@@ -109,7 +109,7 @@ unless asked for**: with no variable set the hooks are one load and one branch e
 | `V86C_DUMP_ON_STOP=1` | on a stop: registers, cr0–cr4, cr2 and cr2_64, cr3, efer, idtr/gdtr, cpl, the segment bases |
 | `V86C_CHAIN=<va>` | with the above, the PML4E/PDPTE/PDE/PTE chain of a virtual address, with each entry's physical address and value |
 | `V86C_INTS=<N>` | trace interrupt/exception **delivery**: the vector, the interrupted rip, rsp/cs/cpl and the nesting depth, plus a per-vector histogram and the total, dumped on a stop |
-| `V86C_RSPLOW=<K>` | keep the last K instructions on which **rsp reached a new minimum** (rip, rsp, the delta from the previous low) and dump them on any stop — the stack descent *recorded*, instead of inferred from whatever the stack happens to hold |
+| `V86C_RSPLOW=<K>` | keep the last K instructions on which **rsp decreased** from the value the previous instruction left (rip, rsp, the size of the decrease) and dump them on any stop — the stack descent *recorded*, instead of inferred from whatever the stack happens to hold. It is a decrease rule, **not** a new-minimum rule: the machine's first rsp is `0x100` in real mode and every long-mode stack address is numerically higher, so a minimum is unfalsifiable on a 64-bit guest (`results/x86-64-rsplow.md` §7) |
 
 Output goes to **stderr** with the prefix `v86c dbg:` and is **unbuffered** (`v86c_dbg_init` calls
 `setvbuf(stderr, NULL, _IONBF, 0)`, and `v86c_dbg_on_stop` flushes), so a crash cannot eat it — this

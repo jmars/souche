@@ -78,7 +78,7 @@ must_fail() { # must_fail <name> <cmd...> -- the able-to-fail arm of an assertio
 
 echo "== A. --long-mode OFF is still the 32-bit machine (S2's refusal, by name, S4's counts)"
 step "off-is-32bit" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_OFF" \
-	--expect counts --expect-counts "green=0 red_unimplemented=85 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=0 red_unimplemented=86 mismatch=0 error=0" --quiet
 # a count assertion alone would also pass on 57 of anything, so the census's own line is
 # checked: the refusal must NAME the reason
 step "off-refusal-names-the-reason" sh -c \
@@ -106,9 +106,12 @@ echo "== D. the 0x2NN overlay's census (routed arms / named stops) AS NUMBERS"
 # SSE/movd/cvt 0F encodings) and the 0x81 imm32 ALU group S6 left uninstrumented; S5 measured
 # 102/61/23 and S6 117/76/29 -- each slice's move is in its own report.  The 23 are
 # the default-64 named stops (ret/call/jmp/pop r-m/iret) that S6-S11 replace; a slice that
-# lands one EDITS THIS LINE, which is the record of what it landed.
+# lands one EDITS THIS LINE, which is the record of what it landed.  REX.W 0xA9 (TEST rax,
+# imm32, results/x86-64-testrax.md) moved 158/118/42 -> 159/119/42: the arm was a bare
+# NAMED-STOP case before, so the entry and routed counts rise and the unimplemented-call-site
+# count does not.
 step "overlay-census" sh -c \
-	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 158 overlay entries, 118 routed to instr64 bodies, 42 of those call sites unimplemented'"
+	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 159 overlay entries, 119 routed to instr64 bodies, 42 of those call sites unimplemented'"
 must_fail "overlay-census-able-to-fail" sh -c \
 	"node gen/interpreter_c.js 2>&1 | grep -q 'long mode: 0 overlay entries'"
 
@@ -117,7 +120,7 @@ step "family-1-green" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_
 	--filter '^mov-' --expect counts \
 	--expect-counts "green=12 red_unimplemented=0 mismatch=0 error=0" --quiet
 step "whole-corpus-no-mismatch" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
-	--expect counts --expect-counts "green=84 red_unimplemented=1 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=86 red_unimplemented=0 mismatch=0 error=0" --quiet
 must_fail "whole-corpus-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
 	--actual "$ACTUAL_ON" --expect counts --expect-counts "green=57 mismatch=0" --quiet
 
@@ -238,11 +241,16 @@ must_fail "rexw-xor-no-longer-stops" sh -c \
 	"$PORT64 $MUT/rexw-xor.img 20000000 --fixture64 --long-mode on 2>&1 | grep -q 'at 64 bits is S6'"
 
 echo "== F3. S6: THE ALU FAMILY AT 64 BITS, WITH ITS FLAGS (family 2, case by case)"
-# 9 of the 10 cases are green against the HOST; alu-div-zero needs DIV, which is S8's, and is
-# therefore RED BY NAME.  The counts are the assertion -- family 2's own census.
+# EVERY case is green against the HOST -- including alu-div-zero, which S8's DIV turned from a
+# named stop into the #DE the host raises.  The counts are the assertion -- family 2's own census.
+# THE LAST RED CASE IN THE WHOLE CORPUS WAS THIS UNIT'S ENCODING: alu-test-imm32-64 contains
+# `test rax, 0xFFFFFFFF80000000`, which gas encodes as `48 a9` (MEASURED: it is the only
+# pre-existing case with an A9 encoding -- a scan of every build/nasm64/*.elf for `48 a9` finds
+# just that one and this unit's new case), so it stopped on `long mode: 0xA9 has no 64-bit form`
+# and was the `red_unimplemented=1` in the counts above.  REX.W 0xA9 turns it green: 84+1 -> 86+0.
 step "alu-family" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
 	--filter '^alu-' --expect counts \
-	--expect-counts "green=13 red_unimplemented=1 mismatch=0 error=0" --quiet
+	--expect-counts "green=15 red_unimplemented=0 mismatch=0 error=0" --quiet
 must_fail "alu-family-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
 	--actual "$ACTUAL_ON" --filter '^alu-' --expect counts \
 	--expect-counts "green=12 mismatch=0" --quiet

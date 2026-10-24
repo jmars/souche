@@ -29,8 +29,9 @@
 #      only for them -- run.js:497-505 -- and are C4's subject.)
 #   D. THE RED CENSUS, AS COUNTS: every corpus case run against the CURRENT binary must
 #      stop with a named `v86c: unimplemented: <symbol>`; the SUMMARY NUMBERS are asserted
-#      (green=0 red_unimplemented=85 mismatch=0 error=0 -- 58 since S6 added the
-#      alu-pop-rsp case), NOT a shape.  Round 2, fix 6:
+#      (green=0 red_unimplemented=86 mismatch=0 error=0 -- 86 since the REX.W 0xA9 unit
+#      added alu-test-rax-imm32, 58 since S6 added the alu-pop-rsp case), NOT a shape.
+#      Round 2, fix 6:
 #      asserting "the stop exists" cannot tell progress from catastrophe (MEASURED: an
 #      `--expect any`-style permissive verdict returns rc 0 with mismatch=55/55).
 #   D2. THE COUNT ASSERTION'S ABLE-TO-FAIL ARM: the same step with DELIBERATELY WRONG
@@ -145,7 +146,7 @@ must_fail "emptied-stack-arm-negative" stack_arm 0x0AAA
 
 echo "== D. THE RED CENSUS AS COUNTS: every case against the CURRENT binary"
 step "red-census-counts" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_PORT" \
-	--expect counts --expect-counts "green=0 red_unimplemented=85 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=0 red_unimplemented=86 mismatch=0 error=0" --quiet
 if grep -q '^\[+\] SUMMARY' $LOG; then
 	PASS=$((PASS+1))
 	echo "ok   red-census printed a SUMMARY"
@@ -161,7 +162,7 @@ must_fail "red-census-counts-arm" $PYTHON tests/nasm64_run.py --stage run \
 
 echo "== D3. the NOT-RED arm: a bare --stage run against a document-producing leg"
 step "not-red-arm" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_NATIVE" \
-	--expect counts --expect-counts "green=85 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=86 mismatch=0 error=0" --quiet
 
 echo
 echo "[+] gate-nasm64: $PASS passed, $FAIL failed"

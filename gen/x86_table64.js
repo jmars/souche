@@ -379,6 +379,17 @@ const x86_table64 = [
 	{ opcode: 0x6B }, /* imul r64, r/m64, imm8  */
 	{ opcode: 0x85 }, /* test r/m64, r64 */
 	{ opcode: 0xF7 }, /* the group: /2 not /3 neg (the rest are S8's) */
+	/* 0xA9 TEST AL/AX/EAX/RAX, imm -- the ACCUMULATOR form of TEST, a DIFFERENT ENCODING
+	 * from the 0xF7 /0 group member above (no modrm byte, so one byte shorter; gas picks it
+	 * for `test rax, imm`).  It was a NAMED STOP until the amd64 guest's own boot path
+	 * executed `48 a9`, which is where the lane's blocker was measured:
+	 *   long mode: 0xA9 has no 64-bit form in gen/x86_table64.js
+	 *   eip=0xa8879d3d (link 0xffffffff810f9d3d), 4,564,309,411 instructions
+	 * (results/x86-64-setcc.md ss4 named it; results/x86-64-testrax.md lands it, with
+	 * alu/test-rax-imm32 as the instrument).  The imm32 is SIGN-EXTENDED to 64 bits and the
+	 * test uses the FULL 64 bits of RAX -- the same width rule as instr64_F7_0, whose flag
+	 * path this body reuses rather than duplicating (test64, arith.c). */
+	{ opcode: 0xA9 }, /* test rax, imm32 */
 
 	/* ---------------- the stack and the stop, all default-64 ---------------- */
 	{ opcode: 0x50, narrow64: "the 16-bit operand form of a default-64 encoding in long mode is not implemented (its stack path runs through the 32-bit accessor, which would truncate RSP)", default64: true }, /* push r0 */

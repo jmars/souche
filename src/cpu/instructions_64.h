@@ -134,6 +134,7 @@ void instr64_3B_mem(int64_t addr, int32_t r);
 void instr64_3B_reg(int32_t r1, int32_t r);
 void instr64_85_mem(int64_t addr, int32_t r);
 void instr64_85_reg(int32_t r1, int32_t r);
+void instr64_A9(int64_t imm); /* test rax, imm32 -- the accumulator form (the guest's `48 a9`) */
 void instr64_81_0_mem(int64_t addr, int64_t imm);
 void instr64_81_0_reg(int32_t r1, int64_t imm);
 void instr64_81_1_mem(int64_t addr, int64_t imm);

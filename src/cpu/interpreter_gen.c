@@ -25,8 +25,8 @@
  * reached this way still stops by name, exactly as the unprefixed encoding does.
  * See gen/interpreter_c.js, C-side difference 3.
  *
- * 2294 call sites, 42 of them unimplemented at the time this
- * file was generated (2256 instr* symbols defined in the port's sources).
+ * 2295 call sites, 42 of them unimplemented at the time this
+ * file was generated (2257 instr* symbols defined in the port's sources).
  */
 
 #include "cpu.h"
@@ -5206,8 +5206,9 @@ void run_instruction(int32_t opcode)
 	break;
 	case 0x2A9:
 	{
-		unimplemented_instruction("long mode: 0xA9 has no 64-bit form in gen/x86_table64.js");
-		return;
+		int64_t imm = read_imm32s();
+		if (cpu->pagefault) return;
+		instr64_A9(imm);
 	}
 	break;
 	case 0xAA:

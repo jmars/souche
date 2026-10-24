@@ -435,6 +435,18 @@ void instr64_85_reg(int32_t r1, int32_t r)
 	test64((int64_t)read_reg64(r1), (int64_t)read_reg64(r));
 }
 
+/* 0xA9 test rax, imm32 -- the ACCUMULATOR form of TEST (no modrm byte; one byte shorter than
+ * F7 /0).  The operand is ALWAYS RAX and the imm32 is SIGN-EXTENDED to 64 bits, so
+ * `48 A9 FF FF FF FF` is `test rax, -1` -- the whole 64-bit register against all-ones -- and
+ * `48 A9 00 00 00 80` is `test rax, 0xFFFFFFFF80000000`.  Same flag path as instr64_F7_0
+ * (test64: CF/OF cleared, SF/ZF/PF from the AND, AF undefined) and nothing is stored.
+ *
+ * NAMED STOP UNTIL THE GUEST REACHED IT (results/x86-64-setcc.md ss4, results/x86-64-testrax.md):
+ * MEASURED at 4,564,309,411 instructions as `long mode: 0xA9 has no 64-bit form`, eip=0xa8879d3d
+ * (link 0xffffffff810f9d3d).  alu/test-rax-imm32 is its instrument: RAX = 0x100000000 with
+ * `test rax, -1` leaves ZF=0 here and ZF=1 under a 32-bit test (EAX = 0). */
+void instr64_A9(int64_t imm) { test64((int64_t)read_reg64(0), imm); }
+
 /* ------------------------------------------------------------------ *
  * 0x83: THE IMM8 GROUP, /0 add /1 or /2 adc /3 sbb /4 and /5 sub /6 xor /7 cmp.
  *

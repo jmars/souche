@@ -269,6 +269,39 @@ case("alu", "test-imm32-64",
     mov rbx, 0x1122334455667788
     test rbx, 0xFFFFFFFF80000000
 """, flags=True, flags_mask="0x8C5")
+case("alu", "test-rax-imm32",
+     "A9 with REX.W is `TEST rax, imm32` -- the ACCUMULATOR form, a DIFFERENT ENCODING from "
+     "F7 /0 (gas picks it for `test rax, imm` because it is one byte shorter), and the unit "
+     "that landed it.  The imm32 is SIGN-EXTENDED and the test uses ALL 64 BITS of RAX: "
+     "`test rax, -1` on RAX = 0x100000000 leaves ZF=0, where a 32-bit test sees EAX = 0 and "
+     "leaves ZF=1; `test rax, 0xFFFFFFFF80000000` on RAX = 0x80000000 ANDs to ZERO at 64 bits "
+     "(ZF=1) and to 0x80000000 at 32 (ZF=0, SF=1); `test rax, -1` on RAX = "
+     "0x8000000000000000 leaves SF=1 at 64 bits and SF=0/ZF=1 at 32.  TEST stores nothing, "
+     "so every RAX above must survive its own test.  AF is UNDEFINED after TEST (0x8C5).",
+     """\
+    mov rax, 0x100000000
+    test rax, -1
+    pushfq
+    pop qword ptr [0x100200]
+    and dword ptr [0x100200], 0x8C5
+    and dword ptr [rsp - 8], 0x8C5
+    mov rax, 0x80000000
+    test rax, 0xFFFFFFFF80000000
+    pushfq
+    pop qword ptr [0x100208]
+    and dword ptr [0x100208], 0x8C5
+    and dword ptr [rsp - 8], 0x8C5
+    mov rax, 0x8000000000000000
+    test rax, -1
+    pushfq
+    pop qword ptr [0x100210]
+    and dword ptr [0x100210], 0x8C5
+    and dword ptr [rsp - 8], 0x8C5
+    mov rbx, 0x1122334455667788
+    test rbx, 0xFFFFFFFF80000000
+    mov rax, 0x1122334455667788
+    test rax, 0xFFFFFFFF80000000
+""", flags=True, flags_mask="0x8C5")
 
 # --- family 1: mov (S5, the first vertical slice) --------------------------------
 case("mov", "imm64",
