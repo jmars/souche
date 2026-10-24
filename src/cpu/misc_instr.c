@@ -100,7 +100,7 @@ void cmovcc32(bool condition, int32_t value, int32_t r)
 
 void setcc_reg(bool condition, int32_t r) { write_reg8(r, condition ? 1 : 0); }
 
-void setcc_mem(bool condition, int32_t addr)
+void setcc_mem(bool condition, int64_t addr)
 {
     safe_write8(addr, condition ? 1 : 0);
     if (cpu->pagefault) {

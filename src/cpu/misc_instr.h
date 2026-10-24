@@ -72,7 +72,13 @@ void jcxz32(int32_t imm8s);
 void cmovcc16(bool condition, int32_t value, int32_t r);
 void cmovcc32(bool condition, int32_t value, int32_t r);
 void setcc_reg(bool condition, int32_t r);
-void setcc_mem(bool condition, int32_t addr);
+/* int64_t, NOT int32_t: in long mode every `setcc` body receives a 64-bit effective address
+ * (instructions_0f.c's instr_0F9x_mem all take int64_t addr), and the 0F dispatch routes a setcc
+ * WITHOUT REX.W to those 32-bit-arm bodies -- which is every setcc in a normal kernel.  Narrowing
+ * here truncated the address and safe_write8 then sign-extended the 32-bit value: MEASURED as the
+ * amd64 guest's fatal fault, `sete 0x1b(%rsp)` at 0xffffd1fac0003b1b faulting at
+ * 0xffffffffc0003b1b (results/x86-64-setcc.md). */
+void setcc_mem(bool condition, int64_t addr);
 
 /* ---- the stack pointer (misc_instr.rs:133-148 + cpu.rs:4300-4320) ---- */
 int64_t get_stack_pointer(int32_t offset);
