@@ -607,6 +607,40 @@ static void test_debug_toolkit_range_overlap(void)
 }
 
 /* ================================================================== *
+ * TEST 1h -- THE LONG-MODE STORE'S PHYSICAL FRAME IS WATCHABLE (results/x86-64-watchphys.md)
+ *
+ * A long-mode store is issued as a LINEAR address and the frame it lands in exists only after the
+ * walk, so before this seat V86C_WATCH on a PHYSICAL range -- the documented way to watch a frame
+ * -- saw NOTHING from any 64-bit store: the V hook fired before translate_address_write() and the
+ * P hook only ever sees the 32-bit path's already-physical address.  v86c_dbg_watch_vp tests each
+ * entry against BOTH addresses.
+ *
+ * THE ARM FAILS AGAINST A ONE-SIDED IMPLEMENTATION, and each call is the half that proves it:
+ * call 1 matches ONLY through the PHYSICAL address, so an implementation that tests only the
+ * linear one leaves the count at 0 where 1 is asserted; call 2 matches ONLY through the VIRTUAL
+ * address, so an implementation that tests only the physical one leaves it at 1 where 2 is
+ * asserted.  Call 4 is the "once, not twice" half: watch[0] = 0x31558:1 contains the same address
+ * in both slots, and the count must go up by exactly 1 (a per-address counter reads 4).
+ * ================================================================== */
+static void test_debug_toolkit_watch_vp(void)
+{
+    machine_setup(false);
+    v86c_dbg_test_arm();                       /* watch[0] = 0x31558:1 */
+    CHECK(v86c_dbg_watch_on);
+
+    v86c_dbg_watch_vp(0xdead0000, 0x31558, 1, 0xAB, 0xFFFFFFFF9C2775C2ull);   /* PHYSICAL only: 1 */
+    CHECK_EQ(v86c_dbg_test_counts(), 1);
+    v86c_dbg_watch_vp(0x31558, 0xdead0000, 1, 0xAB, 0xFFFFFFFF9C2775C2ull);   /* VIRTUAL only: 2 */
+    CHECK_EQ(v86c_dbg_test_counts(), 2);
+    v86c_dbg_watch_vp(0xdead0000, 0xdead0000, 1, 0xAB, 0xFFFFFFFF9C2775C2ull);/* neither: still 2 */
+    CHECK_EQ(v86c_dbg_test_counts(), 2);
+    v86c_dbg_watch_vp(0x31558, 0x31558, 1, 0xAB, 0xFFFFFFFF9C2775C2ull);      /* both, one entry: 3 */
+    CHECK_EQ(v86c_dbg_test_counts(), 3);
+
+    v86c_dbg_test_disarm();
+}
+
+/* ================================================================== *
  * TEST 1i -- A LONG-MODE `mov r64, cr2` RETURNS THE WHOLE ADDRESS (results/x86-64-repair.md)
  *
  * The corpus cannot carry it: MOV CR is privileged and the native leg runs at CPL 3.  This arm
@@ -1775,6 +1809,7 @@ int main(void)
     RUN(test_swapgs, "SWAPGS exchanges the GS base with KERNEL_GS_BASE (and is not SWAPGS outside long mode)");
     RUN(test_cr2_64bit_read, "a long-mode `mov r64, cr2` returns the WHOLE linear address (and 32-bit mode is unchanged)");
     RUN(test_debug_toolkit_range_overlap, "the range hook counts only the ranges that contain a watched byte");
+    RUN(test_debug_toolkit_watch_vp, "the long-mode store's physical frame is watchable: vp counts a hit through EITHER address, once");
     RUN(test_rip_relative_segment_base, "a segment override applies to a RIP-relative operand (FS/GS add their base)");
     RUN(test_long_mode_descriptor_address_is_64bit, "the GDT base is 64 bits in long mode: lookup_segment_selector returns gdt_base+0x40 above 4 GiB and reads the descriptor through the mapping");
     RUN(test_long_mode_ff_inc_dec_are_32bit_without_rexw, "FF /0 and FF /1 in long mode are 32-bit without REX.W: `inc %eax` on the 0xffffffff wrap zero-extends into RAX and sets ZF");

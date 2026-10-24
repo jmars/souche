@@ -39,6 +39,9 @@ void v86c_dbg_init(void);
 void v86c_dbg_break_hit(uint64_t eip);
 void v86c_dbg_watch_v(uint64_t addr, int width, uint64_t value, uint64_t rip);
 void v86c_dbg_watch_p(uint32_t phys, int width, uint64_t value, uint64_t rip);
+/* the long-mode store's TWO addresses at once: the linear address it was issued as and the
+ * physical frame it landed in.  A watch entry counts if EITHER is in its range, once. */
+void v86c_dbg_watch_vp(uint64_t va, uint32_t phys, int width, uint64_t value, uint64_t rip);
 void v86c_dbg_watch_fault(uint64_t addr, bool write, uint64_t rip);
 void v86c_dbg_watch_range(uint64_t phys, uint64_t len, uint64_t rip);
 void v86c_dbg_ring_record(uint64_t eip, const uint8_t *bytes, int n); /* up to 16 bytes */

@@ -131,9 +131,32 @@ void v86c_dbg_watch_p(uint32_t phys, int width, uint64_t value, uint64_t rip)
     watch_hit(1, (uint64_t)phys, width, value, rip);
 }
 
+/* THE LONG-MODE STORE'S TWO ADDRESSES AT ONCE (results/x86-64-watchphys.md).  A long-mode store
+ * is issued as a LINEAR address and the frame it lands in exists only AFTER the walk, so the two
+ * hooks above could not both speak for one store: watch_v fires before translate_address_write()
+ * and watch_p only ever sees the 32-bit path's already-physical address.  The consequence was
+ * measured -- V86C_WATCH on a PHYSICAL range (the documented way to watch a frame) saw NOTHING
+ * from any 64-bit store.  This one carries both, tests every entry against BOTH, and counts an
+ * entry ONCE even when its range contains both: a hit is a hit, not two. */
+void v86c_dbg_watch_vp(uint64_t va, uint32_t phys, int width, uint64_t value, uint64_t rip)
+{
+    for (int i = 0; i < watch_n; i++) {
+        uint64_t a = watch[i].addr;
+        uint64_t end = a + (uint64_t)watch[i].len;
+        bool in_v = va >= a && va < end;
+        bool in_p = (uint64_t)phys >= a && (uint64_t)phys < end;
+        if (!in_v && !in_p) continue;
+        test_counts++;
+        fprintf(stderr, "v86c dbg: WATCH V 0x%llx -> P 0x%llx width=%d value=0x%llx rip=0x%llx\n",
+                (unsigned long long)va, (unsigned long long)phys, width,
+                (unsigned long long)value, (unsigned long long)rip);
+    }
+}
+
 /* A BULK COPY IS ONE STORE THE PER-BYTE HOOK CANNOT SEE: string.c's fast path writes a whole
  * page run with ONE memcpy_no_mmap_or_dirty_check/memset_no_mmap_or_dirty_check call, and its
- * 64-bit slow path stores through safe_write*_addr, which does not call the hook above either.
+ * 64-bit slow path stores through safe_write*_addr, whose per-store hook sees one store, not the
+ * run the fast path writes.
  * MEASURED as a real blind spot (results/x86-64-reach.md ss4): the decompressor's .data segment
  * copy and the kernel's -load_delta global appeared at their addresses with NO logged write, so
  * "the watch shows no writer" was not "nothing wrote it".  One call per copy with a range
