@@ -19,10 +19,11 @@
  *   V86C_INTS=<N>                              trace INTERRUPT/EXCEPTION DELIVERY: N printed lines
  *                                              (max 100000), plus a per-vector histogram, the max
  *                                              nesting depth and the total, dumped on a stop
- *   V86C_RSPLOW=<K>                            keep the last K instructions on which rsp reached a
- *                                              NEW MINIMUM (rip, rsp, the delta from the previous
- *                                              low), dumped on any stop -- the descent RECORDED
- *                                              instead of inferred from stack words
+ *   V86C_RSPLOW=<K>                            keep the last K instructions on which rsp DECREASED
+ *                                              from the value the previous instruction left (rip,
+ *                                              rsp, the size of the decrease), dumped on any stop
+ *                                              -- the descent RECORDED instead of inferred from
+ *                                              stack words
  *
  * THE COST WHEN OFF is one load and one branch per hooked write (the mask is a global bool read
  * once per hook), and the bench pin is the measurement that it is free (results/x86-64-debugtoolkit.md).
@@ -63,11 +64,13 @@ void v86c_dbg_ring_record(uint64_t eip, const uint8_t *bytes, int n); /* up to 1
 void v86c_dbg_ints_delivery(int32_t vector, bool is_int, bool has_error_code,
                             int32_t error_code, int depth, uint64_t interrupted_rip,
                             uint64_t rsp, uint64_t cs);
-/* THE NEW-MINIMUM RING (results/x86-64-rsplow.md): called once per instruction from the
+/* THE RSP DESCENT RING (results/x86-64-rsplow.md): called once per instruction from the
  * interpreter's per-instruction seat, AFTER the instruction ran, so `rsp` is the value it LEFT and
- * `rip` names the instruction that moved it.  Records only a value LOWER than every value seen so
- * far (the descent), never a recovery.  The first value seen seeds the minimum and records nothing,
- * so every recorded event is a real step below a previous low and `delta` is the size of that step. */
+ * `rip` names the instruction that moved it.  Records a DECREASE from the value the PREVIOUS
+ * instruction left -- any amount, in any mode -- never a rise and never a flat step.  The first
+ * instruction seen has no predecessor, so it only seeds the baseline and records nothing.  NOT a
+ * minimum rule: the machine's first rsp is 0x100 (real mode) and every long-mode stack address is
+ * numerically higher, so a minimum is unfalsifiable on a 64-bit guest (MEASURED, ss7 of the doc). */
 void v86c_dbg_rsplow_tick(uint64_t rip, uint64_t rsp);
 void v86c_dbg_on_stop(const char *why);
 
@@ -87,13 +90,16 @@ int v86c_dbg_ints_limit(void);   /* the PRINT limit after parsing/capping -- the
 /* the per-vector histogram's read-back: the summary prints the top eight, and the selftest asks
  * one vector directly -- a histogram nothing can assert is a seat nobody calls. */
 int v86c_dbg_ints_count(int vector);
-/* the new-minimum ring's own surface: arm it with a CAPACITY (capped at the ring bound), read back
+/* the descent ring's own surface: arm it with a CAPACITY (capped at the ring bound), read back
  * how many events it saw and how many it still holds, and read one entry oldest-first -- a ring
  * nobody can inspect cannot be asserted to hold the LAST K rather than the first. */
 void v86c_dbg_test_rsplow_arm(int k);
 int v86c_dbg_rsplow_total(void);
 int v86c_dbg_rsplow_kept(void);
 int v86c_dbg_rsplow_limit(void);   /* the capacity after capping -- the bound, not the request */
+/* the INFORMATIONAL minimum (not the event rule): the lowest rsp seen, plus the rip and 1-based
+ * instruction number that first reached it */
+uint64_t v86c_dbg_rsplow_min(uint64_t *rip, uint64_t *insn);
 bool v86c_dbg_rsplow_entry(int i, uint64_t *rip, uint64_t *rsp, uint64_t *delta);
 
 #endif /* V86C_DEBUG_H */

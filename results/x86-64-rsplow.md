@@ -13,6 +13,9 @@ MEASURED / READ / INTERPRETATION.
   on any stop with the **total** on the first line. It is armed by the same one-shot env parse as the
   rest of the toolkit, capped at the ring bound the file already used (`V86C_DBG_RING_MAX` = 4096),
   and costs one `bool` test per instruction when off.
+  **⚠ SUPERSEDED BY §7 (MEASURED): the minimum rule was UNFALSIFIABLE on the amd64 guest — it
+  reported `total=0` for a stack that was descending. The rule is now "a DECREASE from the rsp the
+  previous instruction left"; read §7 before §1, whose event definitions are the old ones.**
 - **`cr2_64`** (B) now prints on the `state rip=...` line of the stop dump, beside the 32-bit `cr2`.
 - **`tools/kallsyms.py`** (C) names a link address from the pinned image's own kallsyms tables. It
   produces page-fault-looking names for both #PF-path anchors, `__stack_chk_fail` for the canary-fail
@@ -22,6 +25,10 @@ MEASURED / READ / INTERPRETATION.
   and the route works.**
 
 ## 1. `V86C_RSPLOW=K` — the seat, and why it is where it is
+
+**The SEAT (§1's argument, and `cpu.c:204`) is UNCHANGED and still correct. The EVENT DEFINITIONS
+below — "strictly lower than every value seen so far", the seeded minimum, the delta from the previous
+low — were SUPERSEDED by §7 (MEASURED unfalsifiable on the amd64 guest). Read them as history.**
 
     src/cpu/debug.c:97-146    the state, the arm surface, the getters, the seat
     src/cpu/debug.c:223-232   the env parse (V86C_RSPLOW=<K>, K > 0, capped at 4096)
@@ -75,6 +82,11 @@ engine, not a silent instrument, and it is the one thing a reader of the dump mu
 
 ## 2. The arm, and the seven mutants it is measured against
 
+**⚠ SUPERSEDED BY §7: these seven mutants were built against the MINIMUM rule and its arms no longer
+exist in that form. §7 carries the five mutants that guard the DECREASE rule, measured on the arm as
+it now stands. The M7 lesson (a seat nobody calls) is unchanged and still the reason there are two
+arms.**
+
     src/cpu/m1c_selftest.c:768   test_debug_rsplow_ring      (the ring's own behaviour + the env path)
     src/cpu/m1c_selftest.c:850   test_debug_rsplow_loop_seat (the seat IS called from the loop)
     registered at                :2052 and :2053
@@ -119,6 +131,7 @@ it. The printed count therefore excludes them: the suite reports **274 checks** 
 the summary run and can fail the exit code. The exit code is honest; the count is not the whole
 suite's. Moving the `printf` to the end is a one-line fix, and it changes a number several reports
 quote, so it is the orchestrator's call, not a silent edit here.
+**FIXED in §7.4: the summary is now the last statement in `main()` and the honest total is 414.**
 
 ## 3. `cr2_64` on the stop line (B)
 
@@ -259,3 +272,130 @@ No `-DNDEBUG`. Nothing committed, nothing pushed, `v86/` untouched, and the two
   different table order would need its own look — that is the honest bound.
 - The kallsyms names are **link** addresses. The guest's addresses in the earlier reports are slid
   (`slide 0x27800000`); subtract the slide before asking this tool.
+
+## 7. The minimum rule was UNFALSIFIABLE — MEASURED on the guest, and replaced by a DECREASE rule
+
+**Status: fixed, proved both ways, all four gates green. Claims tagged MEASURED / READ /
+INTERPRETATION.** This section supersedes §0's first bullet, §1's event definitions and §2's seven
+mutants; the SEAT (`src/cpu/cpu.c:204`) and the ring/total/last-K machinery are unchanged.
+
+### 7.1 The measurement that killed the rule (MEASURED — the orchestrator's boot, not mine)
+
+The pinned amd64 guest, the exact configuration the tool exists for:
+
+    $ V86C_RSPLOW=4096 V86C_DUMP_ON_STOP=1 ./build/v86c --bzimage tests/images/vmlinuz-6.1.0-50-amd64 \
+        6000000000 --memory 256 --bios build/minibios-256m.bin \
+        --cmdline 'console=ttyS0 earlyprintk=serial' --serial /tmp/x.txt --long-mode on
+    v86c dbg: RSPLOW total=0 kept=0 ring=4096 min=0x100 (oldest first; ...)
+    v86c dbg:   RSPLOW no event: rsp never went below its first value
+
+…while the guest stopped at **4,590,902,204 instructions with `rsp` `0x40` below its 16 KiB stack
+region** — the exact descent the instrument was built to record. `total=0` there is not a quiet
+guest; it is an instrument that cannot fire, and **an instrument that cannot fire is
+indistinguishable from one that fired nothing.**
+
+### 7.2 Why it could not fire (READ + MEASURED)
+
+The machine's FIRST `rsp` is **`0x100`** — real mode, at reset — and every long-mode stack address is
+numerically **HIGHER** (`0xffffd1fac0000288` and up). "Lower than everything ever seen" therefore
+required the 64-bit stack to descend below `0x100`, which it never can: the first value seeded a
+minimum no later instruction could improve on. **The rule was not wrong about the stack; it was
+phrased over a quantity that spans two incomparable address regimes.** The fixture in §2 shows the
+same thing at small scale (`min=0x100`, `total=0`, on an image whose stack was moving).
+
+### 7.3 The rule now — a decrease from the previous instruction's rsp
+
+    src/cpu/debug.c:80-124   the state and the block comment that says WHY not a minimum
+    src/cpu/debug.c:155-175  v86c_dbg_rsplow_tick(): the rule
+    src/cpu/debug.c:136-146  v86c_dbg_rsplow_min(): the informational minimum's read-back
+    src/cpu/debug.c:623-648  dump_rsplow(): the header, the min line, the entries
+    src/cpu/debug.h:22,66-72 the env surface and the seat's contract
+    src/cpu/cpu.c:204        THE SEAT, unchanged: one bool test per instruction when off
+
+- **AN EVENT IS A DECREASE**: `rsp` lower than the value the **previous instruction** left, any
+  amount, in any mode. `delta` = previous instruction's `rsp` − this `rsp`.
+- **The first instruction seen has no predecessor**, so it only sets the baseline and records
+  nothing (a seed event would print `delta=-0x0` and make "the first event" mean "the first
+  instruction"). An **EQUAL** `rsp` is not a decrease.
+- **A decrease back to a level already reached IS an event** — the old rule dropped it, and dropping
+  it is the whole defect: a stack that goes down, comes back up and goes down again is still
+  descending.
+- **`min` is kept, INFORMATIONAL ONLY**: the lowest `rsp` seen plus the instruction number and `rip`
+  that first reached it. Nothing is gated on it, and on this guest it will read `0x100` — the
+  real-mode value the old rule mistook for the bottom of the stack, printed now as the diagnostic it
+  is. The header carries `insns=` (instructions ticked) so a reader can tell "the 3rd of 12,346".
+- Long mode is still **not** a condition, and the flag-off machine is untouched (one `bool` test).
+
+The dump now reads (MEASURED, `build/nasm64/alu-div-zero.img`, the same image §2's `total=0` came
+from):
+
+    v86c dbg: RSPLOW total=1 kept=1 ring=8 insns=12346 (oldest first; each event is a DECREASE from the rsp the previous instruction left)
+    v86c dbg:   RSPLOW min=0x100 rip=0x80020 insn=1 (informational: the lowest rsp seen, not the event rule)
+    v86c dbg: RSPLOW 1 rip=0x9002d rsp=0x101ff8 delta=-0x8
+
+`delta` is printed signed (`-0x8` = "rsp fell by 8"), as before.
+
+### 7.4 The asymmetry — MEASURED both ways, five mutants built/run/restored
+
+The arm is `test_debug_rsplow_ring` (`src/cpu/m1c_selftest.c:780`), plus the seat arm
+`test_debug_rsplow_loop_seat` (`:905`, unchanged in substance: `nop; nop; push; push` still records
+two events, at `0x2FFC`/`0x2FFD`, deltas 4). Each mutant was applied to `src/cpu/debug.c`, **built,
+run, and restored**, and after every one the file was `cmp`-identical to the good copy:
+
+| # | mutant (the defect) | the assertion it FAILS | reported |
+|---|---|---|---|
+| M1 | **back to the minimum rule** (the regression this unit exists to prevent) | **(c)** `:860` `v86c_dbg_rsplow_total() == 2` | got `0x0` — the `0x100`-then-`0xffffd1fa…` descent records nothing; also `:801` `== 2` got `0x1` (the decrease back to a level already reached), `:815` `== 6` got `0x5` — 16 failures, rc 1 |
+| M2 | **record every tick** (no non-decrease filter) | **(b)** `:848` `v86c_dbg_rsplow_total() == 0` | got `0x2` on a rising-only sequence; also the loop arm `:924` `== 2` got `0x5` — 24 failures, rc 1 |
+| M3 | **delta from the previous EVENT**, not the previous instruction (baseline updated only on an event) | **(a)** `:809` `delta == 0x18` | got `0x10`; `:801` `== 2` got `0x1` — 14 failures, rc 1 |
+| M4 | **the ring keeps the FIRST K** | **(d)** `:821` `rip == 0x1014` | got `0x1008` (event 1, not event 3) — 10 failures, rc 1 |
+| M5 | **the seed is recorded as an event** | **(a)** `:793` `v86c_dbg_rsplow_total() == 0` | got `0x1`, and entry 0 is the seed with `delta 0x0` — 25 failures, rc 1 |
+
+Assertion **(c)** is the one that catches a regression to the old rule, and its comment says so
+(`m1c_selftest.c:770-777`): a sequence starting at `0x100` and continuing at `0xffffd1fac0000278`
+while descending must record, and under the minimum rule it records nothing.
+
+**END-TO-END, on a real image, the same binary path the user runs** (MEASURED, not the amd64 guest):
+the minimum-rule build and the decrease-rule build were each run on `build/nasm64/alu-div-zero.img`
+with the SAME command and the same 12,346 instructions —
+
+    minimum rule : RSPLOW total=0 kept=0 ring=8 insns=12346 ... / "no event: rsp never decreased..."
+    decrease rule: RSPLOW total=1 kept=1 ring=8 insns=12346 ... / "RSPLOW 1 rip=0x9002d rsp=0x101ff8 delta=-0x8"
+
+The old rule's `total=0` on that image is the same `total=0` the guest printed. **The instrument now
+fires on a stack that moves, and stays silent on one that does not** (assertion (b)).
+
+### 7.5 The check count that omitted arms — fixed, and the honest total
+
+The summary `printf` sat MID-LIST (`:2043` before this unit), so the printed count excluded the last
+ten `RUN(...)` arms — **274 checks**. It is now the last statement in `main()`
+(`src/cpu/m1c_selftest.c:2112-2117`), and the suite reports:
+
+    cpu_m1c_selftest: 414 checks, 0 failures
+
+414 is the whole run, including the ten arms the old count dropped and the eight assertions this unit
+added to the descent arm. **A count that omits arms is the same class of defect as an instrument that
+cannot fire: it reads like a green suite over work nothing ran.**
+
+### 7.6 The gates — run on this tree, judged by EXIT CODE
+
+| gate | exit code | evidence |
+|---|---|---|
+| `make` | **0** | builds, no warnings (`-Werror`) |
+| `make selftest` | **0** | `cpu_m1c_selftest: 414 checks, 0 failures`; `selftest: all suites green` |
+| `make bench` | **0** | all 7 runs `instr=200095214 state=ok serial=ok jit-inline=ok` — **the pin is UNMOVED**, no re-pin (the tool is default-off) |
+| `make transcript-diff` | **0** | `milestone: the C transcript is byte-identical to the reference's` |
+
+No `-DNDEBUG`. Files touched: `src/cpu/debug.c`, `src/cpu/debug.h`, `src/cpu/m1c_selftest.c`,
+`docs/testing.md` (the `V86C_RSPLOW` row described the old rule and would have lied), and this
+document. Nothing committed, nothing pushed, `v86/` untouched; the two `results/m2-5-guest-armA-*`
+files were already dirty and were not touched. Source identity at the gates:
+`sha256(debug.c)=95466a57…`, `sha256(debug.h)=763742c2…`, `sha256(m1c_selftest.c)=3cca5d80…`.
+
+### 7.7 What this section does NOT claim
+
+- **No amd64 guest run here.** The orchestrator's `total=0` boot is quoted as the measurement; whether
+  the new rule's ring shows the descent's `rip` sequence on that guest is the orchestrator's run.
+- The seat is still `interpreted_run` only (uop/JIT batches record nothing — §1's stated limit, still
+  true).
+- The delta is the **arithmetic** difference between consecutive instructions, printed signed; it is
+  not a claim about which instruction is "responsible" for a multi-instruction descent.

@@ -743,23 +743,35 @@ static void test_debug_ints_delivery(void)
 }
 
 /* ================================================================== *
- * TEST 1l -- THE NEW-MINIMUM RING RECORDS THE DESCENT, AND KEEPS THE LAST K (results/x86-64-rsplow.md)
+ * TEST 1l -- THE RSP DESCENT RING RECORDS EVERY DECREASE, AND KEEPS THE LAST K (results/x86-64-rsplow.md)
  *
  * V86C_RSPLOW=K is the instrument results/x86-64-nostorm.md ss5 asked for: three units read the
  * descent off the STACK and were wrong about it (the function at 0xffffffff819e4290 is reached by a
  * TAIL JUMP, so the word at rsp is not its return address), so the pushes themselves have to be
  * RECORDED at the seat that moves rsp.  The arm drives the seat directly and asks the questions a
  * ring must answer, each with the mutant it catches:
- *   - SEED: the first value seen only seeds the minimum -- a seat that records it reads 1 where 0 is
- *     asserted, and "the first event" then means "the first instruction", with a delta of zero;
- *   - NON-LOWER: an EQUAL value and a HIGHER value record nothing -- a `>` instead of `>=` in the
- *     comparison reads 2 after the equal tick, and a ring that stores every value reads 2 after the
- *     higher one;
- *   - DELTA: each step's size below the PREVIOUS minimum (0x10, then 0xf0, then 0x100...), which a
- *     delta computed after the minimum has already been updated reads as 0;
- *   - LAST K: six events into a ring of FOUR must hold events 3..6 -- a ring that fills and then
+ *   (a) THE RULE IS A DECREASE FROM THE PREVIOUS INSTRUCTION'S rsp (results/x86-64-rsplow.md ss7):
+ *     - SEED: the first instruction has no predecessor and only sets the baseline -- a seat that
+ *       records it reads 1 where 0 is asserted, and "the first event" then means "the first
+ *       instruction", with a delta of zero;
+ *     - NON-DECREASE: an EQUAL rsp and a RISING rsp record nothing -- a `>` instead of `>=` reads 2
+ *       after the flat tick, and a ring that stores every value reads 2 after the rising one;
+ *     - DELTA: the size of THAT decrease (0x10, then 0x18 across a rise, then 0xf0...), which a delta
+ *       computed after the baseline has already been updated reads as 0;
+ *     - A DECREASE TO A LEVEL ALREADY REACHED IS AN EVENT (the 0x1010 tick, delta 0x18): the OLD
+ *       rule -- a new all-time minimum -- dropped it, and dropping it is the whole defect, because a
+ *       stack that goes down, comes back up and goes down again is still descending.
+ *   (b) A SEQUENCE THAT ONLY RISES RECORDS NOTHING -- the property the old rule also got right, and
+ *     the one a "record every instruction" mutant loses.
+ *   (c) LOW THEN HIGH: a sequence that starts at 0x100 (the machine's real-mode first rsp) and
+ *     continues at 64-bit stack addresses while descending RECORDS its events.  THIS IS THE
+ *     ASSERTION THAT CATCHES A REGRESSION TO THE MINIMUM RULE: every long-mode address is
+ *     numerically ABOVE 0x100, so a minimum can never be improved and the old rule reports total=0
+ *     here (MEASURED on the amd64 guest as `RSPLOW total=0` while rsp was 0x40 below its stack
+ *     region).  The informational `min` stays 0x100 in this arm, which is the defect made visible.
+ *   (d) LAST K: six events into a ring of FOUR must hold events 3..6 -- a ring that fills and then
  *     stops storing holds events 1..4, and its entry 0 is the WRONG descent step, which is the
- *     reading error this arm exists for (the tail of the ring is what names the overflow);
+ *     reading error this arm exists for (the tail of the ring is what names the overflow).
  *   - THE DUMP SPEAKS ALONE: with every other tool off, v86c_dbg_on_stop must still take its early
  *     return branch (the STOP entry + the RSPLOW entry) -- a dump gated on another tool leaves +1.
  * The ENV path is asserted too: K arms the seat, a K past the ring bound is CAPPED (a cap that does
@@ -767,7 +779,7 @@ static void test_debug_ints_delivery(void)
  * ================================================================== */
 static void test_debug_rsplow_ring(void)
 {
-    uint64_t rip, rsp, delta;
+    uint64_t rip, rsp, delta, min;
 
     machine_setup(false);
     v86c_dbg_test_rsplow_arm(4);              /* the LAST FOUR events */
@@ -776,46 +788,89 @@ static void test_debug_rsplow_ring(void)
     CHECK_EQ(v86c_dbg_rsplow_total(), 0);
     CHECK_EQ(v86c_dbg_rsplow_kept(), 0);
 
-    v86c_dbg_rsplow_tick(0x1000, 0x4000);     /* the SEED: not an event */
+    /* (a) THE RULE: a decrease from the rsp the PREVIOUS instruction left */
+    v86c_dbg_rsplow_tick(0x1000, 0x4000);     /* the SEED: no predecessor, not an event */
     CHECK_EQ(v86c_dbg_rsplow_total(), 0);
-    v86c_dbg_rsplow_tick(0x1004, 0x4000);     /* EQUAL to the minimum: not an event */
+    v86c_dbg_rsplow_tick(0x1004, 0x4000);     /* EQUAL to the previous rsp: not a decrease */
     CHECK_EQ(v86c_dbg_rsplow_total(), 0);
     v86c_dbg_rsplow_tick(0x1008, 0x3ff0);     /* event 1, delta 0x10 */
     CHECK_EQ(v86c_dbg_rsplow_total(), 1);
-    v86c_dbg_rsplow_tick(0x100c, 0x4008);     /* HIGHER: not an event */
+    v86c_dbg_rsplow_tick(0x100c, 0x4008);     /* a RISE: not an event */
     CHECK_EQ(v86c_dbg_rsplow_total(), 1);
-    v86c_dbg_rsplow_tick(0x1010, 0x3ff0);     /* back to a level already reached: not an event */
-    CHECK_EQ(v86c_dbg_rsplow_total(), 1);
+    v86c_dbg_rsplow_tick(0x1010, 0x3ff0);     /* a decrease back to a level already reached: EVENT 2 */
+    CHECK_EQ(v86c_dbg_rsplow_total(), 2);
     CHECK(v86c_dbg_rsplow_entry(0, &rip, &rsp, &delta));
     CHECK_EQ(rip, 0x1008);
     CHECK_EQ(rsp, 0x3ff0);
     CHECK_EQ(delta, 0x10);
+    CHECK(v86c_dbg_rsplow_entry(1, &rip, &rsp, &delta));
+    CHECK_EQ(rip, 0x1010);
+    CHECK_EQ(rsp, 0x3ff0);
+    CHECK_EQ(delta, 0x18);                    /* 0x4008 - 0x3ff0: the rise is the baseline */
 
-    v86c_dbg_rsplow_tick(0x1014, 0x3f00);     /* event 2, delta 0xf0 */
-    v86c_dbg_rsplow_tick(0x1018, 0x3e00);     /* event 3, delta 0x100 */
-    v86c_dbg_rsplow_tick(0x101c, 0x3d00);     /* event 4 */
-    v86c_dbg_rsplow_tick(0x1020, 0x3c00);     /* event 5 */
-    v86c_dbg_rsplow_tick(0x1024, 0x3b00);     /* event 6 */
+    v86c_dbg_rsplow_tick(0x1014, 0x3f00);     /* event 3, delta 0xf0 */
+    v86c_dbg_rsplow_tick(0x1018, 0x3e00);     /* event 4, delta 0x100 */
+    v86c_dbg_rsplow_tick(0x101c, 0x3d00);     /* event 5 */
+    v86c_dbg_rsplow_tick(0x1020, 0x3c00);     /* event 6 */
     CHECK_EQ(v86c_dbg_rsplow_total(), 6);
     CHECK_EQ(v86c_dbg_rsplow_kept(), 4);      /* the ring holds K, not the total */
 
-    /* THE LAST FOUR, oldest first: events 3..6.  A ring that keeps the FIRST K reads
+    /* (d) THE LAST FOUR, oldest first: events 3..6.  A ring that keeps the FIRST K reads
      * entry 0 = 0x3ff0 (event 1) and names the wrong descent step. */
     CHECK(v86c_dbg_rsplow_entry(0, &rip, &rsp, &delta));
-    CHECK_EQ(rip, 0x1018); CHECK_EQ(rsp, 0x3e00); CHECK_EQ(delta, 0x100);
+    CHECK_EQ(rip, 0x1014); CHECK_EQ(rsp, 0x3f00); CHECK_EQ(delta, 0xf0);
     CHECK(v86c_dbg_rsplow_entry(1, &rip, &rsp, &delta));
-    CHECK_EQ(rip, 0x101c); CHECK_EQ(rsp, 0x3d00);
+    CHECK_EQ(rip, 0x1018); CHECK_EQ(rsp, 0x3e00); CHECK_EQ(delta, 0x100);
     CHECK(v86c_dbg_rsplow_entry(2, &rip, &rsp, &delta));
-    CHECK_EQ(rip, 0x1020); CHECK_EQ(rsp, 0x3c00);
+    CHECK_EQ(rip, 0x101c); CHECK_EQ(rsp, 0x3d00);
     CHECK(v86c_dbg_rsplow_entry(3, &rip, &rsp, &delta));
-    CHECK_EQ(rip, 0x1024); CHECK_EQ(rsp, 0x3b00);
+    CHECK_EQ(rip, 0x1020); CHECK_EQ(rsp, 0x3c00);
     CHECK(!v86c_dbg_rsplow_entry(4, NULL, NULL, NULL));   /* no fifth entry */
+
+    /* the INFORMATIONAL minimum: the ninth instruction's value, and the rip that reached it */
+    min = v86c_dbg_rsplow_min(&rip, &rsp);
+    CHECK_EQ(min, 0x3c00);
+    CHECK_EQ(rip, 0x1020);
+    CHECK_EQ(rsp, 9);
 
     /* THE DUMP SPEAKS ALONE: no other tool is on, so the early return must not fire and the ring
      * must print -- +2 entries (the STOP line and the RSPLOW summary) */
     { int before = v86c_dbg_test_counts();
       v86c_dbg_on_stop("the rsplow arm");
       CHECK_EQ(v86c_dbg_test_counts(), before + 2); }
+
+    /* (b) A SEQUENCE THAT ONLY RISES RECORDS NOTHING -- the old rule's one correct property, and the
+     * one a "record every tick" mutant loses. */
+    v86c_dbg_test_rsplow_arm(8);
+    v86c_dbg_rsplow_tick(0x2000, 0x1000);
+    v86c_dbg_rsplow_tick(0x2004, 0x1008);
+    v86c_dbg_rsplow_tick(0x2008, 0x2000);
+    CHECK_EQ(v86c_dbg_rsplow_total(), 0);
+    CHECK_EQ(v86c_dbg_rsplow_kept(), 0);
+
+    /* (c) LOW THEN HIGH -- the case the OLD rule failed on, and the regression this arm exists to
+     * catch: 0x100 is the machine's FIRST rsp (real mode, at reset) and every long-mode stack address
+     * is numerically HIGHER, so a minimum rule reports total=0 for a stack that is plainly descending.
+     * Under the decrease rule both pushes are events. */
+    v86c_dbg_test_rsplow_arm(8);
+    v86c_dbg_rsplow_tick(0x3000, 0x100);                        /* real mode at reset: the baseline */
+    v86c_dbg_rsplow_tick(0x3004, 0xFFFFD1FAC0000288ull);        /* long mode: HIGHER, so no event */
+    v86c_dbg_rsplow_tick(0x3008, 0xFFFFD1FAC0000278ull);        /* a 16-byte push: event 1 */
+    v86c_dbg_rsplow_tick(0x300c, 0xFFFFD1FAC0000268ull);        /* a 16-byte push: event 2 */
+    CHECK_EQ(v86c_dbg_rsplow_total(), 2);
+    CHECK_EQ(v86c_dbg_rsplow_kept(), 2);
+    CHECK(v86c_dbg_rsplow_entry(0, &rip, &rsp, &delta));
+    CHECK_EQ(rip, 0x3008);
+    CHECK_EQ(rsp, 0xFFFFD1FAC0000278ull);
+    CHECK_EQ(delta, 0x10);
+    CHECK(v86c_dbg_rsplow_entry(1, &rip, &rsp, &delta));
+    CHECK_EQ(rip, 0x300c);
+    CHECK_EQ(delta, 0x10);
+    /* and the informational minimum is still the REAL-MODE 0x100 -- the value the old rule mistook
+     * for the bottom of the stack, printed here as the diagnostic it now is */
+    CHECK_EQ(v86c_dbg_rsplow_min(&rip, &rsp), 0x100);
+    CHECK_EQ(rip, 0x3000);
+    CHECK_EQ(rsp, 1);
 
     v86c_dbg_test_disarm();
     CHECK(!v86c_dbg_rsplow_on);
@@ -856,9 +911,9 @@ static void test_debug_rsplow_loop_seat(void)
     cpu->reg64[0] = 0x12345678;               /* eax, the value pushed */
     cpu->instruction_pointer = 0x2FFA;
     cpu->previous_ip = 0x2FFA;
-    mem8[0x2FFA] = 0x90;                      /* nop  -- seeds the minimum, no event */
-    mem8[0x2FFB] = 0x90;                      /* nop */
-    mem8[0x2FFC] = 0x50;                      /* push %eax -> rsp 0x6ffc */
+    mem8[0x2FFA] = 0x90;                      /* nop  -- seeds the baseline, no event */
+    mem8[0x2FFB] = 0x90;                      /* nop  -- rsp flat, so still no event */
+    mem8[0x2FFC] = 0x50;                      /* push %eax -> rsp 0x6ffc, a DECREASE of 4 */
     mem8[0x2FFD] = 0x50;                      /* push %eax -> rsp 0x6ff8 */
     mem8[0x2FFE] = 0x90;                      /* nop */
     mem8[0x2FFF] = 0x90;                      /* nop -- and the fetch crosses to page 0x3000 */
@@ -2040,8 +2095,7 @@ int main(void)
     RUN(test_segments, "switch_seg and lar/lsl/verr/verw");
     RUN(test_m1c_opcodes, "the 31 landed 0F encodings");
 
-    printf("cpu_m1c_selftest: %d checks, %d failures\n", checks, failures);
-        RUN(test_cr4_pge_write_no_pdpte_reload, "MOV CR4 with PGE 0->1 does not reload PDPTEs (long mode: CR3 holds a PML4E)");
+    RUN(test_cr4_pge_write_no_pdpte_reload, "MOV CR4 with PGE 0->1 does not reload PDPTEs (long mode: CR3 holds a PML4E)");
     RUN(test_far_return_64bit_frame, "a 64-bit RETF: an eight-byte RIP/CS frame and a 64-bit target");
     RUN(test_debug_toolkit_fires, "the debugging toolkit fires: watchpoint, fault watch, ring, dump-on-stop");
     RUN(test_swapgs, "SWAPGS exchanges the GS base with KERNEL_GS_BASE (and is not SWAPGS outside long mode)");
@@ -2049,10 +2103,16 @@ int main(void)
     RUN(test_debug_toolkit_range_overlap, "the range hook counts only the ranges that contain a watched byte");
     RUN(test_debug_toolkit_watch_vp, "the long-mode store's physical frame is watchable: vp counts a hit through EITHER address, once");
     RUN(test_debug_ints_delivery, "the delivery trace counts every delivery, records nesting depth, and its print window BOUNDS");
-    RUN(test_debug_rsplow_ring, "the new-minimum ring records only a LOWER rsp, keeps the LAST K, and dumps alone");
+    RUN(test_debug_rsplow_ring, "the rsp descent ring records every DECREASE from the previous instruction, keeps the LAST K, and dumps alone");
     RUN(test_debug_rsplow_loop_seat, "the ring's seat is in the interpreter's per-instruction loop (two pushes recorded)");
     RUN(test_rip_relative_segment_base, "a segment override applies to a RIP-relative operand (FS/GS add their base)");
     RUN(test_long_mode_descriptor_address_is_64bit, "the GDT base is 64 bits in long mode: lookup_segment_selector returns gdt_base+0x40 above 4 GiB and reads the descriptor through the mapping");
     RUN(test_long_mode_ff_inc_dec_are_32bit_without_rexw, "FF /0 and FF /1 in long mode are 32-bit without REX.W: `inc %eax` on the 0xffffffff wrap zero-extends into RAX and sets ZF");
-return failures != 0;
+
+    /* THE SUMMARY IS THE LAST THING THAT RUNS.  It used to sit mid-list, before the ten arms above,
+     * so the printed check count EXCLUDED them -- a count that omits arms reads like a green suite
+     * over work nothing ran, the same class of defect as an instrument that cannot fire.  Keep this
+     * line last. */
+    printf("cpu_m1c_selftest: %d checks, %d failures\n", checks, failures);
+    return failures != 0;
 }

@@ -77,21 +77,30 @@ int v86c_dbg_ints_count(int vector)
     return ints_hist[vector];
 }
 
-/* ---- THE NEW-MINIMUM RING (results/x86-64-rsplow.md) ----------------------------
+/* ---- THE RSP DESCENT RING (results/x86-64-rsplow.md) ----------------------------
  * WHY IT EXISTS: the amd64 guest's descent (results/x86-64-stackoverflow.md ss5) was read off the
  * STACK, and results/x86-64-nostorm.md ss3 proved that reading cannot settle it -- a value at rsp is
  * not necessarily a return address (the function at 0xffffffff819e4290 is reached by a TAIL JUMP from
  * 0xffffffff819e6ce0, so the word at rsp belongs to the caller of a function one link away).  The
  * descent has to be RECORDED at the seat that moves rsp, not inferred afterwards.
- * WHAT IS AN EVENT: cpu->reg64[4] strictly LOWER than every value seen so far.  The FIRST value seen
- * only seeds the minimum -- it records nothing, so every recorded event is a real step below a
- * previous low and `delta` is the size of that step (a seed event would print delta=-0x0 and make
- * "the first event" mean "the first instruction").  A value that recovers and comes back down to a
- * level already reached is NOT an event: the ring is the descent's frontier, not a stack trace.
+ * WHAT IS AN EVENT: cpu->reg64[4] LOWER than the value the PREVIOUS instruction left -- a DECREASE
+ * from one instruction to the next, any amount, in any mode.  `delta` is the size of that decrease.
+ * The FIRST instruction seen has no predecessor, so it only seeds the baseline and records nothing
+ * (a seed event would print delta=-0x0 and make "the first event" mean "the first instruction"); an
+ * EQUAL rsp is not a decrease and records nothing either.
+ * WHY NOT "A NEW ALL-TIME MINIMUM", which is what this ring did FIRST and what results/x86-64-rsplow.md
+ * ss1 described: MEASURED on the pinned amd64 guest (same document, ss7) the machine's FIRST rsp is
+ * 0x100 -- real mode, at reset -- while every long-mode stack address is numerically HIGHER
+ * (0xffffd1fac0000288 and up).  A minimum can therefore never be improved on that guest: the rule was
+ * UNFALSIFIABLE, it reported total=0, and total=0 reads exactly like a quiet guest.  Do NOT
+ * "simplify" this back to a minimum -- the comparison is between two CONSECUTIVE instructions, which
+ * is a property of the stack's own motion and fires in every mode.
  * LONG MODE IS NOT A CONDITION: the descent is a property of the guest's own pushes, and a 16- or
  * 32-bit guest has a stack too.  Gating on EFER.LMA would make the instrument silently useless for
  * any other investigation, and the tool is default-off, so the flag-off machine is untouched either
  * way.  Stated here because the brief left the choice open.
+ * `min` IS INFORMATIONAL ONLY -- the lowest rsp seen, with the instruction number and rip that first
+ * reached it.  It is not the event rule any more and nothing is gated on it.
  * THE RING HOLDS THE LAST K, so the total is printed with it: "the last 4096 of N" is only readable
  * if N is on the page (this lane has read a bounded window as a quiet guest before). */
 bool v86c_dbg_rsplow_on;
@@ -99,8 +108,12 @@ static struct { uint64_t rip; uint64_t rsp; uint64_t delta; } rsplow[V86C_DBG_RI
 static int rsplow_k;        /* capacity: the last K events */
 static int rsplow_i;        /* next slot to write */
 static int rsplow_total;    /* every event ever recorded, kept or not */
-static uint64_t rsplow_min;
-static bool rsplow_seen;
+static uint64_t rsplow_prev;     /* the rsp the PREVIOUS instruction left: the event rule's baseline */
+static bool rsplow_seen;         /* has any instruction been ticked at all */
+static uint64_t rsplow_min;      /* informational: the lowest rsp seen (not the rule) */
+static uint64_t rsplow_min_rip;  /* the rip that first reached it */
+static uint64_t rsplow_min_insn; /* the instruction number (1-based) that first reached it */
+static uint64_t rsplow_ticks;    /* instructions ticked: what min_insn is numbered against */
 
 void v86c_dbg_test_rsplow_arm(int k)
 {
@@ -109,13 +122,25 @@ void v86c_dbg_test_rsplow_arm(int k)
     rsplow_k = k;
     rsplow_i = 0;
     rsplow_total = 0;
-    rsplow_min = 0;
+    rsplow_prev = 0;
     rsplow_seen = false;
+    rsplow_min = 0;
+    rsplow_min_rip = 0;
+    rsplow_min_insn = 0;
+    rsplow_ticks = 0;
     v86c_dbg_rsplow_on = true;
 }
 int v86c_dbg_rsplow_total(void) { return rsplow_total; }
 int v86c_dbg_rsplow_kept(void) { return rsplow_total < rsplow_k ? rsplow_total : rsplow_k; }
 int v86c_dbg_rsplow_limit(void) { return rsplow_k; }
+/* the informational minimum: the value, and (out-params) the rip and 1-based instruction number that
+ * first reached it.  Read back by the selftest so the field is not a seat nobody asserts. */
+uint64_t v86c_dbg_rsplow_min(uint64_t *rip, uint64_t *insn)
+{
+    if (rip != NULL) *rip = rsplow_min_rip;
+    if (insn != NULL) *insn = rsplow_min_insn;
+    return rsplow_min;
+}
 bool v86c_dbg_rsplow_entry(int i, uint64_t *rip, uint64_t *rsp, uint64_t *delta)
 {
     int k;
@@ -130,14 +155,23 @@ bool v86c_dbg_rsplow_entry(int i, uint64_t *rip, uint64_t *rsp, uint64_t *delta)
 void v86c_dbg_rsplow_tick(uint64_t rip, uint64_t rsp)
 {
     if (!v86c_dbg_rsplow_on) return;   /* the entire cost when off: this test */
-    if (!rsplow_seen) { rsplow_seen = true; rsplow_min = rsp; return; }
-    if (rsp >= rsplow_min) return;
+    rsplow_ticks++;
+    if (!rsplow_seen) {                /* the first instruction has no predecessor to decrease from */
+        rsplow_seen = true;
+        rsplow_prev = rsp;
+        rsplow_min = rsp;
+        rsplow_min_rip = rip;
+        rsplow_min_insn = rsplow_ticks;
+        return;
+    }
+    if (rsp < rsplow_min) { rsplow_min = rsp; rsplow_min_rip = rip; rsplow_min_insn = rsplow_ticks; }
+    if (rsp >= rsplow_prev) { rsplow_prev = rsp; return; }   /* a rise or a flat step: no event */
     rsplow_total++;
     test_counts++;
     rsplow[rsplow_i].rip = rip;
     rsplow[rsplow_i].rsp = rsp;
-    rsplow[rsplow_i].delta = rsplow_min - rsp;
-    rsplow_min = rsp;
+    rsplow[rsplow_i].delta = rsplow_prev - rsp;
+    rsplow_prev = rsp;
     rsplow_i = (rsplow_i + 1) % rsplow_k;
 }
 
@@ -589,18 +623,25 @@ static void dump_ints_summary(void)
 
 /* THE DESCENT'S TAIL, oldest first, with the TOTAL on the first line: a ring holding the last K of
  * N is only readable if N is printed (a bounded window read as the whole story is this lane's most
- * expensive instrument failure).  `delta` is the step below the PREVIOUS minimum, so the printed
- * sequence IS the descent -- each line a push (or a `sub rsp`) that went lower than everything
- * before it, and the rip that did it is what a kallsyms lookup then names. */
+ * expensive instrument failure).  `delta` is the DECREASE from the rsp the PREVIOUS instruction left,
+ * so the printed sequence IS the stack's motion -- each line a push (or a `sub rsp`) that lowered rsp
+ * below where the instruction before it left it, and the rip that did it is what a kallsyms lookup
+ * then names.  `min` is informational (the lowest rsp seen and the instruction that first reached it),
+ * NOT the event rule -- see the block comment above the state. */
 static void dump_rsplow(void)
 {
     int i, kept = v86c_dbg_rsplow_kept();
     test_counts++;   /* the dump is an entry this tool PRODUCED: a caller can assert it spoke */
-    fprintf(stderr, "v86c dbg: RSPLOW total=%d kept=%d ring=%d min=0x%llx (oldest first; delta from"
-                    " the previous minimum)\n",
-            rsplow_total, kept, rsplow_k, (unsigned long long)rsplow_min);
+    fprintf(stderr, "v86c dbg: RSPLOW total=%d kept=%d ring=%d insns=%llu (oldest first; each event"
+                    " is a DECREASE from the rsp the previous instruction left)\n",
+            rsplow_total, kept, rsplow_k, (unsigned long long)rsplow_ticks);
+    fprintf(stderr, "v86c dbg:   RSPLOW min=0x%llx rip=0x%llx insn=%llu (informational: the lowest rsp"
+                    " seen, not the event rule)\n",
+            (unsigned long long)rsplow_min, (unsigned long long)rsplow_min_rip,
+            (unsigned long long)rsplow_min_insn);
     if (kept == 0) {
-        fprintf(stderr, "v86c dbg:   RSPLOW no event: rsp never went below its first value\n");
+        fprintf(stderr, "v86c dbg:   RSPLOW no event: rsp never decreased from one instruction to the"
+                        " next\n");
         return;
     }
     for (i = 0; i < kept; i++) {
