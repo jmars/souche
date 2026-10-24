@@ -736,20 +736,51 @@ void instr64_F7_3_mem(int64_t addr)
 	safe_write64_addr(addr, (uint64_t)neg64(x));
 }
 void instr64_F7_3_reg(int32_t r1) { write_reg64(r1, (uint64_t)neg64((int64_t)read_reg64(r1))); }
+/* FF /0 (inc) AND FF /1 (dec) ARE NOT IN THE DEFAULT-64 GROUP.  Only /2 (call), /4 (jmp) and
+ * /6 (push) default to a 64-bit operand size in a 64-bit code segment; inc and dec keep the
+ * 32-bit default and are 64-bit ONLY under REX.W (SDM Vol 2, the 0xFF group).  The dispatch
+ * key (modrm.c's dispatch_os_index) is a function of the OPCODE alone and `long_mode_default64`
+ * is true for 0xFF, so these four bodies are the only place the group's members can be told
+ * apart.  MEASURED as the reason this exists (results/x86-64-inc.md): with the 64-bit body
+ * unconditional, `inc %eax` on eax = 0xffffffff produced rax = 0x100000000 and ZF = 0 instead
+ * of rax = 0 and ZF = 1, and the amd64 guest's numa_init_array took the "not NUMA_NO_NODE"
+ * branch for all 8192 cpus. */
+static bool ff_inc_dec_is_32bit(void) { return (cpu->prefixes & PREFIX_REX_W) == 0; }
+
 void instr64_FF_0_mem(int64_t addr)
 {
+	if (ff_inc_dec_is_32bit()) {
+		int32_t x = safe_read32_addr(addr);
+		if (cpu->pagefault) return;
+		safe_write32_addr(addr, inc32(x));
+		return;
+	}
 	int64_t x = (int64_t)safe_read64_addr(addr);
 	if (cpu->pagefault) return;
 	safe_write64_addr(addr, (uint64_t)inc64(x));
 }
-void instr64_FF_0_reg(int32_t r1) { write_reg64(r1, (uint64_t)inc64((int64_t)read_reg64(r1))); }
+void instr64_FF_0_reg(int32_t r1)
+{
+	if (ff_inc_dec_is_32bit()) { write_reg32(r1, inc32(read_reg32(r1))); return; }
+	write_reg64(r1, (uint64_t)inc64((int64_t)read_reg64(r1)));
+}
 void instr64_FF_1_mem(int64_t addr)
 {
+	if (ff_inc_dec_is_32bit()) {
+		int32_t x = safe_read32_addr(addr);
+		if (cpu->pagefault) return;
+		safe_write32_addr(addr, dec32(x));
+		return;
+	}
 	int64_t x = (int64_t)safe_read64_addr(addr);
 	if (cpu->pagefault) return;
 	safe_write64_addr(addr, (uint64_t)dec64(x));
 }
-void instr64_FF_1_reg(int32_t r1) { write_reg64(r1, (uint64_t)dec64((int64_t)read_reg64(r1))); }
+void instr64_FF_1_reg(int32_t r1)
+{
+	if (ff_inc_dec_is_32bit()) { write_reg32(r1, dec32(read_reg32(r1))); return; }
+	write_reg64(r1, (uint64_t)dec64((int64_t)read_reg64(r1)));
+}
 
 /* ================================================================== *
  * THE STACK -- push/pop/pushf/popf, all of them default-64

@@ -56,6 +56,8 @@
 #include "flags.h"
 #include "instructions.h"
 #include "instructions_0f.h"
+#include "instructions_64.h"
+#include "modrm.h"
 #include "memory.h"
 #include "misc_instr.h"
 #include "paging.h"
@@ -1646,6 +1648,50 @@ static void test_m1c_opcodes(void)
         printf("%s %s\n\n", failures == before ? "PASS" : "FAIL", (what));      \
     } while (0)
 
+/* FF /0 AND FF /1 ARE NOT IN THE SDM'S DEFAULT-64 GROUP.  Only FF /2 (call), /4 (jmp) and
+ * /6 (push) default to a 64-bit operand size in a 64-bit code segment; inc/dec keep the
+ * 32-bit default and are 64-bit ONLY with REX.W (SDM Vol 2, the 0xFF group).  MEASURED as the
+ * reason this arm exists (results/x86-64-inc.md): the dispatch key is a function of the
+ * OPCODE alone, `long_mode_default64(0xFF)` is true, so every 0xFF reached the 64-bit arm --
+ * `inc %eax` with eax = 0xffffffff produced rax = 0x100000000 and ZF = 0 instead of rax = 0
+ * and ZF = 1, and the amd64 guest's numa_init_array read `early_cpu_to_node(i) !=
+ * NUMA_NO_NODE` as true for all 8192 cpus. */
+static void test_long_mode_ff_inc_dec_are_32bit_without_rexw(void)
+{
+    machine_setup(false);
+    cpu->efer |= EFER_LMA;
+    cpu->is_64 = true;
+    cpu->prefixes = 0;
+
+    /* inc %eax on the wrap: EAX is written (zero-extending into RAX) and ZF is SET */
+    write_reg64(EAX, 0x00000000FFFFFFFFull);
+    instr64_FF_0_reg(EAX);
+    CHECK_EQ(read_reg64(EAX), 0ull);
+    CHECK(getzf());
+
+    /* dec %eax on the same edge: 0 - 1 = 0xffffffff, ZF clear */
+    write_reg64(EAX, 0ull);
+    instr64_FF_1_reg(EAX);
+    CHECK_EQ(read_reg64(EAX), 0x00000000FFFFFFFFull);
+    CHECK(!getzf());
+
+    /* the memory forms take the same branch; they go through safe_*_addr, which this
+     * harness cannot enable in long mode (no PAE table here), so the guest run is their
+     * coverage (results/x86-64-inc.md). */
+
+    /* REX.W keeps the 64-bit behaviour (and is NOT the 32-bit wrap) */
+    cpu->prefixes = PREFIX_REX_W;
+    write_reg64(EAX, 0x00000000FFFFFFFFull);
+    instr64_FF_0_reg(EAX);
+    CHECK_EQ(read_reg64(EAX), 0x0000000100000000ull);
+    CHECK(!getzf());
+    cpu->prefixes = 0;
+
+    cpu->efer &= ~EFER_LMA;
+    cpu->is_64 = false;
+    machine_setup(false);
+}
+
 int main(void)
 {
     RUN(test_pagefault_delivery_and_iret, "#PF through an IDT, the frame, the iret return");
@@ -1670,5 +1716,6 @@ int main(void)
     RUN(test_cr2_64bit_read, "a long-mode `mov r64, cr2` returns the WHOLE linear address (and 32-bit mode is unchanged)");
     RUN(test_debug_toolkit_range_overlap, "the range hook counts only the ranges that contain a watched byte");
     RUN(test_rip_relative_segment_base, "a segment override applies to a RIP-relative operand (FS/GS add their base)");
+    RUN(test_long_mode_ff_inc_dec_are_32bit_without_rexw, "FF /0 and FF /1 in long mode are 32-bit without REX.W: `inc %eax` on the 0xffffffff wrap zero-extends into RAX and sets ZF");
 return failures != 0;
 }
