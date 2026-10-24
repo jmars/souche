@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "memory.h"
+#include "debug.h"
 #include "instructions.h" /* handle_irqs -- the APIC/IOAPIC write arms (memory.rs:284-289) */
 #include "uop_cache.h" /* PERF-4/M2: the write-path invalidation hook (plan ss4.1) */
 
@@ -517,6 +518,12 @@ reg128 read128(uint32_t addr)
 
 void write8(uint32_t addr, int32_t value)
 {
+    /* THE PHYSICAL WRITE HOOK (results/x86-64-producer.md): the per-store watch above lives in
+     * safe_write*, so a store that reaches RAM any other way is invisible -- MEASURED: the amd64
+     * kernel rewrote page_offset_base (phys 0x2413d60) from 0xffff888000000000 to
+     * 0xffff8c16c0000000 in one run with NO watch line, in any of three virtual windows.  This
+     * hook is the physical side of the same watch; it costs one load and one branch when off. */
+    if (v86c_dbg_watch_on) v86c_dbg_watch_p(addr, 1, (uint64_t)value, cpu->instruction_pointer);
     if (in_mapped_range(addr)) {
         mmap_write8(addr, value & 0xFF);
     }
@@ -535,6 +542,7 @@ void write8_no_mmap_or_dirty_check(uint32_t addr, int32_t value) { mem8[addr] = 
 
 void write16(uint32_t addr, int32_t value)
 {
+    if (v86c_dbg_watch_on) v86c_dbg_watch_p(addr, 2, (uint64_t)value, cpu->instruction_pointer);
     if (in_mapped_range(addr)) {
         mmap_write16(addr, value & 0xFFFF);
     }
@@ -560,6 +568,7 @@ void write16_no_mmap_or_dirty_check(uint32_t addr, int32_t value)
 
 void write32(uint32_t addr, int32_t value)
 {
+    if (v86c_dbg_watch_on) v86c_dbg_watch_p(addr, 4, (uint64_t)value, cpu->instruction_pointer);
     if (in_mapped_range(addr)) {
         mmap_write32(addr, value);
     }
@@ -581,6 +590,7 @@ void write32_no_mmap_or_dirty_check(uint32_t addr, int32_t value)
 
 void write64_no_mmap_or_dirty_check(uint32_t addr, uint64_t value)
 {
+    if (v86c_dbg_watch_on) v86c_dbg_watch_p(addr, 8, value, cpu->instruction_pointer);
     memcpy(mem8 + addr, &value, sizeof(value));
 }
 
@@ -674,6 +684,7 @@ void mmap_write32(uint32_t addr, int32_t value)
 
 void mmap_write64(uint32_t addr, uint64_t value)
 {
+    if (v86c_dbg_watch_on) v86c_dbg_watch_p(addr, 8, value, cpu->instruction_pointer);
     if (in_svga_lfb(addr)) {
         vga_mark_dirty(addr);
         memcpy(vga_mem8 + (addr - VGA_LFB_ADDRESS), &value, sizeof(value));
