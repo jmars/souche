@@ -354,6 +354,22 @@ or pack in normal use has to carry it.
 
 ## 8. Long mode (64-bit guests) — **one day**, not a non-goal
 
+**E820 (2026-10-24): THE FIRMWARE PUBLISHES 63 MiB, NOT ~3.2 GB — THE ALLOCATOR'S RAM BELIEF DOES NOT
+COME FROM THE E820.** `results/x86-64-e820-port.md`. MEASURED, one run at `--memory 256` with
+`V86C_BOOTPARAMS=0x84790 V86C_DUMP_ON_STOP=1` (`V86C_BOOTPARAMS` alone prints nothing — it is dumped
+from `v86c_dbg_on_stop`, which needs `V86C_DUMP_ON_STOP=1`): `e820_entries=4`, `[0,0x9fc00]` RAM,
+`[0x9fc00,0x400]` reserved, `[0xf0000,0x10000]` reserved, `[0x100000,0x3f00000]` RAM — usable top
+**64 MiB**, byte-identical to `tests/minibios.asm:803-807` (whose `MEM_TOP` is assembled in as
+`0x4000000`; `--memory 256` does not rebuild the firmware, `src/main.c:783-793`) and to the kernel's own
+`BIOS-e820:` lines. **NO entry claims RAM above 256 MiB**; the machine is described as SMALLER than it
+is. In the same run the kernel's view stays inside RAM (`last_pfn = 0x4430` = 68.2 MiB, node 0 faked at
+`[mem 0x0-0x442ffff]`, `NODE_DATA(0) at [mem 0x00fd4000-0x00ffefff]`), and at the stop `cr2=0xc0a0b010`
+while `gs_base=0xffff8c16c0a0b000` — so `0xc0fd4000`/`0xc0e00000` read as the **low 32 bits of the
+VIRTUAL** address, not as phys above RAM. **The next measurement is the 32-bit drop on the linear→phys
+path (cr2 / the walk's PTEA / `__per_cpu_offset`), not the E820 and not minibios** — the PRODUCER entry's
+"physical addresses above RAM" reading is now in doubt. Measurement-only: no source change, no battery,
+QEMU's 256 MiB leg still owed.
+
 **PRODUCER (2026-10-21): `page_offset_base` IS WRITTEN CORRECTLY — AND THE HALVES ENTRY BELOW IS
 RETRACTED.** `results/x86-64-producer.md`. The instrument had to be fixed first (MEASURED): `V86C_WATCH`
 on the global's virtual address, on its neighbours and on two direct-map aliases all reported **nothing**
