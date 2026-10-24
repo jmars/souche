@@ -233,7 +233,7 @@ static void dump_peek(void)
         uint64_t len = 8;
         int i;
         if (*end == ':') len = strtoull(end + 1, &end, 0);
-        if (len > 64) len = 64;
+        if (len > 4096) len = 4096;
         fprintf(stderr, "v86c dbg: PEEK phys 0x%llx (%llu bytes):", (unsigned long long)a,
                 (unsigned long long)len);
         for (i = 0; i < (int)len; i++) {
@@ -246,8 +246,15 @@ static void dump_peek(void)
 }
 
 /* THE FRAME IS AT RSP, and the kernel's stack is not identity-mapped, so this dump is a VIRTUAL
- * read through the port's own walk (results/x86-64-nest.md).  A fault here is swallowed: this is a
- * diagnostic, and it must not change the guest's abort state. */
+ * read through the port's own walk (results/x86-64-nest.md).
+ * THE WALK MUST BE THE NO-SIDE-EFFECTS ONE.  MEASURED (results/x86-64-peekperturb.md): the
+ * side-effecting read DELIVERS the #PF (paging.c:201-215 -> trigger_pagefault ->
+ * call_interrupt_vector), so a peek that ran off an unmapped page injected a real guest exception
+ * mid-dump and changed the boot's path -- a 2048-byte V86C_PEEK_SP turned a stack-overflow stop at
+ * 4,590,902,204 instructions into a 6,000,054,617-instruction run that stopped somewhere else
+ * entirely.  A diagnostic that changes what it measures is worse than no diagnostic.
+ * THE CAP IS THE STACK, NOT A LINE: a nesting guest's ancestor chain can be a full page deep
+ * (results/x86-64-stackoverflow.md ss5 read none of it at 128 bytes), so the cap is 4 KiB. */
 static void dump_peek_sp(void)
 {
     const char *k = getenv("V86C_PEEK_SP");
@@ -256,12 +263,12 @@ static void dump_peek_sp(void)
     bool saved;
     if (k == NULL) return;
     len = strtoull(k, NULL, 0);
-    if (len > 128) len = 128;
+    if (len > 4096) len = 4096;
     saved = cpu->pagefault;
     fprintf(stderr, "v86c dbg: PEEK SP 0x%llx (%llu bytes):", (unsigned long long)cpu->reg64[4],
             (unsigned long long)len);
     for (i = 0; i < (int)len; i++) {
-        uint32_t p = translate_address_read((uint64_t)(cpu->reg64[4] + (uint64_t)i));
+        uint32_t p = translate_address_read_no_side_effects((uint64_t)(cpu->reg64[4] + (uint64_t)i));
         if (cpu->pagefault) { fprintf(stderr, " <fault at +%d>", i); break; }
         fprintf(stderr, " %02x", (unsigned)read8(p));
     }
