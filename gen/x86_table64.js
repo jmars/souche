@@ -142,6 +142,13 @@ const x86_table64_0f = [
 	{ opcode: 0xAD }, /* shrd r/m64, r64, cl */
 	{ opcode: 0xBC }, /* bsf r64, r/m64 */
 	{ opcode: 0xBD }, /* bsr r64, r/m64 */
+	/* 0xB8: POPCNT r64, r/m64 (F3 REX.W 0F B8) -- and the plain 0F B8, which is #UD and MUST
+	 * STAY #UD.  The F3-prefix requirement is the EMITTER's prefix split, not a flag here: the
+	 * arm emits `if (prefixes_ & PREFIX_F3) instr64_F30FB8_*; else instr64_0FB8_*` exactly as
+	 * the 16/32-bit arms do (instructions_0f.c:1754), and the else branch is a trigger_ud()
+	 * body.  MEASURED blocker (results/x86-64-popcnt64.md): the amd64 guest executes
+	 * `f3 48 0f b8 c7` in a bitmap walk and this arm's absence was the lane's stop. */
+	{ opcode: 0xB8 }, /* popcnt r64, r/m64 (F3 0F B8; plain 0F B8 is #UD) */
 	{ opcode: 0xA3 }, /* bt  r/m64, r64 */
 	{ opcode: 0xAB }, /* bts r/m64, r64 (results/x86-64-kgs.md) */
 	{ opcode: 0xB3 }, /* btr r/m64, r64 */

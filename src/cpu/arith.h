@@ -209,6 +209,7 @@ int32_t bsf32(int32_t old, int32_t bit_base);
 int32_t bsr16(int32_t old, int32_t bit_base);
 int32_t bsr32(int32_t old, int32_t bit_base);
 int32_t popcnt(int32_t v);
+int64_t popcnt64(int64_t v);
 
 /* ---- the saturating pack helpers used by instructions_0f (arith.rs:1127-1206) ---- */
 uint8_t saturate_sw_to_ub(uint16_t v);

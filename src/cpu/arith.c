@@ -1456,6 +1456,24 @@ int32_t popcnt(int32_t v)
     }
 }
 
+/* the 64-bit POPCNT (F3 REX.W 0F B8).  The SDM's flag rule is the same at every operand size
+ * -- CF/PF/AF/ZF/SF/OF are CLEARED and ZF is set when the source is zero -- so this is popcnt()
+ * over the FULL 64 bits rather than a second flag convention.  Counting only the low half is
+ * the silent-wrong body here: `popcnt rax, rax` on 0x8000000000000001 answers 2, and a 32-bit
+ * count answers 1. */
+int64_t popcnt64(int64_t v)
+{
+    cpu->flags_changed = 0;
+    cpu->flags &= ~FLAGS_ALL;
+    if (v != 0) {
+        return __builtin_popcountll((uint64_t)v);
+    }
+    else {
+        cpu->flags |= FLAG_ZERO;
+        return 0;
+    }
+}
+
 /* ------------------------------------------------------------------ *
  * the saturating pack helpers -- arith.rs:1127-1206
  * ------------------------------------------------------------------ */

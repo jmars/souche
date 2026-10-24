@@ -1746,6 +1746,36 @@ void instr64_0FBD_reg(int32_t r1, int32_t r)
 	bsf_bsr_flags(zero);
 }
 
+/* 0x0F B8 -- POPCNT r64, r/m64 (F3 0F B8), and the PLAIN 0F B8, which is #UD.
+ *
+ * The F3 requirement is decided by the generated arm's prefix split (the same one the 16/32-bit
+ * arms use, instructions_0f.c:1754), so the two names below are the two halves of one encoding:
+ * `instr64_F30FB8_*` is popcnt, `instr64_0FB8_*` is the #UD the SDM states for the bare form.
+ * Keeping the second pair a trigger_ud() -- rather than letting the arm fall through to popcnt --
+ * is the whole reason the F3 rule survives at 64 bits.
+ *
+ * The count is over ALL 64 bits of the source (popcnt64 in arith.c); the destination register is
+ * written, so the memory form only READS. */
+void instr64_F30FB8_mem(int64_t addr, int32_t r)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	write_reg64(r, (uint64_t)popcnt64((int64_t)x));
+}
+void instr64_F30FB8_reg(int32_t r1, int32_t r) { write_reg64(r, (uint64_t)popcnt64(read_reg64(r1))); }
+void instr64_0FB8_mem(int64_t _addr, int32_t _r)
+{
+	(void)_addr;
+	(void)_r;
+	trigger_ud();
+}
+void instr64_0FB8_reg(int32_t _r1, int32_t _r2)
+{
+	(void)_r1;
+	(void)_r2;
+	trigger_ud();
+}
+
 /* 0x0F C8+r BSWAP r64 (eight opcodes, one body each -- the register is the opcode's low bits
  * plus REX.B).  BSWAP touches NO flags. */
 void instr64_0FC8(void) { write_reg64(reg_index_b(0), bswap64(read_reg64(reg_index_b(0)))); }

@@ -78,7 +78,7 @@ must_fail() { # must_fail <name> <cmd...> -- the able-to-fail arm of an assertio
 
 echo "== A. --long-mode OFF is still the 32-bit machine (S2's refusal, by name, S4's counts)"
 step "off-is-32bit" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_OFF" \
-	--expect counts --expect-counts "green=0 red_unimplemented=86 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=0 red_unimplemented=88 mismatch=0 error=0" --quiet
 # a count assertion alone would also pass on 57 of anything, so the census's own line is
 # checked: the refusal must NAME the reason
 step "off-refusal-names-the-reason" sh -c \
@@ -120,7 +120,7 @@ step "family-1-green" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_
 	--filter '^mov-' --expect counts \
 	--expect-counts "green=12 red_unimplemented=0 mismatch=0 error=0" --quiet
 step "whole-corpus-no-mismatch" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
-	--expect counts --expect-counts "green=86 red_unimplemented=0 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=88 red_unimplemented=0 mismatch=0 error=0" --quiet
 must_fail "whole-corpus-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
 	--actual "$ACTUAL_ON" --expect counts --expect-counts "green=57 mismatch=0" --quiet
 
@@ -248,9 +248,11 @@ echo "== F3. S6: THE ALU FAMILY AT 64 BITS, WITH ITS FLAGS (family 2, case by ca
 # pre-existing case with an A9 encoding -- a scan of every build/nasm64/*.elf for `48 a9` finds
 # just that one and this unit's new case), so it stopped on `long mode: 0xA9 has no 64-bit form`
 # and was the `red_unimplemented=1` in the counts above.  REX.W 0xA9 turns it green: 84+1 -> 86+0.
+# THE POPCNT UNIT (results/x86-64-popcnt64.md) added TWO alu cases, alu-popcnt-64 and
+# alu-popcnt-nof3, so the family is 17 and the corpus 88.
 step "alu-family" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
 	--filter '^alu-' --expect counts \
-	--expect-counts "green=15 red_unimplemented=0 mismatch=0 error=0" --quiet
+	--expect-counts "green=17 red_unimplemented=0 mismatch=0 error=0" --quiet
 must_fail "alu-family-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
 	--actual "$ACTUAL_ON" --filter '^alu-' --expect counts \
 	--expect-counts "green=12 mismatch=0" --quiet

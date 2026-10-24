@@ -25,8 +25,8 @@
  * reached this way still stops by name, exactly as the unprefixed encoding does.
  * See gen/interpreter_c.js, C-side difference 3.
  *
- * 2295 call sites, 42 of them unimplemented at the time this
- * file was generated (2257 instr* symbols defined in the port's sources).
+ * 2299 call sites, 42 of them unimplemented at the time this
+ * file was generated (2261 instr* symbols defined in the port's sources).
  */
 
 #include "cpu.h"
@@ -17024,8 +17024,30 @@ void run_instruction0f(int32_t opcode)
 	break;
 	case 0x2B8:
 	{
-		unimplemented_instruction("long mode: 0F B8 has no 64-bit arm in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		uint8_t prefixes_ = cpu->prefixes;
+		if ((prefixes_ & PREFIX_F3) != 0) {
+			if (modrm_byte < 0xC0) {
+				int64_t addr = modrm_resolve(modrm_byte);
+				if (cpu->pagefault) return;
+				instr64_F30FB8_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+			}
+			else {
+				instr64_F30FB8_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+			}
+		}
+		else {
+			if (modrm_byte < 0xC0) {
+				int64_t addr = modrm_resolve(modrm_byte);
+				if (cpu->pagefault) return;
+				instr64_0FB8_mem(addr, reg_index_r(modrm_byte >> 3 & 7));
+			}
+			else {
+				instr64_0FB8_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7));
+			}
+			after_block_boundary();
+		}
 	}
 	break;
 	case 0xB9:

@@ -302,6 +302,54 @@ case("alu", "test-rax-imm32",
     mov rax, 0x1122334455667788
     test rax, 0xFFFFFFFF80000000
 """, flags=True, flags_mask="0x8C5")
+case("alu", "popcnt-64",
+     "F3 REX.W 0F B8 /r is POPCNT r64, r/m64, and it counts ALL 64 BITS of the source: "
+     "`popcnt rax, rax` on 0x8000000000000001 is 2 where a low-half-only count is 1, and "
+     "`popcnt rdx, rdx` on -1 is 64 where the 32-bit body answers 32.  The flags are the "
+     "SECOND discrimination: the SDM's POPCNT CLEARS CF/PF/AF/ZF/SF/OF and sets ZF only "
+     "when the source is zero, so a body that left the previous flags alone keeps the "
+     "CMP's SF (0x80), and a body that went through the generic ALU path sets PF from the "
+     "RESULT -- 0x8000000000000003 has three set bits, so a result-driven PF would be 1 "
+     "where POPCNT's rule leaves it clear.  The plain 0F B8 (no F3) is #UD and is NOT "
+     "this case: it is alu-popcnt-nof3.",
+     """\
+    mov rax, 0x8000000000000001
+    mov rcx, -1
+    cmp rcx, 0
+    popcnt rax, rax
+    pushfq
+    pop qword ptr [0x100200]
+    and dword ptr [0x100200], 0x8D5
+    and dword ptr [rsp - 8], 0x8D5
+    mov rbx, 0x8000000000000003
+    mov rcx, -1
+    cmp rcx, 0
+    popcnt rbx, rbx
+    pushfq
+    pop qword ptr [0x100208]
+    and dword ptr [0x100208], 0x8D5
+    and dword ptr [rsp - 8], 0x8D5
+    mov rdx, -1
+    popcnt rdx, rdx
+    popcnt rdi, qword ptr [rip + body_data0]
+    mov r8, 0xFFFFFFFFFFFFFFFF
+    popcnt r9, r8
+    mov rcx, -1
+    cmp rcx, 0
+    xor esi, esi
+    popcnt rsi, rsi
+""", flags=True, flags_mask="0x8D5", data=[0xF0F0F0F0F0F0F0F0])
+case("alu", "popcnt-nof3",
+     "PLAIN REX.W 0F B8 (NO F3 prefix) is #UD: the F3 is what makes the encoding popcnt "
+     "(instructions_0f.c:1754), and this case holds that rule at 64 bits -- a 64-bit arm "
+     "that emitted the popcnt body for the whole 0x2B8 case would EXECUTE it and the case "
+     "would stop being a fault.  The bytes are written out because no assembler will emit "
+     "the form: `popcnt rax, rdi` minus its F3.  The body's witness is the 2^32 literal "
+     "(the fault itself is width-independent, so the ENCODING carries the discrimination).",
+     """\
+    mov rax, 0x100000000
+    .byte 0x48, 0x0f, 0xb8, 0xc7
+""", fault="UD")
 
 # --- family 1: mov (S5, the first vertical slice) --------------------------------
 case("mov", "imm64",
