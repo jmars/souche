@@ -497,7 +497,12 @@ static int32_t do_page_walk64(uint64_t addr,
     {
         uint64_t upper = addr >> 47;
         if (upper != 0 && upper != 0x1FFFFull) {
-            trigger_gp(0);
+            /* NOT DELIVERED WHEN `side_effects` IS FALSE (results/x86-64-instrholes.md, from the
+             * review's m2).  Every other fault in this walk is guarded; this one was not, so the
+             * toolkit's no-side-effects peek at a non-canonical rsp injected a REAL #GP into the
+             * guest -- the same perturbation class 484f04f fixed for #PF.  The abort channel is
+             * still set: the caller must not act on the 0. */
+            if (side_effects) trigger_gp(0);
             cpu->pagefault = true; /* the abort channel: the instruction must not act on the 0 */
             return 0;
         }
@@ -1425,20 +1430,44 @@ int32_t safe_read8_addr(int64_t addr)
     return read8(p);
 }
 
+/* ONE STORE, ONE REPORT (results/x86-64-instrholes.md).  Every 64-bit store body in
+ * instructions_64.c and the generated overlay calls one of the `_addr` writers below, and they
+ * are the only place that knows the LINEAR address AND the PHYSICAL frame of a long-mode store.
+ * So each of them reports its store ONCE, here, and then stores through the physical routers --
+ * which carry their own physical hook (memory.c write8/16/32/64, the producer.md hook).  The
+ * guard below is what stops that hook from reporting the SAME store a second time: without it one
+ * RAM qword store printed one `WATCH V -> P` line plus two `WATCH P` lines, and a reader counting
+ * lines overcounted stores 2-3x (review M2).  The guard is raised only when the tools are on, so
+ * the flag-off machine pays nothing, and it is a COUNTER because a 16-byte store nests two qword
+ * stores inside one report.
+ *
+ * A STRADDLING STORE IS ONE STORE IN TWO FRAMES: it is reported once, matched against BOTH frames
+ * (a watch set on the frame the store's TAIL writes must still fire -- that is the page-boundary
+ * arrival a stack descent is investigated with), and the two halves store with the guard raised.
+ * B1 (review): the qword straddle arm used to recurse into safe_write32_addr_local, which has no
+ * hook at all, so a qword store with (addr & 0xFFF) in (0xFF8, 0xFFF] reached NO watch hook. */
+static void watch_quiet_raise(void)
+{
+    if (v86c_dbg_watch_on) v86c_dbg_watch_quiet++;
+}
+static void watch_quiet_lower(void)
+{
+    if (v86c_dbg_watch_on) v86c_dbg_watch_quiet--;
+}
+
 void safe_write8_addr(int64_t addr, int32_t value)
 {
-    /* THE LONG-MODE WATCH SEAT (results/x86-64-reach2.md, results/x86-64-watchphys.md).  Every
-     * 64-bit store body in instructions_64.c and the generated overlay calls THIS function rather
-     * than safe_write8(), so the hook at safe_write8()'s top never saw them -- and the amd64 guest
-     * runs in no other mode.  MEASURED: the decompressor's `.data` copy, __startup_64's
-     * `pgd[0] = pgd[1] = 0x30ec063` and `phys_base`'s fixup all appeared at their addresses
-     * with V86C_WATCH reporting no writer at all.  The hook lives here, once per guest store, and
-     * it runs AFTER the walk because the PHYSICAL frame only exists once the walk has run -- and
-     * because a store that faults never stores (V86C_WATCH_F is the faulting access's reporter). */
+    /* the hook runs AFTER the walk because the PHYSICAL frame only exists once the walk has run --
+     * and because a store that faults never stores (V86C_WATCH_F is the faulting access's
+     * reporter).  MEASURED as the reason this seat exists (results/x86-64-reach2.md): the
+     * decompressor's `.data` copy, __startup_64's `pgd[0] = pgd[1] = 0x30ec063` and `phys_base`'s
+     * fixup all appeared at their addresses with V86C_WATCH reporting no writer at all. */
     uint32_t p = translate_address_write((uint64_t)addr);
     if (cpu->pagefault) return;
     if (v86c_dbg_watch_on) v86c_dbg_watch_vp((uint64_t)addr, p, 1, (uint64_t)value, cpu->instruction_pointer);
+    watch_quiet_raise();
     write8(p, value);
+    watch_quiet_lower();
 }
 
 static int32_t safe_read32_addr_local(int64_t addr)
@@ -1448,6 +1477,8 @@ static int32_t safe_read32_addr_local(int64_t addr)
     return read32s(p);
 }
 
+/* the write half of the qword straddle: translate, then store through the router.  No hook of its
+ * own -- the caller's single report covers it (and the guard is raised around the call). */
 static void safe_write32_addr_local(int64_t addr, int32_t value)
 {
     /* the write half translates through the write path, which is also where the uop cache's
@@ -1493,24 +1524,65 @@ int32_t safe_read32_addr(int64_t addr)
 void safe_write16_addr(int64_t addr, int32_t value)
 {
     if (((uint64_t)addr & 0xFFF) == 0xFFF) {
+        /* one store in two frames: report once, after the walk, matched against both frames */
+        uint32_t lo = 0, hi = 0;
+        bool armed = v86c_dbg_watch_on;
+        if (armed) {
+            lo = translate_address_write((uint64_t)addr);
+            if (cpu->pagefault) return;
+        }
+        watch_quiet_raise();
         safe_write8_addr(addr, value & 0xFF);
-        if (cpu->pagefault) return;
-        safe_write8_addr(addr + 1, (value >> 8) & 0xFF);
+        if (!cpu->pagefault) safe_write8_addr(addr + 1, (value >> 8) & 0xFF);
+        watch_quiet_lower();
+        if (armed) {
+            if (cpu->pagefault) {
+                /* the high half's walk refused: report the byte that DID store */
+                v86c_dbg_watch_vp((uint64_t)addr, lo, 1, (uint64_t)(value & 0xFF),
+                                  cpu->instruction_pointer);
+            }
+            else {
+                hi = translate_address_write((uint64_t)addr + 1);
+                v86c_dbg_watch_vp_split((uint64_t)addr, lo, hi, 2, (uint64_t)value,
+                                        cpu->instruction_pointer);
+            }
+        }
         return;
     }
     /* after the walk: the physical frame exists only then, and a store that faults never stores */
     uint32_t p = translate_address_write((uint64_t)addr);
     if (cpu->pagefault) return;
     if (v86c_dbg_watch_on) v86c_dbg_watch_vp((uint64_t)addr, p, 2, (uint64_t)value, cpu->instruction_pointer);
+    watch_quiet_raise();
     write16(p, value);
+    watch_quiet_lower();
 }
 
 void safe_write32_addr(int64_t addr, int32_t value)
 {
     if (((uint64_t)addr & 0xFFF) >= 0xFFD) {
+        uint32_t lo = 0, hi = 0;
+        bool armed = v86c_dbg_watch_on;
+        if (armed) {
+            lo = translate_address_write((uint64_t)addr);
+            if (cpu->pagefault) return;
+        }
+        watch_quiet_raise();
         safe_write16_addr(addr, value & 0xFFFF);
-        if (cpu->pagefault) return;
-        safe_write16_addr(addr + 2, (value >> 16) & 0xFFFF);
+        if (!cpu->pagefault) safe_write16_addr(addr + 2, (value >> 16) & 0xFFFF);
+        watch_quiet_lower();
+        if (armed) {
+            if (cpu->pagefault) {
+                /* the high half's walk refused: report the two bytes that DID store */
+                v86c_dbg_watch_vp((uint64_t)addr, lo, 2, (uint64_t)(value & 0xFFFF),
+                                  cpu->instruction_pointer);
+            }
+            else {
+                hi = translate_address_write((uint64_t)addr + 2);
+                v86c_dbg_watch_vp_split((uint64_t)addr, lo, hi, 4, (uint64_t)value,
+                                        cpu->instruction_pointer);
+            }
+        }
         return;
     }
     /* the write half translates through the write path, which is also where the uop cache's
@@ -1519,7 +1591,9 @@ void safe_write32_addr(int64_t addr, int32_t value)
     uint32_t p = translate_address_write((uint64_t)addr);
     if (cpu->pagefault) return;
     if (v86c_dbg_watch_on) v86c_dbg_watch_vp((uint64_t)addr, p, 4, (uint64_t)value, cpu->instruction_pointer);
+    watch_quiet_raise();
     write32(p, value);
+    watch_quiet_lower();
 }
 
 uint64_t safe_read64_addr(int64_t addr)
@@ -1544,15 +1618,40 @@ uint64_t safe_read64_addr(int64_t addr)
 void safe_write64_addr(int64_t addr, uint64_t value)
 {
     if (((uint64_t)addr & 0xFFF) > 0x1000 - 8) {
+        /* THE ARM B1 WAS IN.  Both frames are translated for the report (the low one first, so a
+         * fault is the same fault the store would take), the two halves store with the guard
+         * raised, and the store is reported ONCE against both frames -- or, if the high half's
+         * walk faults, once as the four bytes that actually stored. */
+        uint32_t lo = 0, hi = 0;
+        bool armed = v86c_dbg_watch_on;
+        if (armed) {
+            lo = translate_address_write((uint64_t)addr);
+            if (cpu->pagefault) return;
+        }
+        watch_quiet_raise();
         safe_write32_addr_local(addr, (int32_t)value);
-        if (cpu->pagefault) return;
-        safe_write32_addr_local(addr + 4, (int32_t)(value >> 32));
+        if (!cpu->pagefault) safe_write32_addr_local(addr + 4, (int32_t)(value >> 32));
+        watch_quiet_lower();
+        if (armed) {
+            if (cpu->pagefault) {
+                /* the high half's walk refused: report the four bytes that DID store */
+                v86c_dbg_watch_vp((uint64_t)addr, lo, 4, (uint64_t)(uint32_t)value,
+                                  cpu->instruction_pointer);
+            }
+            else {
+                hi = translate_address_write((uint64_t)addr + 4);
+                v86c_dbg_watch_vp_split((uint64_t)addr, lo, hi, 8, value,
+                                        cpu->instruction_pointer);
+            }
+        }
         return;
     }
     /* after the walk: the physical frame exists only then, and a store that faults never stores */
     uint32_t p = translate_address_write((uint64_t)addr);
     if (cpu->pagefault) return;
-    if (v86c_dbg_watch_on) v86c_dbg_watch_vp((uint64_t)addr, p, 8, (uint64_t)value, cpu->instruction_pointer);
+    if (v86c_dbg_watch_on) v86c_dbg_watch_vp((uint64_t)addr, p, 8, value, cpu->instruction_pointer);
+    watch_quiet_raise();
     write32(p, (int32_t)value);
     write32(p + 4, (int32_t)(value >> 32));
+    watch_quiet_lower();
 }

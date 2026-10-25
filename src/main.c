@@ -487,6 +487,20 @@ static run_result_t run(uint64_t limit)
 	result.exception = guest_exception;
 	result.unimplemented = interpreted_unimplemented;
 	result.count = cpu->instruction_counter;
+	/* ONE STOP DUMP FOR EVERY TERMINAL PATH (results/x86-64-instrholes.md).  This used to be
+	 * reached only from the named-stop seat (cpu.c's unimplemented_instruction), so a run that
+	 * ended by INSTRUCTION BUDGET -- the shape every measurement in this lane uses -- by HLT, by
+	 * an undeliverable guest exception or by a reboot printed NO INTS summary, NO RSPLOW ring
+	 * and NO break totals: the tools' whole payoff was silent exactly where it is most used.
+	 * The named-stop path has already dumped at its own seat (with the better reason), so it is
+	 * not dumped twice. */
+	if (!interpreted_unimplemented) {
+		v86c_dbg_on_stop(cpu->in_hlt ? "hlt"
+		                 : guest_exception >= 0 ? "undeliverable guest exception"
+		                 : cpu->reboot_requested ? "guest reboot"
+		                 : cpu->instruction_counter >= limit ? "instruction limit"
+		                 : "no progress");
+	}
 	return result;
 }
 

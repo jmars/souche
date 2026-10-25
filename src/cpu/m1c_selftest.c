@@ -642,6 +642,113 @@ static void test_debug_toolkit_watch_vp(void)
 }
 
 /* ================================================================== *
+ * TEST 1n -- THE WATCH'S SEAT IS IN THE LONG-MODE STORE PATH, AND ONE STORE IS ONE LINE
+ * (results/x86-64-instrholes.md)
+ *
+ * TEST 1h above drives v86c_dbg_watch_vp DIRECTLY, so it stays green with every hook deleted from
+ * paging.c -- the lane's own M7 lesson, applied to RSPLOW but not to the watch.  This arm runs the
+ * real seat: a long-mode machine with a 4-level identity mapping, and a store through
+ * safe_write64_addr, which is the function every 64-bit store body and the generated overlay
+ * calls.  The watch is on the VIRTUAL address, so the physical router's own hook underneath cannot
+ * stand in for it.
+ *
+ * IT FAILS AGAINST TWO MUTANTS, both built and measured in the report:
+ *   - HOOK DELETED (the v86c_dbg_watch_vp call removed from safe_write64_addr): count 0, not 1.
+ *   - DOUBLE REPORT RESTORED (the one-store guard removed): count 3 -- one `V -> P` line plus the
+ *     two `WATCH P` lines the two physical write32 calls print -- which is the 2-3x overcount a
+ *     reader counting lines made before this unit (review M2).
+ * ================================================================== */
+static void debug_long_mode_identity_fixture(void)
+{
+    machine_setup(false);
+    /* four-level paging, as every long-mode fixture in this file builds it: PML4[0] -> PDPT[0] ->
+     * PD[0] = a 2 MiB identity page, so a linear address IS its physical address here */
+    wr64(PML4_64 + 0, (uint64_t)(PAE_PDPT | PAGE_TABLE_PRESENT_MASK));
+    wr64(PAE_PDPT + 0, (uint64_t)(PAE_PD | PAGE_TABLE_PRESENT_MASK));
+    wr64(PAE_PD + 0, (uint64_t)(PAGE_TABLE_PSE_MASK | PAGE_TABLE_PRESENT_MASK | PAGE_TABLE_RW_MASK));
+    cpu->cr[3] = PML4_64;
+    cpu->cr[4] = CR4_PAE;
+    set_cr0(cpu->cr[0] | CR0_PG);
+    cpu->efer |= EFER_LMA;
+    cpu->is_64 = true;
+    cpu->pagefault = false;
+    CHECK(!cpu->pagefault);
+    CHECK(long_mode_64());
+}
+
+static void test_debug_watch_long_mode_seat(void)
+{
+    int base;
+    debug_long_mode_identity_fixture();
+    base = v86c_dbg_test_counts();
+
+    v86c_dbg_test_watch_set(0x3000, 8);
+    safe_write64_addr(0x3000, 0x1122334455667788ull);
+    CHECK(!cpu->pagefault);
+    CHECK_EQ((uint32_t)read32s(0x3000), 0x55667788u);          /* the store happened */
+    CHECK_EQ((uint32_t)read32s(0x3004), 0x11223344u);
+    CHECK_EQ(v86c_dbg_test_counts(), base + 1);                /* ONE store, ONE line */
+    CHECK_EQ(v86c_dbg_watch_quiet_depth(), 0);                 /* and the guard is back down */
+
+    /* a 16-bit store inside one page: also exactly one line */
+    v86c_dbg_test_watch_set(0x4000, 2);
+    safe_write16_addr(0x4000, 0xBEEF);
+    CHECK_EQ((uint32_t)read16(0x4000), 0xBEEFu);
+    CHECK_EQ(v86c_dbg_test_counts(), base + 2);
+    CHECK_EQ(v86c_dbg_watch_quiet_depth(), 0);
+
+    v86c_dbg_test_disarm();
+    cpu->efer &= ~EFER_LMA;
+    cpu->is_64 = false;
+}
+
+/* THE STRADDLING QWORD: ONE STORE, ONE LINE, AND THE SECOND FRAME STILL MATCHES.
+ * A qword at 0xFFC stores 0xFFC..0xFFF in page 0 and 0x1000..0x1003 in page 1, and the entry here
+ * is on the SECOND frame -- the page-boundary arrival a stack descent is investigated with.  The
+ * count is the proof that the two halves did not each report: the pre-unit behaviour reached the
+ * physical router twice (`WATCH P 0xFF8` and `WATCH P 0x1000`, review M2's 2-3x) and the VP hook
+ * never fired at all (no LINEAR address on a straddling store). */
+static void test_debug_watch_straddle_reports_once(void)
+{
+    int base;
+    debug_long_mode_identity_fixture();
+    base = v86c_dbg_test_counts();
+
+    v86c_dbg_test_watch_set(0x1000, 4);        /* the frame the store's TAIL writes */
+    safe_write64_addr(0xFFC, 0xAABBCCDDEEFF0011ull);
+    CHECK(!cpu->pagefault);
+    CHECK_EQ((uint32_t)read32s(0xFFC), 0xEEFF0011u);   /* the low half, page 0 */
+    CHECK_EQ((uint32_t)read32s(0x1000), 0xAABBCCDDu);  /* the high half, page 1 */
+    CHECK_EQ(v86c_dbg_test_counts(), base + 1);
+    CHECK_EQ(v86c_dbg_watch_quiet_depth(), 0);
+
+    /* and the LINEAR address of the same straddling store matches too, still once */
+    v86c_dbg_test_watch_set(0xFFC, 8);
+    safe_write64_addr(0xFFC, 0x0011223344556677ull);
+    CHECK_EQ(v86c_dbg_test_counts(), base + 2);
+    CHECK_EQ(v86c_dbg_watch_quiet_depth(), 0);
+
+    /* a straddling 16-bit store: one line, and the second frame matches */
+    v86c_dbg_test_watch_set(0x2000, 1);
+    safe_write16_addr(0x1FFF, 0xCAFE);
+    CHECK_EQ((uint32_t)read8(0x1FFF), 0xFEu);
+    CHECK_EQ((uint32_t)read8(0x2000), 0xCAu);
+    CHECK_EQ(v86c_dbg_test_counts(), base + 3);
+    CHECK_EQ(v86c_dbg_watch_quiet_depth(), 0);
+
+    /* A WATCH ENTRY WHOSE END WRAPS THE ADDRESS SPACE IS NOT UNMATCHABLE: the range saturates, so
+     * the address it starts at is still watched (review m6 -- `a + len` wrapped, and a wrapped
+     * range can never satisfy `addr >= a && addr < a+len`). */
+    v86c_dbg_test_watch_set(0xFFFFFFFFFFFFFFFCull, 8);
+    v86c_dbg_watch_v(0xFFFFFFFFFFFFFFFCull, 1, 0xAB, 0x1000);
+    CHECK_EQ(v86c_dbg_test_counts(), base + 4);
+
+    v86c_dbg_test_disarm();
+    cpu->efer &= ~EFER_LMA;
+    cpu->is_64 = false;
+}
+
+/* ================================================================== *
  * TEST 1k -- THE DELIVERY TRACE COUNTS, RECORDS DEPTH, AND ITS PRINT WINDOW BOUNDS
  * (results/x86-64-ints.md)
  *
@@ -2102,6 +2209,8 @@ int main(void)
     RUN(test_cr2_64bit_read, "a long-mode `mov r64, cr2` returns the WHOLE linear address (and 32-bit mode is unchanged)");
     RUN(test_debug_toolkit_range_overlap, "the range hook counts only the ranges that contain a watched byte");
     RUN(test_debug_toolkit_watch_vp, "the long-mode store's physical frame is watchable: vp counts a hit through EITHER address, once");
+    RUN(test_debug_watch_long_mode_seat, "the watch's SEAT is the long-mode store path, and one store prints ONE line (mutants: hook deleted -> 0, guard removed -> 3)");
+    RUN(test_debug_watch_straddle_reports_once, "a straddling qword store reports exactly once and still matches the frame its TAIL writes");
     RUN(test_debug_ints_delivery, "the delivery trace counts every delivery, records nesting depth, and its print window BOUNDS");
     RUN(test_debug_rsplow_ring, "the rsp descent ring records every DECREASE from the previous instruction, keeps the LAST K, and dumps alone");
     RUN(test_debug_rsplow_loop_seat, "the ring's seat is in the interpreter's per-instruction loop (two pushes recorded)");

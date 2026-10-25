@@ -14,6 +14,8 @@
 
 bool v86c_dbg_watch_on;
 int v86c_dbg_delivery_bound = 4;
+int v86c_dbg_watch_quiet;
+bool v86c_dbg_no_stop;
 bool v86c_dbg_ring_on;
 bool v86c_dbg_break_on;
 static bool dump_on_stop;
@@ -193,6 +195,19 @@ void v86c_dbg_test_disarm(void)
 }
 int v86c_dbg_test_counts(void) { return test_counts; }
 
+/* arm ONE watch entry at a chosen address: the seat arms below drive a REAL store, so they need
+ * to watch the address that store touches (the default 0x31558 is the toolkit arm's own). */
+void v86c_dbg_test_watch_set(uint64_t addr, int len)
+{
+    watch_n = 1;
+    watch[0].addr = addr;
+    watch[0].len = len > 0 ? len : 1;
+    v86c_dbg_watch_on = true;
+}
+/* the guard's depth: a store path that raises it and returns without lowering it would silence
+ * every later report, so an arm asserts this is back to 0 after a store. */
+int v86c_dbg_watch_quiet_depth(void) { return v86c_dbg_watch_quiet; }
+
 
 void v86c_dbg_init(void)
 {
@@ -213,6 +228,17 @@ void v86c_dbg_init(void)
             if (*end == ':') { len = (int)strtol(end + 1, &end, 0); }
             watch[watch_n].addr = a;
             watch[watch_n].len = len > 0 ? len : 1;
+            /* AN ENTRY WHOSE END WRAPS THE ADDRESS SPACE NEVER FIRES (the matchers test
+             * `addr >= a && addr < a+len`, and a wrapped end makes that unsatisfiable).  Clamp
+             * the length to the space that is left and SAY SO, rather than leave a watch that
+             * silently watches nothing (results/x86-64-instrholes.md). */
+            if ((uint64_t)watch[watch_n].len > ~(uint64_t)0 - a) {
+                uint64_t room = ~(uint64_t)0 - a;
+                fprintf(stderr, "v86c dbg: WATCH 0x%llx:%d wraps the address space: clamped to"
+                                " 0x%llx\n", (unsigned long long)a, watch[watch_n].len,
+                        (unsigned long long)room);
+                watch[watch_n].len = room > 0x7FFFFFFFull ? 0x7FFFFFFF : (int)room;
+            }
             watch_n++;
             p = (*end == ',') ? end + 1 : end;
             if (p == end) break;
@@ -273,48 +299,94 @@ void v86c_dbg_init(void)
     }
 }
 
-static void watch_hit(int is_physical, uint64_t addr, int width, uint64_t value, uint64_t rip)
+/* THE END OF A WATCH ENTRY, SATURATING.  `a + len` wraps at the top of the address space, and a
+ * wrapped range is UNMATCHABLE (`addr < a || addr >= a+len` can never both hold), i.e. an entry
+ * that silently never fires.  The parser clamps what it can; this makes the matchers safe for
+ * every entry regardless of how it was set (the selftest sets one directly). */
+static uint64_t watch_end(uint64_t a, int len)
 {
+    uint64_t n = (uint64_t)(len > 0 ? len : 1);
+    return (a + n < a) ? ~(uint64_t)0 : a + n;
+}
+
+/* is `addr` in entry i's range? */
+static bool watch_contains(int i, uint64_t addr)
+{
+    uint64_t a = watch[i].addr;
+    return addr >= a && addr < watch_end(a, watch[i].len);
+}
+
+/* ONE STORE, ONE LINE.  `p_hi_used` false means the store lies inside one frame (p_hi == p_lo);
+ * true means it straddles a page boundary and BOTH frames are tested, still for ONE line. */
+static void watch_hit(int is_physical, uint64_t va, uint32_t p_lo, bool p_hi_used, uint32_t p_hi,
+                      int width, uint64_t value, uint64_t rip)
+{
+    if (v86c_dbg_watch_quiet) return;   /* this store has already been reported by its own path */
     for (int i = 0; i < watch_n; i++) {
-        uint64_t a = watch[i].addr;
-        if (addr < a || addr >= a + (uint64_t)watch[i].len) continue;
+        bool in_v = watch_contains(i, va);
+        bool in_p = watch_contains(i, (uint64_t)p_lo) ||
+                    (p_hi_used && watch_contains(i, (uint64_t)p_hi));
+        if (!in_v && !in_p) continue;
         test_counts++;
-        fprintf(stderr, "v86c dbg: WATCH %c 0x%llx width=%d value=0x%llx rip=0x%llx\n",
-                is_physical ? 'P' : 'V', (unsigned long long)addr, width,
-                (unsigned long long)value, (unsigned long long)rip);
+        if (is_physical) {
+            fprintf(stderr, "v86c dbg: WATCH P 0x%llx width=%d value=0x%llx rip=0x%llx\n",
+                    (unsigned long long)p_lo, width, (unsigned long long)value,
+                    (unsigned long long)rip);
+        }
+        else if (p_hi_used) {
+            fprintf(stderr, "v86c dbg: WATCH V 0x%llx -> P 0x%llx+0x%llx width=%d value=0x%llx"
+                            " rip=0x%llx (STRADDLES a page: one line for one store)\n",
+                    (unsigned long long)va, (unsigned long long)p_lo, (unsigned long long)p_hi,
+                    width, (unsigned long long)value, (unsigned long long)rip);
+        }
+        else {
+            fprintf(stderr, "v86c dbg: WATCH V 0x%llx -> P 0x%llx width=%d value=0x%llx"
+                            " rip=0x%llx\n",
+                    (unsigned long long)va, (unsigned long long)p_lo, width,
+                    (unsigned long long)value, (unsigned long long)rip);
+        }
     }
 }
 
+/* the LINEAR-address-only report: for a path that has no physical address to give (a store that
+ * faults before the walk, and the tools' own arms).  va == 0 means "no linear address". */
 void v86c_dbg_watch_v(uint64_t addr, int width, uint64_t value, uint64_t rip)
 {
-    watch_hit(0, addr, width, value, rip);
+    if (v86c_dbg_watch_quiet) return;
+    for (int i = 0; i < watch_n; i++) {
+        if (!watch_contains(i, addr)) continue;
+        test_counts++;
+        fprintf(stderr, "v86c dbg: WATCH V 0x%llx width=%d value=0x%llx rip=0x%llx\n",
+                (unsigned long long)addr, width, (unsigned long long)value,
+                (unsigned long long)rip);
+    }
 }
 
 void v86c_dbg_watch_p(uint32_t phys, int width, uint64_t value, uint64_t rip)
 {
-    watch_hit(1, (uint64_t)phys, width, value, rip);
+    if (v86c_dbg_watch_quiet) return;
+    for (int i = 0; i < watch_n; i++) {
+        if (!watch_contains(i, (uint64_t)phys)) continue;
+        test_counts++;
+        fprintf(stderr, "v86c dbg: WATCH P 0x%llx width=%d value=0x%llx rip=0x%llx\n",
+                (unsigned long long)phys, width, (unsigned long long)value,
+                (unsigned long long)rip);
+    }
 }
 
 /* THE LONG-MODE STORE'S TWO ADDRESSES AT ONCE (results/x86-64-watchphys.md).  A long-mode store
  * is issued as a LINEAR address and the frame it lands in exists only AFTER the walk, so the two
- * hooks above could not both speak for one store: watch_v fires before translate_address_write()
- * and watch_p only ever sees the 32-bit path's already-physical address.  The consequence was
- * measured -- V86C_WATCH on a PHYSICAL range (the documented way to watch a frame) saw NOTHING
- * from any 64-bit store.  This one carries both, tests every entry against BOTH, and counts an
- * entry ONCE even when its range contains both: a hit is a hit, not two. */
+ * hooks above could not both speak for one store.  This one carries both, tests every entry
+ * against BOTH, and prints ONCE even when its range contains both: a hit is a hit, not two. */
 void v86c_dbg_watch_vp(uint64_t va, uint32_t phys, int width, uint64_t value, uint64_t rip)
 {
-    for (int i = 0; i < watch_n; i++) {
-        uint64_t a = watch[i].addr;
-        uint64_t end = a + (uint64_t)watch[i].len;
-        bool in_v = va >= a && va < end;
-        bool in_p = (uint64_t)phys >= a && (uint64_t)phys < end;
-        if (!in_v && !in_p) continue;
-        test_counts++;
-        fprintf(stderr, "v86c dbg: WATCH V 0x%llx -> P 0x%llx width=%d value=0x%llx rip=0x%llx\n",
-                (unsigned long long)va, (unsigned long long)phys, width,
-                (unsigned long long)value, (unsigned long long)rip);
-    }
+    watch_hit(0, va, phys, false, phys, width, value, rip);
+}
+
+void v86c_dbg_watch_vp_split(uint64_t va, uint32_t p_lo, uint32_t p_hi, int width, uint64_t value,
+                             uint64_t rip)
+{
+    watch_hit(0, va, p_lo, true, p_hi, width, value, rip);
 }
 
 /* A BULK COPY IS ONE STORE THE PER-BYTE HOOK CANNOT SEE: string.c's fast path writes a whole
@@ -328,9 +400,10 @@ void v86c_dbg_watch_vp(uint64_t va, uint32_t phys, int width, uint64_t value, ui
 void v86c_dbg_watch_range(uint64_t phys, uint64_t len, uint64_t rip)
 {
     int i;
+    if (v86c_dbg_watch_quiet) return;
     for (i = 0; i < watch_n; i++) {
         uint64_t a = watch[i].addr;
-        uint64_t b = a + (uint64_t)watch[i].len;
+        uint64_t b = watch_end(a, watch[i].len);
         uint64_t lo = phys > a ? phys : a;
         uint64_t hi = (phys + len) < b ? (phys + len) : b;
         if (lo >= hi) continue;
@@ -345,9 +418,9 @@ void v86c_dbg_watch_range(uint64_t phys, uint64_t len, uint64_t rip)
  * This one is the faulting access itself -- the shape that answers "who writes 0x31558". */
 void v86c_dbg_watch_fault(uint64_t addr, bool write, uint64_t rip)
 {
+    if (v86c_dbg_watch_quiet) return;
     for (int i = 0; i < watch_n; i++) {
-        uint64_t a = watch[i].addr;
-        if (addr < a || addr >= a + (uint64_t)watch[i].len) continue;
+        if (!watch_contains(i, addr)) continue;
         test_counts++;
         fprintf(stderr, "v86c dbg: WATCH F 0x%llx %s rip=0x%llx (the access FAULTED, no store)\n",
                 (unsigned long long)addr, write ? "write" : "read", (unsigned long long)rip);
@@ -422,20 +495,34 @@ static void dump_peek(void)
 static void dump_peek_sp(void)
 {
     const char *k = getenv("V86C_PEEK_SP");
-    uint64_t len;
+    uint64_t len, va;
     int i;
     bool saved;
     if (k == NULL) return;
     len = strtoull(k, NULL, 0);
     if (len > 4096) len = 4096;
     saved = cpu->pagefault;
-    fprintf(stderr, "v86c dbg: PEEK SP 0x%llx (%llu bytes):", (unsigned long long)cpu->reg64[4],
+    va = cpu->reg64[4];
+    fprintf(stderr, "v86c dbg: PEEK SP 0x%llx (%llu bytes):", (unsigned long long)va,
             (unsigned long long)len);
+    /* A DIAGNOSTIC MUST NOT BE ABLE TO STOP THE MACHINE (results/x86-64-instrholes.md).  Two
+     * ways it could: a NON-CANONICAL rsp made the 4-level walk deliver a real #GP (the same
+     * perturbation class 484f04f fixed for #PF), and a walk that hit WALK64_TABLE/WALK64_BOUND
+     * called unimplemented_instruction -- a STOP, raised by the dump, in a run the dump was
+     * supposed to observe.  The address is refused here; v86c_dbg_no_stop covers the named
+     * stops the walk can still reach from a canonical address. */
+    if (long_mode_64() && ((va >> 47) != 0 && (va >> 47) != 0x1FFFFull)) {
+        fprintf(stderr, " <not walked: 0x%llx is not a canonical address>\n",
+                (unsigned long long)va);
+        return;
+    }
+    v86c_dbg_no_stop = true;
     for (i = 0; i < (int)len; i++) {
-        uint32_t p = translate_address_read_no_side_effects((uint64_t)(cpu->reg64[4] + (uint64_t)i));
-        if (cpu->pagefault) { fprintf(stderr, " <fault at +%d>", i); break; }
+        uint32_t p = translate_address_read_no_side_effects((uint64_t)(va + (uint64_t)i));
+        if (cpu->pagefault) { fprintf(stderr, " <not walked: the walk refused at +%d>", i); break; }
         fprintf(stderr, " %02x", (unsigned)read8(p));
     }
+    v86c_dbg_no_stop = false;
     fprintf(stderr, "\n");
     cpu->pagefault = saved;
 }
@@ -579,14 +666,18 @@ void v86c_dbg_ints_delivery(int32_t vector, bool is_int, bool has_error_code,
         else strcpy(err, "-");
         ints_printed++;
         test_counts++;
-        /* cr2 IS THE FAULTING ADDRESS FOR vec=14 ONLY (results/x86-64-nostorm.md ss5): every
-         * other delivery leaves it stale, and reading it as "the address this exception is
-         * about" is the same trap as reading a stale stack word as a return address. */
+        /* cr2 IS THE FAULTING ADDRESS FOR A WALK-RAISED #PF ONLY (results/x86-64-nostorm.md ss5,
+         * corrected in results/x86-64-instrholes.md): every other delivery leaves it stale, and a
+         * guest `int $0x0e` is the trap here -- same vector, NO walk, so cr2 is whatever the last
+         * real fault left.  `is_int` is the tell: a hardware/exception fault arrives with is_int
+         * false and the walk has set cr2 by then (trigger_pagefault), an `int $0x0e` arrives with
+         * is_int true.  The vec==14 RULE is unchanged; only its label got the source it needed. */
         fprintf(stderr, "v86c dbg: INTS %d vec=%d int=%d err=%s cpl=%d depth=%d from_rip=0x%llx"
                         " rsp=0x%llx cs=0x%llx%s0x%llx\n",
                 ints_total, (int)vector, is_int ? 1 : 0, err, (int)cpu->cpl, depth,
                 (unsigned long long)interrupted_rip, (unsigned long long)rsp,
-                (unsigned long long)cs, vector == 14 ? " cr2=" : " cr2(stale)=",
+                (unsigned long long)cs,
+                (vector == 14 && !is_int) ? " cr2=" : " cr2(stale)=",
                 (unsigned long long)cpu->cr2_64);
     }
     else if (!ints_window_closed) {
@@ -627,10 +718,15 @@ static void dump_ints_summary(void)
 
 /* THE DESCENT'S TAIL, oldest first, with the TOTAL on the first line: a ring holding the last K of
  * N is only readable if N is printed (a bounded window read as the whole story is this lane's most
- * expensive instrument failure).  `delta` is the DECREASE from the rsp the PREVIOUS instruction left,
- * so the printed sequence IS the stack's motion -- each line a push (or a `sub rsp`) that lowered rsp
- * below where the instruction before it left it, and the rip that did it is what a kallsyms lookup
- * then names.  `min` is informational (the lowest rsp seen and the instruction that first reached it),
+ * expensive instrument failure).  `delta` is the DECREASE from the rsp the PREVIOUS instruction
+ * left, so the printed sequence IS the stack's motion -- but a line is a NET decrease over one
+ * instruction SLOT, and three different things can produce one: a push, a `sub rsp`, or an
+ * exception DELIVERY whose frame push happens inside the slot (delivery runs inside
+ * run_instruction, so the tick at cpu.c's per-instruction seat sees post-delivery rsp).  The gloss
+ * here used to say "each line a push (or a `sub rsp`)", which is wrong for exactly the lines that
+ * dominate an oops stop's tail (results/x86-64-instrholes.md, from the review's m4): the rip names
+ * the instruction the decrease is ATTRIBUTABLE TO, not necessarily one that stored to the stack.
+ * `min` is informational (the lowest rsp seen and the instruction that first reached it),
  * NOT the event rule -- see the block comment above the state. */
 static void dump_rsplow(void)
 {

@@ -78,6 +78,11 @@ void unimplemented_instruction(const char *name)
 	 * overwrote the first and the machine reported the SYMPTOM: MEASURED on gate-long-mode.sh's
 	 * 1 GiB / 2 MiB mutation probes, which found no walk stop at all.  The machine stops either
 	 * way; what changes is that the reason a reader gets is the first one. */
+	/* A DIAGNOSTIC MUST NOT BE ABLE TO STOP THE MACHINE (results/x86-64-instrholes.md): the
+	 * toolkit's peek walks the page tables, and a walk that hit one of its NAMED stops would
+	 * stop the guest from inside a dump.  v86c_dbg_no_stop is set only for the duration of that
+	 * walk; the walk still sets cpu->pagefault, so the peek reports "not walked" instead. */
+	if (v86c_dbg_no_stop) return;
 	if (interpreted_unimplemented) return;
 	v86c_dbg_on_stop(name);
 	interpreted_unimplemented = true;
