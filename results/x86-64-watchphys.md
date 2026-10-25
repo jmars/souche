@@ -1,5 +1,81 @@
 # x86-64: `V86C_WATCH` could not see the PHYSICAL frame a long-mode store went to
 
+---
+
+> # CORRECTION (appended after the fact — READ THIS BEFORE §1)
+>
+> **This report's §1 headline and `5178acd`'s commit message are REFUTED by the tree's own record.**
+> The original text is left exactly as it was written (see the in-place note in §1); what follows is
+> what was measured instead.
+>
+> ## What the original claimed
+>
+> §1, verbatim: an operator who sets `V86C_WATCH` on a **physical** range "saw **nothing** from any
+> long-mode store", and `5178acd`'s message: "a watch set on a physical frame could **never match
+> one** — an instrument that cannot speak, the sixth instance of the lane's trap 1". §2 repeats it
+> as the reason for the change.
+>
+> ## What is measured instead
+>
+> **The physical write routers already carried `v86c_dbg_watch_p` hooks, and every long-mode store
+> reaches them.** READ, and present at *this unit's own baseline* `592687f`, not just afterwards:
+>
+> * `src/cpu/memory.c:526/545/571/593` (plus `:687`) each begin
+>   `if (v86c_dbg_watch_on) v86c_dbg_watch_p(addr, <width>, ...)` — MEASURED with
+>   `git show 5178acd~1:src/cpu/memory.c | rg -n v86c_dbg_watch_p` → the same five lines. They
+>   landed in `55ec3cb`, whose own subject is exactly this hook.
+> * Every long-mode store ends at one of those routers (READ, `git show 5178acd~1:src/cpu/paging.c`):
+>   `safe_write8_addr` → `write8(p, value)`; `safe_write16_addr` → `write16(p, value)`;
+>   `safe_write32_addr` → `safe_write32_addr_local` → `write32(p, value)`; `safe_write64_addr` →
+>   `write32(p, …)` twice.
+>
+> **And it was MEASURED speaking, from the long-mode amd64 guest, on that baseline** —
+> `results/x86-64-producer.md:30-31`:
+>
+> ```
+> WATCH P 0x2413d60 width=4 value=0xffffffffc0000000 rip=0xffffffff8ae9ef45
+> WATCH P 0x2413d64 width=4 value=0xffffffffffff8c16 rip=0xffffffff8ae9ef45
+> ```
+>
+> A watch on a **physical** address, fired by a long-mode guest store. The instrument could speak;
+> the "sixth instance of trap 1" framing is itself a misreading, and so is §1's "the 32-bit path was
+> fine" (see the last item below).
+>
+> ## What the change genuinely added (recorded honestly, not inflated)
+>
+> `5178acd` added the **LINEAR address the physical hit came from**: one line,
+> `WATCH V 0x<va> -> P 0x<phys> width=… value=… rip=…`, instead of a `V` line with no frame and a
+> `P` line with no virtual address. That pairing is what makes a physical hit *attributable* — it is
+> what let `results/x86-64-setcc.md` read a store to the truncated range `0xffffffffc0003b1b` against
+> the frame it really landed in (its decisive lines are the `WATCH F` line plus `cr2`, which the
+> pairing made interpretable, not the pairing alone). The follow-up unit
+> (`results/x86-64-instrholes.md` §2) then made one store print **one** line instead of 2-4.
+> So: not "an instrument that could not speak", but "an instrument that could not say which address
+> it was speaking about".
+>
+> ## §2's straddle claim, corrected
+>
+> §2 says the straddle arms "recurse into the per-half writers, which now hook themselves" and is
+> right about 16/32-bit, but the **qword** straddle's stated mechanism was wrong too:
+> `safe_write32_addr_local` has no hook of its own, yet it ends in `write32(p, …)` — the physical
+> router, which hooks. MEASURED in `results/x86-64-instrholes.md` §1 (mutant C, pre-unit straddle arm
+> restored): a straddling qword store at linear `0xffc` printed `WATCH P 0x1000 width=4 …` for its
+> **second** frame. What the straddle arm did not carry was the **linear** address, and it printed
+> two lines for one store — a real defect, but not a silence. `results/x86-64-instrholes.md` is the
+> current measurement of these arms and supersedes §2 and §5 here.
+>
+> ## "The 32-bit path was fine" — false under the default engine
+>
+> READ, and checked before asserting: `jit_enabled` defaults **true** (`src/cpu/jit_mem.c:42`) and
+> `jitcg_emit_mem_store` (`src/cpu/jit_codegen.c:404-421`) writes the store natively with
+> `jx64_mov_rm_r32`/`…_r16`/`…_r8` — no watch hook on that path at all. A 32-bit-mode RAM store that
+> hits the TLB therefore carried **no** watch (~91% of the 32-bit bench, per
+> `souche-instruments-review` m5). Long mode is unaffected: `src/cpu/uop_cache.c:1332-1336` sends
+> every long-mode batch to `interpreted_run`, and the JIT never sees it. The 32-bit path was not
+> "fine"; it was unmeasured on the engine the bench actually runs.
+
+---
+
 **Status: INSTRUMENT FIXED, gated, four gates green, no pin moved.** Claims tagged MEASURED / READ.
 This is trap 1 of `results/x86-64-handoff.md` §7 ("an instrument's silence is not evidence unless the
 instrument can speak") in its sixth instance; the next scheduled measurement (a physical watch on the
@@ -17,6 +93,13 @@ Consequence, and it is exactly the shape the peekfix note hit: an operator who s
 PHYSICAL range (the documented way to watch a frame, `V86C_WATCH=0xf802000:0x1000`) saw **nothing**
 from any long-mode store. The 32-bit path was fine (`memory.c`'s `write*()` report physical addresses,
 `paging.c`'s `safe_write*()` the virtual one); the amd64 guest runs in no other mode than the blind one.
+
+> **CORRECTION, appended later: this paragraph is REFUTED — a physical-range `V86C_WATCH` did NOT
+> see nothing.** The hooks at `src/cpu/memory.c:526/545/571/593` were already there at this unit's
+> baseline and `results/x86-64-producer.md:30-31` MEASURED `WATCH P 0x2413d60 …` from the long-mode
+> guest. See the CORRECTION section at the top of this file for the evidence, for what `5178acd`
+> genuinely added (the linear address), and for the §2 straddle correction.
+
 
 ## 2. The change
 

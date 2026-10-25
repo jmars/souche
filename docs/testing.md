@@ -135,16 +135,41 @@ parses it out of the ELF's `.rodata` — structurally, never from hard-coded fil
     0xffffffff81c00c02 -> asm_exc_page_fault+0x22
     0xffffffff81a3d3aa -> exc_page_fault+0xca
 
-It prints `<address> -> <symbol>+<offset>` per address, and one banner line on stderr with the table
+It prints `<address> -> <symbol>+<offset>` per address, and two banner lines on stderr: the table
 geometry (symbol count, `relative_base`, where the offsets/names/markers/token tables were found,
-which offset convention the image uses).  Addresses are **link** addresses; a guest's slid address
-must have the slide subtracted first.  The parse is proved by anchors that are independent of it —
-section boundaries (`_text` = 0xffffffff81000000, `__start_rodata` = 0xffffffff82000000,
-`__bss_start` = 0xffffffff8330d000, all three equal to the ELF section addresses) and the names of
-disassembled functions (`__stack_chk_fail`, `asm_exc_page_fault`, `vsnprintf`/`pointer`/
-`symbol_string`); see `results/x86-64-rsplow.md` §4.  A one-symbol shift of the offsets array is
-caught by the table's own sortedness and by those anchors — that shift is the failure mode to expect
-from a parser like this, and it names plausible-but-wrong symbols silently.
+which offset convention the image uses **and the evidence that chose it**), then the validated
+**symbol domain** — the range in which a name means anything, from the ELF's text floor to the
+highest symbol the table holds.  Addresses are **link** addresses; a guest's slid address must have
+the slide subtracted first.
+
+Outside the domain the tool prints a **named refusal instead of a name**, and exits 1 — a
+nearest-entry lookup always has an answer, and a plausible wrong name is the worst output a naming
+tool can produce:
+
+    0xffff888000000000 -> <not kernel text: the direct-map/vmalloc/vmemmap range ... no symbol name is meaningful here>
+    0xffffffffc0123000 -> <not kernel text: the module region (0xffffffffc0000000..0xffffffffff000000) ...>
+    0x1000             -> <not an address: the percpu offset namespace ...>
+
+A per-cpu symbol's **offset** is refused too: it is meaningless without that CPU's per-cpu base.  The
+convention (base-relative / `ABSOLUTE_PERCPU`) is accepted only if its first decoded address at or
+above the text floor falls inside the ELF's `.text`/`.init.text`/`.exit.text` VMA range **and** the
+decoded table is non-decreasing; if no convention validates, the tool exits non-zero and names
+nothing.
+
+Prove the tool before quoting it — the anchors are independent of the parse (the ELF's section VMAs
+and the symbols at them, `__stack_chk_fail` at the address `.text` calls 8914 times, the `#PF`
+entry), plus the three refusals above:
+
+    python3 tools/kallsyms.py /tmp/vmlinux.bin --verify
+    ...
+    verify: PASS __stack_chk_fail: 0xffffffff81a3d470 is the target of 8914 call rel32 in .text ...
+    verify: PASS refusal of 0x1000: refused by name, not named
+    verify: 8/8 anchors pass                      (rc 0; a shifted table gives 4/8 and rc 1)
+
+See `results/x86-64-kallsyms-guards.md`.  A one-symbol shift of the offsets array is caught by the
+table's own sortedness, by the domain check and by those anchors — that shift is the failure mode to
+expect from a parser like this, and (before these guards) it named plausible-but-wrong symbols
+silently.
 
 ## 3. The rules, each of which cost something real
 
