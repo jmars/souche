@@ -1701,6 +1701,32 @@ void instr64_0FAD_reg(int32_t r1, int32_t r)
 	write_reg64(r1, shrd64(read_reg64(r1), read_reg64(r), read_reg8(CL) & 63));
 }
 
+/* 0x0F A4 SHLD r/m64, r64, imm8 and 0x0F AC SHRD (muldiv-shld-shrd, the imm8 halves).
+ * SDM: the count is masked to SIX bits at operand size 64 (not five -- five is the 32-bit
+ * rule), and a count of 0 (i.e. an imm8 of 0, 64, 128 or 192) leaves the destination AND the
+ * flags UNCHANGED.  Both rules live in shld64/shrd64 (arith.c), which is why the body only
+ * masks: the guest's own `48 0F AC D0 20` is shrd rax, rdx, 0x20. */
+void instr64_0FA4_mem(int64_t addr, int32_t r, int32_t imm)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, shld64(x, read_reg64(r), imm & 63));
+}
+void instr64_0FA4_reg(int32_t r1, int32_t r, int32_t imm)
+{
+	write_reg64(r1, shld64(read_reg64(r1), read_reg64(r), imm & 63));
+}
+void instr64_0FAC_mem(int64_t addr, int32_t r, int32_t imm)
+{
+	uint64_t x = safe_read64_addr(addr);
+	if (cpu->pagefault) return;
+	safe_write64_addr(addr, shrd64(x, read_reg64(r), imm & 63));
+}
+void instr64_0FAC_reg(int32_t r1, int32_t r, int32_t imm)
+{
+	write_reg64(r1, shrd64(read_reg64(r1), read_reg64(r), imm & 63));
+}
+
 /* 0x0F BC BSF and 0x0F BD BSR (muldiv-bsf-bsr-bswap): ZF is the ONLY defined flag, and a zero
  * source leaves the destination UNCHANGED. */
 static void bsf_bsr_flags(bool zero)

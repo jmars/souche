@@ -138,7 +138,9 @@ const x86_table64_0f = [
 	{ opcode: 0xBF }, /* movsx r64, r/m16 */
 	/* S8: the 0F-qualified arithmetic/bit family (family 4's cases) */
 	{ opcode: 0xAF }, /* imul r64, r/m64 */
+	{ opcode: 0xA4 }, /* shld r/m64, r64, imm8 */
 	{ opcode: 0xA5 }, /* shld r/m64, r64, cl */
+	{ opcode: 0xAC }, /* shrd r/m64, r64, imm8 */
 	{ opcode: 0xAD }, /* shrd r/m64, r64, cl */
 	{ opcode: 0xBC }, /* bsf r64, r/m64 */
 	{ opcode: 0xBD }, /* bsr r64, r/m64 */

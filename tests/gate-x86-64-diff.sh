@@ -22,11 +22,11 @@ PASS=0; FAIL=0
 step() { local n="$1"; shift; if "$@" >$LOG 2>&1; then PASS=$((PASS+1)); echo "ok   $n"; else FAIL=$((FAIL+1)); echo "FAIL $n"; sed -n '1,25p' $LOG; fi; }
 must_fail() { local n="$1"; shift; if "$@" >$LOG 2>&1; then FAIL=$((FAIL+1)); echo "FAIL $n (it PASSED and must not)"; else PASS=$((PASS+1)); echo "ok   $n (correctly refused)"; fi; }
 
-echo "== A. EVERY ENGINE AGREES WITH THE HOST on the whole corpus (88 cases each)"
+echo "== A. EVERY ENGINE AGREES WITH THE HOST on the whole corpus (89 cases each)"
 for e in interp uop uopjit; do
 	step "corpus-$e" $PYTHON tests/nasm64_run.py --stage run \
 		--actual "$PORT64 {img} {limit} --fixture64 --long-mode on --cpu-engine $e" \
-		--expect counts --expect-counts "green=88 red_unimplemented=0 mismatch=0 error=0" --quiet
+		--expect counts --expect-counts "green=89 red_unimplemented=0 mismatch=0 error=0" --quiet
 done
 
 echo "== B. THE ENGINES' DOCUMENTS ARE BYTE-IDENTICAL (the differential proper)"

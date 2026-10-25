@@ -1192,6 +1192,46 @@ case("muldiv", "rol-preserves-flags",
     and dword ptr [rsp - 8], 0x8C5
     cmp rax, rax
 """)
+case("muldiv", "shld-shrd-imm8",
+     "SHLD/SHRD with an imm8 count: the count is masked to SIX bits at operand size 64 (not "
+     "five), and a count of 0 leaves the destination AND the flags UNCHANGED.  `shrd rax, rdx, "
+     "0x20` is the amd64 guest's own instruction (48 0F AC D0 20): at 64 bits it shifts in the "
+     "HIGH half of rdx, at 32 bits a five-bit mask turns the count into 0 and leaves eax alone; "
+     "the memory form is the same width rule.",
+     """\
+    mov rax, 0x99AABBCCDDEEFF00
+    mov rdx, 0x1122334455667788
+    shrd rax, rdx, 0x20
+    mov qword ptr [0x100160], rax
+    # (rax >> 32) | (rdx << 32) = 0x1122334499AABBCC; a 32-bit body leaves 0xDDEEFF00
+    mov rbx, 0x0123456789ABCDEF
+    mov rcx, 0xFEDCBA9876543210
+    shld rbx, rcx, 16
+    mov qword ptr [0x100168], rbx
+    # (rbx << 16) | (rcx >> 48) = 0x456789ABCDEFFEDC
+    mov rsi, 0x8000000000000001
+    mov qword ptr [0x100180], rsi
+    mov rdx, 0x00000000000000FF
+    shrd qword ptr [0x100180], rdx, 8
+    # the r/m64 MEMORY form: 0x0080000000000000 | 0xFF = 0x00800000000000FF
+    mov rax, 0xDEADBEEFCAFEBABE
+    mov rdx, 0x0123456789ABCDEF
+    cmp rax, rax
+    # a count of 0 (imm8 0) must leave BOTH the destination and the flags alone; the cmp above
+    # leaves ZF=0/SF=1, so a body that always sets the shift's flags reports ZF=1/SF=0 here
+    shrd rax, rdx, 0
+    mov qword ptr [0x1001B0], rax
+    pushfq
+    pop qword ptr [0x100200]
+    and dword ptr [0x100200], 0x8C5
+    and dword ptr [rsp - 8], 0x8C5
+    shld rdx, rax, 0
+    mov qword ptr [0x1001B8], rdx
+    # the flags element is compared with MASK_ARITH unconditionally, so the body ends with a
+    # flag-DEFINING instruction that touches no register
+    cmp rax, rax
+""")
+
 case("muldiv", "shld-shrd",
      "SHLD/SHRD concatenate TWO 64-bit operands: the shifted-in bits come from the "
      "other 64-bit register, not from its low half",

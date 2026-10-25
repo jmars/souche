@@ -25,8 +25,8 @@
  * reached this way still stops by name, exactly as the unprefixed encoding does.
  * See gen/interpreter_c.js, C-side difference 3.
  *
- * 2299 call sites, 42 of them unimplemented at the time this
- * file was generated (2261 instr* symbols defined in the port's sources).
+ * 2303 call sites, 42 of them unimplemented at the time this
+ * file was generated (2265 instr* symbols defined in the port's sources).
  */
 
 #include "cpu.h"
@@ -16249,8 +16249,20 @@ void run_instruction0f(int32_t opcode)
 	break;
 	case 0x2A4:
 	{
-		unimplemented_instruction("long mode: 0F A4 has no 64-bit arm in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve_imm(modrm_byte, 1);
+			if (cpu->pagefault) return;
+			int64_t imm = read_imm8();
+			if (cpu->pagefault) return;
+			instr64_0FA4_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
+		}
+		else {
+			int64_t imm = read_imm8();
+			if (cpu->pagefault) return;
+			instr64_0FA4_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
+		}
 	}
 	break;
 	case 0xA5:
@@ -16447,8 +16459,20 @@ void run_instruction0f(int32_t opcode)
 	break;
 	case 0x2AC:
 	{
-		unimplemented_instruction("long mode: 0F AC has no 64-bit arm in gen/x86_table64.js");
-		return;
+		int32_t modrm_byte = read_imm8();
+		if (cpu->pagefault) return;
+		if (modrm_byte < 0xC0) {
+			int64_t addr = modrm_resolve_imm(modrm_byte, 1);
+			if (cpu->pagefault) return;
+			int64_t imm = read_imm8();
+			if (cpu->pagefault) return;
+			instr64_0FAC_mem(addr, reg_index_r(modrm_byte >> 3 & 7), imm);
+		}
+		else {
+			int64_t imm = read_imm8();
+			if (cpu->pagefault) return;
+			instr64_0FAC_reg(reg_index_b(modrm_byte & 7), reg_index_r(modrm_byte >> 3 & 7), imm);
+		}
 	}
 	break;
 	case 0xAD:
