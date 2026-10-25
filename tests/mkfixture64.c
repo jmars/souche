@@ -66,6 +66,24 @@
 #define BSS_START 0x100000UL
 #define BSS_END 0x102000UL
 
+/* THE ABOVE-4-GIBIT ALIAS (results/x86-64-addrwidth.md).  The emulated leg's stub maps
+ * linear 0x100000000 onto physical 0x100000 -- the compared window itself -- so a corpus case
+ * whose MEMORY OPERAND is above 4 GiB writes bytes the document already compares.  The host
+ * has no such mapping, and without one such a case would SIGSEGV here (which the comparison
+ * would read as a #GP) and prove nothing about the port.  So the image lives in a SHARED
+ * memfd mapped TWICE: at the link base, and again at HIGH_BASE with the file offset that
+ * makes host address HIGH_BASE + x BE host address BSS_START + x.  THE WINDOW IS A PAGE TABLE
+ * RANGE, NOT THE WHOLE IMAGE: gen/nasm64_gen.py's PT2 identity-maps physical
+ * 0x100000..0x108000 (8 x 4 KiB), and the alias covers exactly that.
+ *
+ * MEASURED, the reason this exists: the reviewer's sweep found that no corpus case had ever
+ * used the generator's HIGH_BASE window, so the corpus could not catch ANY narrowing of a
+ * 64-bit effective address -- the class that produced the setcc blocker and the fxsave one. */
+#define HIGH_BASE 0x100000000UL
+#define HIGH_LEN 0x8000UL                          /* PT2: physical 0x100000..0x108000 */
+#define HIGH_FILE_OFF (BSS_START - LOAD_BASE)      /* 0x80000: address 0x100000's offset */
+#define HIGH_ALIAS_FILE_END (HIGH_FILE_OFF + HIGH_LEN)
+
 struct regs64 {
 	unsigned long r15, r14, r13, r12, rbp, rbx, r11, r10, r9, r8, rax, rcx, rdx, rsi,
 	              rdi, orig_rax, rip, cs, eflags, rsp, ss, fs_base, gs_base, ds, es, fs, gs;
@@ -295,10 +313,16 @@ int main(int argc, char **argv)
 	calibrate_ftw();     /* BEFORE the fork: the child inherits a defined FPU state and
 	                      * the trampoline re-does fninit anyway */
 
+	/* the shared object the child maps twice -- see HIGH_BASE's comment.  Created BEFORE the
+	 * fork: the child must not do syscalls it does not have to while traced. */
+	int mfd = memfd_create("nasm64-image", 0);
+	if (mfd < 0) { perror("memfd_create"); return 1; }
+	if (ftruncate(mfd, HIGH_ALIAS_FILE_END) < 0) { perror("ftruncate"); return 1; }
+
 	pid_t pid = fork();
 	if (pid == 0) {
 		void *mapped = mmap((void *)LOAD_BASE, MAX_IMAGE, PROT_READ | PROT_WRITE | PROT_EXEC,
-		                    MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
+		                    MAP_SHARED | MAP_FIXED_NOREPLACE, mfd, 0);
 		if (mapped != (void *)LOAD_BASE) {
 			/* the plan's named fallback is the ELF64 branch in load_elf; until then
 			   this must be LOUD, because everything downstream is meaningless */
@@ -306,6 +330,12 @@ int main(int argc, char **argv)
 			_exit(127);
 		}
 		memcpy((void *)LOAD_BASE, image, (size_t)image_size);
+		void *high = mmap((void *)HIGH_BASE, HIGH_LEN, PROT_READ | PROT_WRITE | PROT_EXEC,
+		                  MAP_SHARED | MAP_FIXED_NOREPLACE, mfd, (off_t)HIGH_FILE_OFF);
+		if (high != (void *)HIGH_BASE) {
+			perror("mmap(MAP_FIXED_NOREPLACE at 0x100000000)");
+			_exit(127);
+		}
 		if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0) { perror("TRACEME"); _exit(127); }
 		raise(SIGSTOP);      /* the parent pokes int3 at `loop` from here */
 		jump_to_body(body_addr);

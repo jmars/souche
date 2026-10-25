@@ -139,28 +139,28 @@ uint64_t f80_to_f64(f80_t v)
 f80_t i32_to_f80(int32_t v) { return f80_of_i32(v); }
 f80_t i64_to_f80(int64_t v) { return f80_of_i64(v); }
 
-f80_t fpu_load_i16(int32_t addr)
+f80_t fpu_load_i16(int64_t addr)
 {
     int32_t v = safe_read16(addr);
     if (cpu->pagefault) return F80_ZERO;
     return f80_of_i32((int16_t)v); /* safe_read16 zero-extends; upstream re-signs it */
 }
 
-f80_t fpu_load_i32(int32_t addr)
+f80_t fpu_load_i32(int64_t addr)
 {
     int32_t v = safe_read32s(addr);
     if (cpu->pagefault) return F80_ZERO;
     return f80_of_i32(v);
 }
 
-f80_t fpu_load_i64(int32_t addr)
+f80_t fpu_load_i64(int64_t addr)
 {
     uint64_t v = safe_read64s(addr);
     if (cpu->pagefault) return F80_ZERO;
     return f80_of_i64((int64_t)v);
 }
 
-f80_t fpu_load_m32(int32_t addr)
+f80_t fpu_load_m32(int64_t addr)
 {
     f80_t x;
     int32_t raw;
@@ -172,7 +172,7 @@ f80_t fpu_load_m32(int32_t addr)
     return x;
 }
 
-f80_t fpu_load_m64(int32_t addr)
+f80_t fpu_load_m64(int64_t addr)
 {
     f80_t x;
     uint64_t raw;
@@ -184,7 +184,7 @@ f80_t fpu_load_m64(int32_t addr)
     return x;
 }
 
-f80_t fpu_load_m80(int32_t addr)
+f80_t fpu_load_m80(int64_t addr)
 {
     f80_t x;
     uint64_t mantissa = safe_read64s(addr);
@@ -514,21 +514,21 @@ void fpu_fucompp(void)
  * load / store (fpu.rs:254-256, 324-415, 456-460, 552-637)
  * ------------------------------------------------------------------ */
 
-void fpu_fildm16(int32_t addr)
+void fpu_fildm16(int64_t addr)
 {
     f80_t x = fpu_load_i16(addr);
     if (cpu->pagefault) return;
     fpu_push(x);
 }
 
-void fpu_fildm32(int32_t addr)
+void fpu_fildm32(int64_t addr)
 {
     f80_t x = fpu_load_i32(addr);
     if (cpu->pagefault) return;
     fpu_push(x);
 }
 
-void fpu_fildm64(int32_t addr)
+void fpu_fildm64(int64_t addr)
 {
     f80_t x = fpu_load_i64(addr);
     if (cpu->pagefault) return;
@@ -604,7 +604,7 @@ int16_t fpu_truncate_to_i16(f80_t f)
     return (int16_t)st0;
 }
 
-void fpu_fistm16(int32_t addr)
+void fpu_fistm16(int64_t addr)
 {
     int16_t v;
     writable_or_pagefault(addr, 2);
@@ -613,14 +613,14 @@ void fpu_fistm16(int32_t addr)
     safe_write16(addr, v & 0xFFFF);
 }
 
-void fpu_fistm16p(int32_t addr)
+void fpu_fistm16p(int64_t addr)
 {
     fpu_fistm16(addr);
     if (cpu->pagefault) return;
     fpu_pop();
 }
 
-void fpu_fisttpm16(int32_t addr)
+void fpu_fisttpm16(int64_t addr)
 {
     int16_t v;
     writable_or_pagefault(addr, 2);
@@ -630,7 +630,7 @@ void fpu_fisttpm16(int32_t addr)
     fpu_pop();
 }
 
-void fpu_fistm32(int32_t addr)
+void fpu_fistm32(int64_t addr)
 {
     int32_t v;
     writable_or_pagefault(addr, 4);
@@ -639,14 +639,14 @@ void fpu_fistm32(int32_t addr)
     safe_write32(addr, v);
 }
 
-void fpu_fistm32p(int32_t addr)
+void fpu_fistm32p(int64_t addr)
 {
     fpu_fistm32(addr);
     if (cpu->pagefault) return;
     fpu_pop();
 }
 
-void fpu_fisttpm32(int32_t addr)
+void fpu_fisttpm32(int64_t addr)
 {
     int32_t v;
     writable_or_pagefault(addr, 4);
@@ -656,7 +656,7 @@ void fpu_fisttpm32(int32_t addr)
     fpu_pop();
 }
 
-void fpu_fistm64p(int32_t addr)
+void fpu_fistm64p(int64_t addr)
 {
     int64_t v;
     writable_or_pagefault(addr, 8);
@@ -666,7 +666,7 @@ void fpu_fistm64p(int32_t addr)
     fpu_pop();
 }
 
-void fpu_fisttpm64(int32_t addr)
+void fpu_fisttpm64(int64_t addr)
 {
     int64_t v;
     writable_or_pagefault(addr, 8);
@@ -676,28 +676,28 @@ void fpu_fisttpm64(int32_t addr)
     fpu_pop();
 }
 
-void fpu_fldm32(int32_t addr)
+void fpu_fldm32(int64_t addr)
 {
     f80_t x = fpu_load_m32(addr);
     if (cpu->pagefault) return;
     fpu_push(x);
 }
 
-void fpu_fldm64(int32_t addr)
+void fpu_fldm64(int64_t addr)
 {
     f80_t x = fpu_load_m64(addr);
     if (cpu->pagefault) return;
     fpu_push(x);
 }
 
-void fpu_fldm80(int32_t addr)
+void fpu_fldm80(int64_t addr)
 {
     f80_t x = fpu_load_m80(addr);
     if (cpu->pagefault) return;
     fpu_push(x);
 }
 
-void fpu_fldm80_without_fault(int32_t addr)
+void fpu_fldm80_without_fault(int64_t addr)
 {
     /* Named "without_fault" because the CALLER checked (instructions.rs's DB_5_mem does
      * `readable_or_pagefault(addr, 10)` first); upstream still `.unwrap()`s, so a fault
@@ -707,7 +707,7 @@ void fpu_fldm80_without_fault(int32_t addr)
     fpu_push(x);
 }
 
-void fpu_store_m32(int32_t addr, f80_t x)
+void fpu_store_m32(int64_t addr, f80_t x)
 {
     f80_clear_exception_flags();
     safe_write32(addr, (int32_t)f80_convert_to_f32(x)); /* the METHOD: x.to_f32() */
@@ -715,36 +715,36 @@ void fpu_store_m32(int32_t addr, f80_t x)
     cpu->fpu_status_word |= (uint16_t)f80_get_exception_flags();
 }
 
-void fpu_store_m64(int32_t addr, f80_t x)
+void fpu_store_m64(int64_t addr, f80_t x)
 {
     safe_write64(addr, f80_convert_to_f64(x)); /* the METHOD: x.to_f64() */
 }
 
-void fpu_store_m80(int32_t addr, f80_t f)
+void fpu_store_m80(int64_t addr, f80_t f)
 {
     /* writable_or_pagefault must have been called by the caller! (upstream's comment) */
     safe_write64(addr, f.mantissa);
     safe_write16(addr + 8, f.sign_exponent);
 }
 
-void fpu_fstm32(int32_t addr)
+void fpu_fstm32(int64_t addr)
 {
     fpu_store_m32(addr, fpu_get_st0());
 }
 
-void fpu_fstm32p(int32_t addr)
+void fpu_fstm32p(int64_t addr)
 {
     fpu_store_m32(addr, fpu_get_st0());
     if (cpu->pagefault) return;
     fpu_pop();
 }
 
-void fpu_fstm64(int32_t addr)
+void fpu_fstm64(int64_t addr)
 {
     fpu_store_m64(addr, fpu_get_st0());
 }
 
-void fpu_fstm64p(int32_t addr)
+void fpu_fstm64p(int64_t addr)
 {
     /* XXX: writable_or_pagefault before get_st0 (upstream's comment) */
     fpu_store_m64(addr, fpu_get_st0());
@@ -752,7 +752,7 @@ void fpu_fstm64p(int32_t addr)
     fpu_pop();
 }
 
-void fpu_fst80p(int32_t addr)
+void fpu_fst80p(int64_t addr)
 {
     writable_or_pagefault(addr, 10);
     if (cpu->pagefault) return;
@@ -760,7 +760,7 @@ void fpu_fst80p(int32_t addr)
     fpu_pop();
 }
 
-void fpu_fbstp(int32_t addr)
+void fpu_fbstp(int64_t addr)
 {
     f80_t st0 = fpu_get_st0();
     int64_t signed_value = f80_to_i64(st0);
@@ -790,7 +790,7 @@ void fpu_fbstp(int32_t addr)
  * control / environment (fpu.rs:272-309, 412-439, 521-580, 612-613)
  * ------------------------------------------------------------------ */
 
-void fpu_fldcw(int32_t addr)
+void fpu_fldcw(int64_t addr)
 {
     int32_t word = safe_read16(addr);
     if (cpu->pagefault) return;
@@ -799,7 +799,7 @@ void fpu_fldcw(int32_t addr)
 
 /* fpu.rs:417-427.  The PROTECTED-MODE layout; the whole 14-byte block was range-checked
  * by the caller (instructions.rs's D9_4_mem), which is why upstream unwraps. */
-void fpu_fldenv16(int32_t addr)
+void fpu_fldenv16(int64_t addr)
 {
     set_control_word((uint16_t)safe_read16(addr));
     fpu_set_status_word((uint16_t)safe_read16(addr + 2));
@@ -810,7 +810,7 @@ void fpu_fldenv16(int32_t addr)
     cpu->fpu_dp_selector = safe_read16(addr + 12);
 }
 
-void fpu_fldenv32(int32_t addr)
+void fpu_fldenv32(int64_t addr)
 {
     set_control_word((uint16_t)safe_read16(addr));
     fpu_set_status_word((uint16_t)safe_read16(addr + 4));
@@ -822,7 +822,7 @@ void fpu_fldenv32(int32_t addr)
     cpu->fpu_dp_selector = safe_read16(addr + 24);
 }
 
-void fpu_fstenv16(int32_t addr)
+void fpu_fstenv16(int64_t addr)
 {
     safe_write16(addr + 0, cpu->fpu_control_word);
     safe_write16(addr + 2, fpu_load_status_word());
@@ -833,7 +833,7 @@ void fpu_fstenv16(int32_t addr)
     safe_write16(addr + 12, cpu->fpu_dp_selector);
 }
 
-void fpu_fstenv32(int32_t addr)
+void fpu_fstenv32(int64_t addr)
 {
     /* upstream adds the high half into the control/status/tag words and ORs it into the
      * data-pointer selector -- reproduced verbatim, including the add/or asymmetry */
@@ -848,12 +848,12 @@ void fpu_fstenv32(int32_t addr)
     safe_write32(addr + 24, high_bits | cpu->fpu_dp_selector);
 }
 
-void fpu_fstcw(int32_t addr)
+void fpu_fstcw(int64_t addr)
 {
     safe_write16(addr, cpu->fpu_control_word);
 }
 
-void fpu_fnstsw_mem(int32_t addr)
+void fpu_fnstsw_mem(int64_t addr)
 {
     safe_write16(addr, fpu_load_status_word());
 }
@@ -863,13 +863,13 @@ void fpu_fnstsw_reg(void)
     write_reg16(AX, fpu_load_status_word());
 }
 
-void fpu_fsave16(int32_t addr)
+void fpu_fsave16(int64_t addr)
 {
     (void)addr; /* upstream logs "fsave16" (dbg_log, dropped) then treats it as unimpl */
     fpu_unimpl();
 }
 
-void fpu_fsave32(int32_t addr)
+void fpu_fsave32(int64_t addr)
 {
     int i;
     writable_or_pagefault(addr, 108);
@@ -884,13 +884,13 @@ void fpu_fsave32(int32_t addr)
     fpu_finit();
 }
 
-void fpu_frstor16(int32_t addr)
+void fpu_frstor16(int64_t addr)
 {
     (void)addr; /* upstream logs "frstor16" (dbg_log, dropped) then treats it as unimpl */
     fpu_unimpl();
 }
 
-void fpu_frstor32(int32_t addr)
+void fpu_frstor32(int64_t addr)
 {
     int i;
     readable_or_pagefault(addr, 28 + 8 * 10);
@@ -1145,7 +1145,7 @@ void fpu_fincstp(void)
  * FXSAVE / FXRSTOR (misc_instr.rs:369-428, deferred to M1b by M1a-2)
  * ------------------------------------------------------------------ */
 
-void fxsave(int32_t addr)
+void fxsave(int64_t addr)
 {
     int i;
 
@@ -1189,7 +1189,7 @@ void fxsave(int32_t addr)
     }
 }
 
-void fxrstor(int32_t addr)
+void fxrstor(int64_t addr)
 {
     int32_t new_mxcsr;
     int i;

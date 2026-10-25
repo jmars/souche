@@ -195,8 +195,12 @@ static void string_instruction64(int32_t ds_or_prefix,
         int64_t dst_val = 0;
 
         if (instruction == STR_INS) {
-            /* check the fault *before* reading the port (upstream's order) */
-            writable_or_pagefault((int32_t)(es + (int64_t)dst), size_bytes);
+            /* check the fault *before* reading the port (upstream's order).  The address is
+             * NOT narrowed here: the store below (string64_write) uses the full 64-bit
+             * `es + dst`, so a 32-bit pre-check would fault on a page the store never
+             * touches -- a spurious #PF with a truncated cr2 for an INS buffer above 4 GiB
+             * (an insw into a physmap buffer).  results/x86-64-addrwidth.md finding 4. */
+            writable_or_pagefault((uint64_t)(es + (int64_t)dst), size_bytes);
             if (cpu->pagefault) break;
         }
         if (uses_esi) {

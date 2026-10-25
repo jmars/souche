@@ -1,5 +1,5 @@
---- results/m2-5-guest-armA-js.dev.txt	2026-10-17 15:02:05.876208001 +0000
-+++ results/m2-5-guest-armA-c.dev.txt	2026-10-17 15:02:05.879207961 +0000
+--- results/m2-5-guest-armA-js.dev.txt	2026-10-24 11:45:25.054382643 +0000
++++ results/m2-5-guest-armA-c.dev.txt	2026-10-24 11:45:25.057382600 +0000
 @@ -3,13 +3,13 @@
  ata1.00: ATA-0: v86 ATA HD, 1.00, max MWDMA2
  ata1.00: 131072 sectors, multi 0: LBA48 

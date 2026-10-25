@@ -52,8 +52,8 @@
  *     fxsave/fxrstor    misc_instr.rs:369-428 -- 0F AE /0 and /1 (this file)
  * ------------------------------------------------------------------ */
 void fpu_set_tag_word(uint16_t tag_word);
-void fxsave(int32_t addr);
-void fxrstor(int32_t addr);
+void fxsave(int64_t addr);
+void fxrstor(int64_t addr);
 
 /* ------------------------------------------------------------------ *
  * The table.  Grouped by the 0F opcode byte, in upstream's file order.

@@ -153,7 +153,7 @@ void instr32_0F00_1_reg(int32_t r)
  * ------------------------------------------------------------------ */
 
 /* instructions_0f.rs:200-206 */
-static void sgdt(int32_t addr, int32_t mask)
+static void sgdt(int64_t addr, int32_t mask)
 {
 	/* REACH-3 (results/x86-64-highpf.md): in 64-bit mode the operand is TEN bytes -- a
 	 * 2-byte limit and an EIGHT-byte base -- and the operand-size mask does not apply to the
@@ -189,7 +189,7 @@ void instr32_0F01_0_reg(int32_t _r)
 }
 
 /* instructions_0f.rs:215-221 */
-static void sidt(int32_t addr, int32_t mask)
+static void sidt(int64_t addr, int32_t mask)
 {
 	writable_or_pagefault(addr, long_mode_64() ? 10 : 6);
 	if (cpu->pagefault) return;
@@ -219,7 +219,7 @@ void instr32_0F01_1_reg(int32_t _r)
 }
 
 /* instructions_0f.rs:230-241 */
-static void lgdt(int32_t addr, int32_t mask)
+static void lgdt(int64_t addr, int32_t mask)
 {
 	if (cpu->cpl != 0) {
 		trigger_gp(0);
@@ -275,7 +275,7 @@ void instr32_0F01_2_reg(int32_t _r)
 }
 
 /* instructions_0f.rs:250-262 */
-static void lidt(int32_t addr, int32_t mask)
+static void lidt(int64_t addr, int32_t mask)
 {
 	if (cpu->cpl != 0) {
 		trigger_gp(0);
@@ -5898,7 +5898,7 @@ void instr_0FF7_mem(int64_t _addr, int32_t _r)
 	(void)_r;
 	trigger_ud();
 }
-static void maskmovq(int32_t r1, int32_t r2, int32_t addr)
+static void maskmovq(int32_t r1, int32_t r2, int64_t addr)
 {
 	reg128 source, mask;
 	source.u64[0] = read_mmx64s(r2);
@@ -5925,7 +5925,7 @@ void instr_660FF7_mem(int64_t _addr, int32_t _r)
 	(void)_r;
 	trigger_ud();
 }
-static void maskmovdqu(int32_t r1, int32_t r2, int32_t addr)
+static void maskmovdqu(int32_t r1, int32_t r2, int64_t addr)
 {
 	reg128 source = read_xmm128s(r2);
 	reg128 mask = read_xmm128s(r1);

@@ -22,11 +22,11 @@ PASS=0; FAIL=0
 step() { local n="$1"; shift; if "$@" >$LOG 2>&1; then PASS=$((PASS+1)); echo "ok   $n"; else FAIL=$((FAIL+1)); echo "FAIL $n"; sed -n '1,25p' $LOG; fi; }
 must_fail() { local n="$1"; shift; if "$@" >$LOG 2>&1; then FAIL=$((FAIL+1)); echo "FAIL $n (it PASSED and must not)"; else PASS=$((PASS+1)); echo "ok   $n (correctly refused)"; fi; }
 
-echo "== A. EVERY ENGINE AGREES WITH THE HOST on the whole corpus (89 cases each)"
+echo "== A. EVERY ENGINE AGREES WITH THE HOST on the whole corpus (91 cases each)"
 for e in interp uop uopjit; do
 	step "corpus-$e" $PYTHON tests/nasm64_run.py --stage run \
 		--actual "$PORT64 {img} {limit} --fixture64 --long-mode on --cpu-engine $e" \
-		--expect counts --expect-counts "green=89 red_unimplemented=0 mismatch=0 error=0" --quiet
+		--expect counts --expect-counts "green=91 red_unimplemented=0 mismatch=0 error=0" --quiet
 done
 
 echo "== B. THE ENGINES' DOCUMENTS ARE BYTE-IDENTICAL (the differential proper)"
@@ -61,10 +61,13 @@ step "no-long-mode-no-delegation" sh -c \
 	"$PORT64 $WORK/mov-imm64.img 20000000 --fixture64 --cpu-engine uop \
 	 --uop-cache-stats 2>&1 >/dev/null | grep -q 'long-mode batches delegated to the interpreter: 0'"
 # the JIT compiles no 64-bit block: the blocks it DID compile belong to the stub's 16/32-bit phase,
-# so the assertion is that the count does not grow with a longer long-mode run
+# so the assertion is that the count does not grow with a longer long-mode run.  The number is the
+# stub's own 32-bit block count and MOVED 10 -> 11 in the address-width unit, which added the
+# above-4-GiB window's fill loop to the stub (MEASURED: 11 at limits 500000, 2000000 and
+# 20000000 -- the count is a pre-long-mode constant, which is the property this step asserts).
 step "jit-no-long-mode-blocks" sh -c \
 	"$PORT64 $WORK/mov-imm64.img 20000000 --fixture64 --long-mode on --cpu-engine uopjit \
-	 --jit-stats 2>&1 >/dev/null | grep -q 'blocks compiled 10'"
+	 --jit-stats 2>&1 >/dev/null | grep -q 'blocks compiled 11'"
 
 echo
 echo "[+] gate-x86-64-diff: $PASS passed, $FAIL failed"

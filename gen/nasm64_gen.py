@@ -58,13 +58,22 @@ PDPT = 0x105000
 PD = 0x106000
 PT0 = 0x107000
 PT_END = 0x10B000  # PT0 + 4 * 0x1000
-# THE ABOVE-4-GIBIT WINDOW (this unit): linear 0x100000000..0x10200000 maps to physical
-# 0x100000..0x300000 through PML4[1] -> PDPT2[0] -> PD2[0] (a 2 MiB page).  A corpus case that
-# needs a 64-bit EFFECTIVE ADDRESS can therefore touch real memory and be compared in the
-# window -- an access to an unmapped high address would fault in both legs and prove nothing.
-PML4_2 = 0x10B000
-PDPT2 = 0x10C000
-PD2 = 0x10D000
+# THE ABOVE-4-GIBIT WINDOW: linear 0x100000000..0x100008000 maps to physical
+# 0x100000..0x108000 through PML4[0] -> PDPT[4] -> PD2[0] -> PT2 (8 x 4 KiB).  A corpus case
+# that needs a 64-bit EFFECTIVE ADDRESS can therefore touch REAL MEMORY and be compared in the
+# window -- an access to an unmapped high address faults in both legs and proves nothing.
+#
+# THE FIRST VERSION OF THIS WINDOW WAS ARITHMETICALLY WRONG and had never been exercised
+# (MEASURED, results/x86-64-addrwidth.md): it wrote PML4[1] -> PDPT2[0] -> a 2 MiB page at
+# physical 0x100000 and its comment claimed that was linear 0x100000000.  PML4 index is
+# addr >> 39, so 0x100000000 is PML4[0] (the entry the low identity map already owns) and its
+# PDPT index is 4; PML4[1] begins at 0x8000000000.  And a 2 MiB page's base must be 2 MiB
+# ALIGNED -- physical 0x100000 is not -- so that entry was a reserved-bit #PF even at the
+# linear address it actually named.  Both faults are why no case could ever use the window.
+PD2 = 0x10B000   # one PD, its entry 0 -> PT2
+PT2 = 0x10C000   # 8 entries: physical 0x100000..0x108000
+PT2_END = 0x10D000
+PT2_PAGES = 8
 HIGH_BASE = 0x100000000   # the linear base a case adds its offset to
 HIGH_PHYS = 0x100000      # what it maps to: the compared window's own start
 
@@ -129,10 +138,10 @@ mb_entry:
 stub_start:
     cli
     cld
-    # zero PML4..PT_END
+    # zero PML4..PT2_END
     mov edi, {pml4}
     xor eax, eax
-    mov ecx, ({pt_end} - {pml4}) / 4
+    mov ecx, ({pt2_end} - {pml4}) / 4
     rep stosd
     # PML4[0] -> PDPT, PDPT[0] -> PD, PD[0..1] -> the first two page tables.  S5a FINDING:
     # A 4-LEVEL (and a PAE) PAGE TABLE HAS EIGHT-BYTE ENTRIES, and this stub used to fill
@@ -145,13 +154,30 @@ stub_start:
     # entries -- which identity-maps the first 4 MiB through PD[0] and PD[1] (512 entries x
     # 4 KiB = 2 MiB each).
     mov dword ptr [{pml4}], {pdpt} + 3
-    # THE ABOVE-4-GIBIT WINDOW: PML4[1] -> PDPT2[0] -> PD2[0] = a 2 MiB page at physical
-    # 0x100000.  Linear 0x100000000 therefore lands on the compared window's first page, so a
-    # case's access through a 64-bit effective address is visible in the window it compares.
-    mov dword ptr [{pml4} + 8], {pdpt2} + 3
-    mov dword ptr [{pdpt2}], {pd2} + 3
-    mov dword ptr [{pd2}], {high_phys} + 0x83
+    # THE ABOVE-4-GIBIT WINDOW: PML4[0] (this very entry -- PML4 index is addr >> 39, so
+    # linear 0x100000000 is PDPT[4] of the SAME PML4 entry the identity map uses) ->
+    # PDPT[4] -> PD2[0] -> PT2, whose {pt2_pages} entries identity-map physical
+    # 0x100000..0x108000: the compared window plus the 8 KiB above it that a case may use as
+    # a scratch.  See the constants' comment for the three arithmetic errors this replaces.
+    mov dword ptr [{pdpt} + 32], {pd2} + 3
+    mov dword ptr [{pd2}], {pt2} + 3
     mov dword ptr [{pd2} + 4], 0
+    mov edi, {pt2}
+    mov eax, {high_phys} + 3
+    xor edx, edx                    # the high dword, from a register: `mov dword ptr
+                                    # [edi + 4], 0` would be the SAME seven bytes the identity
+                                    # fill loop below uses, and tests/gate-long-mode.sh patches
+                                    # that byte pattern to raise every frame above 4 GiB -- a
+                                    # pattern that must stay UNIQUE in the image (MEASURED: the
+                                    # gate refused it as ambiguous, 2 occurrences).
+    mov ecx, {pt2_pages}
+.fill_high:
+    mov dword ptr [edi], eax
+    mov dword ptr [edi + 4], edx
+    add edi, 8
+    add eax, 0x1000
+    dec ecx
+    jnz .fill_high
     mov dword ptr [{pdpt}], {pd} + 3
     mov dword ptr [{pd}], {pt0} + 3
     mov dword ptr [{pd} + 8], {pt0} + 0x1000 + 3
@@ -200,8 +226,9 @@ gdt_end:
 gdt_descriptor:
     .word gdt_end - gdt - 1
     .long gdt
-""".format(pml4=hex(PML4), pdpt=hex(PDPT), pd=hex(PD), pt0=hex(PT0), pt_end=hex(PT_END),
-              pdpt2=hex(PDPT2), pd2=hex(PD2), high_phys=hex(HIGH_PHYS))
+""".format(pml4=hex(PML4), pdpt=hex(PDPT), pd=hex(PD), pt0=hex(PT0), pt2=hex(PT2),
+              pt2_end=hex(PT2_END), pt2_pages=PT2_PAGES, pd2=hex(PD2),
+              high_phys=hex(HIGH_PHYS))
 
 PROLOGUE = """\
     # the shared prologue: the register file the document compares starts at zero, the
@@ -274,8 +301,12 @@ case("alu", "test-rax-imm32",
      "F7 /0 (gas picks it for `test rax, imm` because it is one byte shorter), and the unit "
      "that landed it.  The imm32 is SIGN-EXTENDED and the test uses ALL 64 BITS of RAX: "
      "`test rax, -1` on RAX = 0x100000000 leaves ZF=0, where a 32-bit test sees EAX = 0 and "
-     "leaves ZF=1; `test rax, 0xFFFFFFFF80000000` on RAX = 0x80000000 ANDs to ZERO at 64 bits "
-     "(ZF=1) and to 0x80000000 at 32 (ZF=0, SF=1); `test rax, -1` on RAX = "
+     "leaves ZF=1; `test rax, 0xFFFFFFFF80000000` on RAX = 0x80000000 ANDs to 0x80000000 at "
+     "BOTH widths, so the flag that discriminates is SF -- 0 at 64 bits (the AND has bit 63 "
+     "clear) and 1 at 32 (0x80000000 as a 32-bit result), ZF=0 in both.  (This text said the "
+     "64-bit AND was ZERO with ZF=1; corrected by the address-width unit, MEASURED: the arm is "
+     "still discriminating, on SF, and arm 1 catches the 32-bit body on ZF anyway.)  "
+     "`test rax, -1` on RAX = "
      "0x8000000000000000 leaves SF=1 at 64 bits and SF=0/ZF=1 at 32.  TEST stores nothing, "
      "so every RAX above must survive its own test.  AF is UNDEFINED after TEST (0x8C5).",
      """\
@@ -1195,15 +1226,19 @@ case("muldiv", "rol-preserves-flags",
 case("muldiv", "shld-shrd-imm8",
      "SHLD/SHRD with an imm8 count: the count is masked to SIX bits at operand size 64 (not "
      "five), and a count of 0 leaves the destination AND the flags UNCHANGED.  `shrd rax, rdx, "
-     "0x20` is the amd64 guest's own instruction (48 0F AC D0 20): at 64 bits it shifts in the "
-     "HIGH half of rdx, at 32 bits a five-bit mask turns the count into 0 and leaves eax alone; "
-     "the memory form is the same width rule.",
+     "0x20` is the amd64 guest's own instruction (48 0F AC D0 20): at 64 bits the 32 bits "
+     "shifted in are rdx's LOW half (the source is shifted LEFT by 64-count, so its low bits "
+     "land on top), and at 32 bits a five-bit mask turns the count into 0 and leaves eax alone; "
+     "the memory form is the same width rule.  THE ARITHMETIC IN THESE COMMENTS WAS CORRECTED "
+     "by the address-width unit: they said the shifted-in bits were rdx's HIGH half and gave "
+     "0x1122334499AABBCC -- MEASURED (and asserted by the host leg) the value is "
+     "0x5566778899AABBCC, because rdx << 32 = 0x5566778800000000.",
      """\
     mov rax, 0x99AABBCCDDEEFF00
     mov rdx, 0x1122334455667788
     shrd rax, rdx, 0x20
     mov qword ptr [0x100160], rax
-    # (rax >> 32) | (rdx << 32) = 0x1122334499AABBCC; a 32-bit body leaves 0xDDEEFF00
+    # (rax >> 32) | (rdx << 32) = 0x5566778899AABBCC; a 32-bit body leaves 0xDDEEFF00
     mov rbx, 0x0123456789ABCDEF
     mov rcx, 0xFEDCBA9876543210
     shld rbx, rcx, 16
@@ -1213,12 +1248,18 @@ case("muldiv", "shld-shrd-imm8",
     mov qword ptr [0x100180], rsi
     mov rdx, 0x00000000000000FF
     shrd qword ptr [0x100180], rdx, 8
-    # the r/m64 MEMORY form: 0x0080000000000000 | 0xFF = 0x00800000000000FF
+    # the r/m64 MEMORY form: (0x8000000000000001 >> 8) | (0xFF << 56) = 0xFF80000000000000.
+    # (The first version of this comment said `0x0080000000000000 | 0xFF =
+    # 0x00800000000000FF`, which ORs the source in at the BOTTOM -- not SHRD's rule, which
+    # shifts it left by 64-count.  Corrected by the address-width unit.)
     mov rax, 0xDEADBEEFCAFEBABE
     mov rdx, 0x0123456789ABCDEF
     cmp rax, rax
-    # a count of 0 (imm8 0) must leave BOTH the destination and the flags alone; the cmp above
-    # leaves ZF=0/SF=1, so a body that always sets the shift's flags reports ZF=1/SF=0 here
+    # a count of 0 (imm8 0) must leave BOTH the destination and the flags alone; `cmp rax, rax`
+    # leaves ZF=1/SF=0 (equal operands), so a body that always runs the shift's flag rule
+    # reports ZF=0 (from the result 0xDEADBEEFCAFEBABE) and the stored flags word differs.
+    # (This comment said "ZF=0/SF=1" -- it described `cmp rax, rdx`, not `cmp rax, rax`.
+    # Corrected by the address-width unit; the arm still discriminates, on ZF.)
     shrd rax, rdx, 0
     mov qword ptr [0x1001B0], rax
     pushfq
@@ -1419,6 +1460,60 @@ case("wide", "simd-mem-above-4g",
 case("wide", "str-mem-above-4g",
      "CMPSB with BOTH pointers above 4 GiB: the string path's 64-bit addresses",
      WIDE + "    mov rsi, r9\n    mov rdi, r9\n    mov rcx, 1\n    cmpsb\n", fault="GP")
+
+# --- the >4 GiB MEMORY seat (this unit, results/x86-64-addrwidth.md) ----------------
+# THE FAMILY ABOVE IS NOT A SEAT FOR THE ADDRESS-WIDTH CLASS, and the review MEASURED why: it
+# dereferences a NON-CANONICAL address, so BOTH legs fault and the comparison is the exception
+# KIND -- a callee that narrows its `int64_t addr` to `int32_t` never runs, because the walk
+# faults first.  The class that produced the setcc blocker (`setcc_mem(int32_t)`) and the
+# fxsave blocker lives ONE FRAME BELOW that, in functions the resolver hands its 64-bit EA to,
+# so a case must REACH MEMORY above 4 GiB and compare the bytes.  These two do: the stub's
+# above-4-GiB window maps linear 0x100000000 onto physical 0x100000 (the compared window
+# itself), so a store through a 64-bit EA lands in a slot the document already compares, and a
+# narrowing makes it land somewhere else (or fault).
+case("wide", "high-mem-store",
+     "a PLAIN 64-bit store and load through an effective address above 4 GiB: the store path's "
+     "callee (safe_write64 / safe_read64 and everything between modrm_resolve and the leaf) "
+     "must keep all 64 bits.  With a 32-bit narrowing the store lands at physical 0x00000100 "
+     "instead of 0x100100, i.e. outside the compared window, so the slot reads back zero",
+     """\
+    mov r9, 0x100000100
+    mov rax, 0x1122334455667788
+    mov qword ptr [r9], rax
+    mov rcx, qword ptr [r9]
+    mov qword ptr [0x100118], rcx
+    mov qword ptr [r9 + 8], rcx
+    mov rdx, qword ptr [r9 + 8]
+    mov qword ptr [0x100128], rdx
+""")
+case("wide", "high-mem-fxsave",
+     "FXSAVE and FXRSTOR through an effective address above 4 GiB -- THE BLOCKER of this unit "
+     "(fpu.c:1148/1192 took int32_t addr, called from the 0F AE /0,/1 bodies whose EA is "
+     "int64_t; the FPU encodings have no REX.W form, so every long-mode 0F AE /0,/1 reaches "
+     "them).  The image is written ABOVE the compared window (linear 0x100002000 = physical "
+     "0x102000), COPIED to a second high address by a plain `rep movsq` (which does not narrow "
+     "in either leg), and restored from the COPY after an fninit -- so the two values stored "
+     "into the window are what the restore recovered FROM THE COPY, and a truncated FXSAVE "
+     "leaves the copy's source zeros.  MEASURED: with the round trip through ONE address "
+     "instead, the arm was GREEN under the old int32_t signature, because both accesses "
+     "truncated to the same 0x2000 and round-tripped consistently -- a case whose two sides "
+     "narrow together cannot see a narrowing.",
+     """\
+    mov r9, 0x100002000
+    fninit
+    fld1
+    fldz
+    fxsave [r9]
+    mov rsi, 0x100002000
+    mov rdi, 0x100002200
+    mov rcx, 64
+    rep movsq
+    mov r10, 0x100002200
+    fninit
+    fxrstor [r10]
+    fstp qword ptr [0x100100]
+    fstp qword ptr [0x100108]
+""")
 
 # --- family 5b: str (this unit) -- the rep string family's LONG-MODE widths ------
 # S9's strobits cases cover the Q opcodes; these four cover what they do not: the

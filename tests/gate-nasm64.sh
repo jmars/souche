@@ -29,7 +29,8 @@
 #      only for them -- run.js:497-505 -- and are C4's subject.)
 #   D. THE RED CENSUS, AS COUNTS: every corpus case run against the CURRENT binary must
 #      stop with a named `v86c: unimplemented: <symbol>`; the SUMMARY NUMBERS are asserted
-#      (green=0 red_unimplemented=89 mismatch=0 error=0 -- 89 since the SHLD/SHRD imm8 unit
+#      (green=0 red_unimplemented=91 mismatch=0 error=0 -- 91 since the ADDRESS-WIDTH unit
+#      added wide-high-mem-store and wide-high-mem-fxsave; 89 since the SHLD/SHRD imm8 unit
 #      added muldiv-shld-shrd-imm8, 88 since the POPCNT unit added
 #      alu-popcnt-64 and alu-popcnt-nof3, 86 since the REX.W 0xA9 unit added
 #      alu-test-rax-imm32, 58 since S6 added the alu-pop-rsp case), NOT a shape.
@@ -148,7 +149,7 @@ must_fail "emptied-stack-arm-negative" stack_arm 0x0AAA
 
 echo "== D. THE RED CENSUS AS COUNTS: every case against the CURRENT binary"
 step "red-census-counts" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_PORT" \
-	--expect counts --expect-counts "green=0 red_unimplemented=89 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=0 red_unimplemented=91 mismatch=0 error=0" --quiet
 if grep -q '^\[+\] SUMMARY' $LOG; then
 	PASS=$((PASS+1))
 	echo "ok   red-census printed a SUMMARY"
@@ -164,7 +165,7 @@ must_fail "red-census-counts-arm" $PYTHON tests/nasm64_run.py --stage run \
 
 echo "== D3. the NOT-RED arm: a bare --stage run against a document-producing leg"
 step "not-red-arm" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_NATIVE" \
-	--expect counts --expect-counts "green=89 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=91 mismatch=0 error=0" --quiet
 
 echo
 echo "[+] gate-nasm64: $PASS passed, $FAIL failed"

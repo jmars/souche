@@ -13,8 +13,8 @@
  *
  * THE CROSS-UNIT CONTRACT (results/m1b3-fpu.md): instructions_0f.c (M1b-1) calls
  *     void fpu_set_tag_word(uint16_t tag_word);
- *     void fxsave(int32_t addr);
- *     void fxrstor(int32_t addr);
+ *     void fxsave(int64_t addr);
+ *     void fxrstor(int64_t addr);
  * with exactly these signatures.  The two FXSAVE forms are 0F AE /0 and /1.
  *
  * FAULT CONVENTION: as everywhere in the port, a fallible helper SETS `cpu->pagefault` and
@@ -74,12 +74,12 @@ uint64_t f80_to_f64(f80_t x);
 f80_t i32_to_f80(int32_t v);
 f80_t i64_to_f80(int64_t v);
 
-f80_t fpu_load_i16(int32_t addr);
-f80_t fpu_load_i32(int32_t addr);
-f80_t fpu_load_i64(int32_t addr);
-f80_t fpu_load_m32(int32_t addr);
-f80_t fpu_load_m64(int32_t addr);
-f80_t fpu_load_m80(int32_t addr);
+f80_t fpu_load_i16(int64_t addr);
+f80_t fpu_load_i32(int64_t addr);
+f80_t fpu_load_i64(int64_t addr);
+f80_t fpu_load_m32(int64_t addr);
+f80_t fpu_load_m64(int64_t addr);
+f80_t fpu_load_m80(int64_t addr);
 
 /* ---- words (fpu.rs:160-164, 444-454, 582-597) ---- */
 uint16_t fpu_load_status_word(void);
@@ -116,30 +116,30 @@ void fpu_fst(int32_t r);
 void fpu_fstp(int32_t r);
 
 /* ---- load / store (fpu.rs:254-256, 324-415, 456-460, 606-637) ---- */
-void fpu_fildm16(int32_t addr);
-void fpu_fildm32(int32_t addr);
-void fpu_fildm64(int32_t addr);
-void fpu_fistm16(int32_t addr);
-void fpu_fistm16p(int32_t addr);
-void fpu_fisttpm16(int32_t addr);
-void fpu_fistm32(int32_t addr);
-void fpu_fistm32p(int32_t addr);
-void fpu_fisttpm32(int32_t addr);
-void fpu_fistm64p(int32_t addr);
-void fpu_fisttpm64(int32_t addr);
-void fpu_fldm32(int32_t addr);
-void fpu_fldm64(int32_t addr);
-void fpu_fldm80(int32_t addr);
-void fpu_fldm80_without_fault(int32_t addr);
-void fpu_fst80p(int32_t addr);
-void fpu_fstm32(int32_t addr);
-void fpu_fstm32p(int32_t addr);
-void fpu_fstm64(int32_t addr);
-void fpu_fstm64p(int32_t addr);
-void fpu_store_m32(int32_t addr, f80_t x);
-void fpu_store_m64(int32_t addr, f80_t x);
-void fpu_store_m80(int32_t addr, f80_t x);
-void fpu_fbstp(int32_t addr);
+void fpu_fildm16(int64_t addr);
+void fpu_fildm32(int64_t addr);
+void fpu_fildm64(int64_t addr);
+void fpu_fistm16(int64_t addr);
+void fpu_fistm16p(int64_t addr);
+void fpu_fisttpm16(int64_t addr);
+void fpu_fistm32(int64_t addr);
+void fpu_fistm32p(int64_t addr);
+void fpu_fisttpm32(int64_t addr);
+void fpu_fistm64p(int64_t addr);
+void fpu_fisttpm64(int64_t addr);
+void fpu_fldm32(int64_t addr);
+void fpu_fldm64(int64_t addr);
+void fpu_fldm80(int64_t addr);
+void fpu_fldm80_without_fault(int64_t addr);
+void fpu_fst80p(int64_t addr);
+void fpu_fstm32(int64_t addr);
+void fpu_fstm32p(int64_t addr);
+void fpu_fstm64(int64_t addr);
+void fpu_fstm64p(int64_t addr);
+void fpu_store_m32(int64_t addr, f80_t x);
+void fpu_store_m64(int64_t addr, f80_t x);
+void fpu_store_m80(int64_t addr, f80_t x);
+void fpu_fbstp(int64_t addr);
 
 /* ---- conversions to integer (fpu.rs:313-410) ---- */
 int16_t fpu_convert_to_i16(f80_t f);
@@ -152,17 +152,17 @@ void fpu_invalid_arithmetic(void);
 
 /* ---- control/env (fpu.rs:272-309, 412-439, 521-580) ---- */
 void fpu_finit(void);
-void fpu_fldcw(int32_t addr);
-void fpu_fldenv16(int32_t addr);
-void fpu_fldenv32(int32_t addr);
-void fpu_fstenv16(int32_t addr);
-void fpu_fstenv32(int32_t addr);
-void fpu_fsave16(int32_t addr);
-void fpu_fsave32(int32_t addr);
-void fpu_frstor16(int32_t addr);
-void fpu_frstor32(int32_t addr);
-void fpu_fstcw(int32_t addr);
-void fpu_fnstsw_mem(int32_t addr);
+void fpu_fldcw(int64_t addr);
+void fpu_fldenv16(int64_t addr);
+void fpu_fldenv32(int64_t addr);
+void fpu_fstenv16(int64_t addr);
+void fpu_fstenv32(int64_t addr);
+void fpu_fsave16(int64_t addr);
+void fpu_fsave32(int64_t addr);
+void fpu_frstor16(int64_t addr);
+void fpu_frstor32(int64_t addr);
+void fpu_fstcw(int64_t addr);
+void fpu_fnstsw_mem(int64_t addr);
 void fpu_fnstsw_reg(void);
 void fpu_unimpl(void);
 
@@ -188,7 +188,7 @@ void fpu_fdecstp(void);
 void fpu_fincstp(void);
 
 /* ---- misc_instr.rs:369-428, deferred by M1a-2 to this unit ---- */
-void fxsave(int32_t addr);
-void fxrstor(int32_t addr);
+void fxsave(int64_t addr);
+void fxrstor(int64_t addr);
 
 #endif /* V86C_FPU_H */
