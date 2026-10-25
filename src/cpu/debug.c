@@ -177,6 +177,140 @@ void v86c_dbg_rsplow_tick(uint64_t rip, uint64_t rsp)
     rsplow_i = (rsplow_i + 1) % rsplow_k;
 }
 
+/* ---- THE rsp JUMP RECORDER (results/x86-64-rspjump.md) --------------------------
+ * WHY IT EXISTS: MEASURED on the pinned amd64 guest, rsp leaves 0xffffd1fac056ba58 for 0x58ba56c0
+ * inside ONE instruction slot whose instruction is `bswap %r12d` (rip 0xffffffff815bdf65, link
+ * 0xffffffff815bdf65 -- the guest patches its own text, so that IS the instruction).  No
+ * instruction can do that, and the RSPLOW tick runs AFTER run_instruction, so the tick cannot say
+ * whether the instruction or a DELIVERY inside the slot moved rsp.  This tool answers the two
+ * questions the earlier instruments could not: WHAT was in the register file at that moment, and
+ * HOW MANY DELIVERIES the slot contained.
+ * WHAT IS AN EVENT: |rsp_out - rsp_in| >= threshold, where rsp_in is the rsp the slot STARTED
+ * with.  A MOVE EITHER WAY, unlike RSPLOW's decrease rule, because the question this tool answers
+ * is HOW FAR rsp travelled inside the slot, not which way: the measured jump is a DECREASE of
+ * 0xffffd1fa679c6398 (rsp lands numerically BELOW the kernel stack, at 0x58ba56c0, so RSPLOW does
+ * see it -- as a delta with no register file and no delivery count), and a rise of the same size
+ * would be exactly as diagnostic.  The rule is magnitude, and the printed delta carries the sign.
+ * THE THRESHOLD IS `>=`, and that is the contract: K is "at least K bytes", so a slot that moves
+ * rsp by exactly K is an event.  A `>` mutant loses it, which is arm 2's second half.
+ * THE DELIVERY DELTA IS THE POINT: the difference of v86c_dbg_ints_total() across the slot, so a
+ * line says "this slot delivered N exception(s)".  THE COUNT IS INDEPENDENT OF V86C_INTS: the
+ * delivery seat counts when EITHER tool is armed (see v86c_dbg_ints_delivery), because a delta
+ * that only counts while another tool happens to be on reads 0 -- "no delivery" -- in exactly the
+ * run where a reader trusts it.
+ * THE OUTPUT IS BOUNDED BOTH WAYS: `rspjump_max` events printed (each four lines, with the window
+ * announcing its own CLOSURE), and a ring of the LAST `rspjump_k` dumped from v86c_dbg_on_stop with
+ * the TOTAL on its first line -- a bounded window read as the whole set is this lane's most
+ * expensive instrument failure.
+ * LONG MODE IS NOT A CONDITION, and neither is a mode of any kind: a slot that moves rsp is a
+ * property of the slot.  The tool is default-off, so the flag-off machine pays two bool tests. */
+#define V86C_DBG_RSPJUMP_RING 32
+#define V86C_DBG_RSPJUMP_PRINT 16
+#define V86C_DBG_RSPJUMP_KMAX ((uint64_t)1 << 40)
+bool v86c_dbg_rspjump_on;
+static v86c_dbg_rspjump_event rspjump[V86C_DBG_RSPJUMP_RING];
+static int rspjump_k = V86C_DBG_RSPJUMP_RING;  /* ring capacity */
+static int rspjump_i;                          /* next slot to write */
+static int rspjump_total;                      /* every event ever recorded, kept or not */
+static int rspjump_printed;                    /* events whose lines were printed */
+static int rspjump_max = V86C_DBG_RSPJUMP_PRINT;
+static uint64_t rspjump_thresh;                /* the threshold in bytes */
+static bool rspjump_window_closed;
+static bool rspjump_open;      /* a slot has begun and has not ended */
+static uint64_t rspjump_rip;   /* that slot's start eip */
+static uint64_t rspjump_in;    /* the rsp it started with */
+static int rspjump_ints_in;    /* the delivery count it started with */
+
+static void print_rspjump_event(const v86c_dbg_rspjump_event *e, int seq);
+
+void v86c_dbg_test_rspjump_arm(uint64_t threshold, int max_print, int cap)
+{
+    /* THE THRESHOLD IS `>=`, so a threshold of 0 would fire on EVERY instruction (every slot moves
+     * rsp by at least zero) -- an instrument with no falsifier.  The env layer treats 0 as OFF;
+     * the arm clamps to 1 rather than leaving a setting that records the whole run. */
+    if (threshold < 1) threshold = 1;
+    if (threshold > V86C_DBG_RSPJUMP_KMAX) threshold = V86C_DBG_RSPJUMP_KMAX;
+    rspjump_thresh = threshold;
+    if (cap < 1) cap = 1;
+    if (cap > V86C_DBG_RSPJUMP_RING) cap = V86C_DBG_RSPJUMP_RING;
+    rspjump_k = cap;
+    if (max_print < 0) max_print = 0;
+    if (max_print > cap) max_print = cap;   /* a print window wider than the ring is not a window */
+    rspjump_max = max_print;
+    rspjump_i = 0;
+    rspjump_total = 0;
+    rspjump_printed = 0;
+    rspjump_window_closed = false;
+    rspjump_open = false;
+    v86c_dbg_rspjump_on = true;
+}
+int v86c_dbg_rspjump_total(void) { return rspjump_total; }
+int v86c_dbg_rspjump_kept(void) { return rspjump_total < rspjump_k ? rspjump_total : rspjump_k; }
+uint64_t v86c_dbg_rspjump_limit(void) { return rspjump_thresh; }
+int v86c_dbg_rspjump_max(void) { return rspjump_max; }
+int v86c_dbg_rspjump_printed(void) { return rspjump_printed; }
+bool v86c_dbg_rspjump_entry(int i, v86c_dbg_rspjump_event *out)
+{
+    int k;
+    if (i < 0 || i >= v86c_dbg_rspjump_kept()) return false;
+    k = (rspjump_i + rspjump_k - v86c_dbg_rspjump_kept() + i) % rspjump_k;
+    if (out != NULL) *out = rspjump[k];
+    return true;
+}
+
+/* THE SLOT'S ENTRY.  Called BEFORE run_instruction, so the rsp and the delivery count recorded
+ * here are the ones the slot starts with; the comparison in _end is therefore the SLOT's own
+ * motion, including whatever a delivery inside it did. */
+void v86c_dbg_rspjump_begin(uint64_t rip)
+{
+    if (!v86c_dbg_rspjump_on) return;   /* the caller's test is the whole cost when off */
+    rspjump_rip = rip;
+    rspjump_in = cpu->reg64[4];
+    rspjump_ints_in = v86c_dbg_ints_total();
+    rspjump_open = true;
+}
+
+/* THE SLOT'S EXIT: the event rule, the ring, and the bounded print. */
+void v86c_dbg_rspjump_end(void)
+{
+    v86c_dbg_rspjump_event *e;
+    uint64_t out, delta;
+    int deliv, seq;
+    if (!v86c_dbg_rspjump_on) return;
+    if (!rspjump_open) return;          /* an end with no begin has nothing to compare against */
+    rspjump_open = false;
+    out = cpu->reg64[4];
+    delta = out >= rspjump_in ? out - rspjump_in : rspjump_in - out;
+    if (delta < rspjump_thresh) return;   /* the contract: |delta| >= K, either direction */
+    deliv = v86c_dbg_ints_total() - rspjump_ints_in;
+
+    e = &rspjump[rspjump_i];
+    e->rip = rspjump_rip;
+    e->rsp_in = rspjump_in;
+    e->rsp_out = out;
+    for (int i = 0; i < 16; i++) e->regs[i] = cpu->reg64[i];
+    e->cs = cpu->segment_offsets[CS];
+    e->ss = cpu->segment_offsets[SS];
+    e->cr2_64 = cpu->cr2_64;
+    e->cpl = (int)cpu->cpl;
+    e->deliv = deliv;
+    rspjump_total++;
+    test_counts++;
+    seq = rspjump_total;
+    rspjump_i = (rspjump_i + 1) % rspjump_k;
+
+    if (rspjump_printed < rspjump_max) {
+        rspjump_printed++;
+        print_rspjump_event(e, seq);
+    }
+    else if (!rspjump_window_closed) {
+        rspjump_window_closed = true;
+        fprintf(stderr, "v86c dbg: RSPJUMP print window CLOSED at %d event(s) (event %d); the ring"
+                        " keeps the last %d and the stop dump carries the TOTAL\n",
+                rspjump_max, rspjump_total, rspjump_k);
+    }
+}
+
 void v86c_dbg_test_arm(void)
 {
     watch_n = 1; watch[0].addr = 0x31558; watch[0].len = 1;
@@ -192,6 +326,7 @@ void v86c_dbg_test_disarm(void)
     v86c_dbg_break_on = false; brk_n = 0;
     v86c_dbg_ints_on = false;
     v86c_dbg_rsplow_on = false;
+    v86c_dbg_rspjump_on = false;
 }
 int v86c_dbg_test_counts(void) { return test_counts; }
 
@@ -289,13 +424,35 @@ void v86c_dbg_init(void)
             v86c_dbg_rsplow_on = true;
         }
       } }
+    { const char *rj = getenv("V86C_RSPJUMP");
+      if (rj != NULL) {
+        /* K IS A THRESHOLD IN BYTES: 0 and absent both mean OFF (a 0 threshold would fire on every
+         * instruction, since every slot moves rsp by at least zero), and a huge K is CAPPED rather
+         * than trusted -- a cap that does not cap is a setting nobody can predict. */
+        unsigned long long v = strtoull(rj, NULL, 0);
+        if (v > 0) {
+            if (v > V86C_DBG_RSPJUMP_KMAX) v = V86C_DBG_RSPJUMP_KMAX;
+            rspjump_thresh = (uint64_t)v;
+            v86c_dbg_rspjump_on = true;
+        }
+      } }
+    { const char *rm = getenv("V86C_RSPJUMP_MAX");
+      if (rm != NULL) {
+        long v = strtol(rm, NULL, 0);
+        if (v >= 0) {
+            if (v > V86C_DBG_RSPJUMP_RING) v = V86C_DBG_RSPJUMP_RING;
+            rspjump_max = (int)v;
+        }
+      } }
     dump_on_stop = d != NULL && *d != '0';
     /* UNBUFFERED BY DEFAULT: the whole point is that a crash cannot eat the output */
     setvbuf(stderr, NULL, _IONBF, 0);
     if (v86c_dbg_watch_on || v86c_dbg_ring_on || dump_on_stop || v86c_dbg_break_on ||
-        v86c_dbg_ints_on || v86c_dbg_rsplow_on) {
-        fprintf(stderr, "v86c dbg: tools on (watch=%d break=%d ring=%d dump=%d ints=%d rsplow=%d)\n",
-                watch_n, brk_n, ring_n, (int)dump_on_stop, ints_limit, rsplow_k);
+        v86c_dbg_ints_on || v86c_dbg_rsplow_on || v86c_dbg_rspjump_on) {
+        fprintf(stderr, "v86c dbg: tools on (watch=%d break=%d ring=%d dump=%d ints=%d rsplow=%d"
+                        " rspjump=0x%llx)\n",
+                watch_n, brk_n, ring_n, (int)dump_on_stop, ints_limit, rsplow_k,
+                v86c_dbg_rspjump_on ? (unsigned long long)rspjump_thresh : 0ull);
     }
 }
 
@@ -656,7 +813,15 @@ void v86c_dbg_ints_delivery(int32_t vector, bool is_int, bool has_error_code,
                             int32_t error_code, int depth, uint64_t interrupted_rip,
                             uint64_t rsp, uint64_t cs)
 {
-    if (!v86c_dbg_ints_on) return;   /* the entire cost when off: this test */
+    if (!v86c_dbg_ints_on) {
+        /* THE DELIVERY COUNT IS ALSO THE RSPJUMP TOOL'S FIELD (results/x86-64-rspjump.md): a line
+         * has to say "this slot delivered N exception(s)", and a count that only runs while the
+         * TRACE is armed reads 0 -- "no delivery" -- in exactly the run where a reader trusts it.
+         * So the counter keeps counting when either tool is on; the histogram, the depth and the
+         * printed lines stay the trace's own. */
+        if (v86c_dbg_rspjump_on) ints_total++;
+        return;   /* the entire cost when off: this test */
+    }
     ints_total++;
     if (vector >= 0 && vector < V86C_DBG_INTS_VECTORS) ints_hist[vector]++;
     if (depth > ints_max_depth) ints_max_depth = depth;
@@ -753,10 +918,62 @@ static void dump_rsplow(void)
     }
 }
 
+/* ONE EVENT, FOUR LINES, and the first is the line results/x86-64-rspjump.md ss3 asked for: rip,
+ * the rsp the slot started with, the rsp it left, the signed delta, and the DELIVERY delta.  `deliv`
+ * is the field that separates the two possible causes, so it sits on the FIRST line with them. */
+static void print_rspjump_event(const v86c_dbg_rspjump_event *e, int seq)
+{
+    uint64_t mag = e->rsp_out >= e->rsp_in ? e->rsp_out - e->rsp_in : e->rsp_in - e->rsp_out;
+    fprintf(stderr, "v86c dbg: RSPJUMP %d rip=0x%llx rsp_in=0x%llx rsp_out=0x%llx delta=%s0x%llx"
+                    " deliv=%d\n",
+            seq, (unsigned long long)e->rip, (unsigned long long)e->rsp_in,
+            (unsigned long long)e->rsp_out, e->rsp_out >= e->rsp_in ? "+" : "-",
+            (unsigned long long)mag, e->deliv);
+    fprintf(stderr, "v86c dbg:   RSPJUMP regs r0=0x%llx r1=0x%llx r2=0x%llx r3=0x%llx r4=0x%llx"
+                    " r5=0x%llx r6=0x%llx r7=0x%llx\n",
+            (unsigned long long)e->regs[0], (unsigned long long)e->regs[1],
+            (unsigned long long)e->regs[2], (unsigned long long)e->regs[3],
+            (unsigned long long)e->regs[4], (unsigned long long)e->regs[5],
+            (unsigned long long)e->regs[6], (unsigned long long)e->regs[7]);
+    fprintf(stderr, "v86c dbg:   RSPJUMP regs r8=0x%llx r9=0x%llx r10=0x%llx r11=0x%llx r12=0x%llx"
+                    " r13=0x%llx r14=0x%llx r15=0x%llx\n",
+            (unsigned long long)e->regs[8], (unsigned long long)e->regs[9],
+            (unsigned long long)e->regs[10], (unsigned long long)e->regs[11],
+            (unsigned long long)e->regs[12], (unsigned long long)e->regs[13],
+            (unsigned long long)e->regs[14], (unsigned long long)e->regs[15]);
+    fprintf(stderr, "v86c dbg:   RSPJUMP cs=0x%llx ss=0x%llx cpl=%d cr2_64=0x%llx\n",
+            (unsigned long long)e->cs, (unsigned long long)e->ss, e->cpl,
+            (unsigned long long)e->cr2_64);
+}
+
+/* THE RING'S TAIL, oldest first, WITH THE TOTAL ON THE FIRST LINE: the last 32 of N is only
+ * readable if N is on the page.  This is the half of the bound that survives the print limit, so a
+ * run whose window closed still carries the events that led to the stop. */
+static void dump_rspjump(void)
+{
+    int i, kept = v86c_dbg_rspjump_kept();
+    test_counts++;   /* the dump is an entry this tool PRODUCED: a caller can assert it spoke */
+    fprintf(stderr, "v86c dbg: RSPJUMP total=%d kept=%d ring=%d threshold=0x%llx printed=%d"
+                    " (oldest first; each event is one instruction SLOT whose rsp moved by at least"
+                    " the threshold, either way)\n",
+            rspjump_total, kept, rspjump_k, (unsigned long long)rspjump_thresh, rspjump_printed);
+    if (kept == 0) {
+        fprintf(stderr, "v86c dbg:   RSPJUMP no event: no slot moved rsp by >= 0x%llx\n",
+                (unsigned long long)rspjump_thresh);
+        return;
+    }
+    for (i = 0; i < kept; i++) {
+        v86c_dbg_rspjump_event e;
+        if (!v86c_dbg_rspjump_entry(i, &e)) continue;
+        print_rspjump_event(&e, rspjump_total - kept + i + 1);
+    }
+}
+
 void v86c_dbg_on_stop(const char *why)
 {
     int i;
-    if (!dump_on_stop && !v86c_dbg_ring_on && !v86c_dbg_ints_on && !v86c_dbg_rsplow_on) return;
+    if (!dump_on_stop && !v86c_dbg_ring_on && !v86c_dbg_ints_on && !v86c_dbg_rsplow_on &&
+        !v86c_dbg_rspjump_on) return;
     test_counts++;
     fflush(stderr);
     fprintf(stderr, "v86c dbg: STOP (%s)\n", why != NULL ? why : "?");
@@ -768,6 +985,7 @@ void v86c_dbg_on_stop(const char *why)
     }
     if (v86c_dbg_ints_on) dump_ints_summary();
     if (v86c_dbg_rsplow_on) dump_rsplow();
+    if (v86c_dbg_rspjump_on) dump_rspjump();
     if (v86c_dbg_ring_on) dump_ring();
     if (dump_on_stop) {
         const char *c = getenv("V86C_CHAIN");

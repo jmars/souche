@@ -41,6 +41,29 @@
  *                                              exception delivery that pushed its frame inside the
  *                                              slot.  It names the instruction the decrease is
  *                                              attributable to, not necessarily one that stored.
+ *   V86C_RSPJUMP=K                             record the instruction SLOTS whose rsp moved by at
+ *                                              least K BYTES, either way, with the whole register
+ *                                              file -- the tool results/x86-64-rspjump.md ss3 asked
+ *                                              for, because a slot can leave rsp somewhere no
+ *                                              instruction at its rip could put it.  K is a
+ *                                              threshold in bytes; 0 or absent = OFF, and K is
+ *                                              capped at 2^40 (a cap that does not cap is a
+ *                                              setting nobody can predict).  An event carries
+ *                                              rip, rsp_in, rsp_out, |delta| with its SIGN, all
+ *                                              sixteen GPRs, the cs/ss offsets, cpl, cr2_64, and
+ *                                              THE DELIVERY DELTA -- the number of exception/
+ *                                              interrupt deliveries that happened INSIDE the slot,
+ *                                              which is the field that separates "an instruction
+ *                                              moved rsp" from "a delivery moved rsp".  The delta
+ *                                              is counted by this tool even when V86C_INTS is off
+ *                                              (see v86c_dbg_ints_delivery): a field that only
+ *                                              counts when another tool is armed reads 0 exactly
+ *                                              when a reader trusts it.
+ *   V86C_RSPJUMP_MAX=<N>                       events PRINTED per run (default 16, capped at the
+ *                                              ring's 32; each event is four lines).  The ring
+ *                                              keeps the last 32 either way and the stop dump
+ *                                              prints them with the TOTAL, so a bounded window is
+ *                                              never read as the whole set.
  *
  * A STOP IS DUMPED ON EVERY TERMINAL PATH (results/x86-64-instrholes.md): instruction budget, HLT,
  * an undeliverable guest exception, a reboot and a named stop all reach v86c_dbg_on_stop once, so
@@ -79,6 +102,7 @@ extern bool v86c_dbg_ring_on;
 extern bool v86c_dbg_break_on;
 extern bool v86c_dbg_ints_on;
 extern bool v86c_dbg_rsplow_on;
+extern bool v86c_dbg_rspjump_on;
 
 void v86c_dbg_init(void);
 void v86c_dbg_break_hit(uint64_t eip);
@@ -148,5 +172,39 @@ int v86c_dbg_rsplow_limit(void);   /* the capacity after capping -- the bound, n
  * instruction number that first reached it */
 uint64_t v86c_dbg_rsplow_min(uint64_t *rip, uint64_t *insn);
 bool v86c_dbg_rsplow_entry(int i, uint64_t *rip, uint64_t *rsp, uint64_t *delta);
+
+/* ---- THE rsp JUMP RECORDER (results/x86-64-rspjump.md) -----------------------------
+ * TWO CALLS AROUND ONE INSTRUCTION SLOT, both from the interpreter's per-instruction seat:
+ * `_begin` BEFORE run_instruction captures the rsp and the delivery count the slot starts with,
+ * `_end` AFTER it compares.  Two calls rather than one post-slot hook on the previous slot's exit
+ * rsp, deliberately: anything that moves rsp BETWEEN slots (a delivery raised at a batch boundary,
+ * a task switch) would then be attributed to the following instruction, and attribution is the
+ * whole product of this tool.  The cost when off is two bool tests per instruction.
+ * The measured fact the tool exists for: the amd64 guest's rsp leaves 0xffffd1fac056ba58 for
+ * 0x58ba56c0 inside a slot whose instruction is `bswap %r12d`, which cannot move rsp at all. */
+void v86c_dbg_rspjump_begin(uint64_t rip);
+void v86c_dbg_rspjump_end(void);
+/* one recorded event, as the ring holds it: the whole point is that a reader never has to
+ * re-infer the register file from the instruction at `rip` */
+typedef struct {
+    uint64_t rip;      /* the slot's start eip */
+    uint64_t rsp_in;   /* rsp when the slot began */
+    uint64_t rsp_out;  /* rsp when it ended */
+    uint64_t regs[16]; /* r0..r15 as the slot LEFT them */
+    uint64_t cs, ss;   /* the segment offsets */
+    uint64_t cr2_64;
+    int cpl;
+    int deliv;         /* deliveries INSIDE this slot (the field that separates the two causes) */
+} v86c_dbg_rspjump_event;
+/* the recorder's own surface: arm with a threshold, a PRINT limit and a ring capacity, read back
+ * the totals and one entry oldest-first (a ring nobody can inspect cannot be asserted to hold the
+ * LAST N rather than the first) */
+void v86c_dbg_test_rspjump_arm(uint64_t threshold, int max_print, int cap);
+int v86c_dbg_rspjump_total(void);
+int v86c_dbg_rspjump_kept(void);
+uint64_t v86c_dbg_rspjump_limit(void); /* the THRESHOLD in bytes, after capping */
+int v86c_dbg_rspjump_max(void);      /* the PRINT limit in events, after capping */
+int v86c_dbg_rspjump_printed(void);  /* events printed so far (the window's own counter) */
+bool v86c_dbg_rspjump_entry(int i, v86c_dbg_rspjump_event *out);
 
 #endif /* V86C_DEBUG_H */

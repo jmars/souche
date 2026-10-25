@@ -200,7 +200,14 @@ void interpreted_run(uint32_t phys_addr)
 		 * the ones this instruction sees (results/x86-64-reach.md).  One load and one branch
 		 * when the tools are off, the same shape as the ring hook below. */
 		if (v86c_dbg_break_on) v86c_dbg_break_hit(start_eip);
+		/* RSPJUMP's slot ENTRY (results/x86-64-rspjump.md ss3): the rsp and the delivery count
+		 * this instruction slot STARTS with, taken BEFORE run_instruction -- so the comparison at
+		 * the exit below is the slot's OWN motion, and a fault DELIVERY that ran inside the slot
+		 * (delivery happens inside run_instruction) is inside the delta rather than attributed to
+		 * the instruction that follows.  Two bool tests when off, and nothing else. */
+		if (v86c_dbg_rspjump_on) v86c_dbg_rspjump_begin(start_eip);
 		run_instruction(opcode | dispatch_os_index(opcode) << 8);
+		if (v86c_dbg_rspjump_on) v86c_dbg_rspjump_end();
 		/* the NEW-MINIMUM ring (results/x86-64-rsplow.md): AFTER the instruction, so the rsp
 		 * recorded is the one the instruction LEFT -- a push or a `sub rsp` lowers it -- and
 		 * start_eip is the instruction's own address, which is what a kallsyms lookup names.

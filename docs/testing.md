@@ -110,13 +110,16 @@ unless asked for**: with no variable set the hooks are one load and one branch e
 | `V86C_CHAIN=<va>` | with the above, the PML4E/PDPTE/PDE/PTE chain of a virtual address, with each entry's physical address and value |
 | `V86C_INTS=<N>` | trace interrupt/exception **delivery**: the vector, the interrupted rip, rsp/cs/cpl and the nesting depth, plus a per-vector histogram and the total, dumped on a stop |
 | `V86C_RSPLOW=<K>` | keep the last K instructions on which **rsp decreased** from the value the previous instruction left (rip, rsp, the size of the decrease) and dump them on any stop — the stack descent *recorded*, instead of inferred from whatever the stack happens to hold. It is a decrease rule, **not** a new-minimum rule: the machine's first rsp is `0x100` in real mode and every long-mode stack address is numerically higher, so a minimum is unfalsifiable on a 64-bit guest (`results/x86-64-rsplow.md` §7) |
+| `V86C_RSPJUMP=<K>` | record the instruction **slots** whose rsp moved by at least K **bytes**, *either direction*, and print each with the whole register file (`r0..r15`), the cs/ss offsets, `cpl`, `cr2_64` and **the number of deliveries inside the slot** — the field that separates "an instruction moved rsp" from "a delivery moved rsp".  The rule is magnitude, not direction: the measured event is a *decrease* of `0xffffd1fa679c6398` (rsp leaves the kernel stack for `0x58ba56c0` inside one slot whose instruction is `bswap %r12d`), and RSPLOW saw it only as a delta.  `K=0`/absent = off, capped at 2^40; the print window is `V86C_RSPJUMP_MAX=<N>` events (default 16, each four lines) and the ring keeps the last 32, dumped on any stop with the TOTAL on its first line.  The delivery count is independent of `V86C_INTS` (it ticks when either tool is armed), so the delta is not silently 0 whenever the trace is off (`results/x86-64-rspjump-tool.md`) |
 
 Output goes to **stderr** with the prefix `v86c dbg:` and is **unbuffered** (`v86c_dbg_init` calls
 `setvbuf(stderr, NULL, _IONBF, 0)`, and `v86c_dbg_on_stop` flushes), so a crash cannot eat it — this
 lane lost probe output to block buffering twice before the toolkit existed.  `m1c_selftest`'s
 `test_debug_toolkit_fires` proves each tool fires (it checks the tool's own counter, not just that the
-call returned); `test_debug_ints_delivery` and `test_debug_rsplow_ring` do the same for the two
-traces, with mutants each is measured against.
+call returned); `test_debug_ints_delivery`, `test_debug_rsplow_ring` and `test_debug_rspjump_records`
+do the same for the traces and the rsp-jump recorder, with mutants each is measured against —
+`test_debug_rsplow_loop_seat` and `test_debug_rspjump_loop_seat` run the REAL per-instruction seat,
+because a seat nobody calls is indistinguishable from an absent seat to every other test.
 
 Example — the question that built the toolkit (the amd64 kernel's first #PF):
 

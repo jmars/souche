@@ -1041,6 +1041,230 @@ static void test_debug_rsplow_loop_seat(void)
 }
 
 /* ================================================================== *
+ * TEST 1n -- THE rsp JUMP RECORDER: A SLOT THAT MOVES rsp BY >= K, WITH THE REGISTER FILE AND THE
+ *            DELIVERY DELTA (results/x86-64-rspjump.md)
+ *
+ * WHY IT EXISTS: MEASURED on the pinned amd64 guest, rsp leaves the kernel stack 0xffffd1fac056ba58
+ * for 0x58ba56c0 inside ONE instruction slot whose instruction is `bswap %r12d` -- an instruction
+ * that cannot touch rsp.  RSPLOW's tick runs after run_instruction, so it names the instruction but
+ * cannot say what the slot contained; this tool prints the register file and the number of
+ * DELIVERIES inside the slot, which is the field that separates the two possible causes.
+ *
+ * The arm drives the two seat calls directly (the ring's own half; TEST 1o drives the REAL seat in
+ * interpreted_run), and each block is an arm with the mutant it kills:
+ *   (1) A SLOT ABOVE THE THRESHOLD IS AN EVENT WITH THE RIGHT in/out/delta: the MEASURED jump,
+ *       which is a DECREASE of 0xffffd1fa679c6398 (rsp lands numerically BELOW the kernel stack at
+ *       0x58ba56c0), and then the SAME travel in the other direction, a RISE.  The rule is
+ *       MAGNITUDE, not direction -- the question is how far rsp travelled inside the slot -- so a
+ *       rule copied from RSPLOW's decrease test loses the rise, and that is the second half of (1).
+ *       The register file is the one the slot LEFT (r12 = the register the slot's instruction
+ *       touched) and r4 is rsp_out, so a capture taken at the ENTRY reads rsp_in there.
+ *   (2) BELOW the threshold records NOTHING (0xfff of motion), and EXACTLY the threshold IS an
+ *       event -- the contract is `>=`, so a `>` mutant reads 0 here.
+ *   (3) THE DELIVERY DELTA: a slot that delivers reads 1 and a slot that does not reads 0, and it
+ *       counts WITH V86C_INTS OFF (only this tool armed) -- the mutant "read the counter that only
+ *       ticks when the trace is armed" reads 0, i.e. "no delivery", on the one line a reader trusts.
+ *   (4) LAST N, AND THE TOTAL: six events into a ring of FOUR must hold events 3..6 (a ring that
+ *       keeps the FIRST N reads event 1 at entry 0, which names the wrong slot), the print window
+ *       is BOUNDED at 2, and the dump -- alone, with no other tool on -- prints the TOTAL.
+ * The ENV path is asserted too: K arms the seat, K=0 and an absent K leave it OFF, a K past the cap
+ * is CAPPED, and V86C_RSPJUMP_MAX past the ring's 32 is capped with it.
+ * ================================================================== */
+static void test_debug_rspjump_records(void)
+{
+    v86c_dbg_rspjump_event e;
+    int i;
+
+    machine_setup(false);
+    cpu->reg64[4] = 0xFFFFD1FAC056BA58ull;    /* the measured kernel stack */
+    cpu->reg64[12] = 0x11223344;              /* r12: what the slot's `bswap %r12d` touches */
+    cpu->cr2_64 = 0xFFFF8EAA88A00000ull;
+    cpu->segment_offsets[CS] = 0xFFFF888000000000ull;
+    cpu->segment_offsets[SS] = 0xFFFF888000001000ull;
+    cpu->cpl = 0;
+
+    v86c_dbg_test_rspjump_arm(0x1000, 16, 8);
+    CHECK(v86c_dbg_rspjump_on);
+    CHECK_EQ(v86c_dbg_rspjump_limit(), 0x1000);
+    CHECK_EQ(v86c_dbg_rspjump_total(), 0);
+    CHECK_EQ(v86c_dbg_rspjump_kept(), 0);
+
+    /* (2a) BELOW the threshold: 0xfff bytes of motion is not an event.  Each slot below STARTS
+     * from the kernel stack again, so the delta is the slot's own (a slot is not cumulative). */
+    cpu->reg64[4] = 0xFFFFD1FAC056BA58ull;
+    v86c_dbg_rspjump_begin(0xFFFFFFFFFF600000ull);
+    cpu->reg64[4] = 0xFFFFD1FAC056BA58ull - 0xFFFull;
+    v86c_dbg_rspjump_end();
+    CHECK_EQ(v86c_dbg_rspjump_total(), 0);
+
+    /* (2b) EXACTLY the threshold IS an event: the contract is `>=`, so a `>` mutant reads 0 here */
+    cpu->reg64[4] = 0xFFFFD1FAC056BA58ull;
+    v86c_dbg_rspjump_begin(0xFFFFFFFFFF600008ull);
+    cpu->reg64[4] = 0xFFFFD1FAC056BA58ull - 0x1000ull;
+    v86c_dbg_rspjump_end();
+    CHECK_EQ(v86c_dbg_rspjump_total(), 1);
+
+    /* (1) THE MEASURED JUMP: rsp leaves the kernel stack for 0x58ba56c0 inside one slot, a
+     * DECREASE of 0xffffd1fa679c6398 -- the number RSPLOW printed as its delta, with no register
+     * file and no delivery count behind it. */
+    cpu->reg64[4] = 0xFFFFD1FAC056BA58ull;    /* the slot STARTS on the kernel stack */
+    v86c_dbg_rspjump_begin(0xFFFFFFFF815BDF65ull);   /* `bswap %r12d`, the guest's patched text */
+    cpu->reg64[4] = 0x58BA56C0;               /* and LEAVES it inside the slot */
+    v86c_dbg_rspjump_end();
+    CHECK_EQ(v86c_dbg_rspjump_total(), 2);
+    CHECK(v86c_dbg_rspjump_entry(1, &e));
+    CHECK_EQ(e.rip, 0xFFFFFFFF815BDF65ull);
+    CHECK_EQ(e.rsp_in, 0xFFFFD1FAC056BA58ull);
+    CHECK_EQ(e.rsp_out, 0x58BA56C0);
+    CHECK_EQ(e.rsp_in - e.rsp_out, 0xFFFFD1FA679C6398ull);   /* the magnitude, and the sign */
+    CHECK_EQ(e.regs[4], 0x58BA56C0);          /* r4 IS rsp: the file is captured at the EXIT */
+    CHECK_EQ(e.regs[12], 0x11223344);         /* and it carries the register the slot touched */
+    CHECK_EQ(e.cs, 0xFFFF888000000000ull);
+    CHECK_EQ(e.ss, 0xFFFF888000001000ull);
+    CHECK_EQ(e.cpl, 0);
+    CHECK_EQ(e.cr2_64, 0xFFFF8EAA88A00000ull);
+    CHECK_EQ(e.deliv, 0);                     /* no delivery in this slot */
+
+    /* (1b) THE SAME TRAVEL THE OTHER WAY IS ALSO AN EVENT: the rule is MAGNITUDE, so a recorder
+     * that copied RSPLOW's decrease test reads total=2 here, not 3. */
+    cpu->reg64[4] = 0x58BA56C0;
+    v86c_dbg_rspjump_begin(0xFFFFFFFF815BDF75ull);
+    cpu->reg64[4] = 0xFFFFD1FAC056BA58ull;
+    v86c_dbg_rspjump_end();
+    CHECK_EQ(v86c_dbg_rspjump_total(), 3);
+    CHECK(v86c_dbg_rspjump_entry(2, &e));
+    CHECK_EQ(e.rip, 0xFFFFFFFF815BDF75ull);
+    CHECK(e.rsp_out > e.rsp_in);              /* the direction a decrease-only rule loses */
+
+    /* an END with no BEGIN has nothing to compare against, and must not record */
+    v86c_dbg_rspjump_end();
+    CHECK_EQ(v86c_dbg_rspjump_total(), 3);
+
+    /* (3) THE DELIVERY DELTA -- the field that separates "an instruction moved rsp" from "a
+     * delivery moved rsp".  V86C_INTS IS OFF: only this tool is armed, which is how the tool is
+     * actually run, so a counter that only ticks under the trace reads 0 here. */
+    CHECK(!v86c_dbg_ints_on);
+    cpu->reg64[4] = 0x8000;
+    v86c_dbg_rspjump_begin(0x1000);
+    v86c_dbg_ints_delivery(14, false, true, 0, 0, 0x1000, 0x8000, 0x33);   /* a delivery INSIDE it */
+    cpu->reg64[4] = 0x4000;
+    v86c_dbg_rspjump_end();
+    CHECK_EQ(v86c_dbg_rspjump_total(), 4);
+    CHECK(v86c_dbg_rspjump_entry(3, &e));
+    CHECK_EQ(e.deliv, 1);                     /* THIS slot delivered one exception */
+    CHECK_EQ(e.rsp_in, 0x8000);
+    CHECK_EQ(e.rsp_out, 0x4000);
+    CHECK(v86c_dbg_rspjump_entry(1, &e));
+    CHECK_EQ(e.deliv, 0);                     /* and the other half: a quiet slot reads zero */
+
+    /* (4) LAST N, THE BOUNDED PRINT WINDOW, AND THE TOTAL.  Six events into a ring of FOUR. */
+    v86c_dbg_test_rspjump_arm(1, 2, 4);       /* 1 byte, TWO events printed, ring of four */
+    for (i = 0; i < 6; i++) {
+        cpu->reg64[4] = 0x1000 + (uint64_t)i * 0x100;
+        v86c_dbg_rspjump_begin(0x2000 + (uint64_t)i);
+        cpu->reg64[4] = 0x2000 + (uint64_t)i * 0x100;
+        v86c_dbg_rspjump_end();
+    }
+    CHECK_EQ(v86c_dbg_rspjump_total(), 6);
+    CHECK_EQ(v86c_dbg_rspjump_kept(), 4);     /* the ring holds K, not the total */
+    CHECK_EQ(v86c_dbg_rspjump_printed(), 2);  /* the print window is BOUNDED */
+    CHECK(v86c_dbg_rspjump_entry(0, &e));
+    CHECK_EQ(e.rip, 0x2002);                  /* events 3..6: a first-N ring reads 0x2000 here */
+    CHECK_EQ(e.rsp_in, 0x1200);
+    CHECK_EQ(e.rsp_out, 0x2200);
+    CHECK(v86c_dbg_rspjump_entry(1, &e));
+    CHECK_EQ(e.rip, 0x2003);
+    CHECK(v86c_dbg_rspjump_entry(2, &e));
+    CHECK_EQ(e.rip, 0x2004);
+    CHECK(v86c_dbg_rspjump_entry(3, &e));
+    CHECK_EQ(e.rip, 0x2005);
+    CHECK(!v86c_dbg_rspjump_entry(4, &e));    /* no fifth entry */
+
+    /* THE DUMP SPEAKS ALONE: no other tool is on, so the early return must not fire and the ring
+     * must print -- +2 entries (the STOP line and the RSPJUMP summary, whose first line carries
+     * total=6) */
+    { int before = v86c_dbg_test_counts();
+      v86c_dbg_on_stop("the rspjump arm");
+      CHECK_EQ(v86c_dbg_test_counts(), before + 2); }
+
+    v86c_dbg_test_disarm();
+    CHECK(!v86c_dbg_rspjump_on);
+
+    /* THE ENV PATH IS THE INSTRUMENT THE USER RUNS */
+    setenv("V86C_RSPJUMP", "0x1000", 1);
+    v86c_dbg_init();
+    CHECK(v86c_dbg_rspjump_on);
+    CHECK_EQ(v86c_dbg_rspjump_limit(), 0x1000);
+    v86c_dbg_test_disarm();
+    setenv("V86C_RSPJUMP", "0", 1);           /* K=0 is OFF, not "every instruction" */
+    v86c_dbg_init();
+    CHECK(!v86c_dbg_rspjump_on);
+    v86c_dbg_test_disarm();
+    setenv("V86C_RSPJUMP", "0x100000000000", 1);   /* 2^44: past the cap */
+    v86c_dbg_init();
+    CHECK_EQ(v86c_dbg_rspjump_limit(), (uint64_t)1 << 40);   /* the cap, not the request */
+    v86c_dbg_test_disarm();
+    setenv("V86C_RSPJUMP_MAX", "1000", 1);
+    setenv("V86C_RSPJUMP", "0x1000", 1);
+    v86c_dbg_init();
+    CHECK_EQ(v86c_dbg_rspjump_max(), 32);     /* the ring's bound, not the request */
+    v86c_dbg_test_disarm();
+    unsetenv("V86C_RSPJUMP");
+    unsetenv("V86C_RSPJUMP_MAX");
+    v86c_dbg_init();
+    CHECK(!v86c_dbg_rspjump_on);              /* absent = OFF */
+}
+
+/* ================================================================== *
+ * TEST 1o -- THE RECORDER'S SEAT IS THE INTERPRETER'S PER-INSTRUCTION LOOP
+ *
+ * The arm above drives the two seat calls itself, which proves the RULE and the RING but not that
+ * anything calls them -- and a seat nobody calls is indistinguishable from an absent seat to every
+ * other test in this file (this lane has shipped exactly that, and the review's M7 lesson is why
+ * TEST 1h was rewritten).  So this arm runs the REAL seat: `push %eax` twice with a threshold of
+ * exactly FOUR bytes, which pins BOTH halves at the real seat -- the `>=` contract (a `>` mutant
+ * reads 0 events) and the SLOT's own entry rsp (the second event's rsp_in is what the FIRST push
+ * left, 0x6ffc, not a global baseline).
+ *
+ * IT FAILS AGAINST A debug.c THAT IS NOT WIRED INTO cpu.c: delete the two calls from interpreted_run
+ * and the total is 0 where 2 is asserted.  MEASURED as the seat-deleted mutant.
+ * ================================================================== */
+static void test_debug_rspjump_loop_seat(void)
+{
+    v86c_dbg_rspjump_event e;
+
+    machine_setup(false);
+    cpu->reg64[4] = 0x7000;                   /* rsp */
+    cpu->reg64[0] = 0x12345678;               /* eax, the value pushed */
+    cpu->instruction_pointer = 0x2FFA;
+    cpu->previous_ip = 0x2FFA;
+    mem8[0x2FFA] = 0x90;                      /* nop -- rsp flat, so no event */
+    mem8[0x2FFB] = 0x90;                      /* nop */
+    mem8[0x2FFC] = 0x50;                      /* push %eax -> rsp 0x6ffc: a move of exactly 4 */
+    mem8[0x2FFD] = 0x50;                      /* push %eax -> rsp 0x6ff8 */
+    mem8[0x2FFE] = 0x90;                      /* nop */
+    mem8[0x2FFF] = 0x90;                      /* nop -- and the fetch crosses to page 0x3000 */
+
+    v86c_dbg_test_rspjump_arm(4, 16, 8);      /* K = 4: exactly what a push moves */
+    interpreted_run(0x2FFA);
+
+    CHECK_EQ(v86c_dbg_rspjump_total(), 2);
+    CHECK(v86c_dbg_rspjump_entry(0, &e));
+    CHECK_EQ(e.rip, 0x2FFC);
+    CHECK_EQ(e.rsp_in, 0x7000);
+    CHECK_EQ(e.rsp_out, 0x6FFC);
+    CHECK_EQ(e.regs[4], 0x6FFC);
+    CHECK_EQ(e.deliv, 0);                     /* a push is not a delivery, and the line says so */
+    CHECK(v86c_dbg_rspjump_entry(1, &e));
+    CHECK_EQ(e.rip, 0x2FFD);
+    CHECK_EQ(e.rsp_in, 0x6FFC);               /* the rsp the PREVIOUS slot left: slot-relative */
+    CHECK_EQ(e.rsp_out, 0x6FF8);
+
+    v86c_dbg_test_disarm();
+    CHECK(!v86c_dbg_rspjump_on);
+}
+
+/* ================================================================== *
  * TEST 1i -- A LONG-MODE `mov r64, cr2` RETURNS THE WHOLE ADDRESS (results/x86-64-repair.md)
  *
  * The corpus cannot carry it: MOV CR is privileged and the native leg runs at CPL 3.  This arm
@@ -2214,6 +2438,8 @@ int main(void)
     RUN(test_debug_ints_delivery, "the delivery trace counts every delivery, records nesting depth, and its print window BOUNDS");
     RUN(test_debug_rsplow_ring, "the rsp descent ring records every DECREASE from the previous instruction, keeps the LAST K, and dumps alone");
     RUN(test_debug_rsplow_loop_seat, "the ring's seat is in the interpreter's per-instruction loop (two pushes recorded)");
+    RUN(test_debug_rspjump_records, "the rsp JUMP recorder: a slot moving rsp by >= K records in/out/delta with the register file, the DELIVERY delta counts with V86C_INTS off, and the ring keeps the LAST N");
+    RUN(test_debug_rspjump_loop_seat, "the recorder's seat is the interpreter's per-instruction loop (two pushes at K=4, slot-relative rsp_in)");
     RUN(test_rip_relative_segment_base, "a segment override applies to a RIP-relative operand (FS/GS add their base)");
     RUN(test_long_mode_descriptor_address_is_64bit, "the GDT base is 64 bits in long mode: lookup_segment_selector returns gdt_base+0x40 above 4 GiB and reads the descriptor through the mapping");
     RUN(test_long_mode_ff_inc_dec_are_32bit_without_rexw, "FF /0 and FF /1 in long mode are 32-bit without REX.W: `inc %eax` on the 0xffffffff wrap zero-extends into RAX and sets ZF");
