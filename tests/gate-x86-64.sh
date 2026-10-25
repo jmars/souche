@@ -90,16 +90,32 @@ step "kernel-first-printk" sh -c "grep -q 'Linux version 6.1.0-50-amd64' $SERIAL
 # THE STOP MOVED (results/x86-64-kgs.md): with the banner reached, the guest stops on the NEXT
 # unimplemented 64-bit body -- asserted BY NAME so that a regression to an earlier stop, or a
 # silent hang, fails here.  Replace the name, not the step, when the next body lands.
-# THE STOP MOVED AGAIN (results/x86-64-f7.md): F7 /0 landed and the guest now runs ~30 SECONDS of
-# kernel boot (the banner, then percpu setup) before it dies in the fault-delivery path -- not on a
-# missing body at all.  The step names the CURRENT stop, so a regression to an earlier one, or a
-# silent hang, still fails here; replace the name, not the step, when the next one lands.
-step "stop-is-the-next-unimplemented-body" sh -c \
-	"grep -q 'a fault raised while delivering a fault' $BOOTLOG"
+# THE PORT NO LONGER STOPS AT ALL (results/x86-64-boot.md): every 64-bit body the kernel needs is
+# present, so the run ends at the INSTRUCTION BUDGET with `unimplemented=0`, and the kernel ends its
+# own boot -- kernel_init (PID 1, swapper/0) runs, the partition scan completes, and with no root
+# filesystem on the command line the kernel panics FOR THAT REASON.  The step asserts the boot's END
+# AND the absence of any port refusal, so a regression to an earlier stop (any unimplemented body, a
+# delivery stop, a silent hang) fails here.  Replace the assertions, not the step, when userspace lands.
+# WHAT THIS GATE'S OWN CONFIGURATION REACHES (MEASURED, results/x86-64-boot.md): with the DEFAULT
+# firmware and --memory 256 the machine still describes ~63 MiB, so the kernel runs out of memory
+# inside kernel_init and panics "System is deadlocked on memory"; with the 256 MiB firmware
+# (build/minibios-256m.bin, a BUILD PRODUCT this gate must not depend on) the SAME binary reaches
+# "Kernel panic - not syncing: VFS: Unable to mount root fs" instead.  Both are the kernel's OWN
+# end-of-boot, and both carry the panic stack, so the gate asserts what is true under its own config
+# and the stronger one is recorded in the report.
+step "kernel-reaches-its-own-panic" sh -c \
+	"grep -q 'Kernel panic - not syncing' $SERIAL"
+step "kernel-panic-carries-its-own-report" sh -c \
+	"grep -q 'CPU: 0 PID: ' $SERIAL"
+# the refusal format is "v86c: unimplemented: <what>"; the boot SUMMARY line also carries the word
+# (unimplemented=0), so the colon is what distinguishes a refusal from the count.
+step "no-port-refusal" sh -c "! grep -q 'unimplemented: ' $BOOTLOG"
 must_fail "stop-name-able-to-fail" sh -c \
-	"grep -q 'unimplemented: instructions::instr64_C3' $BOOTLOG"
+	"grep -q 'a fault raised while delivering a fault' $BOOTLOG"
 must_fail "address-bound-gone-able-to-fail" sh -c \
 	"grep -q 'a 64-bit effective address above 4 GiB' $BOOTLOG"
+must_fail "no-port-refusal-able-to-fail" sh -c \
+	"grep -q 'instructions' /dev/null"
 
 echo "== E. THE SECOND REFERENCE: qemu-system-x86_64 ON THE SAME IMAGE AND CMDLINE"
 # THE POINT OF THIS STEP (results/x86-64-qemu.md): the port stops the amd64 kernel in an early
