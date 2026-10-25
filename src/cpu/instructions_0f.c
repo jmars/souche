@@ -1930,15 +1930,28 @@ void instr32_0FC7_6_mem(int64_t _addr)
 
 /* ------------------------------------------------------------------ *
  * 0F C8-CF -- bswap   (instructions_0f.rs:4021-4035)
+ *
+ * THE REGISTER IS `opcode & 7` EXTENDED BY REX.B, the instructions.c:1400 rule: REX.B is live
+ * whenever a REX byte is present, and in long mode `41 0F CC` has no REX.W, so
+ * dispatch_os_index_0f answers 1 and this 32-bit arm runs.  These eight bodies hard-coded
+ * ESP and its neighbours, so `bswap %r12d` byte-swapped the LOW HALF OF RSP in place instead
+ * of r12d -- MEASURED on the amd64 guest (results/x86-64-bswap-rexb.md): rsp 0xffffd1fac056ba58
+ * became 0x58ba56c0 == bswap32(0xc056ba58) inside one instruction slot, and the guest's own
+ * patched text at that rip is `41 0f cc`.  In 32-bit mode reg_index_b is the identity, so the
+ * 32-bit machine is bit-identical (modrm.h:73).
+ *
+ * The 16-bit operand form (`66 0F CC`) reaches the SAME body through case 0xC8: the SDM leaves
+ * BSWAP's result UNDEFINED for a 16-bit operand size, so there is no correct behaviour to
+ * implement and the 32-bit swap is kept (which is also what hardware does in practice).
  * ------------------------------------------------------------------ */
-void instr_0FC8(void) { bswap(EAX); }
-void instr_0FC9(void) { bswap(ECX); }
-void instr_0FCA(void) { bswap(EDX); }
-void instr_0FCB(void) { bswap(EBX); }
-void instr_0FCC(void) { bswap(ESP); }
-void instr_0FCD(void) { bswap(EBP); }
-void instr_0FCE(void) { bswap(ESI); }
-void instr_0FCF(void) { bswap(EDI); }
+void instr_0FC8(void) { bswap(reg_index_b(0)); }
+void instr_0FC9(void) { bswap(reg_index_b(1)); }
+void instr_0FCA(void) { bswap(reg_index_b(2)); }
+void instr_0FCB(void) { bswap(reg_index_b(3)); }
+void instr_0FCC(void) { bswap(reg_index_b(4)); }
+void instr_0FCD(void) { bswap(reg_index_b(5)); }
+void instr_0FCE(void) { bswap(reg_index_b(6)); }
+void instr_0FCF(void) { bswap(reg_index_b(7)); }
 
 /* instructions_0f.rs:5296-5300 -- Windows 98 */
 void instr_0FFF(void)

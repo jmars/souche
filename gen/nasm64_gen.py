@@ -890,6 +890,27 @@ case("ctrl", "rexb-implied-register",
     mov qword ptr [0x100228], r11
     mov qword ptr [0x100230], rax
 """)
+case("ctrl", "rexb-bswap",
+     "REX.B on 0F C8+r BSWAP at a 32-bit operand size: `41 0F CC` is `bswap r12d` and must "
+     "NOT touch esp -- the eight 16/32-bit bswap bodies hard-coded EAX..EDI, so in long mode "
+     "(no REX.W -> dispatch_os_index_0f answers 1 -> the 32-bit arm) the guest's own "
+     "`bswap %r12d` BYTE-SWAPPED THE LOW HALF OF RSP in place (MEASURED on the amd64 guest: "
+     "rsp 0xffffd1fac056ba58 -> 0x58ba56c0 == bswap32(0xc056ba58)).  TWO WITNESSES: r12d "
+     "must come back byte-swapped (0xc056ba58 -> 0x58ba56c0), and rsp must be UNTOUCHED -- "
+     "snapshotted immediately after the bswap, because a second bswap on esp would swap it "
+     "back and hide the damage.  `bswap r13d` covers the same rule one opcode on, and the "
+     "plain `bswap eax` proves the REX-less form did not regress",
+     """\
+    mov r12d, 0xC056BA58
+    mov r13d, 0x11223344
+    mov eax, 0xDEADBEEF
+    mov esp, 0xCAFEBABE
+    bswap r12d
+    mov qword ptr [0x100200], rsp
+    bswap r13d
+    bswap eax
+    cmp rax, rax
+""")
 case("ctrl", "cmov-family",
      "ALL SIXTEEN CMOVcc conditions in one flag state, and the values moved are above 2^32 "
      "so no 32-bit cmov can produce them.  `cmp rax, rbx` with rax=0x100000000, rbx=0xFFFFFFFF "

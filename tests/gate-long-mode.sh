@@ -78,7 +78,7 @@ must_fail() { # must_fail <name> <cmd...> -- the able-to-fail arm of an assertio
 
 echo "== A. --long-mode OFF is still the 32-bit machine (S2's refusal, by name, S4's counts)"
 step "off-is-32bit" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_OFF" \
-	--expect counts --expect-counts "green=0 red_unimplemented=91 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=0 red_unimplemented=92 mismatch=0 error=0" --quiet
 # a count assertion alone would also pass on 57 of anything, so the census's own line is
 # checked: the refusal must NAME the reason
 step "off-refusal-names-the-reason" sh -c \
@@ -120,7 +120,7 @@ step "family-1-green" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_
 	--filter '^mov-' --expect counts \
 	--expect-counts "green=12 red_unimplemented=0 mismatch=0 error=0" --quiet
 step "whole-corpus-no-mismatch" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
-	--expect counts --expect-counts "green=91 red_unimplemented=0 mismatch=0 error=0" --quiet
+	--expect counts --expect-counts "green=92 red_unimplemented=0 mismatch=0 error=0" --quiet
 must_fail "whole-corpus-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
 	--actual "$ACTUAL_ON" --expect counts --expect-counts "green=57 mismatch=0" --quiet
 
@@ -254,6 +254,9 @@ echo "== F3. S6: THE ALU FAMILY AT 64 BITS, WITH ITS FLAGS (family 2, case by ca
 # THE ADDRESS-WIDTH UNIT (results/x86-64-addrwidth.md) added TWO wide cases -- high-mem-store
 # and high-mem-fxsave, the corpus's first MEMORY operands above 4 GiB -- so the wide family is
 # 9 and the corpus 91.
+# THE REX.B BSWAP UNIT (results/x86-64-bswap-rexb.md) added ctrl-rexb-bswap, so the ctrl family
+# is 21 and the corpus 92: `41 0F CC` is `bswap r12d`, and the eight 16/32-bit bswap bodies
+# byte-swapped ESP instead -- the amd64 guest's measured rsp jump.
 step "alu-family" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
 	--filter '^alu-' --expect counts \
 	--expect-counts "green=17 red_unimplemented=0 mismatch=0 error=0" --quiet
@@ -271,7 +274,7 @@ step "alu-pop-rsp-green" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTU
 echo "== F4. S7: CONTROL FLOW AND STACK AT 64 BITS (family 3, 12/12 -- ALL GREEN)"
 step "ctrl-family" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
 	--filter '^ctrl-' --expect counts \
-	--expect-counts "green=20 red_unimplemented=0 mismatch=0 error=0" --quiet
+	--expect-counts "green=21 red_unimplemented=0 mismatch=0 error=0" --quiet
 must_fail "ctrl-family-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage run \
 	--actual "$ACTUAL_ON" --filter '^ctrl-' --expect counts \
 	--expect-counts "green=12 mismatch=0" --quiet
@@ -279,6 +282,13 @@ must_fail "ctrl-family-counts-able-to-fail" $PYTHON tests/nasm64_run.py --stage 
 # the far transfer actually returning.  Assert the case's own counts as a named step.
 step "ctrl-call-ret" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
 	--filter 'call-ret' --expect counts \
+	--expect-counts "green=1 red_unimplemented=0 mismatch=0 error=0" --quiet
+# THE REX.B BSWAP ARM AS ITS OWN STEP (results/x86-64-bswap-rexb.md): `41 0F CC` is `bswap r12d`,
+# and the eight 16/32-bit bswap bodies hard-coded EAX..EDI -- on the amd64 guest that
+# BYTE-SWAPPED THE LOW HALF OF RSP in place (rsp 0xffffd1fac056ba58 -> 0x58ba56c0 inside one
+# instruction slot).  The case asserts BOTH witnesses: r12d byte-swapped, and rsp untouched.
+step "ctrl-rexb-bswap" $PYTHON tests/nasm64_run.py --stage run --actual "$ACTUAL_ON" \
+	--filter 'rexb-bswap' --expect counts \
 	--expect-counts "green=1 red_unimplemented=0 mismatch=0 error=0" --quiet
 
 echo "== F5. S8: MUL/DIV/SHIFTS AT 64 BITS (family 4, 14/14 -- ALL GREEN)"
